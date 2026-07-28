@@ -1,0 +1,49 @@
+{
+  "id": "/",
+  "name": "BajetBN",
+  "short_name": "BajetBN",
+  "description": "Budgeting and life management for Brunei.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "lang": "en",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/bajetbn-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/bajetbn-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/bajetbn-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/bajetbn-dashboard-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "BajetBN dashboard with Accounts and Spaces"
+    },
+    {
+      "src": "/screenshots/bajetbn-login-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "label": "BajetBN sign-in on mobile"
+    }
+  ]
+}

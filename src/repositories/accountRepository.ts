@@ -1,0 +1,44 @@
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { requireFirebase } from '../services/firebase';
+import type { Account, AccountClassification, AccountType } from '../types/models';
+
+export async function listAccounts(uid: string): Promise<Account[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'accounts'), where('ownerId', '==', uid)));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as Account)
+    .filter((account) => !account.archivedAt)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function createAccount(input: {
+  name: string;
+  institution?: string;
+  type: AccountType;
+  classification: AccountClassification;
+  currency: string;
+  openingBalanceMinor: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'createAccount');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function updateAccount(input: {
+  accountId: string;
+  name: string;
+  institution?: string;
+  type: AccountType;
+  classification: AccountClassification;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'updateAccountProfile');
+  return call(input);
+}
+
+export async function archiveAccount(accountId: string) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'archiveAccount');
+  return call({ accountId, idempotencyKey: crypto.randomUUID() });
+}

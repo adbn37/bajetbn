@@ -1,0 +1,27 @@
+name: BajetBN staging validation
+
+on:
+  push:
+    branches: [staging]
+  pull_request:
+    branches: [staging]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm install --prefix functions --no-audit --no-fund
+      - run: npm run build --prefix functions
+
+# Cloudflare Pages should be connected to the staging branch with:
+# Build command: npm run build
+# Output directory: dist
+# Production branch: staging (for the staging Pages project only)

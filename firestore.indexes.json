@@ -1,0 +1,22 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "archivedAt", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ledgerEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "accountId", "order": "ASCENDING" },
+        { "fieldPath": "postedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

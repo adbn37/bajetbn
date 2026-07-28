@@ -1,0 +1,33 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isImageOrPdf() {
+      return request.resource.contentType.matches('image/.*')
+        || request.resource.contentType == 'application/pdf';
+    }
+
+    function underTenMb() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+
+    match /users/{uid}/{allPaths=**} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid && isImageOrPdf() && underTenMb();
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Receipt support is reserved for v0.8.0. Keep uploads denied until
+    // membership-aware Storage rules and upload metadata validation are enabled.
+    match /spaces/{spaceId}/receipts/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

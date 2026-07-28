@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function membershipId(spaceId, uid) {
+      return spaceId + '_' + uid;
+    }
+
+    function isSpaceMember(spaceId) {
+      return signedIn() && exists(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid)));
+    }
+
+    function isSpaceOwner(spaceId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role == 'owner';
+    }
+
+    function accountAccessId(accountId, uid) {
+      return accountId + '_' + uid;
+    }
+
+    function ownsAccount(accountId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/accounts/$(accountId)).data.ownerId == request.auth.uid;
+    }
+
+    function canViewAccountBalance(accountId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid)))
+        && get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data.canViewBalance == true;
+    }
+
+    function canViewAccountLedger(accountId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid)))
+        && get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data.canViewLedger == true;
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid);
+      allow create: if false; // Created by the onboarding Cloud Function.
+      allow update: if isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fullName', 'language', 'currency', 'timezone', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /commands/{commandId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+    }
+
+    match /spaces/{spaceId} {
+      allow read: if isSpaceMember(spaceId);
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.type != 'personal'
+        && existsAfter(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid)));
+      allow update: if isSpaceOwner(spaceId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.type == resource.data.type
+        && !(resource.data.type == 'personal' && request.resource.data.archivedAt != null);
+      allow delete: if false;
+    }
+
+    match /spaceMembers/{memberId} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || isSpaceMember(resource.data.spaceId));
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role == 'owner'
+        && getAfter(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId == request.auth.uid;
+      allow update, delete: if false; // Membership changes move to Cloud Functions in collaboration phase.
+    }
+
+    match /accounts/{accountId} {
+      allow read: if signedIn() && (resource.data.ownerId == request.auth.uid || canViewAccountBalance(accountId));
+      allow create, update, delete: if false; // Server-controlled because opening balances are financial postings.
+    }
+
+    match /accountAccess/{accessId} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || ownsAccount(resource.data.accountId));
+      allow create, update, delete: if false; // Provisioned by trusted server workflows.
+    }
+
+    match /ledgerEntries/{entryId} {
+      allow read: if signedIn() && (ownsAccount(resource.data.accountId) || canViewAccountLedger(resource.data.accountId));
+      allow create, update, delete: if false;
+    }
+
+    match /financialCommands/{commandId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

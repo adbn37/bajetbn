@@ -1,0 +1,6 @@
+name = "bajetbn-staging"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-07-01"
+
+# This file is intentionally staging-only. Create a separate production
+# configuration only after staging approval.
