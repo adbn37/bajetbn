@@ -95,6 +95,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /transactions/{transactionId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false; // Posted and reversed only by trusted Cloud Functions.
+    }
+
     match /financialCommands/{commandId} {
       allow read, write: if false;
     }

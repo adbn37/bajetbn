@@ -64,3 +64,38 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
     text-align: left;
   }
 }
+
+/* Transactions and ledger foundation */
+.transaction-summary { display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:1rem; }
+.transaction-summary div { padding:1.1rem 1.2rem; background:var(--surface); border-right:1px solid var(--border); }
+.transaction-summary div:last-child { border-right:0; }
+.transaction-summary span,.transaction-summary strong { display:block; }
+.transaction-summary span { color:var(--muted); font-size:.75rem; margin-bottom:.45rem; }
+.transaction-summary strong { font-size:1.25rem; }
+.money-positive { color:#5eead4 !important; }
+.money-negative { color:#fda4af !important; }
+.transaction-toolbar { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:1rem 0; }
+.segmented-control { display:inline-flex; padding:.25rem; border:1px solid var(--border); border-radius:12px; background:#07111f; }
+.segmented-control button { border:0; background:transparent; color:var(--muted); padding:.55rem .8rem; border-radius:9px; cursor:pointer; text-transform:capitalize; }
+.segmented-control button.active { color:var(--text); background:var(--surface-2); }
+.transaction-search { width:min(360px,100%); }
+.transaction-list { display:flex; flex-direction:column; gap:.7rem; }
+.transaction-row { display:grid; grid-template-columns:auto minmax(180px,1.2fr) minmax(170px,.9fr) minmax(130px,.55fr) auto; align-items:center; gap:1rem; padding:1rem; background:var(--surface); border:1px solid var(--border); border-radius:14px; }
+.transaction-row.reversed { opacity:.62; }
+.transaction-icon { width:44px; height:44px; display:grid; place-items:center; border-radius:13px; font-size:1.15rem; font-weight:900; }
+.transaction-icon.income { color:#5eead4; background:rgba(45,212,191,.14); }
+.transaction-icon.expense { color:#fda4af; background:rgba(251,113,133,.14); }
+.transaction-icon.transfer { color:#93c5fd; background:rgba(96,165,250,.14); }
+.transaction-icon.reversal { color:#c4b5fd; background:rgba(167,139,250,.14); }
+.transaction-main { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+.transaction-main h2 { margin:0 0 .2rem; font-size:1rem; }
+.transaction-main p,.transaction-main small,.transaction-context small,.transaction-amount small { display:block; margin:0; color:var(--muted); font-size:.72rem; }
+.transaction-context strong { display:block; font-size:.86rem; }
+.transaction-amount { text-align:right; }
+.transaction-amount strong { display:block; margin-bottom:.2rem; white-space:nowrap; }
+.transaction-status { display:flex; flex-direction:column; align-items:flex-end; gap:.35rem; }
+.status-badge { padding:.3rem .55rem; border-radius:999px; font-size:.66rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+.status-badge.posted { color:#99f6e4; background:rgba(13,148,136,.18); }
+.status-badge.reversed { color:#fecdd3; background:rgba(190,24,93,.16); }
+@media (max-width:1100px) { .transaction-summary { grid-template-columns:1fr 1fr; }.transaction-summary div:nth-child(2) { border-right:0; }.transaction-summary div:nth-child(-n+2) { border-bottom:1px solid var(--border); }.transaction-row { grid-template-columns:auto 1fr minmax(130px,.45fr); }.transaction-context { grid-column:2; }.transaction-status { grid-column:3; grid-row:1 / span 2; } }
+@media (max-width:780px) { .transaction-toolbar { align-items:stretch; flex-direction:column; }.segmented-control { overflow:auto; }.transaction-search { width:100%; }.transaction-row { grid-template-columns:auto 1fr; }.transaction-main { align-items:flex-start; }.transaction-main small { display:none; }.transaction-context,.transaction-amount,.transaction-status { grid-column:2; text-align:left; align-items:flex-start; }.transaction-status { grid-row:auto; flex-direction:row; align-items:center; }.transaction-summary { grid-template-columns:1fr; }.transaction-summary div { border-right:0; border-bottom:1px solid var(--border); }.transaction-summary div:last-child { border-bottom:0; } }

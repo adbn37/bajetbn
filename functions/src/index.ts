@@ -1,11 +1,25 @@
 import { initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, type DocumentData, type DocumentReference, type Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { randomBytes } from 'node:crypto';
 
 initializeApp();
 const db = getFirestore();
 const region = 'asia-southeast1';
+
+const accountTypes = ['bank', 'cash', 'e_wallet', 'credit_card'] as const;
+const transactionTypes = ['income', 'expense', 'transfer'] as const;
+type AccountType = (typeof accountTypes)[number];
+type PostedTransactionType = (typeof transactionTypes)[number];
+
+interface AccountRecord extends DocumentData {
+  ownerId: string;
+  type: AccountType;
+  currency: string;
+  ledgerBalanceMinor: number;
+  balanceVersion: number;
+  archivedAt?: unknown;
+}
 
 function requireAuth(uid?: string): string {
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in is required.');
@@ -37,6 +51,81 @@ function displayId(prefix: string): string {
 function commandId(uid: string, key: string): string {
   if (!/^[a-zA-Z0-9-]{16,64}$/.test(key)) throw new HttpsError('invalid-argument', 'Invalid idempotency key.');
   return `${uid}_${key}`;
+}
+
+function positiveMoney(value: unknown): number {
+  if (!Number.isSafeInteger(value) || Number(value) <= 0 || Number(value) > 99_999_999_999) {
+    throw new HttpsError('invalid-argument', 'Amount must be a positive safe integer in minor units.');
+  }
+  return Number(value);
+}
+
+function localDate(value: unknown, field = 'Transaction date'): string {
+  const result = stringValue(value, field, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(result)) throw new HttpsError('invalid-argument', `${field} must use YYYY-MM-DD.`);
+  const parsed = new Date(`${result}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== result) {
+    throw new HttpsError('invalid-argument', `${field} is invalid.`);
+  }
+  return result;
+}
+
+function accountEffect(accountType: AccountType, flow: 'in' | 'out', amountMinor: number): number {
+  const assetEffect = flow === 'in' ? amountMinor : -amountMinor;
+  return accountType === 'credit_card' ? -assetEffect : assetEffect;
+}
+
+function assertAccount(data: DocumentData | undefined, uid: string, label: string, allowArchived = false): AccountRecord {
+  if (!data) throw new HttpsError('not-found', `${label} was not found.`);
+  if (data.ownerId !== uid) throw new HttpsError('permission-denied', `You do not own the ${label.toLowerCase()}.`);
+  if (!accountTypes.includes(data.type as AccountType)) throw new HttpsError('failed-precondition', `${label} has an unsupported type.`);
+  if (!allowArchived && data.archivedAt) throw new HttpsError('failed-precondition', `${label} is archived.`);
+  if (!Number.isSafeInteger(data.ledgerBalanceMinor) || !Number.isSafeInteger(data.balanceVersion)) {
+    throw new HttpsError('failed-precondition', `${label} has an invalid ledger balance.`);
+  }
+  return data as AccountRecord;
+}
+
+function updateAccountBalance(transaction: Transaction, accountRef: DocumentReference, account: AccountRecord, deltaMinor: number) {
+  const nextBalance = account.ledgerBalanceMinor + deltaMinor;
+  if (!Number.isSafeInteger(nextBalance)) throw new HttpsError('out-of-range', 'The resulting account balance is outside the supported range.');
+  transaction.update(accountRef, {
+    ledgerBalanceMinor: nextBalance,
+    balanceVersion: account.balanceVersion + 1,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+function createLedgerEntry(transaction: Transaction, input: {
+  accountId: string;
+  ownerId: string;
+  spaceId: string;
+  transactionId: string;
+  entryType: string;
+  amountMinor: number;
+  currency: string;
+  idempotencyKey: string;
+  counterAccountId?: string | null;
+  now: FieldValue;
+}): string {
+  const ref = db.collection('ledgerEntries').doc();
+  transaction.create(ref, {
+    displayId: displayId('LED'),
+    accountId: input.accountId,
+    ownerId: input.ownerId,
+    spaceId: input.spaceId,
+    transactionId: input.transactionId,
+    entryType: input.entryType,
+    amountMinor: input.amountMinor,
+    currency: input.currency,
+    direction: input.amountMinor >= 0 ? 'debit' : 'credit',
+    counterAccountId: input.counterAccountId ?? null,
+    status: 'posted',
+    idempotencyKey: input.idempotencyKey,
+    postedAt: input.now,
+    createdAt: input.now,
+  });
+  return ref.id;
 }
 
 export const completeOnboarding = onCall({ region }, async (request) => {
@@ -79,11 +168,11 @@ export const createAccount = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const name = stringValue(request.data?.name, 'Account name');
   const institution = optionalString(request.data?.institution);
-  const type = oneOf(request.data?.type, ['bank', 'cash', 'e_wallet', 'credit_card'] as const, 'account type');
+  const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
   const currency = oneOf(request.data?.currency, ['BND', 'MYR', 'SGD', 'USD'] as const, 'currency');
   const openingBalanceMinor = request.data?.openingBalanceMinor;
-  if (!Number.isSafeInteger(openingBalanceMinor) || Math.abs(openingBalanceMinor) > 999_999_999_99) {
+  if (!Number.isSafeInteger(openingBalanceMinor) || Math.abs(openingBalanceMinor) > 99_999_999_999) {
     throw new HttpsError('invalid-argument', 'Opening balance must be a safe integer in minor units.');
   }
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
@@ -121,7 +210,7 @@ export const updateAccountProfile = onCall({ region }, async (request) => {
   const accountId = stringValue(request.data?.accountId, 'Account ID');
   const name = stringValue(request.data?.name, 'Account name');
   const institution = optionalString(request.data?.institution);
-  const type = oneOf(request.data?.type, ['bank', 'cash', 'e_wallet', 'credit_card'] as const, 'account type');
+  const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
   const ref = db.collection('accounts').doc(accountId);
   const snapshot = await ref.get();
@@ -147,6 +236,265 @@ export const archiveAccount = onCall({ region }, async (request) => {
     const result = { accountId, archived: true };
     transaction.update(accountRef, { archivedAt: now, updatedAt: now });
     transaction.create(commandRef, { uid, kind: 'archive_account', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const postTransaction = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const type = oneOf(request.data?.type, transactionTypes, 'transaction type');
+  const accountId = stringValue(request.data?.accountId, 'Account');
+  const destinationAccountId = type === 'transfer' ? stringValue(request.data?.destinationAccountId, 'Destination account') : '';
+  if (destinationAccountId && destinationAccountId === accountId) {
+    throw new HttpsError('invalid-argument', 'Transfer accounts must be different.');
+  }
+  const spaceId = stringValue(request.data?.spaceId, 'Space');
+  const amountMinor = positiveMoney(request.data?.amountMinor);
+  const transactionDate = localDate(request.data?.transactionDate);
+  const category = type === 'transfer' ? 'Transfer' : optionalString(request.data?.category, 80) || 'General';
+  const counterparty = optionalString(request.data?.counterparty, 120);
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
+  const accountRef = db.collection('accounts').doc(accountId);
+  const destinationRef = destinationAccountId ? db.collection('accounts').doc(destinationAccountId) : null;
+
+  return db.runTransaction(async (transaction) => {
+    const commandSnapshot = await transaction.get(commandRef);
+    if (commandSnapshot.exists) return commandSnapshot.data()?.result;
+
+    const [spaceSnapshot, memberSnapshot, accountSnapshot, destinationSnapshot] = await Promise.all([
+      transaction.get(spaceRef),
+      transaction.get(memberRef),
+      transaction.get(accountRef),
+      destinationRef ? transaction.get(destinationRef) : Promise.resolve(null),
+    ]);
+
+    if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'The selected Space is unavailable.');
+    if (!memberSnapshot.exists || memberSnapshot.data()?.canUseAccounts !== true) {
+      throw new HttpsError('permission-denied', 'You cannot post transactions in this Space.');
+    }
+
+    const account = assertAccount(accountSnapshot.data(), uid, 'Account');
+    const destination = destinationSnapshot ? assertAccount(destinationSnapshot.data(), uid, 'Destination account') : null;
+    const spaceCurrency = spaceSnapshot.data()?.currency;
+    if (account.currency !== spaceCurrency) throw new HttpsError('failed-precondition', 'Account and Space currencies must match.');
+    if (destination && destination.currency !== account.currency) {
+      throw new HttpsError('failed-precondition', 'Transfer accounts must use the same currency.');
+    }
+
+    const transactionRef = db.collection('transactions').doc();
+    const now = FieldValue.serverTimestamp();
+    const ledgerEntryIds: string[] = [];
+
+    if (type === 'income' || type === 'expense') {
+      const flow = type === 'income' ? 'in' : 'out';
+      const delta = accountEffect(account.type, flow, amountMinor);
+      updateAccountBalance(transaction, accountRef, account, delta);
+      ledgerEntryIds.push(createLedgerEntry(transaction, {
+        accountId,
+        ownerId: uid,
+        spaceId,
+        transactionId: transactionRef.id,
+        entryType: type,
+        amountMinor: delta,
+        currency: account.currency,
+        idempotencyKey: key,
+        now,
+      }));
+    } else {
+      if (!destinationRef || !destination) throw new HttpsError('invalid-argument', 'Destination account is required.');
+      const sourceDelta = accountEffect(account.type, 'out', amountMinor);
+      const destinationDelta = accountEffect(destination.type, 'in', amountMinor);
+      updateAccountBalance(transaction, accountRef, account, sourceDelta);
+      updateAccountBalance(transaction, destinationRef, destination, destinationDelta);
+      ledgerEntryIds.push(createLedgerEntry(transaction, {
+        accountId,
+        ownerId: uid,
+        spaceId,
+        transactionId: transactionRef.id,
+        entryType: 'transfer_out',
+        amountMinor: sourceDelta,
+        currency: account.currency,
+        idempotencyKey: key,
+        counterAccountId: destinationAccountId,
+        now,
+      }));
+      ledgerEntryIds.push(createLedgerEntry(transaction, {
+        accountId: destinationAccountId,
+        ownerId: uid,
+        spaceId,
+        transactionId: transactionRef.id,
+        entryType: 'transfer_in',
+        amountMinor: destinationDelta,
+        currency: account.currency,
+        idempotencyKey: key,
+        counterAccountId: accountId,
+        now,
+      }));
+    }
+
+    transaction.create(transactionRef, {
+      displayId: displayId('TXN'),
+      ownerId: uid,
+      createdBy: uid,
+      type,
+      status: 'posted',
+      spaceId,
+      accountId,
+      destinationAccountId: destinationAccountId || null,
+      amountMinor,
+      currency: account.currency,
+      category,
+      counterparty,
+      note,
+      transactionDate,
+      reversalOf: null,
+      reversedBy: null,
+      createdAt: now,
+      postedAt: now,
+      updatedAt: now,
+    });
+
+    const result = { transactionId: transactionRef.id, ledgerEntryIds };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'post_transaction',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+    return result;
+  });
+});
+
+export const reverseTransaction = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const originalTransactionId = stringValue(request.data?.transactionId, 'Transaction ID');
+  const reversalDate = localDate(request.data?.transactionDate, 'Reversal date');
+  const reason = optionalString(request.data?.reason, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
+  const originalRef = db.collection('transactions').doc(originalTransactionId);
+
+  return db.runTransaction(async (transaction) => {
+    const commandSnapshot = await transaction.get(commandRef);
+    if (commandSnapshot.exists) return commandSnapshot.data()?.result;
+
+    const originalSnapshot = await transaction.get(originalRef);
+    if (!originalSnapshot.exists) throw new HttpsError('not-found', 'Transaction not found.');
+    const original = originalSnapshot.data();
+    if (!original) throw new HttpsError('not-found', 'Transaction data is unavailable.');
+    if (original.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this transaction.');
+    if (!transactionTypes.includes(original.type as PostedTransactionType)) {
+      throw new HttpsError('failed-precondition', 'Only an original posted transaction can be reversed.');
+    }
+    if (original.status !== 'posted' || original.reversedBy) {
+      throw new HttpsError('failed-precondition', 'This transaction has already been reversed.');
+    }
+
+    const accountRef = db.collection('accounts').doc(String(original.accountId));
+    const destinationRef = original.destinationAccountId ? db.collection('accounts').doc(String(original.destinationAccountId)) : null;
+    const [accountSnapshot, destinationSnapshot] = await Promise.all([
+      transaction.get(accountRef),
+      destinationRef ? transaction.get(destinationRef) : Promise.resolve(null),
+    ]);
+    const account = assertAccount(accountSnapshot.data(), uid, 'Account', true);
+    const destination = destinationSnapshot ? assertAccount(destinationSnapshot.data(), uid, 'Destination account', true) : null;
+    const amountMinor = positiveMoney(original.amountMinor);
+    const originalType = original.type as PostedTransactionType;
+    const reversalRef = db.collection('transactions').doc();
+    const now = FieldValue.serverTimestamp();
+    const ledgerEntryIds: string[] = [];
+
+    if (originalType === 'income' || originalType === 'expense') {
+      const originalFlow = originalType === 'income' ? 'in' : 'out';
+      const delta = -accountEffect(account.type, originalFlow, amountMinor);
+      updateAccountBalance(transaction, accountRef, account, delta);
+      ledgerEntryIds.push(createLedgerEntry(transaction, {
+        accountId: accountRef.id,
+        ownerId: uid,
+        spaceId: String(original.spaceId),
+        transactionId: reversalRef.id,
+        entryType: 'reversal',
+        amountMinor: delta,
+        currency: account.currency,
+        idempotencyKey: key,
+        now,
+      }));
+    } else {
+      if (!destinationRef || !destination) throw new HttpsError('failed-precondition', 'The original transfer is incomplete.');
+      const sourceDelta = -accountEffect(account.type, 'out', amountMinor);
+      const destinationDelta = -accountEffect(destination.type, 'in', amountMinor);
+      updateAccountBalance(transaction, accountRef, account, sourceDelta);
+      updateAccountBalance(transaction, destinationRef, destination, destinationDelta);
+      ledgerEntryIds.push(createLedgerEntry(transaction, {
+        accountId: accountRef.id,
+        ownerId: uid,
+        spaceId: String(original.spaceId),
+        transactionId: reversalRef.id,
+        entryType: 'reversal_transfer_source',
+        amountMinor: sourceDelta,
+        currency: account.currency,
+        idempotencyKey: key,
+        counterAccountId: destinationRef.id,
+        now,
+      }));
+      ledgerEntryIds.push(createLedgerEntry(transaction, {
+        accountId: destinationRef.id,
+        ownerId: uid,
+        spaceId: String(original.spaceId),
+        transactionId: reversalRef.id,
+        entryType: 'reversal_transfer_destination',
+        amountMinor: destinationDelta,
+        currency: account.currency,
+        idempotencyKey: key,
+        counterAccountId: accountRef.id,
+        now,
+      }));
+    }
+
+    transaction.create(reversalRef, {
+      displayId: displayId('TXN'),
+      ownerId: uid,
+      createdBy: uid,
+      type: 'reversal',
+      originalType,
+      status: 'posted',
+      spaceId: original.spaceId,
+      accountId: original.accountId,
+      destinationAccountId: original.destinationAccountId ?? null,
+      amountMinor,
+      currency: original.currency,
+      category: 'Reversal',
+      counterparty: original.counterparty ?? '',
+      note: reason || `Reversal of ${original.displayId || originalTransactionId}`,
+      transactionDate: reversalDate,
+      reversalOf: originalTransactionId,
+      reversedBy: null,
+      createdAt: now,
+      postedAt: now,
+      updatedAt: now,
+    });
+    transaction.update(originalRef, {
+      status: 'reversed',
+      reversedBy: reversalRef.id,
+      reversedAt: now,
+      updatedAt: now,
+    });
+
+    const result = { transactionId: reversalRef.id, originalTransactionId, ledgerEntryIds };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'reverse_transaction',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
     return result;
   });
 });
