@@ -1,5 +1,20 @@
-# Transactions foundation
+# Transactions and ledger foundation
 
-The full posting engine is scheduled for v0.5.0. The Phase 1 Account-opening workflow already establishes the required pattern: integer minor units, server-controlled posting, immutable ledger entries, idempotency keys, and ledger-backed balances.
+This feature branch introduces the first posted financial workflow:
 
-Future transaction documents will connect an independent `accountId` to a `spaceId`.
+- Income, expense, and transfer transactions.
+- Every transaction links an Account to a Space.
+- Money is sent to Cloud Functions as positive integer minor units.
+- Cloud Functions validate ownership, Space membership, currency compatibility, and idempotency.
+- Account balances and immutable ledger entries are updated atomically.
+- Credit-card effects use liability semantics: spending increases the outstanding balance, while payments reduce it.
+- Posted records cannot be edited or deleted. Corrections create a new reversal transaction and inverse ledger entries.
+
+Collections used:
+
+- `transactions`
+- `ledgerEntries`
+- `accounts`
+- `financialCommands`
+- `spaces`
+- `spaceMembers`

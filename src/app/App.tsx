@@ -9,6 +9,7 @@ import { VerifyEmailPage } from '../features/auth/VerifyEmailPage';
 import { OnboardingPage } from '../features/onboarding/OnboardingPage';
 import { SpacesPage } from '../features/spaces/SpacesPage';
 import { AccountsPage } from '../features/accounts/AccountsPage';
+import { TransactionsPage } from '../features/transactions/TransactionsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
@@ -25,7 +26,7 @@ export default function App() {
       <Route index element={<DashboardPage />} />
       <Route path="spaces" element={<SpacesPage />} />
       <Route path="accounts" element={<AccountsPage />} />
-      <Route path="transactions" element={<PlaceholderPage title="Transactions" version="v0.5.0" description="Income, expenses, transfers, categories, posting, reversals, and account ledgers." />} />
+      <Route path="transactions" element={<TransactionsPage />} />
       <Route path="budgets" element={<PlaceholderPage title="Budgets" version="v0.6.0" description="Flexible budgets connected to Spaces, categories, and reporting periods." />} />
       <Route path="goals" element={<PlaceholderPage title="Goals" version="v0.6.0" description="Savings goals, progress, target dates, and linked contributions." />} />
       <Route path="bills" element={<PlaceholderPage title="Bills & commitments" version="v0.6.0" description="Recurring bills, instalments, reminders, and commitment calendars." />} />
