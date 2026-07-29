@@ -1,27 +1,65 @@
-name: BajetBN staging validation
+name: Deploy BajetBN Staging
 
 on:
   push:
-    branches: [staging]
-  pull_request:
-    branches: [staging]
+    branches:
+      - staging
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bajetbn-staging-deployment
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
+    name: Build and deploy staging
     runs-on: ubuntu-latest
+
+    environment:
+      name: staging
+      url: https://bajetbn-staging.pages.dev
+
+    env:
+      VITE_APP_ENV: staging
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_FUNCTIONS_REGION: ${{ secrets.VITE_FIREBASE_FUNCTIONS_REGION }}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out staging source
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm install --no-audit --no-fund
-      - run: npm run typecheck
-      - run: npm run build
-      - run: npm install --prefix functions --no-audit --no-fund
-      - run: npm run build --prefix functions
 
-# Cloudflare Pages should be connected to the staging branch with:
-# Build command: npm run build
-# Output directory: dist
-# Production branch: staging (for the staging Pages project only)
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript validation
+        run: npm run typecheck
+
+      - name: Build staging
+        run: npm run build -- --mode staging
+
+      - name: Verify build output
+        run: test -f dist/index.html
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd "$RUNNER_TEMP"
+          npx --yes wrangler@4 pages deploy "$GITHUB_WORKSPACE/dist" \
+            --project-name bajetbn-staging \
+            --branch staging
