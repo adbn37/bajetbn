@@ -9,8 +9,58 @@ const region = 'asia-southeast1';
 
 const accountTypes = ['bank', 'cash', 'e_wallet', 'credit_card'] as const;
 const transactionTypes = ['income', 'expense', 'transfer'] as const;
+const categoryKinds = ['income', 'expense'] as const;
+const categoryScopes = ['personal', 'business', 'both'] as const;
+const categoryIcons = ['wallet', 'briefcase', 'gift', 'shop', 'laptop', 'home', 'food', 'cart', 'fuel', 'car', 'bus', 'bill', 'phone', 'school', 'health', 'family', 'heart', 'bag', 'game', 'repeat', 'tools', 'staff', 'building', 'bank', 'plane', 'dots'] as const;
+const categoryColors = ['teal', 'blue', 'violet', 'amber', 'rose', 'green', 'slate'] as const;
 type AccountType = (typeof accountTypes)[number];
 type PostedTransactionType = (typeof transactionTypes)[number];
+type CategoryKind = (typeof categoryKinds)[number];
+type CategoryScope = (typeof categoryScopes)[number];
+
+interface CategorySnapshot {
+  id: string;
+  name: string;
+  kind: CategoryKind;
+  scope: CategoryScope;
+  icon: string;
+  color: string;
+  isSystem: boolean;
+}
+
+const systemCategoryList: CategorySnapshot[] = [
+  { id: 'income-salary', name: 'Salary', kind: 'income', scope: 'personal', icon: 'wallet', color: 'teal', isSystem: true },
+  { id: 'income-allowance', name: 'Allowance', kind: 'income', scope: 'personal', icon: 'gift', color: 'blue', isSystem: true },
+  { id: 'income-bonus', name: 'Bonus', kind: 'income', scope: 'personal', icon: 'gift', color: 'violet', isSystem: true },
+  { id: 'income-freelance', name: 'Freelance', kind: 'income', scope: 'both', icon: 'laptop', color: 'blue', isSystem: true },
+  { id: 'income-rental', name: 'Rental income', kind: 'income', scope: 'both', icon: 'home', color: 'green', isSystem: true },
+  { id: 'income-sales', name: 'Sales', kind: 'income', scope: 'business', icon: 'shop', color: 'teal', isSystem: true },
+  { id: 'income-service', name: 'Service income', kind: 'income', scope: 'business', icon: 'briefcase', color: 'green', isSystem: true },
+  { id: 'income-other', name: 'Other income', kind: 'income', scope: 'both', icon: 'dots', color: 'slate', isSystem: true },
+  { id: 'expense-food', name: 'Food & drinks', kind: 'expense', scope: 'personal', icon: 'food', color: 'amber', isSystem: true },
+  { id: 'expense-groceries', name: 'Groceries', kind: 'expense', scope: 'personal', icon: 'cart', color: 'green', isSystem: true },
+  { id: 'expense-fuel', name: 'Fuel', kind: 'expense', scope: 'both', icon: 'fuel', color: 'rose', isSystem: true },
+  { id: 'expense-vehicle', name: 'Vehicle', kind: 'expense', scope: 'both', icon: 'car', color: 'blue', isSystem: true },
+  { id: 'expense-transport', name: 'Public transport', kind: 'expense', scope: 'personal', icon: 'bus', color: 'blue', isSystem: true },
+  { id: 'expense-utilities', name: 'Utilities', kind: 'expense', scope: 'both', icon: 'bill', color: 'amber', isSystem: true },
+  { id: 'expense-phone', name: 'Phone & internet', kind: 'expense', scope: 'both', icon: 'phone', color: 'violet', isSystem: true },
+  { id: 'expense-rent', name: 'Rent & housing', kind: 'expense', scope: 'both', icon: 'home', color: 'rose', isSystem: true },
+  { id: 'expense-education', name: 'Education', kind: 'expense', scope: 'personal', icon: 'school', color: 'blue', isSystem: true },
+  { id: 'expense-health', name: 'Health', kind: 'expense', scope: 'personal', icon: 'health', color: 'green', isSystem: true },
+  { id: 'expense-family', name: 'Family', kind: 'expense', scope: 'personal', icon: 'family', color: 'violet', isSystem: true },
+  { id: 'expense-charity', name: 'Zakat & charity', kind: 'expense', scope: 'personal', icon: 'heart', color: 'green', isSystem: true },
+  { id: 'expense-shopping', name: 'Shopping', kind: 'expense', scope: 'personal', icon: 'bag', color: 'rose', isSystem: true },
+  { id: 'expense-entertainment', name: 'Entertainment', kind: 'expense', scope: 'personal', icon: 'game', color: 'violet', isSystem: true },
+  { id: 'expense-subscriptions', name: 'Subscriptions', kind: 'expense', scope: 'both', icon: 'repeat', color: 'slate', isSystem: true },
+  { id: 'expense-supplies', name: 'Business supplies', kind: 'expense', scope: 'business', icon: 'tools', color: 'amber', isSystem: true },
+  { id: 'expense-supplier', name: 'Supplier purchase', kind: 'expense', scope: 'business', icon: 'cart', color: 'rose', isSystem: true },
+  { id: 'expense-wages', name: 'Staff wages', kind: 'expense', scope: 'business', icon: 'staff', color: 'teal', isSystem: true },
+  { id: 'expense-government', name: 'Government fees', kind: 'expense', scope: 'business', icon: 'building', color: 'blue', isSystem: true },
+  { id: 'expense-bank', name: 'Bank fees', kind: 'expense', scope: 'both', icon: 'bank', color: 'slate', isSystem: true },
+  { id: 'expense-travel', name: 'Travel', kind: 'expense', scope: 'both', icon: 'plane', color: 'blue', isSystem: true },
+  { id: 'expense-other', name: 'Other expense', kind: 'expense', scope: 'both', icon: 'dots', color: 'slate', isSystem: true },
+];
+const systemCategories = new Map(systemCategoryList.map((category) => [category.id, category]));
 
 interface AccountRecord extends DocumentData {
   ownerId: string;
@@ -240,6 +290,76 @@ export const archiveAccount = onCall({ region }, async (request) => {
   });
 });
 
+export const createCategory = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const name = stringValue(request.data?.name, 'Category name', 60);
+  const kind = oneOf(request.data?.kind, categoryKinds, 'category type');
+  const scope = oneOf(request.data?.scope, categoryScopes, 'category scope');
+  const icon = oneOf(request.data?.icon, categoryIcons, 'category icon');
+  const color = oneOf(request.data?.color, categoryColors, 'category colour');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(commandRef);
+    if (existing.exists) return existing.data()?.result;
+    const categoryRef = db.collection('categories').doc(`custom-${randomBytes(10).toString('hex')}`);
+    const now = FieldValue.serverTimestamp();
+    const result = { categoryId: categoryRef.id };
+    transaction.create(categoryRef, {
+      ownerId: uid,
+      name,
+      kind,
+      scope,
+      icon,
+      color,
+      isSystem: false,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.create(commandRef, { uid, kind: 'create_category', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const updateCategory = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const categoryId = stringValue(request.data?.categoryId, 'Category ID');
+  const name = stringValue(request.data?.name, 'Category name', 60);
+  const kind = oneOf(request.data?.kind, categoryKinds, 'category type');
+  const scope = oneOf(request.data?.scope, categoryScopes, 'category scope');
+  const icon = oneOf(request.data?.icon, categoryIcons, 'category icon');
+  const color = oneOf(request.data?.color, categoryColors, 'category colour');
+  const categoryRef = db.collection('categories').doc(categoryId);
+  const snapshot = await categoryRef.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Category not found.');
+  if (snapshot.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this category.');
+  if (snapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Archived categories cannot be edited.');
+  await categoryRef.update({ name, kind, scope, icon, color, updatedAt: FieldValue.serverTimestamp() });
+  return { categoryId };
+});
+
+export const archiveCategory = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const categoryId = stringValue(request.data?.categoryId, 'Category ID');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
+  const categoryRef = db.collection('categories').doc(categoryId);
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(commandRef);
+    if (existing.exists) return existing.data()?.result;
+    const category = await transaction.get(categoryRef);
+    if (!category.exists) throw new HttpsError('not-found', 'Category not found.');
+    if (category.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this category.');
+    const now = FieldValue.serverTimestamp();
+    const result = { categoryId, archived: true };
+    transaction.update(categoryRef, { archivedAt: now, updatedAt: now });
+    transaction.create(commandRef, { uid, kind: 'archive_category', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
 export const postTransaction = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const type = oneOf(request.data?.type, transactionTypes, 'transaction type');
@@ -251,7 +371,7 @@ export const postTransaction = onCall({ region }, async (request) => {
   const spaceId = stringValue(request.data?.spaceId, 'Space');
   const amountMinor = positiveMoney(request.data?.amountMinor);
   const transactionDate = localDate(request.data?.transactionDate);
-  const category = type === 'transfer' ? 'Transfer' : optionalString(request.data?.category, 80) || 'General';
+  const categoryId = type === 'transfer' ? 'system-transfer' : stringValue(request.data?.categoryId, 'Category ID', 80);
   const counterparty = optionalString(request.data?.counterparty, 120);
   const note = optionalString(request.data?.note, 500);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
@@ -261,16 +381,18 @@ export const postTransaction = onCall({ region }, async (request) => {
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
   const accountRef = db.collection('accounts').doc(accountId);
   const destinationRef = destinationAccountId ? db.collection('accounts').doc(destinationAccountId) : null;
+  const customCategoryRef = categoryId.startsWith('custom-') ? db.collection('categories').doc(categoryId) : null;
 
   return db.runTransaction(async (transaction) => {
     const commandSnapshot = await transaction.get(commandRef);
     if (commandSnapshot.exists) return commandSnapshot.data()?.result;
 
-    const [spaceSnapshot, memberSnapshot, accountSnapshot, destinationSnapshot] = await Promise.all([
+    const [spaceSnapshot, memberSnapshot, accountSnapshot, destinationSnapshot, customCategorySnapshot] = await Promise.all([
       transaction.get(spaceRef),
       transaction.get(memberRef),
       transaction.get(accountRef),
       destinationRef ? transaction.get(destinationRef) : Promise.resolve(null),
+      customCategoryRef ? transaction.get(customCategoryRef) : Promise.resolve(null),
     ]);
 
     if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'The selected Space is unavailable.');
@@ -284,6 +406,36 @@ export const postTransaction = onCall({ region }, async (request) => {
     if (account.currency !== spaceCurrency) throw new HttpsError('failed-precondition', 'Account and Space currencies must match.');
     if (destination && destination.currency !== account.currency) {
       throw new HttpsError('failed-precondition', 'Transfer accounts must use the same currency.');
+    }
+
+    const selectedScope: Exclude<CategoryScope, 'both'> = spaceSnapshot.data()?.type === 'sme' ? 'business' : 'personal';
+    let category: CategorySnapshot;
+    if (type === 'transfer') {
+      category = { id: 'system-transfer', name: 'Transfer', kind: 'expense', scope: 'both', icon: 'transfer', color: 'blue', isSystem: true };
+    } else if (customCategoryRef) {
+      if (!customCategorySnapshot?.exists) throw new HttpsError('not-found', 'The selected custom category was not found.');
+      const data = customCategorySnapshot.data();
+      if (data?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own the selected category.');
+      if (data?.archivedAt) throw new HttpsError('failed-precondition', 'The selected category is archived.');
+      const kind = oneOf(data?.kind, categoryKinds, 'category type');
+      const scope = oneOf(data?.scope, categoryScopes, 'category scope');
+      if (kind !== type) throw new HttpsError('failed-precondition', `Choose an ${type} category.`);
+      if (scope !== 'both' && scope !== selectedScope) throw new HttpsError('failed-precondition', 'The selected category is not available for this Space.');
+      category = {
+        id: customCategoryRef.id,
+        name: stringValue(data?.name, 'Category name', 60),
+        kind,
+        scope,
+        icon: oneOf(data?.icon, categoryIcons, 'category icon'),
+        color: oneOf(data?.color, categoryColors, 'category colour'),
+        isSystem: false,
+      };
+    } else {
+      const selected = systemCategories.get(categoryId);
+      if (!selected) throw new HttpsError('invalid-argument', 'Invalid category.');
+      if (selected.kind !== type) throw new HttpsError('failed-precondition', `Choose an ${type} category.`);
+      if (selected.scope !== 'both' && selected.scope !== selectedScope) throw new HttpsError('failed-precondition', 'The selected category is not available for this Space.');
+      category = selected;
     }
 
     const transactionRef = db.collection('transactions').doc();
@@ -348,7 +500,12 @@ export const postTransaction = onCall({ region }, async (request) => {
       destinationAccountId: destinationAccountId || null,
       amountMinor,
       currency: account.currency,
-      category,
+      category: category.name,
+      categoryId: category.id,
+      categoryIcon: category.icon,
+      categoryColor: category.color,
+      categoryScope: category.scope,
+      categoryIsSystem: category.isSystem,
       counterparty,
       note,
       transactionDate,
@@ -471,6 +628,11 @@ export const reverseTransaction = onCall({ region }, async (request) => {
       amountMinor,
       currency: original.currency,
       category: 'Reversal',
+      categoryId: 'system-reversal',
+      categoryIcon: 'reversal',
+      categoryColor: 'slate',
+      categoryScope: original.categoryScope ?? 'both',
+      categoryIsSystem: true,
       counterparty: original.counterparty ?? '',
       note: reason || `Reversal of ${original.displayId || originalTransactionId}`,
       transactionDate: reversalDate,
