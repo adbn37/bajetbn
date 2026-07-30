@@ -26,7 +26,8 @@ import type {
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
-const typeLabels = { income: 'Income', expense: 'Expense', transfer: 'Transfer', reversal: 'Reversal' } as const;
+const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
+const statusLabels = { posted: 'Saved', reversed: 'Undone' } as const;
 
 type PrimaryType = 'income' | 'expense' | 'transfer';
 type TypeFilter = 'all' | PrimaryType;
@@ -155,17 +156,17 @@ export function TransactionsPage() {
   });
 
   const handleReverse = async (item: FinancialTransaction) => {
-    if (!window.confirm(`Reverse ${item.displayId}? A new posted reversal will be created.`)) return;
+    if (!window.confirm(`Undo ${item.displayId}? BajetBN will add a correction record and restore the balance.`)) return;
     setError('');
     try {
       if (item.sharedBillPaymentId) {
         await reverseSharedBillPayment({
           paymentId: item.sharedBillPaymentId,
           reversalDate: dateInTimezone(profile?.timezone || 'Asia/Brunei'),
-          reason: 'Reversed from transaction details',
+          reason: 'Undone from money activity details',
         });
       } else {
-        await reverseTransaction(item.id, dateInTimezone(profile?.timezone || 'Asia/Brunei'), 'Reversed from transaction details');
+        await reverseTransaction(item.id, dateInTimezone(profile?.timezone || 'Asia/Brunei'), 'Undone from money activity details');
       }
       setSelectedTransaction(null);
       await load();
@@ -177,26 +178,26 @@ export function TransactionsPage() {
   return (
     <main className="page">
       <PageHeader
-        eyebrow="Financial ledger"
-        title="Transactions"
-        description="Post income, expenses, and transfers with Brunei-friendly categories and a full audit trail."
+        eyebrow="Money records"
+        title="Money activity"
+        description="Record money in, money out, and money moved between accounts."
         action={<div className="header-actions">
-          <button className="button secondary" onClick={() => setShowCategoryManager(true)}>Manage categories</button>
-          <button className="button primary" onClick={() => setShowForm(true)} disabled={!accounts.length || !spaces.length}>+ New transaction</button>
+          <button className="button secondary" onClick={() => setShowCategoryManager(true)}>Edit categories</button>
+          <button className="button primary" onClick={() => setShowForm(true)} disabled={!accounts.length || !spaces.length}>+ Add money activity</button>
         </div>}
       />
       {error && <div className="notice error">{error}</div>}
-      <div className="info-banner"><strong>Posted records</strong><span>Balances are updated by Cloud Functions. Corrections create reversals; posted financial records are never silently edited.</span></div>
+      <div className="info-banner"><strong>Safe account updates</strong><span>Saving money activity updates your account balance. Use Undo when something was entered wrongly.</span></div>
 
       <section className="transaction-summary">
-        <div><span>Income this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
-        <div><span>Expenses this month</span><strong className="money-negative">{formatMoney(expenses, profile?.currency || 'BND')}</strong></div>
-        <div><span>Net cash flow</span><strong>{formatMoney(income - expenses, profile?.currency || 'BND')}</strong></div>
-        <div><span>Transfers this month</span><strong>{transferCount}</strong></div>
+        <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
+        <div><span>Money out this month</span><strong className="money-negative">{formatMoney(expenses, profile?.currency || 'BND')}</strong></div>
+        <div><span>Money left this month</span><strong>{formatMoney(income - expenses, profile?.currency || 'BND')}</strong></div>
+        <div><span>Money moves this month</span><strong>{transferCount}</strong></div>
       </section>
 
       {expenseCategorySummary.length > 0 && <section className="category-summary-panel">
-        <div className="section-heading"><div><span>Spending mix</span><h2>Top categories this month</h2></div><small>{expenseCategorySummary.length} categories</small></div>
+        <div className="section-heading"><div><span>Where your money went</span><h2>Top categories this month</h2></div><small>{expenseCategorySummary.length} categories</small></div>
         <div className="category-summary-grid">
           {expenseCategorySummary.map(({ category, amountMinor }) => <div className="category-summary-item" key={category.id}>
             <CategoryBadge category={category} />
@@ -205,8 +206,8 @@ export function TransactionsPage() {
         </div>
       </section>}
 
-      {!accounts.length && !loading && <div className="notice">Create an active Account before posting a transaction.</div>}
-      {!spaces.length && !loading && <div className="notice">Create or restore a Space before posting a transaction.</div>}
+      {!accounts.length && !loading && <div className="notice">Add an account before recording money.</div>}
+      {!spaces.length && !loading && <div className="notice">Add or restore a Space before recording money.</div>}
 
       <section className="transaction-toolbar transaction-toolbar-expanded">
         <div className="segmented-control" role="group" aria-label="Transaction type filter">
@@ -215,15 +216,15 @@ export function TransactionsPage() {
         <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, Space, Account, payee…" />
         <div className="transaction-filter-grid">
           <label>Period<select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}><option value="current_month">This month</option><option value="all">All time</option></select></label>
-          <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Posted</option><option value="reversed">Reversed</option></select></label>
+          <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Saved</option><option value="reversed">Undone</option></select></label>
           <label>Space<select value={spaceFilter} onChange={(event) => setSpaceFilter(event.target.value)}><option value="all">All Spaces</option>{spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label>
           <label>Account<select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}><option value="all">All Accounts</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
           <label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{allCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         </div>
       </section>
 
-      {loading ? <div className="loading-panel">Loading transactions…</div> : visibleTransactions.length === 0 ? (
-        <EmptyState title="No matching transactions" description="Adjust the filters or record a new income, expense, or transfer." action={accounts.length && spaces.length ? <button className="button primary" onClick={() => setShowForm(true)}>Create transaction</button> : undefined} />
+      {loading ? <div className="loading-panel">Loading money activity…</div> : visibleTransactions.length === 0 ? (
+        <EmptyState title="No matching money activity" description="Change the filters or add money in, money out, or a money move." action={accounts.length && spaces.length ? <button className="button primary" onClick={() => setShowForm(true)}>Add money activity</button> : undefined} />
       ) : (
         <section className="transaction-list">
           {visibleTransactions.map((item) => {
@@ -248,7 +249,7 @@ export function TransactionsPage() {
                 <small>{item.transactionDate}</small>
               </div>
               <div className="transaction-status">
-                <span className={`status-badge ${item.status}`}>{item.status}</span>
+                <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
                 <button className="text-button" onClick={() => setSelectedTransaction(item)}>Details</button>
               </div>
             </article>;
@@ -387,17 +388,17 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
     }
   };
 
-  return <Modal title="Post transaction" onClose={onClose}><form className="transaction-form" onSubmit={submit}>
+  return <Modal title="Add money activity" onClose={onClose}><form className="transaction-form" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
-    <div className="segmented-control transaction-type-picker" role="group" aria-label="Transaction type">
+    <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
       {(['expense', 'income', 'transfer'] as const).map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
     </div>
 
     <div className="form-grid">
       <label>Date<input required type="date" value={transactionDate} onChange={(event) => setTransactionDate(event.target.value)} /></label>
       <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} · {space.type === 'sme' ? 'SME' : 'Personal'} · {space.currency}</option>)}</select></label>
-      <label className={type === 'transfer' ? '' : 'span-2'}>{type === 'income' ? 'Deposit to' : type === 'expense' ? 'Pay from' : 'From Account'}<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
-      {type === 'transfer' && <label>To Account<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Select destination</option>{destinationOptions.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>}
+      <label className={type === 'transfer' ? '' : 'span-2'}>{type === 'income' ? 'Money goes into' : type === 'expense' ? 'Money comes from' : 'Move from account'}<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
+      {type === 'transfer' && <label>Move to account<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Choose account</option>{destinationOptions.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>}
       <label className="span-2 amount-field">Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})<input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
     </div>
 
@@ -408,18 +409,18 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
     </div></fieldset>}
 
     <div className="form-grid">
-      {type !== 'transfer' && <label>{type === 'income' ? 'Source or customer' : 'Merchant or payee'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} placeholder="Optional" maxLength={120} /></label>}
+      {type !== 'transfer' && <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} placeholder="Optional" maxLength={120} /></label>}
       <label className={type === 'transfer' ? 'span-2' : ''}>Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional details" maxLength={500} /></label>
     </div>
 
     {sourceAccount && amountMinor > 0 && <div className="transaction-preview">
-      <div><span>{sourceAccount.name} after posting</span><strong>{formatMoney(projectedSource, sourceAccount.currency)}</strong></div>
-      {type === 'transfer' && destinationAccount && <div><span>{destinationAccount.name} after posting</span><strong>{formatMoney(projectedDestination, destinationAccount.currency)}</strong></div>}
-      <small>Preview only. The server will calculate and post the final ledger balances.</small>
+      <div><span>{sourceAccount.name} after saving</span><strong>{formatMoney(projectedSource, sourceAccount.currency)}</strong></div>
+      {type === 'transfer' && destinationAccount && <div><span>{destinationAccount.name} after saving</span><strong>{formatMoney(projectedDestination, destinationAccount.currency)}</strong></div>}
+      <small>Preview only. BajetBN will safely update the final account balances.</small>
     </div>}
 
-    {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No active Account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
-    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{busy ? 'Posting…' : `Post ${type}`}</button></div>
+    {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
+    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{busy ? 'Saving…' : 'Save money activity'}</button></div>
   </form></Modal>;
 }
 
@@ -432,29 +433,29 @@ function TransactionDetails({ item, source, destination, space, category, onClos
   onClose: () => void;
   onReverse: () => void;
 }) {
-  return <Modal title="Transaction details" onClose={onClose}>
+  return <Modal title="Money activity details" onClose={onClose}>
     <div className="transaction-detail-hero">
       <CategoryBadge category={category} />
       <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? '−' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
-      <span className={`status-badge ${item.status}`}>{item.status}</span>
+      <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
     </div>
     <dl className="detail-list">
-      <Detail label="Reference">{item.displayId}</Detail>
-      <Detail label="Type">{item.type === 'reversal' && item.originalType ? `Reversal of ${item.originalType}` : typeLabels[item.type]}</Detail>
+      <Detail label="Record number">{item.displayId}</Detail>
+      <Detail label="Type">{item.type === 'reversal' && item.originalType ? `Undo of ${typeLabels[item.originalType]}` : typeLabels[item.type]}</Detail>
       <Detail label="Date">{item.transactionDate}</Detail>
       <Detail label="Space">{space?.name || 'Unknown Space'}</Detail>
       <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ` → ${destination.name}` : ''}</Detail>
-      <Detail label={item.type === 'income' ? 'Source' : 'Payee'}>{item.counterparty || '—'}</Detail>
+      <Detail label={item.type === 'income' ? 'Money from' : 'Paid to'}>{item.counterparty || '—'}</Detail>
       <Detail label="Note">{item.note || '—'}</Detail>
       {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
-      {item.commitmentId && <Detail label="Commitment">Linked bill or instalment</Detail>}
-      {item.sharedBillAssignmentId && <Detail label="Shared bill assignment">{item.sharedBillAssignmentId}</Detail>}
-      {item.sharedBillPaymentId && <Detail label="Shared payment claim">{item.sharedBillPaymentId}</Detail>}
+      {item.commitmentId && <Detail label="Bill or instalment">Linked bill or instalment</Detail>}
+      {item.sharedBillAssignmentId && <Detail label="Person's bill share">{item.sharedBillAssignmentId}</Detail>}
+      {item.sharedBillPaymentId && <Detail label="Payment submitted">{item.sharedBillPaymentId}</Detail>}
       {item.paymentProofPath && <Detail label="Payment proof">Attached in Sharing</Detail>}
-      {item.reversalOf && <Detail label="Reversal of">{item.reversalOf}</Detail>}
-      {item.reversedBy && <Detail label="Reversed by">{item.reversedBy}</Detail>}
+      {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
+      {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
     </dl>
-    <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button>{item.type !== 'reversal' && item.status === 'posted' && <button className="button danger" onClick={onReverse}>Reverse transaction</button>}</div>
+    <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button>{item.type !== 'reversal' && item.status === 'posted' && <button className="button danger" onClick={onReverse}>Undo this activity</button>}</div>
   </Modal>;
 }
 
@@ -473,7 +474,7 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
   const [error, setError] = useState('');
 
   const archive = async (category: TransactionCategory) => {
-    if (!window.confirm(`Archive “${category.name}”? Existing transactions will keep their category snapshot.`)) return;
+    if (!window.confirm(`Hide “${category.name}”? Past money activity will still keep this category name.`)) return;
     setBusyId(category.id);
     setError('');
     try {
@@ -486,14 +487,14 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
     }
   };
 
-  return <Modal title="Manage categories" onClose={onClose}>
+  return <Modal title="Edit categories" onClose={onClose}>
     <div className="category-manager-intro"><div><strong>Brunei-ready defaults</strong><p>{DEFAULT_TRANSACTION_CATEGORIES.length} built-in categories are available automatically. Add custom categories for your own household or SME workflow.</p></div><button className="button primary" onClick={() => { setEditing(null); setShowEditor(true); }}>+ Custom category</button></div>
     {error && <div className="notice error">{error}</div>}
-    {customCategories.length === 0 ? <EmptyState title="No custom categories" description="Built-in categories are already ready to use. Create a custom category when you need a more specific label." /> : <div className="category-manager-list">
+    {customCategories.length === 0 ? <EmptyState title="No custom categories" description="Ready-made categories are available. Add your own only when you need a different name." /> : <div className="category-manager-list">
       {customCategories.map((category) => <div className="category-manager-row" key={category.id}>
         <CategoryBadge category={category} />
         <span className="category-meta">{category.kind} · {category.scope}</span>
-        <div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => void archive(category)}>{busyId === category.id ? 'Archiving…' : 'Archive'}</button></div>
+        <div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => void archive(category)}>{busyId === category.id ? 'Hiding…' : 'Hide'}</button></div>
       </div>)}
     </div>}
     <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button></div>

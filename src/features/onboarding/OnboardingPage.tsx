@@ -38,14 +38,14 @@ export function OnboardingPage() {
       <section className="onboarding-card">
         <span className="step-pill">Step 1 of 1</span>
         <h1>Set up your BajetBN home</h1>
-        <p>We will create a private Personal Space using these defaults. You can add Household, SME, Trip, Goal, and Custom Spaces later.</p>
+        <p>We will create your private Personal Space. You can add household, business, trip, goal, or other Spaces later.</p>
         {error && <div className="notice error">{error}</div>}
         <form onSubmit={submit} className="form-grid">
           <label className="span-2">Full name<input required value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Your full name" /></label>
           <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value as 'en' | 'ms')}><option value="en">English</option><option value="ms">Bahasa Melayu</option></select></label>
           <label>Currency<select value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="BND">BND — Brunei Dollar</option><option value="MYR">MYR — Malaysian Ringgit</option><option value="SGD">SGD — Singapore Dollar</option><option value="USD">USD — US Dollar</option></select></label>
           <label className="span-2">Timezone<select value={timezone} onChange={(event) => setTimezone(event.target.value)}><option value="Asia/Brunei">Asia/Brunei (UTC+8)</option></select></label>
-          <div className="personal-space-preview span-2"><span className="space-icon personal">P</span><div><strong>Personal Space</strong><small>Private · Owner only · {currency}</small></div><span>Created automatically</span></div>
+          <div className="personal-space-preview span-2"><span className="space-icon personal">P</span><div><strong>Personal Space</strong><small>Private · Owner only · {currency}</small></div><span>We will create this for you</span></div>
           <button className="button primary span-2" disabled={busy}>{busy ? 'Creating your Space…' : 'Finish setup'}</button>
         </form>
       </section>

@@ -5,15 +5,15 @@ const source = fs.readFileSync(file, 'utf8');
 
 const required = [
   'Amount due each cycle (BND)',
-  'The amount normally due for every billing period.',
-  'Total commitment amount (BND)',
-  'The full purchase, loan, or instalment-plan amount.',
+  'The amount you normally pay each time this bill is due.',
+  'Full instalment total (BND)',
+  'The full amount you need to pay from start to finish.',
   'Instalment amount per cycle (BND)',
-  'The scheduled amount due for each weekly or monthly payment.',
+  'The amount you normally pay each time.',
   'Amount paid now (BND)',
-  'Remaining balance before payment',
-  'Remaining balance after payment',
-  'Total commitment amount must be at least the instalment amount per cycle.',
+  'Amount left before payment',
+  'Amount left after payment',
+  'The full instalment total must be the same as or more than one payment.',
 ];
 
 for (const text of required) {
@@ -27,6 +27,9 @@ const forbidden = [
   '<label>Total amount (BND)',
   '<label>Amount (BND)',
   'Instalment total must be at least one payment amount.',
+  'Total commitment amount (BND)',
+  'Remaining balance before payment',
+  'Remaining balance after payment',
 ];
 
 for (const text of forbidden) {

@@ -37,7 +37,7 @@ export default function App() {
       <Route path="bills" element={<CommitmentsPage />} />
       <Route path="sharing" element={<CollaborationPage />} />
       <Route path="join" element={<JoinSpacePage />} />
-      <Route path="reports" element={<PlaceholderPage title="Reports" version="v0.9.0" description="Financial health, cash flow, category trends, Space reports, and exports." />} />
+      <Route path="reports" element={<PlaceholderPage title="Money reports" version="v0.9.0" description="See money in, money out, spending by category, and reports for each Space." />} />
       <Route path="settings" element={<SettingsPage />} />
     </Route>
     <Route path="*" element={<NotFoundPage />} />
