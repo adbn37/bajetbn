@@ -279,7 +279,7 @@ export const completeOnboarding = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const fullName = stringValue(request.data?.fullName, 'Full name');
   const language = oneOf(request.data?.language, ['en', 'ms'] as const, 'language');
-  const currency = oneOf(request.data?.currency, ['BND', 'MYR', 'SGD', 'USD'] as const, 'currency');
+  const currency = oneOf(request.data?.currency, ['BND'] as const, 'currency');
   const timezone = oneOf(request.data?.timezone, ['Asia/Brunei'] as const, 'timezone');
   const userRef = db.collection('users').doc(uid);
 
@@ -304,6 +304,9 @@ export const completeOnboarding = onCall({ region }, async (request) => {
     });
     transaction.set(userRef, {
       uid, fullName, email: request.auth?.token.email || '', language, currency, timezone,
+      appearance: 'dark', textSize: 'normal', notificationsEnabled: true,
+      dueSoonReminders: true, lateReminders: true, sharedPaymentNotifications: true,
+      whatsappRemindersEnabled: true, reminderDaysBefore: 3,
       onboardingCompleted: true, personalSpaceId: spaceRef.id,
       createdAt: userSnapshot.exists ? userSnapshot.data()?.createdAt || now : now, updatedAt: now,
     }, { merge: true });

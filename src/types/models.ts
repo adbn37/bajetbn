@@ -1,6 +1,8 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export type Language = 'en' | 'ms';
+export type Appearance = 'dark' | 'light' | 'system';
+export type TextSize = 'normal' | 'large';
 export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'custom';
 export type SpaceRole = 'owner' | 'admin' | 'contributor' | 'payer' | 'viewer' | 'member';
 export type SpaceMemberStatus = 'active' | 'suspended' | 'removed';
@@ -88,6 +90,14 @@ export interface UserProfile {
   language: Language;
   currency: string;
   timezone: string;
+  appearance?: Appearance;
+  textSize?: TextSize;
+  notificationsEnabled?: boolean;
+  dueSoonReminders?: boolean;
+  lateReminders?: boolean;
+  sharedPaymentNotifications?: boolean;
+  whatsappRemindersEnabled?: boolean;
+  reminderDaysBefore?: number;
   onboardingCompleted: boolean;
   personalSpaceId?: string;
   createdAt?: Timestamp;

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePreferences } from '../../contexts/PreferencesContext';
 import { listAccounts } from '../../repositories/accountRepository';
 import { listSharedBillAssignments } from '../../repositories/collaborationRepository';
 import { listCommitments } from '../../repositories/commitmentRepository';
@@ -12,6 +13,7 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import type {
   Account,
   Commitment,
+  Language,
   ReminderHistory,
   ReminderItemType,
   SavingsGoal,
@@ -20,6 +22,7 @@ import type {
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
+import { localeForLanguage } from '../../services/i18n';
 
 type ReminderState = 'late' | 'today' | 'soon' | 'later';
 
@@ -75,13 +78,13 @@ function moveMonth(month: string, amount: number) {
   return monthValue(date);
 }
 
-function monthTitle(month: string) {
+function monthTitle(month: string, locale: string) {
   const [year, monthNumber] = month.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1, 1));
+  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1, 1));
 }
 
-function readableDate(date: string) {
-  return new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).format(dateFromString(date));
+function readableDate(date: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(dateFromString(date));
 }
 
 function calendarDates(month: string) {
@@ -112,18 +115,23 @@ function stateLabel(state: ReminderState) {
   return 'Later';
 }
 
-function buildReminderMessage(item: CalendarItem) {
-  const amount = typeof item.amountMinor === 'number' ? ` Amount: ${formatMoney(item.amountMinor, item.currency)}.` : '';
-  return `Reminder: ${item.title} is due on ${readableDate(item.date)}.${amount} Please check BajetBN.`;
+function buildReminderMessage(item: CalendarItem, locale: string, language: Language) {
+  const amount = typeof item.amountMinor === 'number' ? formatMoney(item.amountMinor, item.currency) : '';
+  if (language === 'ms') {
+    return `Peringatan: ${item.title} perlu dibayar pada ${readableDate(item.date, locale)}.${amount ? ` Jumlah: ${amount}.` : ''} Sila semak BajetBN.`;
+  }
+  return `Reminder: ${item.title} is due on ${readableDate(item.date, locale)}.${amount ? ` Amount: ${amount}.` : ''} Please check BajetBN.`;
 }
 
-function ItemList({ items, spaces, accounts, onRemind, onWhatsApp, busyId }: {
+function ItemList({ items, spaces, accounts, onRemind, onWhatsApp, busyId, locale, showWhatsApp }: {
   items: CalendarItem[];
   spaces: Map<string, Space>;
   accounts: Map<string, Account>;
   onRemind: (item: CalendarItem) => Promise<void>;
   onWhatsApp: (item: CalendarItem) => Promise<void>;
   busyId: string;
+  locale: string;
+  showWhatsApp: boolean;
 }) {
   if (!items.length) return <div className="calendar-list-empty">Nothing here.</div>;
 
@@ -132,7 +140,7 @@ function ItemList({ items, spaces, accounts, onRemind, onWhatsApp, busyId }: {
       const space = spaces.get(item.spaceId);
       const account = item.accountId ? accounts.get(item.accountId) : null;
       return <article className={`calendar-item state-${item.state}`} key={item.id}>
-        <div className="calendar-item-date"><strong>{dateFromString(item.date).getDate()}</strong><span>{new Intl.DateTimeFormat('en-US', { month: 'short' }).format(dateFromString(item.date))}</span></div>
+        <div className="calendar-item-date"><strong>{dateFromString(item.date).getDate()}</strong><span>{new Intl.DateTimeFormat(locale, { month: 'short' }).format(dateFromString(item.date))}</span></div>
         <div className="calendar-item-main">
           <div className="calendar-item-heading"><div><span className="type-badge">{itemTypeLabel(item.itemType)}</span><strong>{item.title}</strong></div>{typeof item.amountMinor === 'number' && <b>{formatMoney(item.amountMinor, item.currency)}</b>}</div>
           <p>{item.detail}</p>
@@ -141,7 +149,7 @@ function ItemList({ items, spaces, accounts, onRemind, onWhatsApp, busyId }: {
         <div className="calendar-item-actions">
           <Link className="button secondary" to={item.route}>Open</Link>
           <button className="button secondary" disabled={busyId === item.id} onClick={() => void onRemind(item)}>Mark as reminded</button>
-          <button className="button secondary" disabled={busyId === item.id || !space?.headWhatsapp} onClick={() => void onWhatsApp(item)} title={space?.headWhatsapp ? 'Open WhatsApp with a ready message' : 'Add a WhatsApp number in Sharing first'}>WhatsApp</button>
+          {showWhatsApp && <button className="button secondary" disabled={busyId === item.id || !space?.headWhatsapp} onClick={() => void onWhatsApp(item)} title={space?.headWhatsapp ? 'Open WhatsApp with a ready message' : 'Add a WhatsApp number in Sharing first'}>WhatsApp</button>}
         </div>
       </article>;
     })}
@@ -150,6 +158,8 @@ function ItemList({ items, spaces, accounts, onRemind, onWhatsApp, busyId }: {
 
 export function CalendarPage() {
   const { user, profile } = useAuth();
+  const { language, whatsappRemindersEnabled } = usePreferences();
+  const locale = localeForLanguage(language);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [commitments, setCommitments] = useState<Commitment[]>([]);
@@ -293,7 +303,7 @@ export function CalendarPage() {
         spaceId: item.spaceId,
         dueDate: item.date,
         action: 'marked_reminded',
-        message: buildReminderMessage(item),
+        message: buildReminderMessage(item, locale, language),
       });
       await loadHistory(user.uid);
       setSuccess(`Reminder saved for ${item.title}.`);
@@ -311,7 +321,7 @@ export function CalendarPage() {
       setError('Add a WhatsApp number for this Space on the Sharing page first.');
       return;
     }
-    const message = buildReminderMessage(item);
+    const message = buildReminderMessage(item, locale, language);
     const digits = phone.replace(/\D/g, '');
     window.open(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
     setBusyId(item.id);
@@ -360,27 +370,27 @@ export function CalendarPage() {
     </section>
 
     <section className="reminder-section-grid">
-      <article className="panel"><div className="panel-heading"><div><h2>Late</h2><p>These dates have passed.</p></div><span className="type-badge">{lateItems.length}</span></div><ItemList items={lateItems.slice(0, 5)} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} /></article>
-      <article className="panel"><div className="panel-heading"><div><h2>Due today</h2><p>Things to handle today.</p></div><span className="type-badge">{todayItems.length}</span></div><ItemList items={todayItems.slice(0, 5)} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} /></article>
-      <article className="panel"><div className="panel-heading"><div><h2>Coming soon</h2><p>Due in the next 7 days.</p></div><span className="type-badge">{soonItems.length}</span></div><ItemList items={soonItems.slice(0, 5)} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} /></article>
+      <article className="panel"><div className="panel-heading"><div><h2>Late</h2><p>These dates have passed.</p></div><span className="type-badge">{lateItems.length}</span></div><ItemList items={lateItems.slice(0, 5)} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} locale={locale} showWhatsApp={whatsappRemindersEnabled} /></article>
+      <article className="panel"><div className="panel-heading"><div><h2>Due today</h2><p>Things to handle today.</p></div><span className="type-badge">{todayItems.length}</span></div><ItemList items={todayItems.slice(0, 5)} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} locale={locale} showWhatsApp={whatsappRemindersEnabled} /></article>
+      <article className="panel"><div className="panel-heading"><div><h2>Coming soon</h2><p>Due in the next 7 days.</p></div><span className="type-badge">{soonItems.length}</span></div><ItemList items={soonItems.slice(0, 5)} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} locale={locale} showWhatsApp={whatsappRemindersEnabled} /></article>
     </section>
 
     <section className="calendar-workspace">
       <article className="panel month-calendar-panel">
-        <div className="calendar-month-heading"><button className="icon-button" onClick={() => { const next = moveMonth(selectedMonth, -1); setSelectedMonth(next); setSelectedDate(`${next}-01`); }} aria-label="Previous month">‹</button><h2>{monthTitle(selectedMonth)}</h2><button className="icon-button" onClick={() => { const next = moveMonth(selectedMonth, 1); setSelectedMonth(next); setSelectedDate(`${next}-01`); }} aria-label="Next month">›</button></div>
+        <div className="calendar-month-heading"><button className="icon-button" onClick={() => { const next = moveMonth(selectedMonth, -1); setSelectedMonth(next); setSelectedDate(`${next}-01`); }} aria-label="Previous month">‹</button><h2>{monthTitle(selectedMonth, locale)}</h2><button className="icon-button" onClick={() => { const next = moveMonth(selectedMonth, 1); setSelectedMonth(next); setSelectedDate(`${next}-01`); }} aria-label="Next month">›</button></div>
         <div className="calendar-weekdays">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => <span key={day}>{day}</span>)}</div>
         <div className="calendar-grid">{calendarDates(selectedMonth).map((date, index) => date ? <button key={date} className={`${date === selectedDate ? 'selected' : ''} ${date === localDateString() ? 'today' : ''}`} onClick={() => setSelectedDate(date)}><span>{dateFromString(date).getDate()}</span>{Boolean(itemCountByDate.get(date)) && <b>{itemCountByDate.get(date)}</b>}</button> : <span className="calendar-blank" key={`blank-${index}`} />)}</div>
       </article>
 
       <article className="panel selected-date-panel">
-        <div className="panel-heading"><div><span className="eyebrow">Selected date</span><h2>{readableDate(selectedDate)}</h2></div><span className="type-badge">{selectedDateItems.length}</span></div>
-        {selectedDateItems.length ? <ItemList items={selectedDateItems} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} /> : <EmptyState title="Nothing planned" description="There are no bills, instalments, shared bills, or goal dates on this day." />}
+        <div className="panel-heading"><div><span className="eyebrow">Selected date</span><h2>{readableDate(selectedDate, locale)}</h2></div><span className="type-badge">{selectedDateItems.length}</span></div>
+        {selectedDateItems.length ? <ItemList items={selectedDateItems} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} locale={locale} showWhatsApp={whatsappRemindersEnabled} /> : <EmptyState title="Nothing planned" description="There are no bills, instalments, shared bills, or goal dates on this day." />}
       </article>
     </section>
 
     <section className="panel reminder-history-panel">
       <div className="panel-heading"><div><h2>Reminder history</h2><p>A simple record of reminders you marked or opened in WhatsApp.</p></div></div>
-      {history.length ? <div className="reminder-history-list">{history.slice(0, 20).map((item) => <article key={item.id}><span className="activity-dot" /><div><strong>{item.itemName}</strong><small>{item.action === 'whatsapp_opened' ? 'WhatsApp reminder opened' : 'Marked as reminded'}{item.dueDate ? ` · Due ${readableDate(item.dueDate)}` : ''}</small></div><time>{item.createdAt ? new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(item.createdAt.toDate()) : 'Just now'}</time></article>)}</div> : <EmptyState title="No reminder history yet" description="Use Mark as reminded or WhatsApp and it will appear here." />}
+      {history.length ? <div className="reminder-history-list">{history.slice(0, 20).map((item) => <article key={item.id}><span className="activity-dot" /><div><strong>{item.itemName}</strong><small>{item.action === 'whatsapp_opened' ? 'WhatsApp reminder opened' : 'Marked as reminded'}{item.dueDate ? ` · Due ${readableDate(item.dueDate, locale)}` : ''}</small></div><time>{item.createdAt ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(item.createdAt.toDate()) : 'Just now'}</time></article>)}</div> : <EmptyState title="No reminder history yet" description="Use Mark as reminded or WhatsApp and it will appear here." />}
     </section>
   </main>;
 }
