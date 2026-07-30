@@ -368,3 +368,20 @@ export interface CommitmentPayment {
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
+
+export type ReminderItemType = 'bill' | 'instalment' | 'goal' | 'shared_bill';
+export type ReminderAction = 'marked_reminded' | 'whatsapp_opened';
+
+export interface ReminderHistory {
+  id: string;
+  uid: string;
+  itemType: ReminderItemType;
+  itemId: string;
+  itemName: string;
+  spaceId?: string | null;
+  dueDate?: string | null;
+  action: ReminderAction;
+  message: string;
+  phone?: string | null;
+  createdAt?: Timestamp;
+}

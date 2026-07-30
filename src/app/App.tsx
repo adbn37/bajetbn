@@ -15,6 +15,8 @@ import { GoalsPage } from '../features/goals/GoalsPage';
 import { CommitmentsPage } from '../features/commitments/CommitmentsPage';
 import { CollaborationPage } from '../features/collaboration/CollaborationPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
+import { CalendarPage } from '../features/calendar/CalendarPage';
+import { SearchPage } from '../features/search/SearchPage';
 import { JoinSpacePage } from '../features/collaboration/JoinSpacePage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
@@ -38,6 +40,8 @@ export default function App() {
       <Route path="sharing" element={<CollaborationPage />} />
       <Route path="join" element={<JoinSpacePage />} />
       <Route path="reports" element={<ReportsPage />} />
+      <Route path="calendar" element={<CalendarPage />} />
+      <Route path="search" element={<SearchPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </Route>
     <Route path="*" element={<NotFoundPage />} />
