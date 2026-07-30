@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
+import { PreferencesProvider } from '../contexts/PreferencesContext';
 import { firebaseConfigured } from '../services/firebase';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { AppShell } from '../layouts/AppShell';
@@ -26,7 +27,7 @@ import { ProtectedRoute } from './RouteGuards';
 
 export default function App() {
   if (!firebaseConfigured) return <SetupRequiredPage />;
-  return <AuthProvider><BrowserRouter><Routes>
+  return <AuthProvider><PreferencesProvider><BrowserRouter><Routes>
     <Route element={<AuthLayout />}><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/verify-email" element={<VerifyEmailPage />} /></Route>
     <Route path="/onboarding" element={<OnboardingPage />} />
     <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
@@ -45,5 +46,5 @@ export default function App() {
       <Route path="settings" element={<SettingsPage />} />
     </Route>
     <Route path="*" element={<NotFoundPage />} />
-  </Routes></BrowserRouter></AuthProvider>;
+  </Routes></BrowserRouter></PreferencesProvider></AuthProvider>;
 }

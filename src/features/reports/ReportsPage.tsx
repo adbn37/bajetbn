@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePreferences } from '../../contexts/PreferencesContext';
 import { categoryIconGlyph } from '../categories/defaultCategories';
 import { listAccounts } from '../../repositories/accountRepository';
 import { listBudgets } from '../../repositories/budgetRepository';
@@ -11,6 +12,7 @@ import { listTransactions } from '../../repositories/transactionRepository';
 import type { Account, Budget, Commitment, FinancialTransaction, SavingsGoal, Space } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
+import { localeForLanguage } from '../../services/i18n';
 
 interface AmountBarItem {
   id: string;
@@ -30,9 +32,9 @@ function moveMonth(month: string, amount: number) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function monthName(month: string) {
+function monthName(month: string, locale: string) {
   const [year, monthNumber] = month.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1, 1));
+  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1, 1));
 }
 
 function categoryKey(transaction: FinancialTransaction) {
@@ -63,6 +65,8 @@ function AmountBars({ items, currency, emptyText }: { items: AmountBarItem[]; cu
 
 export function ReportsPage() {
   const { user, profile } = useAuth();
+  const { language } = usePreferences();
+  const locale = localeForLanguage(language);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
@@ -242,7 +246,7 @@ export function ReportsPage() {
     {error && <div className="notice error">{error}</div>}
 
     <section className="report-filter-panel" aria-label="Report filters">
-      <label>Month<select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}><option value="">All time</option>{monthOptions.map((month) => <option value={month} key={month}>{monthName(month)}</option>)}</select></label>
+      <label>Month<select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}><option value="">All time</option>{monthOptions.map((month) => <option value={month} key={month}>{monthName(month, locale)}</option>)}</select></label>
       <label>Space<select value={selectedSpace} onChange={(event) => setSelectedSpace(event.target.value)}><option value="">All Spaces</option>{spaces.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
       <label>Account<select value={selectedAccount} onChange={(event) => setSelectedAccount(event.target.value)}><option value="">All accounts</option>{accounts.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
       <label>Category<select value={selectedCategory} onChange={(event) => setSelectedCategory(event.target.value)}><option value="">All categories</option>{categoryOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
@@ -254,7 +258,7 @@ export function ReportsPage() {
       <article className="summary-card featured"><span>Money in</span><strong>{loading ? '—' : formatMoney(moneyIn, currency)}</strong><small>{selectedMonth ? comparisonText(moneyIn, previousMoneyIn, currency) : 'All saved income'}</small></article>
       <article className="summary-card"><span>Money out</span><strong>{loading ? '—' : formatMoney(moneyOut, currency)}</strong><small>{selectedMonth ? comparisonText(moneyOut, previousMoneyOut, currency) : 'All saved spending'}</small></article>
       <article className={`summary-card ${moneyLeft < 0 ? 'report-warning-card' : ''}`}><span>Money left</span><strong>{loading ? '—' : formatMoney(moneyLeft, currency)}</strong><small>Money in minus money out</small></article>
-      <article className="summary-card"><span>Activity shown</span><strong>{loading ? '—' : filteredTransactions.length}</strong><small>{selectedMonth ? monthName(selectedMonth) : 'All time'}</small></article>
+      <article className="summary-card"><span>Activity shown</span><strong>{loading ? '—' : filteredTransactions.length}</strong><small>{selectedMonth ? monthName(selectedMonth, locale) : 'All time'}</small></article>
     </section>
 
     <section className="reports-grid">

@@ -1,11 +1,19 @@
 import { Outlet } from 'react-router-dom';
 import { Brand } from '../components/Brand';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 export function AuthLayout() {
+  const { language, setLanguage } = usePreferences();
   return (
     <main className="auth-shell">
       <section className="auth-intro">
-        <Brand />
+        <div className="auth-brand-row">
+          <Brand />
+          <div className="language-switch" aria-label="Language">
+            <button type="button" className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>English</button>
+            <button type="button" className={language === 'ms' ? 'active' : ''} onClick={() => setLanguage('ms')}>Bahasa Melayu</button>
+          </div>
+        </div>
         <div>
           <span className="eyebrow">Built for Brunei</span>
           <h1>One place for the money behind your life.</h1>

@@ -56,8 +56,19 @@ service cloud.firestore {
       allow create: if false; // Created by the onboarding Cloud Function.
       allow update: if isSelf(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'fullName', 'language', 'currency', 'timezone', 'updatedAt'
-        ]);
+          'fullName', 'language', 'currency', 'timezone', 'appearance', 'textSize',
+          'notificationsEnabled', 'dueSoonReminders', 'lateReminders',
+          'sharedPaymentNotifications', 'whatsappRemindersEnabled',
+          'reminderDaysBefore', 'updatedAt'
+        ])
+        && request.resource.data.currency == 'BND'
+        && request.resource.data.timezone == 'Asia/Brunei'
+        && request.resource.data.language in ['en', 'ms']
+        && request.resource.data.appearance in ['dark', 'light', 'system']
+        && request.resource.data.textSize in ['normal', 'large']
+        && request.resource.data.reminderDaysBefore is int
+        && request.resource.data.reminderDaysBefore >= 0
+        && request.resource.data.reminderDaysBefore <= 30;
       allow delete: if false;
 
       match /commands/{commandId} {
