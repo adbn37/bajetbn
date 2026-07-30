@@ -12,6 +12,7 @@ const friendlyMessages: Record<string, string> = {
   'functions/not-found': 'The selected record could not be found. Refresh and try again.',
   'functions/already-exists': 'This record already exists.',
   'functions/failed-precondition': 'This action cannot be completed with the current record state.',
+  'functions/deadline-exceeded': 'This invitation has expired. Ask the Space owner for a new invitation.',
   'functions/unavailable': 'The BajetBN service is temporarily unavailable. Check your connection and retry.',
 };
 

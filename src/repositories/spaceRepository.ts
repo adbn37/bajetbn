@@ -16,7 +16,9 @@ import { createClientDisplayId } from '../utils/ids';
 export async function listSpaces(uid: string): Promise<Space[]> {
   const { db } = requireFirebase();
   const memberSnapshot = await getDocs(query(collection(db, 'spaceMembers'), where('uid', '==', uid)));
-  const spaceIds = memberSnapshot.docs.map((item) => item.data().spaceId as string);
+  const spaceIds = memberSnapshot.docs
+    .filter((item) => !item.data().status || item.data().status === 'active')
+    .map((item) => item.data().spaceId as string);
   const spaces: Space[] = [];
 
   for (let index = 0; index < spaceIds.length; index += 10) {
@@ -48,6 +50,8 @@ export async function createSpace(input: {
     type: input.type,
     ownerId: input.uid,
     collaborationMode: 'owner_managed',
+    approvalMode: 'none',
+    headWhatsapp: '',
     currency: input.currency,
     timezone: input.timezone,
     description: input.description?.trim() || '',
@@ -59,6 +63,7 @@ export async function createSpace(input: {
     spaceId: spaceRef.id,
     uid: input.uid,
     role: 'owner',
+    status: 'active',
     canUseAccounts: true,
     canViewBalances: true,
     canViewLedger: true,

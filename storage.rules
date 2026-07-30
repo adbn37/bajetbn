@@ -14,14 +14,30 @@ service firebase.storage {
       return request.resource.size < 10 * 1024 * 1024;
     }
 
+    function membershipId(spaceId, uid) {
+      return spaceId + '_' + uid;
+    }
+
+    function isActiveSpaceMember(spaceId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid)))
+        && (!('status' in firestore.get(/databases/(default)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data)
+          || firestore.get(/databases/(default)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.status == 'active');
+    }
+
     match /users/{uid}/{allPaths=**} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, update: if signedIn() && request.auth.uid == uid && isImageOrPdf() && underTenMb();
       allow delete: if signedIn() && request.auth.uid == uid;
     }
 
-    // Receipt support is reserved for v0.8.0. Keep uploads denied until
-    // membership-aware Storage rules and upload metadata validation are enabled.
+    match /spaces/{spaceId}/payment-proofs/{assignmentId}/{fileName} {
+      allow read: if isActiveSpaceMember(spaceId);
+      allow create: if isActiveSpaceMember(spaceId) && isImageOrPdf() && underTenMb();
+      allow update, delete: if false;
+    }
+
+    // General receipts remain reserved for v0.8.0.
     match /spaces/{spaceId}/receipts/{allPaths=**} {
       allow read, write: if false;
     }

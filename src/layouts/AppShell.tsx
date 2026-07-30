@@ -12,6 +12,7 @@ const navigation = [
   ['/budgets', 'Budgets', '▤'],
   ['/goals', 'Goals', '◇'],
   ['/bills', 'Bills', '◷'],
+  ['/sharing', 'Sharing', '◎'],
   ['/reports', 'Reports', '⌁'],
 ];
 

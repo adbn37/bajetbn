@@ -13,7 +13,7 @@ export function LoginPage() {
 
   if (user) {
     if (!user.emailVerified && user.providerData.some((item) => item.providerId === 'password')) return <Navigate to="/verify-email" replace />;
-    return <Navigate to={profile?.onboardingCompleted ? '/' : '/onboarding'} replace />;
+    return <Navigate to={profile?.onboardingCompleted ? (location.state?.from || '/') : '/onboarding'} replace />;
   }
 
   const submit = async (event: FormEvent) => {
