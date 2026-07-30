@@ -13,6 +13,8 @@ import { TransactionsPage } from '../features/transactions/TransactionsPage';
 import { BudgetsPage } from '../features/budgets/BudgetsPage';
 import { GoalsPage } from '../features/goals/GoalsPage';
 import { CommitmentsPage } from '../features/commitments/CommitmentsPage';
+import { CollaborationPage } from '../features/collaboration/CollaborationPage';
+import { JoinSpacePage } from '../features/collaboration/JoinSpacePage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
@@ -33,6 +35,8 @@ export default function App() {
       <Route path="budgets" element={<BudgetsPage />} />
       <Route path="goals" element={<GoalsPage />} />
       <Route path="bills" element={<CommitmentsPage />} />
+      <Route path="sharing" element={<CollaborationPage />} />
+      <Route path="join" element={<JoinSpacePage />} />
       <Route path="reports" element={<PlaceholderPage title="Reports" version="v0.9.0" description="Financial health, cash flow, category trends, Space reports, and exports." />} />
       <Route path="settings" element={<SettingsPage />} />
     </Route>

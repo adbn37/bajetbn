@@ -14,12 +14,20 @@ service cloud.firestore {
     }
 
     function isSpaceMember(spaceId) {
-      return signedIn() && exists(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid)));
+      return signedIn()
+        && exists(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid)))
+        && (!('status' in get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data)
+          || get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.status == 'active');
     }
 
     function isSpaceOwner(spaceId) {
-      return signedIn()
+      return isSpaceMember(spaceId)
         && get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role == 'owner';
+    }
+
+    function isSpaceManager(spaceId) {
+      return isSpaceMember(spaceId)
+        && get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role in ['owner', 'admin'];
     }
 
     function accountAccessId(accountId, uid) {
@@ -121,13 +129,41 @@ service cloud.firestore {
     }
 
     match /commitments/{commitmentId} {
-      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow read: if signedIn() && (resource.data.ownerId == request.auth.uid || isSpaceMember(resource.data.spaceId));
       allow create, update, delete: if false;
     }
 
     match /commitmentPayments/{paymentId} {
       allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
       allow create, update, delete: if false;
+    }
+
+
+    match /spaceInvitations/{invitationId} {
+      allow read: if signedIn() && isSpaceManager(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /sharedBillAssignments/{assignmentId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /spaceActivities/{activityId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /userNotifications/{notificationId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      allow create, delete: if false;
+    }
+
+    match /collaborationCommands/{commandId} {
+      allow read, write: if false;
     }
 
     match /financialCommands/{commandId} {

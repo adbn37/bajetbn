@@ -7,7 +7,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
   if (loading) return <LoadingScreen />;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   const passwordUser = user.providerData.some((item) => item.providerId === 'password');
   if (passwordUser && !user.emailVerified) return <Navigate to="/verify-email" replace />;
   if (!profile?.onboardingCompleted) return <Navigate to="/onboarding" replace />;

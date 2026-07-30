@@ -295,7 +295,7 @@ export const completeOnboarding = onCall({ region }, async (request) => {
 
     transaction.set(spaceRef, {
       displayId: displayId('SPC'), name: 'Personal', type: 'personal', ownerId: uid,
-      collaborationMode: 'private', currency, timezone, description: 'Your private financial home.', archivedAt: null,
+      collaborationMode: 'private', approvalMode: 'none', headWhatsapp: '', currency, timezone, description: 'Your private financial home.', archivedAt: null,
       createdAt: now, updatedAt: now,
     });
     transaction.set(memberRef, {
@@ -888,4 +888,300 @@ export const archiveCommitment = onCall({ region }, async request=>{const uid=re
 export const payCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const accountId=stringValue(request.data?.accountId,'Account');const requestedAmount=request.data?.amountMinor==null?null:positiveMoney(request.data?.amountMinor);const paymentDate=localDate(request.data?.paymentDate,'Payment date');const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const commitmentRef=db.collection('commitments').doc(commitmentId);const accountRef=db.collection('accounts').doc(accountId);const budgetCandidateRefs=(await db.collection('budgets').where('ownerId','==',uid).get()).docs.map(item=>item.ref);
   return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+});
+
+// v0.7 Collaboration and WhatsApp coordination
+const collaborationRoles = ['admin', 'contributor', 'payer', 'viewer'] as const;
+const approvalModes = ['none', 'owner_approval'] as const;
+type CollaborationRole = (typeof collaborationRoles)[number];
+
+function normalizedEmail(value: unknown): string {
+  const email = stringValue(value, 'Email address', 180).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid email address.');
+  return email;
+}
+
+function optionalPhone(value: unknown): string {
+  const phone = optionalString(value, 32);
+  if (phone && !/^\+?[0-9 ()-]{7,32}$/.test(phone)) throw new HttpsError('invalid-argument', 'Enter a valid WhatsApp number.');
+  return phone;
+}
+
+async function requireActiveSpaceMember(spaceId: string, uid: string): Promise<DocumentData> {
+  const snapshot = await db.collection('spaceMembers').doc(`${spaceId}_${uid}`).get();
+  if (!snapshot.exists) throw new HttpsError('permission-denied', 'You are not a member of this Space.');
+  const member = snapshot.data() || {};
+  if (member.status === 'suspended' || member.status === 'removed') throw new HttpsError('permission-denied', 'Your Space access is not active.');
+  return member;
+}
+
+async function requireSpaceManager(spaceId: string, uid: string): Promise<DocumentData> {
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  if (member.role !== 'owner' && member.role !== 'admin') throw new HttpsError('permission-denied', 'Only the Space owner or an admin can manage collaboration.');
+  return member;
+}
+
+function createActivity(transaction: Transaction, input: { spaceId: string; actorUid: string; actorName?: string; action: string; targetType?: string; targetId?: string; summary: string; now: FieldValue }) {
+  const ref = db.collection('spaceActivities').doc();
+  transaction.create(ref, {
+    displayId: displayId('ACT'), spaceId: input.spaceId, actorUid: input.actorUid,
+    actorName: input.actorName || '', action: input.action, targetType: input.targetType || '',
+    targetId: input.targetId || '', summary: input.summary, createdAt: input.now,
+  });
+}
+
+function createNotification(transaction: Transaction, input: { uid: string; spaceId?: string | null; type: string; title: string; message: string; now: FieldValue }) {
+  const ref = db.collection('userNotifications').doc();
+  transaction.create(ref, { uid: input.uid, spaceId: input.spaceId || null, type: input.type, title: input.title, message: input.message, readAt: null, createdAt: input.now });
+}
+
+export const updateSpaceCollaborationSettings = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const approvalMode = oneOf(request.data?.approvalMode, approvalModes, 'approval mode');
+  const headWhatsapp = optionalPhone(request.data?.headWhatsapp);
+  const manager = await requireSpaceManager(spaceId, uid);
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const space = await spaceRef.get();
+  if (!space.exists || space.data()?.archivedAt) throw new HttpsError('not-found', 'Space not found.');
+  if (space.data()?.type === 'personal') throw new HttpsError('failed-precondition', 'Personal Spaces cannot enable collaboration.');
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    transaction.update(spaceRef, { collaborationMode: 'collaborative', approvalMode, headWhatsapp, updatedAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'settings_updated', targetType: 'space', targetId: spaceId, summary: `Updated collaboration settings for ${space.data()?.name || 'the Space'}.`, now });
+  });
+  return { spaceId };
+});
+
+export const createSpaceInvitation = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const email = normalizedEmail(request.data?.email);
+  const role = oneOf(request.data?.role, collaborationRoles, 'member role');
+  const canUseAccounts = request.data?.canUseAccounts === true;
+  const canViewBalances = request.data?.canViewBalances === true;
+  const canViewLedger = request.data?.canViewLedger === true;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const manager = await requireSpaceManager(spaceId, uid);
+  const space = await db.collection('spaces').doc(spaceId).get();
+  if (!space.exists || space.data()?.archivedAt) throw new HttpsError('not-found', 'Space not found.');
+  if (space.data()?.type === 'personal') throw new HttpsError('failed-precondition', 'Personal Spaces cannot have members.');
+  const existing = await db.collection('spaceInvitations').where('spaceId', '==', spaceId).where('email', '==', email).get();
+  if (existing.docs.some((item) => item.data().status === 'pending')) throw new HttpsError('already-exists', 'A pending invitation already exists for this email.');
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  const invitationRef = db.collection('spaceInvitations').doc();
+  const token = randomBytes(24).toString('hex');
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+    const now = FieldValue.serverTimestamp();
+    const result = { invitationId: invitationRef.id, token };
+    transaction.create(invitationRef, {
+      displayId: displayId('INV'), spaceId, email, role, canUseAccounts, canViewBalances, canViewLedger,
+      token, status: 'pending', invitedBy: uid, acceptedBy: null,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), createdAt: now, updatedAt: now,
+    });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_invited', targetType: 'invitation', targetId: invitationRef.id, summary: `Invited ${email} as ${role}.`, now });
+    transaction.create(commandRef, { uid, kind: 'create_space_invitation', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const revokeSpaceInvitation = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const invitationId = stringValue(request.data?.invitationId, 'Invitation ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const invitationRef = db.collection('spaceInvitations').doc(invitationId);
+  const invitation = await invitationRef.get();
+  if (!invitation.exists) throw new HttpsError('not-found', 'Invitation not found.');
+  const spaceId = String(invitation.data()?.spaceId || '');
+  const manager = await requireSpaceManager(spaceId, uid);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+    const now = FieldValue.serverTimestamp();
+    const result = { invitationId, revoked: true };
+    transaction.update(invitationRef, { status: 'revoked', updatedAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'invitation_revoked', targetType: 'invitation', targetId: invitationId, summary: `Revoked the invitation for ${invitation.data()?.email || 'a member'}.`, now });
+    transaction.create(commandRef, { uid, kind: 'revoke_space_invitation', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const acceptSpaceInvitation = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const token = stringValue(request.data?.token, 'Invitation token', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const authEmail = typeof request.auth?.token.email === 'string' ? request.auth.token.email.toLowerCase() : '';
+  if (!authEmail) throw new HttpsError('failed-precondition', 'Your account does not have a verified email address.');
+  const invitationQuery = await db.collection('spaceInvitations').where('token', '==', token).limit(1).get();
+  if (invitationQuery.empty) throw new HttpsError('not-found', 'Invitation not found.');
+  const invitationRef = invitationQuery.docs[0].ref;
+  const invitation = invitationQuery.docs[0].data();
+  if (invitation.email !== authEmail) throw new HttpsError('permission-denied', 'Sign in using the email address that received this invitation.');
+  if (invitation.status !== 'pending') throw new HttpsError('failed-precondition', 'This invitation is no longer active.');
+  if (invitation.expiresAt?.toDate?.().getTime() < Date.now()) throw new HttpsError('deadline-exceeded', 'This invitation has expired. Ask the Space owner for a new link.');
+  const spaceId = String(invitation.spaceId);
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
+  const profileRef = db.collection('users').doc(uid);
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, member, profile, space] = await Promise.all([transaction.get(commandRef), transaction.get(memberRef), transaction.get(profileRef), transaction.get(spaceRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!space.exists || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'This Space is unavailable.');
+    const now = FieldValue.serverTimestamp();
+    const result = { spaceId, memberId: memberRef.id };
+    transaction.set(memberRef, {
+      spaceId, uid, role: invitation.role as CollaborationRole, status: 'active',
+      displayName: profile.data()?.fullName || authEmail, email: authEmail,
+      canUseAccounts: invitation.canUseAccounts === true, canViewBalances: invitation.canViewBalances === true,
+      canViewLedger: invitation.canViewLedger === true, invitedBy: invitation.invitedBy, joinedAt: now, updatedAt: now,
+    }, { merge: true });
+    transaction.update(invitationRef, { status: 'accepted', acceptedBy: uid, updatedAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: profile.data()?.fullName || authEmail, action: member.exists ? 'member_reactivated' : 'member_joined', targetType: 'member', targetId: uid, summary: `${profile.data()?.fullName || authEmail} joined ${space.data()?.name || 'the Space'}.`, now });
+    createNotification(transaction, { uid: String(invitation.invitedBy), spaceId, type: 'member_joined', title: 'A member joined your Space', message: `${profile.data()?.fullName || authEmail} accepted the invitation to ${space.data()?.name || 'your Space'}.`, now });
+    transaction.create(commandRef, { uid, kind: 'accept_space_invitation', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const updateSpaceMember = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
+  const role = oneOf(request.data?.role, collaborationRoles, 'member role');
+  const status = oneOf(request.data?.status, ['active', 'suspended'] as const, 'member status');
+  const manager = await requireSpaceManager(spaceId, uid);
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`);
+  const member = await memberRef.get();
+  if (!member.exists) throw new HttpsError('not-found', 'Member not found.');
+  if (member.data()?.role === 'owner') throw new HttpsError('failed-precondition', 'The Space owner cannot be changed here.');
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    transaction.update(memberRef, {
+      role, status, canUseAccounts: request.data?.canUseAccounts === true,
+      canViewBalances: request.data?.canViewBalances === true, canViewLedger: request.data?.canViewLedger === true,
+      updatedAt: now,
+    });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_updated', targetType: 'member', targetId: memberUid, summary: `Updated ${member.data()?.displayName || member.data()?.email || 'a member'} to ${role} (${status}).`, now });
+    createNotification(transaction, { uid: memberUid, spaceId, type: 'access_updated', title: 'Your Space access changed', message: `Your role is now ${role} and your status is ${status}.`, now });
+  });
+  return { spaceId, memberUid };
+});
+
+export const removeSpaceMember = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const manager = await requireSpaceManager(spaceId, uid);
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, member] = await Promise.all([transaction.get(commandRef), transaction.get(memberRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!member.exists) throw new HttpsError('not-found', 'Member not found.');
+    if (member.data()?.role === 'owner') throw new HttpsError('failed-precondition', 'The Space owner cannot be removed.');
+    const now = FieldValue.serverTimestamp();
+    const result = { spaceId, memberUid, removed: true };
+    transaction.update(memberRef, { status: 'removed', updatedAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_removed', targetType: 'member', targetId: memberUid, summary: `Removed ${member.data()?.displayName || member.data()?.email || 'a member'} while preserving their financial history.`, now });
+    createNotification(transaction, { uid: memberUid, spaceId, type: 'member_removed', title: 'Space access removed', message: 'Your access to a shared Space has been removed. Existing history is preserved.', now });
+    transaction.create(commandRef, { uid, kind: 'remove_space_member', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const createSharedBillAssignment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const commitmentId = stringValue(request.data?.commitmentId, 'Commitment ID', 80);
+  const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
+  const assignedMinor = positiveMoney(request.data?.assignedMinor);
+  const dueDate = localDate(request.data?.dueDate, 'Due date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const manager = await requireSpaceManager(spaceId, uid);
+  const commitmentRef = db.collection('commitments').doc(commitmentId);
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  const assignmentRef = db.collection('sharedBillAssignments').doc();
+  return db.runTransaction(async (transaction) => {
+    const [command, commitment, member] = await Promise.all([transaction.get(commandRef), transaction.get(commitmentRef), transaction.get(memberRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!commitment.exists || commitment.data()?.spaceId !== spaceId || commitment.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active bill from this Space.');
+    if (!member.exists || member.data()?.status === 'suspended' || member.data()?.status === 'removed') throw new HttpsError('failed-precondition', 'Choose an active Space member.');
+    const now = FieldValue.serverTimestamp();
+    const result = { assignmentId: assignmentRef.id };
+    transaction.create(assignmentRef, {
+      displayId: displayId('SHR'), spaceId, commitmentId, commitmentName: commitment.data()?.name,
+      memberUid, memberName: member.data()?.displayName || '', memberEmail: member.data()?.email || '',
+      assignedMinor, currency: commitment.data()?.currency, dueDate, status: 'unpaid', note,
+      proofPath: null, proofName: null, submittedAt: null, reviewedAt: null, reviewedBy: null,
+      createdBy: uid, createdAt: now, updatedAt: now,
+    });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'bill_assigned', targetType: 'shared_bill', targetId: assignmentRef.id, summary: `Assigned ${commitment.data()?.name || 'a bill'} to ${member.data()?.displayName || member.data()?.email || 'a member'}.`, now });
+    createNotification(transaction, { uid: memberUid, spaceId, type: 'bill_assigned', title: 'A bill was assigned to you', message: `${commitment.data()?.name || 'A bill'} is due on ${dueDate}.`, now });
+    transaction.create(commandRef, { uid, kind: 'create_shared_bill_assignment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const submitSharedBillPayment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const assignmentId = stringValue(request.data?.assignmentId, 'Assignment ID', 80);
+  const proofPath = optionalString(request.data?.proofPath, 500) || null;
+  const proofName = optionalString(request.data?.proofName, 180) || null;
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const assignmentRef = db.collection('sharedBillAssignments').doc(assignmentId);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, assignment] = await Promise.all([transaction.get(commandRef), transaction.get(assignmentRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!assignment.exists) throw new HttpsError('not-found', 'Shared bill not found.');
+    const data = assignment.data();
+    if (data?.memberUid !== uid) throw new HttpsError('permission-denied', 'Only the assigned member can mark this bill paid.');
+    if (data?.status !== 'unpaid' && data?.status !== 'rejected') throw new HttpsError('failed-precondition', 'This payment claim cannot be submitted again.');
+    await requireActiveSpaceMember(String(data?.spaceId), uid);
+    if (proofPath && !proofPath.startsWith(`spaces/${data?.spaceId}/payment-proofs/${assignmentId}/`)) throw new HttpsError('invalid-argument', 'Invalid proof of payment path.');
+    const space = await transaction.get(db.collection('spaces').doc(String(data?.spaceId)));
+    const approvalRequired = space.data()?.approvalMode === 'owner_approval';
+    const nextStatus = approvalRequired ? 'submitted' : 'confirmed';
+    const now = FieldValue.serverTimestamp();
+    const result = { assignmentId, status: nextStatus };
+    transaction.update(assignmentRef, { status: nextStatus, proofPath, proofName, note, submittedAt: now, reviewedAt: approvalRequired ? null : now, reviewedBy: approvalRequired ? null : uid, updatedAt: now });
+    createActivity(transaction, { spaceId: String(data?.spaceId), actorUid: uid, actorName: data?.memberName, action: 'bill_marked_paid', targetType: 'shared_bill', targetId: assignmentId, summary: `${data?.memberName || data?.memberEmail || 'A member'} marked ${data?.commitmentName || 'a bill'} paid${approvalRequired ? ' and requested approval' : ''}.`, now });
+    if (approvalRequired) createNotification(transaction, { uid: String(space.data()?.ownerId), spaceId: String(data?.spaceId), type: 'payment_submitted', title: 'Payment claim needs review', message: `${data?.memberName || data?.memberEmail || 'A member'} submitted payment for ${data?.commitmentName || 'a shared bill'}.`, now });
+    transaction.create(commandRef, { uid, kind: 'submit_shared_bill_payment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const reviewSharedBillPayment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const assignmentId = stringValue(request.data?.assignmentId, 'Assignment ID', 80);
+  const decision = oneOf(request.data?.decision, ['confirmed', 'rejected'] as const, 'decision');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const assignmentRef = db.collection('sharedBillAssignments').doc(assignmentId);
+  const assignment = await assignmentRef.get();
+  if (!assignment.exists) throw new HttpsError('not-found', 'Shared bill not found.');
+  const data = assignment.data();
+  const manager = await requireSpaceManager(String(data?.spaceId), uid);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(assignmentRef)]);
+    if (command.exists) return command.data()?.result;
+    if (current.data()?.status !== 'submitted') throw new HttpsError('failed-precondition', 'Only submitted payment claims can be reviewed.');
+    const now = FieldValue.serverTimestamp();
+    const result = { assignmentId, status: decision };
+    transaction.update(assignmentRef, { status: decision, reviewNote: note, reviewedAt: now, reviewedBy: uid, updatedAt: now });
+    createActivity(transaction, { spaceId: String(data?.spaceId), actorUid: uid, actorName: manager.displayName, action: `payment_${decision}`, targetType: 'shared_bill', targetId: assignmentId, summary: `${decision === 'confirmed' ? 'Confirmed' : 'Rejected'} the payment claim for ${data?.commitmentName || 'a shared bill'}.`, now });
+    createNotification(transaction, { uid: String(data?.memberUid), spaceId: String(data?.spaceId), type: `payment_${decision}`, title: `Payment ${decision}`, message: `Your payment claim for ${data?.commitmentName || 'a shared bill'} was ${decision}.`, now });
+    transaction.create(commandRef, { uid, kind: 'review_shared_bill_payment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
 });
