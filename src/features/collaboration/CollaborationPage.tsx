@@ -76,26 +76,52 @@ export function CollaborationPage() {
   };
 
   const loadSpaceData = async (selectedId: string) => {
-    if (!user || !selectedId) return;
-    setLoading(true); setError('');
-    try {
-      const [nextMembers, nextInvitations, nextAssignments, nextCommitments, nextActivities, nextNotifications] = await Promise.all([
-        listSpaceMembers(selectedId),
-        listSpaceInvitations(selectedId),
-        listSharedBillAssignments(selectedId),
-        listSpaceCommitments(selectedId),
-        listSpaceActivities(selectedId),
-        listUserNotifications(user.uid),
-      ]);
-      setMembers(nextMembers);
-      setInvitations(nextInvitations);
-      setAssignments(nextAssignments);
-      setCommitments(nextCommitments);
-      setActivities(nextActivities.slice(0, 40));
-      setNotifications(nextNotifications.filter((item) => !item.readAt).slice(0, 8));
-    } catch (nextError) { setError(getErrorMessage(nextError)); }
-    finally { setLoading(false); }
-  };
+  if (!user || !selectedId) return;
+
+  setLoading(true);
+  setError('');
+
+  try {
+    const nextMembers = await listSpaceMembers(selectedId);
+
+    const signedInMember = nextMembers.find(
+      (member) => member.uid === user.uid,
+    );
+
+    const mayManageInvitations =
+      signedInMember?.role === 'owner' ||
+      signedInMember?.role === 'admin';
+
+    const [
+      nextInvitations,
+      nextAssignments,
+      nextCommitments,
+      nextActivities,
+      nextNotifications,
+    ] = await Promise.all([
+      mayManageInvitations
+        ? listSpaceInvitations(selectedId)
+        : Promise.resolve([] as SpaceInvitation[]),
+      listSharedBillAssignments(selectedId),
+      listSpaceCommitments(selectedId),
+      listSpaceActivities(selectedId),
+      listUserNotifications(user.uid),
+    ]);
+
+    setMembers(nextMembers);
+    setInvitations(nextInvitations);
+    setAssignments(nextAssignments);
+    setCommitments(nextCommitments);
+    setActivities(nextActivities.slice(0, 40));
+    setNotifications(
+      nextNotifications.filter((item) => !item.readAt).slice(0, 8),
+    );
+  } catch (nextError) {
+    setError(getErrorMessage(nextError));
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { void loadSpaces(); }, [user]);
   useEffect(() => { if (spaceId) void loadSpaceData(spaceId); }, [spaceId]);
