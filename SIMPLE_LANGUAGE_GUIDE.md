@@ -38,3 +38,11 @@ BajetBN is written for people with little or no accounting knowledge.
 - Finish old payment
 - Add bill or instalment
 - Give bill share
+
+## Report wording
+
+- Net cash flow → Money left
+- Variance → More or less than the previous month
+- Expense breakdown → Where your money went
+- Financial health → Simple money check
+- Amount payable → Still to pay

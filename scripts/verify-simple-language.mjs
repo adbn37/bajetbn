@@ -12,6 +12,7 @@ const files = [
   'src/features/commitments/CommitmentsPage.tsx',
   'src/features/collaboration/CollaborationPage.tsx',
   'src/features/collaboration/JoinSpacePage.tsx',
+  'src/features/reports/ReportsPage.tsx',
   'src/features/spaces/SpacesPage.tsx',
   'src/utils/errors.ts',
 ];
