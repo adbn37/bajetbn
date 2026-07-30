@@ -105,6 +105,31 @@ service cloud.firestore {
       allow create, update, delete: if false; // Posted and reversed only by trusted Cloud Functions.
     }
 
+    match /budgets/{budgetId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /goals/{goalId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /goalContributions/{contributionId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /commitments/{commitmentId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /commitmentPayments/{paymentId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
     match /financialCommands/{commandId} {
       allow read, write: if false;
     }

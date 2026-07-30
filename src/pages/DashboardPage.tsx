@@ -3,48 +3,27 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
 import { listAccounts } from '../repositories/accountRepository';
+import { listBudgets } from '../repositories/budgetRepository';
+import { listCommitments } from '../repositories/commitmentRepository';
+import { listGoals } from '../repositories/goalRepository';
 import { listSpaces } from '../repositories/spaceRepository';
-import type { Account, Space } from '../types/models';
+import { listTransactions } from '../repositories/transactionRepository';
+import type { Account, Budget, Commitment, FinancialTransaction, SavingsGoal, Space } from '../types/models';
 import { formatMoney } from '../utils/money';
 
+function monthPrefix() { return new Date().toISOString().slice(0, 7); }
 export function DashboardPage() {
   const { user, profile } = useAuth();
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [spaces, setSpaces] = useState<Space[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dataUnavailable, setDataUnavailable] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    setDataUnavailable(false);
-    Promise.all([listAccounts(user.uid), listSpaces(user.uid)])
-      .then(([nextAccounts, nextSpaces]) => { setAccounts(nextAccounts); setSpaces(nextSpaces); })
-      .catch(() => setDataUnavailable(true))
-      .finally(() => setLoading(false));
-  }, [user]);
-
-  const total = accounts.filter((item) => item.type !== 'credit_card').reduce((sum, item) => sum + item.ledgerBalanceMinor, 0);
-  return (
-    <main className="page">
-      <PageHeader eyebrow="Overview" title={`Good day, ${profile?.fullName?.split(' ')[0] || 'there'}`} description="A clear view of the accounts and Spaces connected to your life." action={<Link className="button primary" to="/accounts">Add account</Link>} />
-      {dataUnavailable && <div className="notice">Cloud data is unavailable. Reconnect to refresh Accounts and Spaces.</div>}
-      <section className="summary-grid">
-        <article className="summary-card featured"><span>Available across accounts</span><strong>{loading ? '—' : formatMoney(total, profile?.currency || 'BND')}</strong><small>Ledger-backed balances</small></article>
-        <article className="summary-card"><span>Active Spaces</span><strong>{loading ? '—' : spaces.filter((item) => !item.archivedAt).length}</strong><small>Personal and life contexts</small></article>
-        <article className="summary-card"><span>Accounts</span><strong>{loading ? '—' : accounts.length}</strong><small>Bank, cash, e-wallet, cards</small></article>
-        <article className="summary-card"><span>This month</span><strong>Coming in v0.5</strong><small>Income and expenses</small></article>
-      </section>
-      <section className="dashboard-grid">
-        <article className="panel">
-          <div className="panel-heading"><div><span className="eyebrow">Accounts</span><h2>Your money sources</h2></div><Link to="/accounts">View all</Link></div>
-          {accounts.length ? <div className="account-list compact-list">{accounts.slice(0, 4).map((account) => <div key={account.id} className="account-row"><span className={`account-symbol ${account.type}`}>{account.name.charAt(0)}</span><div><strong>{account.name}</strong><small>{account.institution || account.type.replace('_', ' ')}</small></div><b>{formatMoney(account.ledgerBalanceMinor, account.currency)}</b></div>)}</div> : <div className="mini-empty"><p>Create BIBD, Baiduri, Cash, or another account to begin.</p><Link to="/accounts">Create your first account →</Link></div>}
-        </article>
-        <article className="panel">
-          <div className="panel-heading"><div><span className="eyebrow">Spaces</span><h2>Life contexts</h2></div><Link to="/spaces">Manage</Link></div>
-          <div className="space-chip-grid">{spaces.filter((item) => !item.archivedAt).slice(0, 6).map((space) => <div key={space.id} className="space-chip"><span className={`space-icon ${space.type}`}>{space.name.charAt(0)}</span><div><strong>{space.name}</strong><small>{space.type}</small></div></div>)}</div>
-        </article>
-      </section>
-      <section className="roadmap-strip"><div><span className="eyebrow">Foundation status</span><h2>BajetBN v0.1.1</h2><p>Application shell, onboarding, Spaces, Accounts, PWA, Firebase rules, and staging configuration.</p></div><div className="progress"><span style={{ width: '10%' }} /><small>Road to public MVP</small></div></section>
-    </main>
-  );
+  const [accounts,setAccounts]=useState<Account[]>([]); const [spaces,setSpaces]=useState<Space[]>([]); const [transactions,setTransactions]=useState<FinancialTransaction[]>([]); const [budgets,setBudgets]=useState<Budget[]>([]); const [goals,setGoals]=useState<SavingsGoal[]>([]); const [commitments,setCommitments]=useState<Commitment[]>([]);
+  const [loading,setLoading]=useState(true); const [dataUnavailable,setDataUnavailable]=useState(false);
+  useEffect(()=>{if(!user)return;setDataUnavailable(false);Promise.all([listAccounts(user.uid),listSpaces(user.uid),listTransactions(user.uid),listBudgets(user.uid),listGoals(user.uid),listCommitments(user.uid)]).then(([a,s,t,b,g,c])=>{setAccounts(a);setSpaces(s);setTransactions(t);setBudgets(b);setGoals(g);setCommitments(c);}).catch(()=>setDataUnavailable(true)).finally(()=>setLoading(false));},[user]);
+  const currency=profile?.currency||'BND'; const total=accounts.filter(i=>i.type!=='credit_card').reduce((sum,i)=>sum+i.ledgerBalanceMinor,0); const month=monthPrefix(); const monthPosted=transactions.filter(i=>i.status==='posted'&&i.transactionDate.startsWith(month)); const income=monthPosted.filter(i=>i.type==='income').reduce((s,i)=>s+i.amountMinor,0); const expenses=monthPosted.filter(i=>i.type==='expense').reduce((s,i)=>s+i.amountMinor,0); const budgetLimit=budgets.reduce((s,i)=>s+i.limitMinor,0); const budgetSpent=budgets.reduce((s,i)=>s+i.spentMinor,0); const goalTarget=goals.reduce((s,i)=>s+i.targetMinor,0); const goalCurrent=goals.reduce((s,i)=>s+i.currentMinor,0); const today=new Date().toISOString().slice(0,10); const overdue=commitments.filter(i=>i.status==='active'&&Boolean(i.nextDueDate&&i.nextDueDate<today)).length;
+  return <main className="page"><PageHeader eyebrow="Overview" title={`Good day, ${profile?.fullName?.split(' ')[0]||'there'}`} description="Accounts, spending plans, goals, and commitments connected in one view." action={<Link className="button primary" to="/transactions">Add transaction</Link>}/>{dataUnavailable&&<div className="notice">Cloud data is unavailable. Reconnect to refresh your dashboard.</div>}
+    <section className="summary-grid"><article className="summary-card featured"><span>Available across accounts</span><strong>{loading?'—':formatMoney(total,currency)}</strong><small>Ledger-backed balances</small></article><article className="summary-card"><span>This month income</span><strong>{loading?'—':formatMoney(income,currency)}</strong><small>Posted transactions</small></article><article className="summary-card"><span>This month expenses</span><strong>{loading?'—':formatMoney(expenses,currency)}</strong><small>Net {formatMoney(income-expenses,currency)}</small></article><article className="summary-card"><span>Overdue commitments</span><strong>{loading?'—':overdue}</strong><small>Bills and instalments</small></article></section>
+    <section className="dashboard-grid"><article className="panel"><div className="panel-heading"><div><span className="eyebrow">Accounts</span><h2>Your money sources</h2></div><Link to="/accounts">View all</Link></div>{accounts.length?<div className="account-list compact-list">{accounts.slice(0,4).map(a=><div key={a.id} className="account-row"><span className={`account-symbol ${a.type}`}>{a.name.charAt(0)}</span><div><strong>{a.name}</strong><small>{a.institution||a.type.replace('_',' ')}</small></div><b>{formatMoney(a.ledgerBalanceMinor,a.currency)}</b></div>)}</div>:<div className="mini-empty"><p>Create BIBD, Baiduri, Cash, or another account to begin.</p><Link to="/accounts">Create your first account →</Link></div>}</article>
+      <article className="panel"><div className="panel-heading"><div><span className="eyebrow">Spaces</span><h2>Life contexts</h2></div><Link to="/spaces">Manage</Link></div><div className="space-chip-grid">{spaces.filter(i=>!i.archivedAt).slice(0,6).map(s=><div key={s.id} className="space-chip"><span className={`space-icon ${s.type}`}>{s.name.charAt(0)}</span><div><strong>{s.name}</strong><small>{s.type}</small></div></div>)}</div></article></section>
+    <section className="dashboard-grid planning-dashboard"><article className="panel"><div className="panel-heading"><div><span className="eyebrow">Budgets</span><h2>{formatMoney(budgetSpent,currency)} of {formatMoney(budgetLimit,currency)}</h2></div><Link to="/budgets">Open budgets</Link></div><div className="progress planning-progress"><span style={{width:`${budgetLimit?Math.min(100,Math.round(budgetSpent/budgetLimit*100)):0}%`}}/></div><p>{budgets.filter(i=>i.spentMinor>i.limitMinor).length} budget(s) over limit.</p></article>
+      <article className="panel"><div className="panel-heading"><div><span className="eyebrow">Goals</span><h2>{formatMoney(goalCurrent,currency)} allocated</h2></div><Link to="/goals">Open goals</Link></div><div className="progress planning-progress"><span style={{width:`${goalTarget?Math.min(100,Math.round(goalCurrent/goalTarget*100)):0}%`}}/></div><p>{goals.filter(i=>i.status==='completed').length} of {goals.length} goals completed.</p></article></section>
+    <section className="roadmap-strip"><div><span className="eyebrow">Foundation status</span><h2>BajetBN v0.6 Alpha</h2><p>Accounts, transactions, categories, budgets, goals, bills, and instalment tracking are connected on staging.</p></div><div className="progress"><span style={{width:'60%'}}/><small>Road to public MVP</small></div></section>
+  </main>;
 }

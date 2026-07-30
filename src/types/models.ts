@@ -49,6 +49,9 @@ export interface FinancialTransaction {
   transactionDate: string;
   reversalOf?: string | null;
   reversedBy?: string | null;
+  budgetIds?: string[];
+  commitmentId?: string | null;
+  commitmentPaymentId?: string | null;
   createdAt?: Timestamp;
   postedAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -131,4 +134,110 @@ export interface AccountAccess {
   canUseAccount: boolean;
   canViewBalance: boolean;
   canViewLedger: boolean;
+}
+
+export type BudgetPeriodType = 'monthly' | 'custom';
+export interface Budget {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  name: string;
+  spaceId: string;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  categoryIcon?: string | null;
+  categoryColor?: string | null;
+  periodType: BudgetPeriodType;
+  startDate: string;
+  endDate: string;
+  limitMinor: number;
+  spentMinor: number;
+  currency: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export type GoalStatus = 'active' | 'completed';
+export interface SavingsGoal {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  name: string;
+  spaceId: string;
+  targetMinor: number;
+  currentMinor: number;
+  currency: string;
+  targetDate?: string | null;
+  status: GoalStatus;
+  note?: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface GoalContribution {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  goalId: string;
+  amountMinor: number;
+  currency: string;
+  contributionDate: string;
+  note?: string;
+  status: 'posted' | 'reversed';
+  reversalOf?: string | null;
+  reversedBy?: string | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export type CommitmentType = 'bill' | 'instalment';
+export type CommitmentFrequency = 'once' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+export type CommitmentStatus = 'active' | 'completed';
+export interface Commitment {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  type: CommitmentType;
+  name: string;
+  payee?: string;
+  spaceId: string;
+  accountId?: string | null;
+  categoryId: string;
+  categoryName: string;
+  categoryIcon: string;
+  categoryColor: string;
+  amountMinor: number;
+  totalAmountMinor?: number | null;
+  amountPaidMinor: number;
+  currency: string;
+  frequency: CommitmentFrequency;
+  startDate: string;
+  nextDueDate?: string | null;
+  endDate?: string | null;
+  reminderDays: number;
+  status: CommitmentStatus;
+  note?: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface CommitmentPayment {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  commitmentId: string;
+  transactionId: string;
+  amountMinor: number;
+  currency: string;
+  paymentDate: string;
+  dueDateApplied?: string | null;
+  previousNextDueDate?: string | null;
+  previousStatus: CommitmentStatus;
+  status: 'posted' | 'reversed';
+  reversedBy?: string | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
