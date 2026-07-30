@@ -95,6 +95,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /categories/{categoryId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false; // Custom categories are validated and written by Cloud Functions.
+    }
+
     match /transactions/{transactionId} {
       allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
       allow create, update, delete: if false; // Posted and reversed only by trusted Cloud Functions.

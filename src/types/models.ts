@@ -9,6 +9,22 @@ export type AccountClassification = 'personal' | 'business';
 
 export type FinancialTransactionType = 'income' | 'expense' | 'transfer' | 'reversal';
 export type FinancialTransactionStatus = 'posted' | 'reversed';
+export type CategoryKind = 'income' | 'expense';
+export type CategoryScope = 'personal' | 'business' | 'both';
+
+export interface TransactionCategory {
+  id: string;
+  ownerId: string | null;
+  name: string;
+  kind: CategoryKind;
+  scope: CategoryScope;
+  icon: string;
+  color: string;
+  isSystem: boolean;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
 
 export interface FinancialTransaction {
   id: string;
@@ -24,6 +40,10 @@ export interface FinancialTransaction {
   amountMinor: number;
   currency: string;
   category: string;
+  categoryId?: string;
+  categoryIcon?: string;
+  categoryColor?: string;
+  categoryScope?: CategoryScope;
   counterparty?: string;
   note?: string;
   transactionDate: string;
