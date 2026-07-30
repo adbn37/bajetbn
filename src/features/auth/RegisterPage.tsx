@@ -30,7 +30,7 @@ export function RegisterPage() {
     <div className="auth-card">
       <span className="eyebrow">Create your account</span>
       <h2>Start with your Personal Space</h2>
-      <p>Your settings and first Space are created during onboarding.</p>
+      <p>We will help you set up your first private Space.</p>
       {error && <div className="notice error">{error}</div>}
       <button className="button secondary full" onClick={() => void signInWithGoogle()} disabled={busy}>Register with Google</button>
       <div className="divider"><span>or use email</span></div>

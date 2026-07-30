@@ -18,7 +18,7 @@ export function ConnectivityBanner() {
   return (
     <div className="connectivity-banner" role="status" aria-live="polite">
       <strong>You are offline.</strong>
-      <span>The BajetBN shell is available, but cloud data and financial changes require a connection.</span>
+      <span>You can open the app, but you need internet to load or save money information.</span>
     </div>
   );
 }

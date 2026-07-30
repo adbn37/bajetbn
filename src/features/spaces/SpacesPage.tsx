@@ -29,22 +29,22 @@ export function SpacesPage() {
   const openEdit = (space: Space) => { setSelected(space); setModal('edit'); };
   return (
     <main className="page">
-      <PageHeader eyebrow="Organisation" title="Spaces" description="Separate life contexts while keeping Accounts independent and reusable." action={<button className="button primary" onClick={() => setModal('create')}>+ New Space</button>} />
+      <PageHeader eyebrow="Money groups" title="Spaces" description="Use Spaces to separate personal, household, trip, or business money." action={<button className="button primary" onClick={() => setModal('create')}>+ Add Space</button>} />
       {error && <div className="notice error">{error}</div>}
-      <div className="info-banner"><strong>How Spaces work</strong><span>Transactions will connect an Account to a Space. The Account itself remains independent.</span></div>
-      {loading ? <div className="loading-panel">Loading Spaces…</div> : spaces.length === 0 ? <EmptyState title="No Spaces yet" description="Your Personal Space will appear after onboarding." /> : (
+      <div className="info-banner"><strong>How Spaces work</strong><span>Choose a Space when recording money. The same account can be used in more than one Space.</span></div>
+      {loading ? <div className="loading-panel">Loading Spaces…</div> : spaces.length === 0 ? <EmptyState title="No Spaces added yet" description="Your Personal Space will appear after onboarding." /> : (
         <section className="card-grid">
           {spaces.map((space) => (
             <article key={space.id} className={`space-card ${space.archivedAt ? 'archived' : ''}`}>
               <div className="card-top"><span className={`space-icon large ${space.type}`}>{space.name.charAt(0)}</span><span className="type-badge">{labels[space.type]}</span></div>
-              <h2>{space.name}</h2><p>{space.description || (space.type === 'personal' ? 'Your private financial home.' : `A ${labels[space.type].toLowerCase()} context for connected money.`)}</p>
-              <div className="meta-row"><span>{space.currency}</span><span>{space.collaborationMode?.replace('_', ' ') || 'private'}</span><span>{space.timezone}</span></div>
-              <footer><small>{space.displayId}</small><div><button className="text-button" onClick={() => openEdit(space)}>Edit</button>{space.type !== 'personal' && !space.archivedAt && <button className="text-button danger" onClick={() => void archiveSpace(space.id).then(load)}>Archive</button>}</div></footer>
+              <h2>{space.name}</h2><p>{space.description || (space.type === 'personal' ? 'Your private money area.' : `A ${labels[space.type].toLowerCase()} area for its money activity.`)}</p>
+              <div className="meta-row"><span>{space.currency}</span><span>{space.collaborationMode === 'private' ? 'Private' : 'Shared'}</span><span>{space.timezone}</span></div>
+              <footer><small>{space.displayId}</small><div><button className="text-button" onClick={() => openEdit(space)}>Edit</button>{space.type !== 'personal' && !space.archivedAt && <button className="text-button danger" onClick={() => void archiveSpace(space.id).then(load)}>Hide</button>}</div></footer>
             </article>
           ))}
         </section>
       )}
-      {modal === 'create' && user && profile && <SpaceForm title="Create Space" submitLabel="Create Space" onClose={() => setModal(null)} onSubmit={async (values) => { await createSpace({ uid: user.uid, currency: profile.currency, timezone: profile.timezone, ...values }); setModal(null); await load(); }} />}
+      {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" onClose={() => setModal(null)} onSubmit={async (values) => { await createSpace({ uid: user.uid, currency: profile.currency, timezone: profile.timezone, ...values }); setModal(null); await load(); }} />}
       {modal === 'edit' && selected && <SpaceForm title="Edit Space" submitLabel="Save changes" initial={selected} lockType onClose={() => setModal(null)} onSubmit={async (values) => { await updateSpace(selected.id, values); setModal(null); await load(); }} />}
     </main>
   );
@@ -56,5 +56,5 @@ function SpaceForm({ title, submitLabel, initial, lockType = false, onClose, onS
   const [description, setDescription] = useState(initial?.description || '');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await onSubmit({ name, type, description }); } catch (e) { setError(getErrorMessage(e)); } finally { setBusy(false); } };
-  return <Modal title={title} onClose={onClose}><form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Space name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Our Household" /></label><label>Type<select disabled={lockType} value={type} onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}><option value="household">Household</option><option value="sme">SME</option><option value="trip">Trip</option><option value="goal">Goal</option><option value="custom">Custom</option></select></label><label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Optional context" /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button></div></form></Modal>;
+  return <Modal title={title} onClose={onClose}><form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Space name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Our Household" /></label><label>Type<select disabled={lockType} value={type} onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}><option value="household">Household</option><option value="sme">SME</option><option value="trip">Trip</option><option value="goal">Goal</option><option value="custom">Custom</option></select></label><label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Optional details" /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button></div></form></Modal>;
 }

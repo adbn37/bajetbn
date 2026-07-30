@@ -43,14 +43,14 @@ import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
 const editableRoles: Array<Exclude<SpaceRole, 'owner' | 'member'>> = ['admin', 'contributor', 'payer', 'viewer'];
-const roleLabel: Record<string, string> = { owner: 'Owner', admin: 'Admin', contributor: 'Contributor', payer: 'Payer', viewer: 'Viewer', member: 'Member' };
+const roleLabel: Record<string, string> = { owner: 'Owner', admin: 'Manager', contributor: 'Can add', payer: 'Can pay', viewer: 'View only', member: 'Member' };
 const statusLabel: Record<string, string> = {
-  unpaid: 'Unpaid',
-  submitted: 'Awaiting review',
-  partially_paid: 'Partially paid',
+  unpaid: 'Not paid',
+  submitted: 'Waiting for check',
+  partially_paid: 'Paid part of it',
   paid: 'Paid',
-  rejected: 'Rejected',
-  confirmed: 'Legacy confirmed claim',
+  rejected: 'Not accepted',
+  confirmed: 'Old payment needs finishing',
 };
 
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -146,7 +146,7 @@ export function CollaborationPage() {
 
   if (!loading && spaces.length === 0) {
     return <main className="page">
-      <PageHeader eyebrow="Collaboration" title="Sharing" description="Invite people into Household, Trip, SME, Goal, and Custom Spaces." />
+      <PageHeader eyebrow="Share with others" title="Sharing" description="Invite family, friends, or team members to a shared Space." />
       <div className="info-banner"><strong>No shared Space yet</strong><span>Create a non-personal Space first, then invite members and share bills.</span></div>
       <Link className="button primary" to="/spaces">Create a Space</Link>
     </main>;
@@ -154,16 +154,16 @@ export function CollaborationPage() {
 
   return <main className="page collaboration-page">
     <PageHeader
-      eyebrow="v0.7 collaboration"
-      title="Sharing & members"
-      description="Manage roles, shared bills, ledger-backed payment finalisation, proof of payment, WhatsApp notices, and activity history."
+      eyebrow="Shared money"
+      title="Sharing"
+      description="Manage members, split bills, check payments, view proof, and send WhatsApp notices."
       action={canManage ? <button className="button primary" onClick={() => setInviteOpen(true)}>Invite member</button> : undefined}
     />
     {error && <div className="notice error">{error}</div>}
 
     <section className="collaboration-space-bar">
-      <label>Shared Space<select value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} — {space.type}</option>)}</select></label>
-      {selectedSpace && <div className="collaboration-space-summary"><strong>{selectedSpace.name}</strong><span>{roleLabel[currentMember?.role || 'viewer']} · {selectedSpace.collaborationMode.replace('_', ' ')}</span></div>}
+      <label>Choose a shared Space<select value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} — {space.type}</option>)}</select></label>
+      {selectedSpace && <div className="collaboration-space-summary"><strong>{selectedSpace.name}</strong><span>{roleLabel[currentMember?.role || 'viewer']} · {selectedSpace.collaborationMode === 'private' ? 'Private' : 'Shared'}</span></div>}
       {unreadForSpace.length > 0 && <button className="notification-pill" onClick={() => void runAction(async () => {
         await Promise.all(unreadForSpace.map((item) => markNotificationRead(item.id)));
       })}>{unreadForSpace.length} new</button>}
@@ -173,9 +173,9 @@ export function CollaborationPage() {
 
     <section className="summary-grid collaboration-summary">
       <article className="summary-card featured"><span>Active members</span><strong>{activeMembers.length}</strong><small>Including the Space owner</small></article>
-      <article className="summary-card"><span>Pending invitations</span><strong>{invitations.filter((item) => item.status === 'pending').length}</strong><small>Awaiting acceptance</small></article>
-      <article className="summary-card"><span>Open shared bills</span><strong>{pendingAssignments.length}</strong><small>Unpaid, partial, or under review</small></article>
-      <article className="summary-card"><span>Approval</span><strong>{selectedSpace?.approvalMode === 'owner_approval' ? 'Required' : 'Automatic'}</strong><small>Before payment finalisation</small></article>
+      <article className="summary-card"><span>Invites not accepted</span><strong>{invitations.filter((item) => item.status === 'pending').length}</strong><small>Waiting for the person to join</small></article>
+      <article className="summary-card"><span>Bills still open</span><strong>{pendingAssignments.length}</strong><small>Not paid, partly paid, or waiting for a check</small></article>
+      <article className="summary-card"><span>Payment check</span><strong>{selectedSpace?.approvalMode === 'owner_approval' ? 'Owner checks' : 'Automatic'}</strong><small>How member payments are checked</small></article>
     </section>
 
     <div className="segmented-control planning-filter collaboration-tabs">
@@ -184,30 +184,30 @@ export function CollaborationPage() {
       <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>Activity</button>
     </div>
 
-    {loading ? <div className="loading-panel">Loading collaboration data…</div> : tab === 'members' ? <>
+    {loading ? <div className="loading-panel">Loading sharing information…</div> : tab === 'members' ? <>
       <section className="panel collaboration-panel">
         <div className="panel-heading"><div><span className="eyebrow">Access</span><h2>Members</h2></div></div>
         <div className="member-list">{members.map((member) => <article className={`member-row status-${member.status || 'active'}`} key={member.id}>
           <span className="avatar">{(member.displayName || member.email || 'M').charAt(0).toUpperCase()}</span>
           <div><strong>{member.displayName || member.email || member.uid}</strong><small>{member.email || member.uid}</small></div>
           <span className="type-badge">{roleLabel[member.role] || member.role}</span>
-          <div className="permission-chips"><span>{member.canUseAccounts ? 'Use accounts' : 'No account use'}</span><span>{member.canViewBalances ? 'See balances' : 'Balances hidden'}</span><span>{member.canViewLedger ? 'See ledger' : 'Ledger hidden'}</span></div>
+          <div className="permission-chips"><span>{member.canUseAccounts ? 'Use accounts' : 'No account use'}</span><span>{member.canViewBalances ? 'See balances' : 'Balances hidden'}</span><span>{member.canViewLedger ? 'See account activity' : 'Account activity hidden'}</span></div>
           {canManage && member.role !== 'owner' && <div className="button-row"><button className="text-button" onClick={() => setEditingMember(member)}>Manage</button><button className="text-button danger" onClick={() => void runAction(async () => {
-            if (confirm(`Remove ${member.displayName || member.email || 'this member'}? Their financial history will remain.`)) await removeSpaceMember(spaceId, member.uid);
+            if (confirm(`Remove ${member.displayName || member.email || 'this member'}? Their past money records will stay.`)) await removeSpaceMember(spaceId, member.uid);
           })}>Remove</button></div>}
         </article>)}</div>
       </section>
       {canManage && <section className="panel collaboration-panel">
-        <div className="panel-heading"><div><span className="eyebrow">Invitations</span><h2>Pending and recent invitations</h2></div></div>
+        <div className="panel-heading"><div><span className="eyebrow">Invitations</span><h2>Invitations</h2></div></div>
         <div className="invitation-list">{invitations.length === 0 ? <p>No invitations yet.</p> : invitations.map((invitation) => <article key={invitation.id} className="invitation-row">
           <div><strong>{invitation.email}</strong><small>{roleLabel[invitation.role]} · {invitation.status}</small></div>
-          {invitation.status === 'pending' && <><button className="button secondary" onClick={() => void navigator.clipboard.writeText(inviteUrl(invitation.token))}>Copy invite link</button><a className="button secondary" href={`https://wa.me/?text=${encodeURIComponent(`Join ${selectedSpace?.name || 'my BajetBN Space'}: ${inviteUrl(invitation.token)}`)}`} target="_blank" rel="noreferrer">WhatsApp</a><button className="text-button danger" onClick={() => void runAction(() => revokeSpaceInvitation(invitation.id))}>Revoke</button></>}
+          {invitation.status === 'pending' && <><button className="button secondary" onClick={() => void navigator.clipboard.writeText(inviteUrl(invitation.token))}>Copy invite link</button><a className="button secondary" href={`https://wa.me/?text=${encodeURIComponent(`Join ${selectedSpace?.name || 'my BajetBN Space'}: ${inviteUrl(invitation.token)}`)}`} target="_blank" rel="noreferrer">WhatsApp</a><button className="text-button danger" onClick={() => void runAction(() => revokeSpaceInvitation(invitation.id))}>Cancel invite</button></>}
         </article>)}</div>
       </section>}
     </> : tab === 'bills' ? <section className="panel collaboration-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Settlement</span><h2>Shared bills and payment claims</h2></div>{canManage && <button className="button primary" onClick={() => setAssignmentOpen(true)}>Assign bill</button>}</div>
-      <div className="info-banner"><strong>Two settlement choices</strong><span>“Paid from BajetBN Account” posts one expense and ledger entry. “Paid outside BajetBN” settles the bill without changing Account balances.</span></div>
-      <div className="shared-bill-grid">{assignments.length === 0 ? <p>No bills assigned to members yet.</p> : assignments.map((assignment) => {
+      <div className="panel-heading"><div><span className="eyebrow">Payments</span><h2>Shared bills</h2></div>{canManage && <button className="button primary" onClick={() => setAssignmentOpen(true)}>Give bill share</button>}</div>
+      <div className="info-banner"><strong>Choose how you paid</strong><span>Use a BajetBN account to update its balance, or choose another method to mark the bill paid without changing an account.</span></div>
+      <div className="shared-bill-grid">{assignments.length === 0 ? <p>No bill shares yet.</p> : assignments.map((assignment) => {
         const isMine = assignment.memberUid === user?.uid;
         const outstanding = outstandingAmount(assignment);
         const settled = settledAmount(assignment);
@@ -221,28 +221,28 @@ export function CollaborationPage() {
         return <article className={`shared-bill-card status-${assignment.status}`} key={assignment.id}>
           <div className="planning-card-head"><div><span className="eyebrow">{statusLabel[assignment.status] || assignment.status}</span><h3>{assignment.commitmentName}</h3></div><strong>{formatMoney(assignment.assignedMinor, assignment.currency)}</strong></div>
           <div className="planning-meta"><span>{assignment.memberName || assignment.memberEmail || assignment.memberUid}</span><span>Due {assignment.dueDate}</span></div>
-          <div className="transaction-preview"><div><span>Paid</span><strong>{formatMoney(settled, assignment.currency)}</strong></div><div><span>Outstanding</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div>{currentPayment && <small>Claim {currentPayment.displayId}: {formatMoney(currentPayment.amountMinor, currentPayment.currency)} · {currentPayment.settlementMode === 'account' ? 'BajetBN Account' : 'Outside BajetBN'}</small>}{lastPayment && !currentPayment && <small>Last payment {lastPayment.displayId}: {lastPayment.settlementMode === 'account' ? 'Ledger posted' : 'External settlement'}.</small>}</div>
+          <div className="transaction-preview"><div><span>Paid</span><strong>{formatMoney(settled, assignment.currency)}</strong></div><div><span>Left to pay</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div>{currentPayment && <small>Payment {currentPayment.displayId}: {formatMoney(currentPayment.amountMinor, currentPayment.currency)} · {currentPayment.settlementMode === 'account' ? 'My BajetBN account' : 'Another method'}</small>}{lastPayment && !currentPayment && <small>Last payment {lastPayment.displayId}: {lastPayment.settlementMode === 'account' ? 'Account updated' : 'Paid another way'}.</small>}</div>
           {assignment.note && <p>{assignment.note}</p>}
           <div className="button-row">
-            {maySubmit && <button className="button primary" onClick={() => setSubmitting(assignment)}>{assignment.status === 'confirmed' ? 'Complete legacy settlement' : 'Record payment'}</button>}
+            {maySubmit && <button className="button primary" onClick={() => setSubmitting(assignment)}>{assignment.status === 'confirmed' ? 'Finish old payment' : 'Add payment'}</button>}
             {proofPath && <button className="button secondary" onClick={() => void getSharedBillProofUrl(proofPath).then((url) => window.open(url, '_blank', 'noopener,noreferrer'))}>View proof</button>}
-            {whatsapp && isMine && (assignment.status === 'submitted' || assignment.status === 'partially_paid' || assignment.status === 'paid') && <a className="button secondary" href={whatsapp} target="_blank" rel="noreferrer">Notify head on WhatsApp</a>}
-            {canReview && currentPayment && <><button className="button primary" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'confirmed' }))}>Confirm & finalise</button><button className="button danger-outline" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'rejected' }))}>Reject</button></>}
+            {whatsapp && isMine && (assignment.status === 'submitted' || assignment.status === 'partially_paid' || assignment.status === 'paid') && <a className="button secondary" href={whatsapp} target="_blank" rel="noreferrer">Tell group head on WhatsApp</a>}
+            {canReview && currentPayment && <><button className="button primary" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'confirmed' }))}>Confirm payment</button><button className="button danger-outline" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'rejected' }))}>Decline</button></>}
             {canReverse && lastPayment && <button className="button danger-outline" onClick={() => void runAction(async () => {
-              if (confirm(`Reverse ${lastPayment.displayId}? The Account transaction, assignment, and bill will be reopened.`)) await reverseSharedBillPayment({ paymentId: lastPayment.id, reversalDate: today(), reason: 'Reversed from Sharing' });
-            })}>Reverse payment</button>}
+              if (confirm(`Undo ${lastPayment.displayId}? The account balance will be restored and the bill will open again.`)) await reverseSharedBillPayment({ paymentId: lastPayment.id, reversalDate: today(), reason: 'Undone from Sharing' });
+            })}>Undo payment</button>}
           </div>
         </article>;
       })}</div>
     </section> : <section className="panel collaboration-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Audit trail</span><h2>Recent Space activity</h2></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Recent activity</h2></div></div>
       <div className="activity-list">{activities.length === 0 ? <p>No activity recorded yet.</p> : activities.map((activity) => <article key={activity.id}><span className="activity-dot"/><div><strong>{activity.summary}</strong><small>{activity.actorName || activity.actorUid} · {activity.createdAt?.toDate?.().toLocaleString() || 'recently'}</small></div></article>)}</div>
     </section>}
 
     {inviteOpen && selectedSpace && <Modal title={`Invite to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm spaceId={selectedSpace.id} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
-    {editingMember && <Modal title="Manage member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
-    {assignmentOpen && selectedSpace && <Modal title="Assign a shared bill" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers.filter((item) => item.role !== 'owner')} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
-    {submitting && <Modal title={`Record payment for ${submitting.commitmentName}`} onClose={() => setSubmitting(null)}><SubmitPaymentForm assignment={submitting} accounts={accounts.filter((account) => account.currency === submitting.currency)} onSaved={async () => { setSubmitting(null); await loadSpaceData(spaceId); }} /></Modal>}
+    {editingMember && <Modal title="Change member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
+    {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers.filter((item) => item.role !== 'owner')} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
+    {submitting && <Modal title={`Add payment for ${submitting.commitmentName}`} onClose={() => setSubmitting(null)}><SubmitPaymentForm assignment={submitting} accounts={accounts.filter((account) => account.currency === submitting.currency)} onSaved={async () => { setSubmitting(null); await loadSpaceData(spaceId); }} /></Modal>}
   </main>;
 }
 
@@ -253,7 +253,7 @@ function CollaborationSettings({ space, onSaved }: { space: Space; onSaved: () =
   const [error, setError] = useState('');
   useEffect(() => { setApprovalMode(space.approvalMode || 'none'); setHeadWhatsapp(space.headWhatsapp || ''); }, [space.id, space.approvalMode, space.headWhatsapp]);
   const save = async () => { setBusy(true); setError(''); try { await updateSpaceCollaborationSettings({ spaceId: space.id, approvalMode, headWhatsapp }); await onSaved(); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <section className="collaboration-settings"><div><strong>Payment claim approval</strong><span>{approvalMode === 'owner_approval' ? 'The Space head reviews each member claim before settlement.' : 'Payment claims finalise immediately.'}</span></div><select value={approvalMode} onChange={(event) => setApprovalMode(event.target.value as 'none' | 'owner_approval')}><option value="none">Automatic finalisation</option><option value="owner_approval">Owner/Admin approval</option></select><label>Head WhatsApp<input value={headWhatsapp} onChange={(event) => setHeadWhatsapp(event.target.value)} placeholder="6738XXXXXX"/><small>Used only to prepare a WhatsApp message. BajetBN does not send it automatically.</small></label><button className="button secondary" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save sharing settings'}</button>{error && <div className="notice error">{error}</div>}</section>;
+  return <section className="collaboration-settings"><div><strong>Check member payments</strong><span>{approvalMode === 'owner_approval' ? 'The Space owner or admin checks each payment before it is accepted.' : 'Member payments are accepted automatically.'}</span></div><select value={approvalMode} onChange={(event) => setApprovalMode(event.target.value as 'none' | 'owner_approval')}><option value="none">Accept automatically</option><option value="owner_approval">Owner or admin checks first</option></select><label>Head WhatsApp<input value={headWhatsapp} onChange={(event) => setHeadWhatsapp(event.target.value)} placeholder="6738XXXXXX"/><small>Used only to prepare a WhatsApp message. BajetBN does not send it automatically.</small></label><button className="button secondary" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save sharing settings'}</button>{error && <div className="notice error">{error}</div>}</section>;
 }
 
 function InviteForm({ spaceId, onSaved }: { spaceId: string; onSaved: () => Promise<void> }) {
@@ -265,7 +265,7 @@ function InviteForm({ spaceId, onSaved }: { spaceId: string; onSaved: () => Prom
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await createSpaceInvitation({ spaceId, email, role, canUseAccounts, canViewBalances, canViewLedger }); await onSaved(); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Email address<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Role<select value={role} onChange={(event) => setRole(event.target.value as Exclude<SpaceRole, 'owner' | 'member'>)}>{editableRoles.map((item) => <option value={item} key={item}>{roleLabel[item]}</option>)}</select></label><div className="permission-editor"><label><input type="checkbox" checked={canUseAccounts} onChange={(event) => setCanUseAccounts(event.target.checked)}/> Can use shared Accounts</label><label><input type="checkbox" checked={canViewBalances} onChange={(event) => setCanViewBalances(event.target.checked)}/> Can view Account balances</label><label><input type="checkbox" checked={canViewLedger} onChange={(event) => setCanViewLedger(event.target.checked)}/> Can view Account ledger</label></div><button className="button primary full" disabled={busy}>{busy ? 'Creating invitation…' : 'Create invitation'}</button></form>;
+  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Email address<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Access level<select value={role} onChange={(event) => setRole(event.target.value as Exclude<SpaceRole, 'owner' | 'member'>)}>{editableRoles.map((item) => <option value={item} key={item}>{roleLabel[item]}</option>)}</select></label><div className="permission-editor"><label><input type="checkbox" checked={canUseAccounts} onChange={(event) => setCanUseAccounts(event.target.checked)}/> Can use shared Accounts</label><label><input type="checkbox" checked={canViewBalances} onChange={(event) => setCanViewBalances(event.target.checked)}/> Can view Account balances</label><label><input type="checkbox" checked={canViewLedger} onChange={(event) => setCanViewLedger(event.target.checked)}/> Can see Account activity</label></div><button className="button primary full" disabled={busy}>{busy ? 'Creating invite…' : 'Create invite'}</button></form>;
 }
 
 function MemberForm({ member, onSaved }: { member: SpaceMember; onSaved: () => Promise<void> }) {
@@ -277,7 +277,7 @@ function MemberForm({ member, onSaved }: { member: SpaceMember; onSaved: () => P
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await updateSpaceMember({ spaceId: member.spaceId, memberUid: member.uid, role, status, canUseAccounts, canViewBalances, canViewLedger }); await onSaved(); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Role<select value={role} onChange={(event) => setRole(event.target.value as Exclude<SpaceRole, 'owner' | 'member'>)}>{editableRoles.map((item) => <option value={item} key={item}>{roleLabel[item]}</option>)}</select></label><label>Status<select value={status} onChange={(event) => setStatus(event.target.value as 'active' | 'suspended')}><option value="active">Active</option><option value="suspended">Suspended</option></select></label><div className="permission-editor"><label><input type="checkbox" checked={canUseAccounts} onChange={(event) => setCanUseAccounts(event.target.checked)}/> Can use shared Accounts</label><label><input type="checkbox" checked={canViewBalances} onChange={(event) => setCanViewBalances(event.target.checked)}/> Can view balances</label><label><input type="checkbox" checked={canViewLedger} onChange={(event) => setCanViewLedger(event.target.checked)}/> Can view ledger</label></div><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Save member access'}</button></form>;
+  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Access level<select value={role} onChange={(event) => setRole(event.target.value as Exclude<SpaceRole, 'owner' | 'member'>)}>{editableRoles.map((item) => <option value={item} key={item}>{roleLabel[item]}</option>)}</select></label><label>Member status<select value={status} onChange={(event) => setStatus(event.target.value as 'active' | 'suspended')}><option value="active">Active</option><option value="suspended">Paused</option></select></label><div className="permission-editor"><label><input type="checkbox" checked={canUseAccounts} onChange={(event) => setCanUseAccounts(event.target.checked)}/> Can use shared Accounts</label><label><input type="checkbox" checked={canViewBalances} onChange={(event) => setCanViewBalances(event.target.checked)}/> Can view balances</label><label><input type="checkbox" checked={canViewLedger} onChange={(event) => setCanViewLedger(event.target.checked)}/> Can see account activity</label></div><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Save access'}</button></form>;
 }
 
 function AssignmentForm({ space, members, commitments, onSaved }: { space: Space; members: SpaceMember[]; commitments: Commitment[]; onSaved: () => Promise<void> }) {
@@ -291,7 +291,7 @@ function AssignmentForm({ space, members, commitments, onSaved }: { space: Space
   const selected = commitments.find((item) => item.id === commitmentId);
   useEffect(() => { if (selected) { setAmount(String(selected.amountMinor / 100)); setDueDate(selected.nextDueDate || selected.startDate); } }, [commitmentId]);
   const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await createSharedBillAssignment({ spaceId: space.id, commitmentId, memberUid, assignedMinor: toMinorUnits(amount), dueDate, note }); await onSaved(); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}{commitments.length === 0 || members.length === 0 ? <div className="notice">Create an active bill and invite at least one member before assigning a bill.</div> : <><label>Bill or instalment<select value={commitmentId} onChange={(event) => setCommitmentId(event.target.value)}>{commitments.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Assigned member<select value={memberUid} onChange={(event) => setMemberUid(event.target.value)}>{members.map((item) => <option value={item.uid} key={item.uid}>{item.displayName || item.email || item.uid}</option>)}</select></label><label>Member share (BND)<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} required/><small>Total member shares cannot exceed the amount due for the current cycle.</small></label><label>Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required readOnly/></label><label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label><button className="button primary full" disabled={busy}>{busy ? 'Assigning…' : 'Assign bill'}</button></>}</form>;
+  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}{commitments.length === 0 || members.length === 0 ? <div className="notice">Add a bill and invite at least one person before sharing the bill.</div> : <><label>Bill or instalment<select value={commitmentId} onChange={(event) => setCommitmentId(event.target.value)}>{commitments.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Who will pay<select value={memberUid} onChange={(event) => setMemberUid(event.target.value)}>{members.map((item) => <option value={item.uid} key={item.uid}>{item.displayName || item.email || item.uid}</option>)}</select></label><label>Their share (BND)<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} required/><small>The total shared amount cannot be more than the bill amount due now.</small></label><label>Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required readOnly/></label><label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Give bill share'}</button></>}</form>;
 }
 
 function SubmitPaymentForm({ assignment, accounts, onSaved }: { assignment: SharedBillAssignment; accounts: Account[]; onSaved: () => Promise<void> }) {
@@ -311,8 +311,8 @@ function SubmitPaymentForm({ assignment, accounts, onSaved }: { assignment: Shar
     try {
       const amountMinor = toMinorUnits(amount);
       if (amountMinor <= 0) throw new Error('Enter an amount greater than BND 0.00.');
-      if (amountMinor > outstanding) throw new Error('Amount paid now cannot exceed the assignment outstanding amount.');
-      if (settlementMode === 'account' && !accountId) throw new Error('Choose the Account used for this payment.');
+      if (amountMinor > outstanding) throw new Error('The amount paid cannot be more than the amount left to pay.');
+      if (settlementMode === 'account' && !accountId) throw new Error('Choose the account used for this payment.');
       const proof = file ? await uploadSharedBillProof({ spaceId: assignment.spaceId, assignmentId: assignment.id, file }) : {};
       await submitSharedBillPayment({ assignmentId: assignment.id, amountMinor, settlementMode, accountId: settlementMode === 'account' ? accountId : undefined, paymentDate, ...proof, note });
       await onSaved();
@@ -324,13 +324,13 @@ function SubmitPaymentForm({ assignment, accounts, onSaved }: { assignment: Shar
   };
   return <form className="form-stack" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
-    <div className="transaction-preview"><div><span>Assigned amount</span><strong>{formatMoney(assignment.assignedMinor, assignment.currency)}</strong></div><div><span>Outstanding before payment</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div><small>Partial payments are supported. The remaining amount stays open.</small></div>
-    <label>Amount paid now (BND)<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} required/><small>The actual amount being recorded for this payment.</small></label>
-    <label>Payment source<select value={settlementMode} onChange={(event) => setSettlementMode(event.target.value as SharedBillSettlementMode)}><option value="account" disabled={accounts.length === 0}>Paid from BajetBN Account</option><option value="external">Paid outside BajetBN</option></select></label>
-    {settlementMode === 'account' ? <><label>Payment Account<select value={accountId} onChange={(event) => setAccountId(event.target.value)} required>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name} — {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label><div className="notice">After approval, BajetBN posts one expense transaction and deducts this Account exactly once.</div></> : <div className="notice">This settles the shared bill without changing any BajetBN Account balance or ledger.</div>}
+    <div className="transaction-preview"><div><span>Amount to pay</span><strong>{formatMoney(assignment.assignedMinor, assignment.currency)}</strong></div><div><span>Amount left before payment</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div><small>You can pay part of it. Any amount left will stay open.</small></div>
+    <label>Amount paid now (BND)<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} required/><small>Enter the amount you paid now.</small></label>
+    <label>How did you pay?<select value={settlementMode} onChange={(event) => setSettlementMode(event.target.value as SharedBillSettlementMode)}><option value="account" disabled={accounts.length === 0}>Paid from my BajetBN account</option><option value="external">Paid using another method</option></select></label>
+    {settlementMode === 'account' ? <><label>Account used<select value={accountId} onChange={(event) => setAccountId(event.target.value)} required>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name} — {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label><div className="notice">After the payment is confirmed, BajetBN records the expense and updates this account once.</div></> : <div className="notice">This marks the shared bill as paid without changing any BajetBN account balance.</div>}
     <label>Payment date<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required/></label>
     <label>Proof of payment<input type="file" accept="image/*,application/pdf" onChange={(event) => setFile(event.target.files?.[0] || null)}/><small>Optional unless your group requires it. Images and PDFs up to 10 MB.</small></label>
-    <label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Transfer reference or short message"/></label>
-    <button className="button primary full" disabled={busy}>{busy ? 'Submitting…' : 'Submit payment'}</button>
+    <label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Receipt number or short message"/></label>
+    <button className="button primary full" disabled={busy}>{busy ? 'Sending…' : 'Send payment details'}</button>
   </form>;
 }

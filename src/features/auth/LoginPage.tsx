@@ -28,7 +28,7 @@ export function LoginPage() {
     <div className="auth-card">
       <span className="eyebrow">Welcome back</span>
       <h2>Sign in to BajetBN</h2>
-      <p>Continue to your personal and shared financial Spaces.</p>
+      <p>Open your personal and shared money Spaces.</p>
       {location.state?.registered && <div className="notice success">Account created. Check your inbox to verify your email.</div>}
       {error && <div className="notice error">{error}</div>}
       <button className="button secondary full" onClick={() => void signInWithGoogle()} disabled={busy}>Continue with Google</button>

@@ -44,29 +44,29 @@ export function BudgetsPage() {
   const spaceMap = useMemo(() => new Map(spaces.map((item) => [item.id, item])), [spaces]);
 
   return <main className="page">
-    <PageHeader eyebrow="Planning" title="Budgets" description="Set category or whole-Space spending limits. Posted expenses update matching budgets automatically." action={<button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Create budget</button>} />
+    <PageHeader eyebrow="Planning" title="Budgets" description="Set how much you plan to spend. Saved expenses update the matching budget automatically." action={<button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Add budget</button>} />
     {error && <div className="notice error">{error}</div>}
     <section className="summary-grid">
-      <article className="summary-card featured"><span>Budgeted</span><strong>{formatMoney(totalLimit, profile?.currency || 'BND')}</strong><small>Across active periods</small></article>
-      <article className="summary-card"><span>Spent</span><strong>{formatMoney(totalSpent, profile?.currency || 'BND')}</strong><small>Posted expenses only</small></article>
-      <article className="summary-card"><span>Remaining</span><strong>{formatMoney(totalLimit - totalSpent, profile?.currency || 'BND')}</strong><small>Can be negative</small></article>
-      <article className="summary-card"><span>Over budget</span><strong>{overCount}</strong><small>Needs attention</small></article>
+      <article className="summary-card featured"><span>Planned to spend</span><strong>{formatMoney(totalLimit, profile?.currency || 'BND')}</strong><small>Across current budgets</small></article>
+      <article className="summary-card"><span>Spent</span><strong>{formatMoney(totalSpent, profile?.currency || 'BND')}</strong><small>From saved expenses</small></article>
+      <article className="summary-card"><span>Left to spend</span><strong>{formatMoney(totalLimit - totalSpent, profile?.currency || 'BND')}</strong><small>May go below zero</small></article>
+      <article className="summary-card"><span>Over budget</span><strong>{overCount}</strong><small>Check these budgets</small></article>
     </section>
     <section className="panel planning-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Active limits</span><h2>{loading ? 'Loading…' : `${budgets.length} budget${budgets.length === 1 ? '' : 's'}`}</h2></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Current budgets</span><h2>{loading ? 'Loading…' : `${budgets.length} budget${budgets.length === 1 ? '' : 's'}`}</h2></div></div>
       {budgets.length ? <div className="planning-card-grid">{budgets.map((budget) => {
         const ratio = budget.limitMinor > 0 ? Math.min(100, Math.round((budget.spentMinor / budget.limitMinor) * 100)) : 0;
         const over = budget.spentMinor > budget.limitMinor;
         return <article className={`planning-card ${over ? 'is-over' : ''}`} key={budget.id}>
-          <div className="planning-card-head"><div><span className="eyebrow">{spaceMap.get(budget.spaceId)?.name || 'Space'}</span><h3>{budget.name}</h3></div><span className="type-badge">{budget.periodType}</span></div>
+          <div className="planning-card-head"><div><span className="eyebrow">{spaceMap.get(budget.spaceId)?.name || 'Space'}</span><h3>{budget.name}</h3></div><span className="type-badge">{budget.periodType === 'monthly' ? 'Monthly' : 'Chosen dates'}</span></div>
           <div className="budget-amount-line"><strong>{formatMoney(budget.spentMinor, budget.currency)}</strong><span>of {formatMoney(budget.limitMinor, budget.currency)}</span></div>
           <div className="progress planning-progress"><span style={{ width: `${ratio}%` }} /></div>
-          <div className="planning-meta"><span>{budget.categoryName || 'All expense categories'}</span><span>{budget.startDate} → {budget.endDate}</span></div>
-          <div className="button-row"><button className="button secondary" onClick={() => { setEditing(budget); setShowForm(true); }}>Edit</button><button className="text-button danger" onClick={async () => { if (!confirm(`Archive ${budget.name}?`)) return; await archiveBudget(budget.id); await load(); }}>Archive</button></div>
+          <div className="planning-meta"><span>{budget.categoryName || 'All spending categories'}</span><span>{budget.startDate} → {budget.endDate}</span></div>
+          <div className="button-row"><button className="button secondary" onClick={() => { setEditing(budget); setShowForm(true); }}>Edit</button><button className="text-button danger" onClick={async () => { if (!confirm(`Hide ${budget.name}?`)) return; await archiveBudget(budget.id); await load(); }}>Hide</button></div>
         </article>;
-      })}</div> : !loading && <div className="mini-empty"><p>No budgets yet. Start with a monthly food, fuel, household, or SME budget.</p></div>}
+      })}</div> : !loading && <div className="mini-empty"><p>No budgets yet. Try adding one for food, fuel, household costs, or your business.</p></div>}
     </section>
-    {showForm && <Modal title={editing ? 'Edit budget' : 'Create budget'} onClose={() => setShowForm(false)}><BudgetForm budget={editing} spaces={spaces} categories={categories} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
+    {showForm && <Modal title={editing ? 'Edit budget' : 'Add budget'} onClose={() => setShowForm(false)}><BudgetForm budget={editing} spaces={spaces} categories={categories} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
   </main>;
 }
 
@@ -96,10 +96,10 @@ function BudgetForm({ budget, spaces, categories, onSaved }: { budget: Budget | 
   return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<div className="form-grid">
     <label className="span-2">Budget name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Monthly groceries" maxLength={80} required /></label>
     <label>Space<select value={spaceId} onChange={(e) => { setSpaceId(e.target.value); setCategoryId(''); }} disabled={Boolean(budget)}>{spaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-    <label>Category<select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">All expense categories</option>{scopedCategories.map((item) => <option key={item.id} value={item.id}>{categoryIconGlyph(item.icon)} {item.name}</option>)}</select></label>
-    <label>Period<select value={periodType} onChange={(e) => setPeriodType(e.target.value as BudgetPeriodType)}><option value="monthly">Monthly</option><option value="custom">Custom period</option></select></label>
-    <label>Limit (BND)<input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="decimal" placeholder="300.00" required /></label>
+    <label>Category<select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">All spending categories</option>{scopedCategories.map((item) => <option key={item.id} value={item.id}>{categoryIconGlyph(item.icon)} {item.name}</option>)}</select></label>
+    <label>How often<select value={periodType} onChange={(e) => setPeriodType(e.target.value as BudgetPeriodType)}><option value="monthly">Monthly</option><option value="custom">Choose dates</option></select></label>
+    <label>Amount you plan to spend (BND)<input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="decimal" placeholder="300.00" required /></label>
     <label>Start date<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required /></label>
     <label>End date<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required /></label>
-  </div><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : budget ? 'Save changes' : 'Create budget'}</button></form>;
+  </div><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : budget ? 'Save changes' : 'Add budget'}</button></form>;
 }

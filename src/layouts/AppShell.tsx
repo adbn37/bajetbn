@@ -8,12 +8,12 @@ const navigation = [
   ['/', 'Overview', '⌂'],
   ['/spaces', 'Spaces', '◫'],
   ['/accounts', 'Accounts', '◉'],
-  ['/transactions', 'Transactions', '↔'],
+  ['/transactions', 'Money activity', '↔'],
   ['/budgets', 'Budgets', '▤'],
   ['/goals', 'Goals', '◇'],
-  ['/bills', 'Bills', '◷'],
+  ['/bills', 'Bills & instalments', '◷'],
   ['/sharing', 'Sharing', '◎'],
-  ['/reports', 'Reports', '⌁'],
+  ['/reports', 'Money reports', '⌁'],
 ];
 
 export function AppShell() {
