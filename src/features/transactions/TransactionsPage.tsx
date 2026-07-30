@@ -437,6 +437,8 @@ function TransactionDetails({ item, source, destination, space, category, onClos
       <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ` → ${destination.name}` : ''}</Detail>
       <Detail label={item.type === 'income' ? 'Source' : 'Payee'}>{item.counterparty || '—'}</Detail>
       <Detail label="Note">{item.note || '—'}</Detail>
+      {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
+      {item.commitmentId && <Detail label="Commitment">Linked bill or instalment</Detail>}
       {item.reversalOf && <Detail label="Reversal of">{item.reversalOf}</Detail>}
       {item.reversedBy && <Detail label="Reversed by">{item.reversedBy}</Detail>}
     </dl>
