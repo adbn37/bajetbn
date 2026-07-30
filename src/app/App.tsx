@@ -14,10 +14,10 @@ import { BudgetsPage } from '../features/budgets/BudgetsPage';
 import { GoalsPage } from '../features/goals/GoalsPage';
 import { CommitmentsPage } from '../features/commitments/CommitmentsPage';
 import { CollaborationPage } from '../features/collaboration/CollaborationPage';
+import { ReportsPage } from '../features/reports/ReportsPage';
 import { JoinSpacePage } from '../features/collaboration/JoinSpacePage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
-import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { SetupRequiredPage } from '../pages/SetupRequiredPage';
 import { ProtectedRoute } from './RouteGuards';
@@ -37,7 +37,7 @@ export default function App() {
       <Route path="bills" element={<CommitmentsPage />} />
       <Route path="sharing" element={<CollaborationPage />} />
       <Route path="join" element={<JoinSpacePage />} />
-      <Route path="reports" element={<PlaceholderPage title="Money reports" version="v0.9.0" description="See money in, money out, spending by category, and reports for each Space." />} />
+      <Route path="reports" element={<ReportsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </Route>
     <Route path="*" element={<NotFoundPage />} />
