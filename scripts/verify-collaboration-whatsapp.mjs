@@ -13,7 +13,7 @@ const checks = [
   ['src/repositories/collaborationRepository.ts', 'createSpaceInvitation'],
   ['src/repositories/collaborationRepository.ts', 'uploadSharedBillProof'],
   ['src/features/collaboration/CollaborationPage.tsx', 'Notify head on WhatsApp'],
-  ['src/features/collaboration/CollaborationPage.tsx', 'Automatic confirmation'],
+  ['src/features/collaboration/CollaborationPage.tsx', 'Automatic finalisation'],
   ['src/features/collaboration/JoinSpacePage.tsx', 'Accept invitation'],
   ['functions/src/index.ts', 'export const createSpaceInvitation'],
   ['functions/src/index.ts', 'export const acceptSpaceInvitation'],

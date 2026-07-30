@@ -11,6 +11,7 @@ import {
   categoryIconGlyph,
 } from '../categories/defaultCategories';
 import { listAccounts } from '../../repositories/accountRepository';
+import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
 import { archiveCategory, createCategory, listCustomCategories, updateCategory } from '../../repositories/categoryRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import { listTransactions, postTransaction, reverseTransaction } from '../../repositories/transactionRepository';
@@ -157,7 +158,15 @@ export function TransactionsPage() {
     if (!window.confirm(`Reverse ${item.displayId}? A new posted reversal will be created.`)) return;
     setError('');
     try {
-      await reverseTransaction(item.id, dateInTimezone(profile?.timezone || 'Asia/Brunei'), 'Reversed from transaction details');
+      if (item.sharedBillPaymentId) {
+        await reverseSharedBillPayment({
+          paymentId: item.sharedBillPaymentId,
+          reversalDate: dateInTimezone(profile?.timezone || 'Asia/Brunei'),
+          reason: 'Reversed from transaction details',
+        });
+      } else {
+        await reverseTransaction(item.id, dateInTimezone(profile?.timezone || 'Asia/Brunei'), 'Reversed from transaction details');
+      }
       setSelectedTransaction(null);
       await load();
     } catch (nextError) {
@@ -439,6 +448,9 @@ function TransactionDetails({ item, source, destination, space, category, onClos
       <Detail label="Note">{item.note || '—'}</Detail>
       {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
       {item.commitmentId && <Detail label="Commitment">Linked bill or instalment</Detail>}
+      {item.sharedBillAssignmentId && <Detail label="Shared bill assignment">{item.sharedBillAssignmentId}</Detail>}
+      {item.sharedBillPaymentId && <Detail label="Shared payment claim">{item.sharedBillPaymentId}</Detail>}
+      {item.paymentProofPath && <Detail label="Payment proof">Attached in Sharing</Detail>}
       {item.reversalOf && <Detail label="Reversal of">{item.reversalOf}</Detail>}
       {item.reversedBy && <Detail label="Reversed by">{item.reversedBy}</Detail>}
     </dl>

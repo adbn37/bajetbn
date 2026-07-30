@@ -643,6 +643,9 @@ export const reverseTransaction = onCall({ region }, async (request) => {
     if (original.status !== 'posted' || original.reversedBy) {
       throw new HttpsError('failed-precondition', 'This transaction has already been reversed.');
     }
+    if (original.sharedBillPaymentId) {
+      throw new HttpsError('failed-precondition', 'Reverse shared bill payments from Sharing so the assignment and commitment reopen correctly.');
+    }
 
     const accountRef = db.collection('accounts').doc(String(original.accountId));
     const destinationRef = original.destinationAccountId ? db.collection('accounts').doc(String(original.destinationAccountId)) : null;
@@ -878,7 +881,7 @@ export const reverseGoalContribution = onCall({ region }, async request=>{const 
 export const createCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const type=oneOf(request.data?.type,commitmentTypes,'commitment type');const name=stringValue(request.data?.name,'Commitment name',80);const payee=optionalString(request.data?.payee,120);const spaceId=stringValue(request.data?.spaceId,'Space');const accountId=optionalString(request.data?.accountId,80)||null;const categoryId=stringValue(request.data?.categoryId,'Category ID',80);const amountMinor=positiveMoney(request.data?.amountMinor);const totalAmountMinor=type==='instalment'?positiveMoney(request.data?.totalAmountMinor):null;if(type==='instalment'&&Number(totalAmountMinor)<amountMinor)throw new HttpsError('invalid-argument','Instalment total must be at least one payment amount.');const frequency=oneOf(request.data?.frequency,commitmentFrequencies,'frequency');const startDate=localDate(request.data?.startDate,'Start date');const endDate=optionalLocalDate(request.data?.endDate,'End date');const reminderDays=integerBetween(request.data?.reminderDays,'Reminder days',0,60);const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);
   const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const spaceRef=db.collection('spaces').doc(spaceId);const memberRef=db.collection('spaceMembers').doc(`${spaceId}_${uid}`);const accountRef=accountId?db.collection('accounts').doc(accountId):null;const categoryRef=categoryId.startsWith('custom-')?db.collection('categories').doc(categoryId):null;
-  return db.runTransaction(async transaction=>{const[command,space,member,account,custom]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef),accountRef?transaction.get(accountRef):Promise.resolve(null),categoryRef?transaction.get(categoryRef):Promise.resolve(null)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});const ref=db.collection('commitments').doc();const now=FieldValue.serverTimestamp();const result={commitmentId:ref.id};transaction.create(ref,{displayId:displayId(type==='bill'?'BIL':'INS'),ownerId:uid,type,name,payee,spaceId,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,amountPaidMinor:0,currency:space.data()?.currency,frequency,startDate,nextDueDate:startDate,endDate,reminderDays,status:'active',note,archivedAt:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+  return db.runTransaction(async transaction=>{const[command,space,member,account,custom]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef),accountRef?transaction.get(accountRef):Promise.resolve(null),categoryRef?transaction.get(categoryRef):Promise.resolve(null)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});const ref=db.collection('commitments').doc();const now=FieldValue.serverTimestamp();const result={commitmentId:ref.id};transaction.create(ref,{displayId:displayId(type==='bill'?'BIL':'INS'),ownerId:uid,type,name,payee,spaceId,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,amountPaidMinor:0,sharedCycleDueDate:startDate,sharedAssignedMinor:0,sharedSettledMinor:0,currency:space.data()?.currency,frequency,startDate,nextDueDate:startDate,endDate,reminderDays,status:'active',note,archivedAt:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 export const updateCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const name=stringValue(request.data?.name,'Commitment name',80);const payee=optionalString(request.data?.payee,120);const accountId=optionalString(request.data?.accountId,80)||null;const categoryId=stringValue(request.data?.categoryId,'Category ID',80);const amountMinor=positiveMoney(request.data?.amountMinor);const frequency=oneOf(request.data?.frequency,commitmentFrequencies,'frequency');const nextDueDate=localDate(request.data?.nextDueDate,'Next due date');const endDate=optionalLocalDate(request.data?.endDate,'End date');const reminderDays=integerBetween(request.data?.reminderDays,'Reminder days',0,60);const note=optionalString(request.data?.note,500);const ref=db.collection('commitments').doc(commitmentId);const snapshot=await ref.get();if(!snapshot.exists)throw new HttpsError('not-found','Commitment not found.');const existing=snapshot.data();if(existing?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(existing?.archivedAt)throw new HttpsError('failed-precondition','Archived commitments cannot be edited.');const totalAmountMinor=existing?.type==='instalment'?positiveMoney(request.data?.totalAmountMinor):null;if(totalAmountMinor&&totalAmountMinor<Number(existing?.amountPaidMinor||0))throw new HttpsError('failed-precondition','Total cannot be below the amount already paid.');const space=await db.collection('spaces').doc(String(existing?.spaceId)).get();const account=accountId?await db.collection('accounts').doc(accountId).get():null;if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const custom=categoryId.startsWith('custom-')?await db.collection('categories').doc(categoryId).get():null;const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});await ref.update({name,payee,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,frequency,nextDueDate,endDate,reminderDays,note,status:existing?.status==='completed'&&totalAmountMinor&&Number(existing?.amountPaidMinor||0)<totalAmountMinor?'active':existing?.status,updatedAt:FieldValue.serverTimestamp()});return{commitmentId};});
@@ -887,7 +890,7 @@ export const archiveCommitment = onCall({ region }, async request=>{const uid=re
 
 export const payCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const accountId=stringValue(request.data?.accountId,'Account');const requestedAmount=request.data?.amountMinor==null?null:positiveMoney(request.data?.amountMinor);const paymentDate=localDate(request.data?.paymentDate,'Payment date');const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const commitmentRef=db.collection('commitments').doc(commitmentId);const accountRef=db.collection('accounts').doc(accountId);const budgetCandidateRefs=(await db.collection('budgets').where('ownerId','==',uid).get()).docs.map(item=>item.ref);
-  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');if(Number(commitment?.sharedAssignedMinor||0)>Number(commitment?.sharedSettledMinor||0))throw new HttpsError('failed-precondition','This commitment has open shared bill assignments. Complete or reverse them from Sharing first.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,sharedCycleDueDate:nextDueDate,sharedAssignedMinor:0,sharedSettledMinor:0,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 // v0.7 Collaboration and WhatsApp coordination
@@ -1094,6 +1097,325 @@ export const removeSpaceMember = onCall({ region }, async (request) => {
   });
 });
 
+// v0.7 Alpha 2 shared-bill settlement and reversal
+const sharedSettlementModes = ['account', 'external'] as const;
+
+function safeMinor(value: unknown, field: string): number {
+  const result = value == null ? 0 : Number(value);
+  if (!Number.isSafeInteger(result) || result < 0) throw new HttpsError('failed-precondition', `${field} is invalid.`);
+  return result;
+}
+
+function sharedCycleTarget(commitment: DocumentData): number {
+  const scheduled = positiveMoney(commitment.amountMinor);
+  if (commitment.type !== 'instalment') return scheduled;
+  const total = positiveMoney(commitment.totalAmountMinor);
+  const paid = safeMinor(commitment.amountPaidMinor, 'Commitment paid amount');
+  return Math.min(scheduled, Math.max(0, total - paid));
+}
+
+function sharedCommitmentProjection(commitment: DocumentData, assignment: DocumentData, amountMinor: number) {
+  const previousAmountPaidMinor = safeMinor(commitment.amountPaidMinor, 'Commitment paid amount');
+  const previousNextDueDate = commitment.nextDueDate ?? commitment.startDate ?? assignment.dueDate ?? null;
+  const previousStatus = commitment.status === 'completed' ? 'completed' : 'active';
+  const previousSharedCycleDueDate = commitment.sharedCycleDueDate ?? previousNextDueDate;
+  const previousSharedAssignedMinor = safeMinor(commitment.sharedAssignedMinor, 'Shared assigned amount');
+  const previousSharedSettledMinor = safeMinor(commitment.sharedSettledMinor, 'Shared settled amount');
+  const assignmentDueDate = String(assignment.dueDate || previousNextDueDate || '');
+
+  if (previousSharedCycleDueDate && previousSharedCycleDueDate !== assignmentDueDate && previousSharedAssignedMinor > previousSharedSettledMinor) {
+    throw new HttpsError('failed-precondition', 'Another shared billing cycle is still open for this commitment.');
+  }
+
+  const sameCycle = !previousSharedCycleDueDate || previousSharedCycleDueDate === assignmentDueDate;
+  const baseAssignedMinor = sameCycle
+    ? Math.max(previousSharedAssignedMinor, safeMinor(assignment.assignedMinor, 'Assigned amount'))
+    : safeMinor(assignment.assignedMinor, 'Assigned amount');
+  const baseSettledMinor = sameCycle ? previousSharedSettledMinor : 0;
+  const cycleTargetMinor = sharedCycleTarget(commitment);
+  const remainingCommitmentMinor = commitment.type === 'instalment'
+    ? Math.max(0, positiveMoney(commitment.totalAmountMinor) - previousAmountPaidMinor)
+    : Number.MAX_SAFE_INTEGER;
+
+  if (amountMinor > remainingCommitmentMinor) throw new HttpsError('invalid-argument', 'Payment exceeds the remaining instalment balance.');
+  const nextAmountPaidMinor = previousAmountPaidMinor + amountMinor;
+  const nextCycleSettledMinor = baseSettledMinor + amountMinor;
+  const cycleComplete = cycleTargetMinor > 0 && nextCycleSettledMinor >= cycleTargetMinor;
+
+  let nextStatus: 'active' | 'completed' = 'active';
+  let nextDueDate: string | null = String(previousNextDueDate || assignmentDueDate || '') || null;
+  let nextSharedCycleDueDate: string | null = assignmentDueDate || nextDueDate;
+  let nextSharedAssignedMinor = baseAssignedMinor;
+  let nextSharedSettledMinor = nextCycleSettledMinor;
+
+  if (cycleComplete) {
+    if (commitment.type === 'instalment' && nextAmountPaidMinor >= positiveMoney(commitment.totalAmountMinor)) {
+      nextStatus = 'completed';
+      nextDueDate = null;
+    } else if (commitment.type === 'bill' && commitment.frequency === 'once') {
+      nextStatus = 'completed';
+      nextDueDate = null;
+    } else {
+      nextDueDate = addFrequency(assignmentDueDate, oneOf(commitment.frequency, commitmentFrequencies, 'frequency'));
+      if (nextDueDate && commitment.endDate && nextDueDate > commitment.endDate) {
+        nextStatus = 'completed';
+        nextDueDate = null;
+      }
+    }
+    nextSharedCycleDueDate = nextDueDate;
+    nextSharedAssignedMinor = 0;
+    nextSharedSettledMinor = 0;
+  }
+
+  return {
+    previousAmountPaidMinor,
+    previousNextDueDate,
+    previousStatus,
+    previousSharedCycleDueDate,
+    previousSharedAssignedMinor,
+    previousSharedSettledMinor,
+    nextAmountPaidMinor,
+    nextNextDueDate: nextDueDate,
+    nextStatus,
+    nextSharedCycleDueDate,
+    nextSharedAssignedMinor,
+    nextSharedSettledMinor,
+  };
+}
+
+function sharedPaymentNote(input: {
+  commitmentName: string;
+  memberLabel: string;
+  paymentDisplayId: string;
+  assignmentDisplayId: string;
+  userNote?: string;
+}): string {
+  const base = `Shared bill payment — ${input.commitmentName} — paid by ${input.memberLabel} — claim ${input.paymentDisplayId} — assignment ${input.assignmentDisplayId}`;
+  return input.userNote ? `${base}. ${input.userNote}` : base;
+}
+
+function writeFinalizedSharedPayment(transaction: Transaction, input: {
+  actorUid: string;
+  actorName?: string;
+  idempotencyKey: string;
+  assignmentRef: DocumentReference;
+  assignment: DocumentData;
+  paymentRef: DocumentReference;
+  payment: DocumentData;
+  paymentIsNew: boolean;
+  commitmentRef: DocumentReference;
+  commitment: DocumentData;
+  commitmentPaymentRef: DocumentReference;
+  accountRef: DocumentReference | null;
+  account: AccountRecord | null;
+  budgetSnapshots: Array<{ id: string; ref: DocumentReference; data: () => DocumentData | undefined }>;
+  now: FieldValue;
+}) {
+  const amountMinor = positiveMoney(input.payment.amountMinor);
+  const assignedMinor = positiveMoney(input.assignment.assignedMinor);
+  const settledBefore = safeMinor(input.assignment.settledMinor, 'Assignment settled amount');
+  const outstandingBefore = Math.max(0, assignedMinor - settledBefore);
+  if (amountMinor > outstandingBefore) throw new HttpsError('invalid-argument', 'Payment exceeds the assignment outstanding amount.');
+
+  const projection = sharedCommitmentProjection(input.commitment, input.assignment, amountMinor);
+  const settlementMode = oneOf(input.payment.settlementMode, sharedSettlementModes, 'settlement mode');
+  const memberUid = stringValue(input.payment.memberUid, 'Member ID', 128);
+  const memberLabel = String(input.payment.memberName || input.payment.memberEmail || memberUid);
+  const paymentDisplayId = String(input.payment.displayId || displayId('SHP'));
+  const assignmentDisplayId = String(input.assignment.displayId || input.assignmentRef.id);
+  const paymentDate = localDate(input.payment.paymentDate, 'Payment date');
+  const transactionRef = settlementMode === 'account' ? db.collection('transactions').doc() : null;
+  let ledgerEntryId: string | null = null;
+  let budgetIds: string[] = [];
+
+  if (settlementMode === 'account') {
+    if (!input.accountRef || !input.account) throw new HttpsError('failed-precondition', 'The selected payment account is unavailable.');
+    if (input.account.ownerId !== memberUid) throw new HttpsError('permission-denied', 'The payment account must belong to the assigned member.');
+    if (input.account.currency !== input.assignment.currency) throw new HttpsError('failed-precondition', 'Account and shared bill currencies must match.');
+    const delta = accountEffect(input.account.type, 'out', amountMinor);
+    updateAccountBalance(transaction, input.accountRef, input.account, delta);
+    ledgerEntryId = createLedgerEntry(transaction, {
+      accountId: input.accountRef.id,
+      ownerId: memberUid,
+      spaceId: String(input.assignment.spaceId),
+      transactionId: transactionRef!.id,
+      entryType: 'shared_bill_payment',
+      amountMinor: delta,
+      currency: input.account.currency,
+      idempotencyKey: input.idempotencyKey,
+      now: input.now,
+    });
+    budgetIds = matchingBudgetIds(input.budgetSnapshots, {
+      spaceId: String(input.assignment.spaceId),
+      categoryId: String(input.commitment.categoryId),
+      transactionDate: paymentDate,
+    });
+    if (budgetIds.length) updateBudgetsSpent(transaction, input.budgetSnapshots, budgetIds, amountMinor);
+    transaction.create(transactionRef!, {
+      displayId: displayId('TXN'),
+      ownerId: memberUid,
+      createdBy: memberUid,
+      approvedBy: input.actorUid,
+      type: 'expense',
+      status: 'posted',
+      spaceId: input.assignment.spaceId,
+      accountId: input.accountRef.id,
+      destinationAccountId: null,
+      amountMinor,
+      currency: input.account.currency,
+      category: input.commitment.categoryName,
+      categoryId: input.commitment.categoryId,
+      categoryIcon: input.commitment.categoryIcon,
+      categoryColor: input.commitment.categoryColor,
+      categoryScope: 'both',
+      categoryIsSystem: !String(input.commitment.categoryId).startsWith('custom-'),
+      counterparty: input.commitment.payee || input.commitment.name,
+      note: sharedPaymentNote({
+        commitmentName: String(input.assignment.commitmentName || input.commitment.name || 'Shared bill'),
+        memberLabel,
+        paymentDisplayId,
+        assignmentDisplayId,
+        userNote: optionalString(input.payment.note, 500),
+      }),
+      transactionDate: paymentDate,
+      reversalOf: null,
+      reversedBy: null,
+      budgetIds,
+      commitmentId: input.assignment.commitmentId,
+      commitmentPaymentId: input.commitmentPaymentRef.id,
+      sharedBillAssignmentId: input.assignmentRef.id,
+      sharedBillPaymentId: input.paymentRef.id,
+      paymentProofPath: input.payment.proofPath || null,
+      createdAt: input.now,
+      postedAt: input.now,
+      updatedAt: input.now,
+    });
+  }
+
+  const settledAfter = settledBefore + amountMinor;
+  const outstandingAfter = Math.max(0, assignedMinor - settledAfter);
+  const assignmentStatus = outstandingAfter === 0 ? 'paid' : 'partially_paid';
+  const transactionId = transactionRef?.id || null;
+
+  transaction.create(input.commitmentPaymentRef, {
+    displayId: displayId('PAY'),
+    ownerId: input.commitment.ownerId,
+    commitmentId: input.assignment.commitmentId,
+    transactionId,
+    amountMinor,
+    currency: input.assignment.currency,
+    paymentDate,
+    dueDateApplied: input.assignment.dueDate,
+    previousNextDueDate: projection.previousNextDueDate,
+    previousStatus: projection.previousStatus,
+    source: 'shared_bill',
+    sharedBillAssignmentId: input.assignmentRef.id,
+    sharedBillPaymentId: input.paymentRef.id,
+    paidByUid: memberUid,
+    status: 'posted',
+    reversedBy: null,
+    createdAt: input.now,
+    updatedAt: input.now,
+  });
+
+  const paymentUpdate = {
+    displayId: paymentDisplayId,
+    assignmentId: input.assignmentRef.id,
+    spaceId: input.assignment.spaceId,
+    commitmentId: input.assignment.commitmentId,
+    commitmentPaymentId: input.commitmentPaymentRef.id,
+    memberUid,
+    memberName: input.payment.memberName || input.assignment.memberName || '',
+    memberEmail: input.payment.memberEmail || input.assignment.memberEmail || '',
+    amountMinor,
+    currency: input.assignment.currency,
+    settlementMode,
+    accountId: input.accountRef?.id || null,
+    paymentDate,
+    proofPath: input.payment.proofPath || null,
+    proofName: input.payment.proofName || null,
+    note: optionalString(input.payment.note, 500),
+    status: 'posted',
+    transactionId,
+    ledgerEntryId,
+    reviewedAt: input.now,
+    reviewedBy: input.actorUid,
+    postedAt: input.now,
+    reversedAt: null,
+    reversedBy: null,
+    reversalTransactionId: null,
+    previousCommitmentAmountPaidMinor: projection.previousAmountPaidMinor,
+    previousNextDueDate: projection.previousNextDueDate,
+    previousCommitmentStatus: projection.previousStatus,
+    previousSharedCycleDueDate: projection.previousSharedCycleDueDate,
+    previousSharedAssignedMinor: projection.previousSharedAssignedMinor,
+    previousSharedSettledMinor: projection.previousSharedSettledMinor,
+    previousAssignmentLastPaymentId: input.assignment.lastPaymentId || null,
+    postCommitmentAmountPaidMinor: projection.nextAmountPaidMinor,
+    postNextDueDate: projection.nextNextDueDate,
+    postCommitmentStatus: projection.nextStatus,
+    postSharedCycleDueDate: projection.nextSharedCycleDueDate,
+    postSharedAssignedMinor: projection.nextSharedAssignedMinor,
+    postSharedSettledMinor: projection.nextSharedSettledMinor,
+    updatedAt: input.now,
+  };
+  if (input.paymentIsNew) transaction.create(input.paymentRef, { ...paymentUpdate, createdAt: input.now });
+  else transaction.update(input.paymentRef, paymentUpdate);
+
+  transaction.update(input.assignmentRef, {
+    settledMinor: settledAfter,
+    outstandingMinor: outstandingAfter,
+    status: assignmentStatus,
+    proofPath: input.payment.proofPath || input.assignment.proofPath || null,
+    proofName: input.payment.proofName || input.assignment.proofName || null,
+    currentPaymentId: null,
+    lastPaymentId: input.paymentRef.id,
+    reviewedAt: input.now,
+    reviewedBy: input.actorUid,
+    closedAt: outstandingAfter === 0 ? input.now : null,
+    updatedAt: input.now,
+  });
+  transaction.update(input.commitmentRef, {
+    amountPaidMinor: projection.nextAmountPaidMinor,
+    nextDueDate: projection.nextNextDueDate,
+    status: projection.nextStatus,
+    sharedCycleDueDate: projection.nextSharedCycleDueDate,
+    sharedAssignedMinor: projection.nextSharedAssignedMinor,
+    sharedSettledMinor: projection.nextSharedSettledMinor,
+    updatedAt: input.now,
+  });
+  createActivity(transaction, {
+    spaceId: String(input.assignment.spaceId),
+    actorUid: input.actorUid,
+    actorName: input.actorName,
+    action: outstandingAfter === 0 ? 'shared_bill_paid' : 'shared_bill_partially_paid',
+    targetType: 'shared_bill_payment',
+    targetId: input.paymentRef.id,
+    summary: `${memberLabel} paid ${amountMinor / 100} ${input.assignment.currency} for ${input.assignment.commitmentName || 'a shared bill'}${settlementMode === 'external' ? ' outside BajetBN' : ' from a BajetBN Account'}.`,
+    now: input.now,
+  });
+  if (input.actorUid !== memberUid) {
+    createNotification(transaction, {
+      uid: memberUid,
+      spaceId: String(input.assignment.spaceId),
+      type: 'payment_confirmed',
+      title: 'Shared bill payment confirmed',
+      message: `${input.assignment.commitmentName || 'Your shared bill'} now has ${outstandingAfter / 100} ${input.assignment.currency} outstanding.`,
+      now: input.now,
+    });
+  }
+
+  return {
+    assignmentId: input.assignmentRef.id,
+    paymentId: input.paymentRef.id,
+    commitmentPaymentId: input.commitmentPaymentRef.id,
+    status: assignmentStatus,
+    transactionId,
+    ledgerEntryId,
+    outstandingMinor: outstandingAfter,
+  };
+}
+
 export const createSharedBillAssignment = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
@@ -1108,22 +1430,83 @@ export const createSharedBillAssignment = onCall({ region }, async (request) => 
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`);
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
   const assignmentRef = db.collection('sharedBillAssignments').doc();
+
   return db.runTransaction(async (transaction) => {
-    const [command, commitment, member] = await Promise.all([transaction.get(commandRef), transaction.get(commitmentRef), transaction.get(memberRef)]);
+    const [command, commitmentSnapshot, member] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(commitmentRef),
+      transaction.get(memberRef),
+    ]);
     if (command.exists) return command.data()?.result;
-    if (!commitment.exists || commitment.data()?.spaceId !== spaceId || commitment.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active bill from this Space.');
-    if (!member.exists || member.data()?.status === 'suspended' || member.data()?.status === 'removed') throw new HttpsError('failed-precondition', 'Choose an active Space member.');
+    if (!commitmentSnapshot.exists || commitmentSnapshot.data()?.spaceId !== spaceId || commitmentSnapshot.data()?.archivedAt || commitmentSnapshot.data()?.status !== 'active') {
+      throw new HttpsError('failed-precondition', 'Choose an active bill from this Space.');
+    }
+    if (!member.exists || member.data()?.status === 'suspended' || member.data()?.status === 'removed') {
+      throw new HttpsError('failed-precondition', 'Choose an active Space member.');
+    }
+    const commitment = commitmentSnapshot.data() || {};
+    const expectedDueDate = String(commitment.nextDueDate || commitment.startDate || '');
+    if (expectedDueDate && dueDate !== expectedDueDate) throw new HttpsError('failed-precondition', `Assign the current cycle due on ${expectedDueDate}.`);
+    const cycleDueDate = String(commitment.sharedCycleDueDate || expectedDueDate || dueDate);
+    const currentAssigned = cycleDueDate === dueDate ? safeMinor(commitment.sharedAssignedMinor, 'Shared assigned amount') : 0;
+    const currentSettled = cycleDueDate === dueDate ? safeMinor(commitment.sharedSettledMinor, 'Shared settled amount') : 0;
+    if (cycleDueDate !== dueDate && currentAssigned > currentSettled) throw new HttpsError('failed-precondition', 'Finish the current shared billing cycle before assigning another cycle.');
+    const cycleTarget = sharedCycleTarget(commitment);
+    if (currentAssigned + assignedMinor > cycleTarget) throw new HttpsError('invalid-argument', 'Assigned member shares cannot exceed the amount due for this cycle.');
+
     const now = FieldValue.serverTimestamp();
     const result = { assignmentId: assignmentRef.id };
     transaction.create(assignmentRef, {
-      displayId: displayId('SHR'), spaceId, commitmentId, commitmentName: commitment.data()?.name,
-      memberUid, memberName: member.data()?.displayName || '', memberEmail: member.data()?.email || '',
-      assignedMinor, currency: commitment.data()?.currency, dueDate, status: 'unpaid', note,
-      proofPath: null, proofName: null, submittedAt: null, reviewedAt: null, reviewedBy: null,
-      createdBy: uid, createdAt: now, updatedAt: now,
+      displayId: displayId('SHR'),
+      spaceId,
+      commitmentId,
+      commitmentName: commitment.name,
+      memberUid,
+      memberName: member.data()?.displayName || '',
+      memberEmail: member.data()?.email || '',
+      assignedMinor,
+      settledMinor: 0,
+      outstandingMinor: assignedMinor,
+      currency: commitment.currency,
+      dueDate,
+      status: 'unpaid',
+      note,
+      proofPath: null,
+      proofName: null,
+      currentPaymentId: null,
+      lastPaymentId: null,
+      submittedAt: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      closedAt: null,
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
     });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'bill_assigned', targetType: 'shared_bill', targetId: assignmentRef.id, summary: `Assigned ${commitment.data()?.name || 'a bill'} to ${member.data()?.displayName || member.data()?.email || 'a member'}.`, now });
-    createNotification(transaction, { uid: memberUid, spaceId, type: 'bill_assigned', title: 'A bill was assigned to you', message: `${commitment.data()?.name || 'A bill'} is due on ${dueDate}.`, now });
+    transaction.update(commitmentRef, {
+      sharedCycleDueDate: dueDate,
+      sharedAssignedMinor: currentAssigned + assignedMinor,
+      sharedSettledMinor: currentSettled,
+      updatedAt: now,
+    });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: manager.displayName,
+      action: 'bill_assigned',
+      targetType: 'shared_bill',
+      targetId: assignmentRef.id,
+      summary: `Assigned ${commitment.name || 'a bill'} to ${member.data()?.displayName || member.data()?.email || 'a member'}.`,
+      now,
+    });
+    createNotification(transaction, {
+      uid: memberUid,
+      spaceId,
+      type: 'bill_assigned',
+      title: 'A bill was assigned to you',
+      message: `${commitment.name || 'A bill'} is due on ${dueDate}.`,
+      now,
+    });
     transaction.create(commandRef, { uid, kind: 'create_shared_bill_assignment', idempotencyKey: key, result, createdAt: now });
     return result;
   });
@@ -1132,29 +1515,142 @@ export const createSharedBillAssignment = onCall({ region }, async (request) => 
 export const submitSharedBillPayment = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const assignmentId = stringValue(request.data?.assignmentId, 'Assignment ID', 80);
-  const proofPath = optionalString(request.data?.proofPath, 500) || null;
-  const proofName = optionalString(request.data?.proofName, 180) || null;
+  const amountMinor = positiveMoney(request.data?.amountMinor);
+  const settlementMode = oneOf(request.data?.settlementMode, sharedSettlementModes, 'settlement mode');
+  const accountId = optionalString(request.data?.accountId, 80) || null;
+  const paymentDate = localDate(request.data?.paymentDate, 'Payment date');
+  const proofPathInput = optionalString(request.data?.proofPath, 500) || null;
+  const proofNameInput = optionalString(request.data?.proofName, 180) || null;
   const note = optionalString(request.data?.note, 500);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  if (settlementMode === 'account' && !accountId) throw new HttpsError('invalid-argument', 'Choose the Account used for this payment.');
+
   const assignmentRef = db.collection('sharedBillAssignments').doc(assignmentId);
+  const assignmentPre = await assignmentRef.get();
+  if (!assignmentPre.exists) throw new HttpsError('not-found', 'Shared bill not found.');
+  const assignmentPreData = assignmentPre.data() || {};
+  if (assignmentPreData.memberUid !== uid) throw new HttpsError('permission-denied', 'Only the assigned member can submit this payment.');
+  await requireActiveSpaceMember(String(assignmentPreData.spaceId), uid);
+  const budgetCandidateRefs = settlementMode === 'account'
+    ? (await db.collection('budgets').where('ownerId', '==', uid).get()).docs.map((item) => item.ref)
+    : [];
+
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  const commitmentRef = db.collection('commitments').doc(String(assignmentPreData.commitmentId));
+  const spaceRef = db.collection('spaces').doc(String(assignmentPreData.spaceId));
+  const memberRef = db.collection('spaceMembers').doc(`${assignmentPreData.spaceId}_${uid}`);
+  const accountRef = accountId ? db.collection('accounts').doc(accountId) : null;
+  const paymentRef = db.collection('sharedBillPayments').doc();
+  const commitmentPaymentRef = db.collection('commitmentPayments').doc();
+
   return db.runTransaction(async (transaction) => {
-    const [command, assignment] = await Promise.all([transaction.get(commandRef), transaction.get(assignmentRef)]);
+    const [command, assignmentSnapshot, commitmentSnapshot, spaceSnapshot, memberSnapshot, accountSnapshot, budgetSnapshots] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(assignmentRef),
+      transaction.get(commitmentRef),
+      transaction.get(spaceRef),
+      transaction.get(memberRef),
+      accountRef ? transaction.get(accountRef) : Promise.resolve(null),
+      Promise.all(budgetCandidateRefs.map((ref) => transaction.get(ref))),
+    ]);
     if (command.exists) return command.data()?.result;
-    if (!assignment.exists) throw new HttpsError('not-found', 'Shared bill not found.');
-    const data = assignment.data();
-    if (data?.memberUid !== uid) throw new HttpsError('permission-denied', 'Only the assigned member can mark this bill paid.');
-    if (data?.status !== 'unpaid' && data?.status !== 'rejected') throw new HttpsError('failed-precondition', 'This payment claim cannot be submitted again.');
-    await requireActiveSpaceMember(String(data?.spaceId), uid);
-    if (proofPath && !proofPath.startsWith(`spaces/${data?.spaceId}/payment-proofs/${assignmentId}/`)) throw new HttpsError('invalid-argument', 'Invalid proof of payment path.');
-    const space = await transaction.get(db.collection('spaces').doc(String(data?.spaceId)));
-    const approvalRequired = space.data()?.approvalMode === 'owner_approval';
-    const nextStatus = approvalRequired ? 'submitted' : 'confirmed';
+    if (!assignmentSnapshot.exists || !commitmentSnapshot.exists || !spaceSnapshot.exists) throw new HttpsError('not-found', 'Shared bill data is unavailable.');
+    const assignment = assignmentSnapshot.data() || {};
+    const commitment = commitmentSnapshot.data() || {};
+    if (assignment.memberUid !== uid) throw new HttpsError('permission-denied', 'Only the assigned member can submit this payment.');
+    if (!memberSnapshot.exists || ['suspended', 'removed'].includes(String(memberSnapshot.data()?.status || 'active'))) throw new HttpsError('permission-denied', 'Your Space access is not active.');
+    if (!['unpaid', 'partially_paid', 'rejected', 'confirmed'].includes(String(assignment.status))) throw new HttpsError('failed-precondition', 'This assignment is not ready for another payment.');
+    if (assignment.currentPaymentId) throw new HttpsError('failed-precondition', 'A payment claim is already awaiting review.');
+    const settledMinor = safeMinor(assignment.settledMinor, 'Assignment settled amount');
+    const outstandingMinor = Math.max(0, positiveMoney(assignment.assignedMinor) - settledMinor);
+    if (amountMinor > outstandingMinor) throw new HttpsError('invalid-argument', 'Payment exceeds the assignment outstanding amount.');
+    const proofPath = proofPathInput || assignment.proofPath || null;
+    const proofName = proofNameInput || assignment.proofName || null;
+    if (proofPath && !String(proofPath).startsWith(`spaces/${assignment.spaceId}/payment-proofs/${assignmentId}/`)) throw new HttpsError('invalid-argument', 'Invalid proof of payment path.');
+    const account = accountSnapshot ? assertAccount(accountSnapshot.data(), uid, 'Account') : null;
+    if (account && account.currency !== assignment.currency) throw new HttpsError('failed-precondition', 'Account and shared bill currencies must match.');
+
+    const paymentDisplayId = displayId('SHP');
+    const paymentData = {
+      displayId: paymentDisplayId,
+      assignmentId,
+      spaceId: assignment.spaceId,
+      commitmentId: assignment.commitmentId,
+      commitmentPaymentId: null,
+      memberUid: uid,
+      memberName: assignment.memberName || memberSnapshot.data()?.displayName || '',
+      memberEmail: assignment.memberEmail || memberSnapshot.data()?.email || '',
+      amountMinor,
+      currency: assignment.currency,
+      settlementMode,
+      accountId,
+      paymentDate,
+      proofPath,
+      proofName,
+      note,
+      status: 'submitted',
+      transactionId: null,
+      ledgerEntryId: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      postedAt: null,
+      reversedAt: null,
+      reversedBy: null,
+      reversalTransactionId: null,
+    };
     const now = FieldValue.serverTimestamp();
-    const result = { assignmentId, status: nextStatus };
-    transaction.update(assignmentRef, { status: nextStatus, proofPath, proofName, note, submittedAt: now, reviewedAt: approvalRequired ? null : now, reviewedBy: approvalRequired ? null : uid, updatedAt: now });
-    createActivity(transaction, { spaceId: String(data?.spaceId), actorUid: uid, actorName: data?.memberName, action: 'bill_marked_paid', targetType: 'shared_bill', targetId: assignmentId, summary: `${data?.memberName || data?.memberEmail || 'A member'} marked ${data?.commitmentName || 'a bill'} paid${approvalRequired ? ' and requested approval' : ''}.`, now });
-    if (approvalRequired) createNotification(transaction, { uid: String(space.data()?.ownerId), spaceId: String(data?.spaceId), type: 'payment_submitted', title: 'Payment claim needs review', message: `${data?.memberName || data?.memberEmail || 'A member'} submitted payment for ${data?.commitmentName || 'a shared bill'}.`, now });
+    const approvalRequired = spaceSnapshot.data()?.approvalMode === 'owner_approval';
+    let result;
+    if (approvalRequired) {
+      result = { assignmentId, paymentId: paymentRef.id, status: 'submitted' };
+      transaction.create(paymentRef, { ...paymentData, createdAt: now, updatedAt: now });
+      transaction.update(assignmentRef, {
+        status: 'submitted',
+        currentPaymentId: paymentRef.id,
+        proofPath,
+        proofName,
+        submittedAt: now,
+        reviewedAt: null,
+        reviewedBy: null,
+        updatedAt: now,
+      });
+      createActivity(transaction, {
+        spaceId: String(assignment.spaceId),
+        actorUid: uid,
+        actorName: assignment.memberName,
+        action: 'payment_submitted',
+        targetType: 'shared_bill_payment',
+        targetId: paymentRef.id,
+        summary: `${assignment.memberName || assignment.memberEmail || 'A member'} submitted ${amountMinor / 100} ${assignment.currency} for ${assignment.commitmentName || 'a shared bill'}.`,
+        now,
+      });
+      createNotification(transaction, {
+        uid: String(spaceSnapshot.data()?.ownerId),
+        spaceId: String(assignment.spaceId),
+        type: 'payment_submitted',
+        title: 'Payment claim needs review',
+        message: `${assignment.memberName || assignment.memberEmail || 'A member'} submitted payment for ${assignment.commitmentName || 'a shared bill'}.`,
+        now,
+      });
+    } else {
+      result = writeFinalizedSharedPayment(transaction, {
+        actorUid: uid,
+        actorName: assignment.memberName || assignment.memberEmail,
+        idempotencyKey: key,
+        assignmentRef,
+        assignment,
+        paymentRef,
+        payment: paymentData,
+        paymentIsNew: true,
+        commitmentRef,
+        commitment,
+        commitmentPaymentRef,
+        accountRef,
+        account,
+        budgetSnapshots,
+        now,
+      });
+    }
     transaction.create(commandRef, { uid, kind: 'submit_shared_bill_payment', idempotencyKey: key, result, createdAt: now });
     return result;
   });
@@ -1162,26 +1658,286 @@ export const submitSharedBillPayment = onCall({ region }, async (request) => {
 
 export const reviewSharedBillPayment = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
-  const assignmentId = stringValue(request.data?.assignmentId, 'Assignment ID', 80);
+  const paymentId = stringValue(request.data?.paymentId, 'Payment ID', 80);
   const decision = oneOf(request.data?.decision, ['confirmed', 'rejected'] as const, 'decision');
   const note = optionalString(request.data?.note, 500);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
-  const assignmentRef = db.collection('sharedBillAssignments').doc(assignmentId);
-  const assignment = await assignmentRef.get();
-  if (!assignment.exists) throw new HttpsError('not-found', 'Shared bill not found.');
-  const data = assignment.data();
-  const manager = await requireSpaceManager(String(data?.spaceId), uid);
+  const paymentRef = db.collection('sharedBillPayments').doc(paymentId);
+  const paymentPre = await paymentRef.get();
+  if (!paymentPre.exists) throw new HttpsError('not-found', 'Payment claim not found.');
+  const paymentPreData = paymentPre.data() || {};
+  const manager = await requireSpaceManager(String(paymentPreData.spaceId), uid);
+  const assignmentRef = db.collection('sharedBillAssignments').doc(String(paymentPreData.assignmentId));
+  const commitmentRef = db.collection('commitments').doc(String(paymentPreData.commitmentId));
+  const accountId = paymentPreData.settlementMode === 'account' ? String(paymentPreData.accountId || '') : '';
+  const accountRef = accountId ? db.collection('accounts').doc(accountId) : null;
+  const budgetCandidateRefs = decision === 'confirmed' && paymentPreData.settlementMode === 'account'
+    ? (await db.collection('budgets').where('ownerId', '==', String(paymentPreData.memberUid)).get()).docs.map((item) => item.ref)
+    : [];
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  const commitmentPaymentRef = db.collection('commitmentPayments').doc();
+
   return db.runTransaction(async (transaction) => {
-    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(assignmentRef)]);
+    const [command, paymentSnapshot, assignmentSnapshot, commitmentSnapshot, accountSnapshot, budgetSnapshots] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(paymentRef),
+      transaction.get(assignmentRef),
+      transaction.get(commitmentRef),
+      accountRef ? transaction.get(accountRef) : Promise.resolve(null),
+      Promise.all(budgetCandidateRefs.map((ref) => transaction.get(ref))),
+    ]);
     if (command.exists) return command.data()?.result;
-    if (current.data()?.status !== 'submitted') throw new HttpsError('failed-precondition', 'Only submitted payment claims can be reviewed.');
+    if (!paymentSnapshot.exists || !assignmentSnapshot.exists || !commitmentSnapshot.exists) throw new HttpsError('not-found', 'Payment claim data is unavailable.');
+    const payment = paymentSnapshot.data() || {};
+    const assignment = assignmentSnapshot.data() || {};
+    const commitment = commitmentSnapshot.data() || {};
+    if (payment.status !== 'submitted' || assignment.currentPaymentId !== paymentId || assignment.status !== 'submitted') {
+      throw new HttpsError('failed-precondition', 'Only the current submitted payment claim can be reviewed.');
+    }
     const now = FieldValue.serverTimestamp();
-    const result = { assignmentId, status: decision };
-    transaction.update(assignmentRef, { status: decision, reviewNote: note, reviewedAt: now, reviewedBy: uid, updatedAt: now });
-    createActivity(transaction, { spaceId: String(data?.spaceId), actorUid: uid, actorName: manager.displayName, action: `payment_${decision}`, targetType: 'shared_bill', targetId: assignmentId, summary: `${decision === 'confirmed' ? 'Confirmed' : 'Rejected'} the payment claim for ${data?.commitmentName || 'a shared bill'}.`, now });
-    createNotification(transaction, { uid: String(data?.memberUid), spaceId: String(data?.spaceId), type: `payment_${decision}`, title: `Payment ${decision}`, message: `Your payment claim for ${data?.commitmentName || 'a shared bill'} was ${decision}.`, now });
+    let result;
+    if (decision === 'rejected') {
+      const settledMinor = safeMinor(assignment.settledMinor, 'Assignment settled amount');
+      const nextStatus = settledMinor > 0 ? 'partially_paid' : 'rejected';
+      result = { assignmentId: assignmentRef.id, paymentId, status: nextStatus };
+      transaction.update(paymentRef, { status: 'rejected', reviewNote: note, reviewedAt: now, reviewedBy: uid, updatedAt: now });
+      transaction.update(assignmentRef, { status: nextStatus, currentPaymentId: null, reviewNote: note, reviewedAt: now, reviewedBy: uid, updatedAt: now });
+      createActivity(transaction, {
+        spaceId: String(assignment.spaceId),
+        actorUid: uid,
+        actorName: manager.displayName,
+        action: 'payment_rejected',
+        targetType: 'shared_bill_payment',
+        targetId: paymentId,
+        summary: `Rejected the payment claim for ${assignment.commitmentName || 'a shared bill'}.`,
+        now,
+      });
+      createNotification(transaction, {
+        uid: String(assignment.memberUid),
+        spaceId: String(assignment.spaceId),
+        type: 'payment_rejected',
+        title: 'Payment rejected',
+        message: `Your payment claim for ${assignment.commitmentName || 'a shared bill'} was rejected.`,
+        now,
+      });
+    } else {
+      const account = accountSnapshot ? assertAccount(accountSnapshot.data(), String(payment.memberUid), 'Account') : null;
+      result = writeFinalizedSharedPayment(transaction, {
+        actorUid: uid,
+        actorName: manager.displayName,
+        idempotencyKey: key,
+        assignmentRef,
+        assignment,
+        paymentRef,
+        payment,
+        paymentIsNew: false,
+        commitmentRef,
+        commitment,
+        commitmentPaymentRef,
+        accountRef,
+        account,
+        budgetSnapshots,
+        now,
+      });
+    }
     transaction.create(commandRef, { uid, kind: 'review_shared_bill_payment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const reverseSharedBillPayment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const paymentId = stringValue(request.data?.paymentId, 'Payment ID', 80);
+  const reversalDate = localDate(request.data?.reversalDate, 'Reversal date');
+  const reason = optionalString(request.data?.reason, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const paymentRef = db.collection('sharedBillPayments').doc(paymentId);
+  const paymentPre = await paymentRef.get();
+  if (!paymentPre.exists) throw new HttpsError('not-found', 'Shared bill payment not found.');
+  const paymentPreData = paymentPre.data() || {};
+  const member = await requireActiveSpaceMember(String(paymentPreData.spaceId), uid);
+  const canReverse = uid === paymentPreData.memberUid || member.role === 'owner' || member.role === 'admin';
+  if (!canReverse) throw new HttpsError('permission-denied', 'Only the payer, Space owner, or admin can reverse this payment.');
+
+  const assignmentRef = db.collection('sharedBillAssignments').doc(String(paymentPreData.assignmentId));
+  const commitmentRef = db.collection('commitments').doc(String(paymentPreData.commitmentId));
+  const commitmentPaymentRef = db.collection('commitmentPayments').doc(String(paymentPreData.commitmentPaymentId || 'missing'));
+  const accountRef = paymentPreData.settlementMode === 'account' && paymentPreData.accountId
+    ? db.collection('accounts').doc(String(paymentPreData.accountId))
+    : null;
+  const originalTransactionRef = paymentPreData.transactionId
+    ? db.collection('transactions').doc(String(paymentPreData.transactionId))
+    : null;
+  const budgetCandidateRefs = paymentPreData.settlementMode === 'account'
+    ? (await db.collection('budgets').where('ownerId', '==', String(paymentPreData.memberUid)).get()).docs.map((item) => item.ref)
+    : [];
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  const reversalAuditRef = db.collection('sharedBillPaymentReversals').doc();
+  const reversalTransactionRef = originalTransactionRef ? db.collection('transactions').doc() : null;
+
+  return db.runTransaction(async (transaction) => {
+    const [command, paymentSnapshot, assignmentSnapshot, commitmentSnapshot, commitmentPaymentSnapshot, accountSnapshot, originalTransactionSnapshot, budgetSnapshots] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(paymentRef),
+      transaction.get(assignmentRef),
+      transaction.get(commitmentRef),
+      transaction.get(commitmentPaymentRef),
+      accountRef ? transaction.get(accountRef) : Promise.resolve(null),
+      originalTransactionRef ? transaction.get(originalTransactionRef) : Promise.resolve(null),
+      Promise.all(budgetCandidateRefs.map((ref) => transaction.get(ref))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!paymentSnapshot.exists || !assignmentSnapshot.exists || !commitmentSnapshot.exists || !commitmentPaymentSnapshot.exists) {
+      throw new HttpsError('not-found', 'Shared bill payment data is unavailable.');
+    }
+    const payment = paymentSnapshot.data() || {};
+    const assignment = assignmentSnapshot.data() || {};
+    const commitment = commitmentSnapshot.data() || {};
+    if (payment.status !== 'posted') throw new HttpsError('failed-precondition', 'Only a posted shared bill payment can be reversed.');
+    if (assignment.lastPaymentId !== paymentId || assignment.currentPaymentId) throw new HttpsError('failed-precondition', 'Reverse the latest completed payment before changing earlier history.');
+    if (safeMinor(commitment.amountPaidMinor, 'Commitment paid amount') !== safeMinor(payment.postCommitmentAmountPaidMinor, 'Posted commitment amount')) {
+      throw new HttpsError('failed-precondition', 'This is no longer the latest commitment payment and cannot be reversed safely.');
+    }
+
+    const amountMinor = positiveMoney(payment.amountMinor);
+    const settledBefore = safeMinor(assignment.settledMinor, 'Assignment settled amount');
+    const settledAfter = Math.max(0, settledBefore - amountMinor);
+    const assignedMinor = positiveMoney(assignment.assignedMinor);
+    const outstandingAfter = Math.max(0, assignedMinor - settledAfter);
+    const assignmentStatus = settledAfter > 0 ? 'partially_paid' : 'unpaid';
+    const now = FieldValue.serverTimestamp();
+    let reversalTransactionId: string | null = null;
+    let ledgerEntryId: string | null = null;
+
+    if (payment.settlementMode === 'account') {
+      if (!accountRef || !accountSnapshot || !originalTransactionRef || !originalTransactionSnapshot || !reversalTransactionRef) {
+        throw new HttpsError('failed-precondition', 'The original Account transaction is incomplete.');
+      }
+      const account = assertAccount(accountSnapshot.data(), String(payment.memberUid), 'Account', true);
+      const original = originalTransactionSnapshot.data() || {};
+      if (original.status !== 'posted' || original.reversedBy || original.sharedBillPaymentId !== paymentId) {
+        throw new HttpsError('failed-precondition', 'The original shared bill transaction is not active.');
+      }
+      const delta = -accountEffect(account.type, 'out', amountMinor);
+      updateAccountBalance(transaction, accountRef, account, delta);
+      ledgerEntryId = createLedgerEntry(transaction, {
+        accountId: accountRef.id,
+        ownerId: String(payment.memberUid),
+        spaceId: String(payment.spaceId),
+        transactionId: reversalTransactionRef.id,
+        entryType: 'shared_bill_payment_reversal',
+        amountMinor: delta,
+        currency: account.currency,
+        idempotencyKey: key,
+        now,
+      });
+      const budgetIds = Array.isArray(original.budgetIds)
+        ? original.budgetIds.filter((id: unknown): id is string => typeof id === 'string')
+        : [];
+      if (budgetIds.length) updateBudgetsSpent(transaction, budgetSnapshots, budgetIds, -amountMinor);
+      reversalTransactionId = reversalTransactionRef.id;
+      transaction.create(reversalTransactionRef, {
+        displayId: displayId('TXN'),
+        ownerId: payment.memberUid,
+        createdBy: uid,
+        type: 'reversal',
+        originalType: 'expense',
+        status: 'posted',
+        spaceId: payment.spaceId,
+        accountId: payment.accountId,
+        destinationAccountId: null,
+        amountMinor,
+        currency: payment.currency,
+        category: 'Reversal',
+        categoryId: 'system-reversal',
+        categoryIcon: 'reversal',
+        categoryColor: 'slate',
+        categoryScope: 'both',
+        categoryIsSystem: true,
+        counterparty: original.counterparty || assignment.commitmentName || '',
+        note: reason || `Reversal of shared bill payment ${payment.displayId || paymentId}`,
+        transactionDate: reversalDate,
+        reversalOf: originalTransactionRef.id,
+        reversedBy: null,
+        budgetIds,
+        commitmentId: payment.commitmentId,
+        commitmentPaymentId: payment.commitmentPaymentId,
+        sharedBillAssignmentId: payment.assignmentId,
+        sharedBillPaymentId: paymentId,
+        paymentProofPath: payment.proofPath || null,
+        createdAt: now,
+        postedAt: now,
+        updatedAt: now,
+      });
+      transaction.update(originalTransactionRef, { status: 'reversed', reversedBy: reversalTransactionRef.id, reversedAt: now, updatedAt: now });
+    }
+
+    transaction.create(reversalAuditRef, {
+      displayId: displayId('SHR-REV'),
+      paymentId,
+      assignmentId: payment.assignmentId,
+      spaceId: payment.spaceId,
+      commitmentId: payment.commitmentId,
+      memberUid: payment.memberUid,
+      amountMinor,
+      currency: payment.currency,
+      settlementMode: payment.settlementMode,
+      transactionId: payment.transactionId || null,
+      reversalTransactionId,
+      ledgerEntryId,
+      reason,
+      reversedBy: uid,
+      reversalDate,
+      createdAt: now,
+    });
+    transaction.update(paymentRef, {
+      status: 'reversed',
+      reversedAt: now,
+      reversedBy: uid,
+      reversalTransactionId,
+      updatedAt: now,
+    });
+    transaction.update(commitmentPaymentRef, { status: 'reversed', reversedBy: reversalTransactionId || reversalAuditRef.id, updatedAt: now });
+    transaction.update(assignmentRef, {
+      settledMinor: settledAfter,
+      outstandingMinor: outstandingAfter,
+      status: assignmentStatus,
+      currentPaymentId: null,
+      lastPaymentId: payment.previousAssignmentLastPaymentId || null,
+      closedAt: null,
+      updatedAt: now,
+    });
+    transaction.update(commitmentRef, {
+      amountPaidMinor: safeMinor(payment.previousCommitmentAmountPaidMinor, 'Previous commitment amount'),
+      nextDueDate: payment.previousNextDueDate ?? null,
+      status: payment.previousCommitmentStatus === 'completed' ? 'completed' : 'active',
+      sharedCycleDueDate: payment.previousSharedCycleDueDate ?? assignment.dueDate ?? null,
+      sharedAssignedMinor: safeMinor(payment.previousSharedAssignedMinor, 'Previous shared assigned amount'),
+      sharedSettledMinor: safeMinor(payment.previousSharedSettledMinor, 'Previous shared settled amount'),
+      updatedAt: now,
+    });
+    createActivity(transaction, {
+      spaceId: String(payment.spaceId),
+      actorUid: uid,
+      actorName: member.displayName || member.email,
+      action: 'shared_bill_payment_reversed',
+      targetType: 'shared_bill_payment',
+      targetId: paymentId,
+      summary: `Reversed ${amountMinor / 100} ${payment.currency} for ${assignment.commitmentName || 'a shared bill'} and reopened the outstanding amount.`,
+      now,
+    });
+    if (uid !== payment.memberUid) {
+      createNotification(transaction, {
+        uid: String(payment.memberUid),
+        spaceId: String(payment.spaceId),
+        type: 'payment_reversed',
+        title: 'Shared bill payment reversed',
+        message: `${assignment.commitmentName || 'A shared bill'} has ${outstandingAfter / 100} ${payment.currency} outstanding again.`,
+        now,
+      });
+    }
+    const result = { paymentId, assignmentId: assignmentRef.id, reversalId: reversalAuditRef.id, reversalTransactionId, ledgerEntryId, outstandingMinor: outstandingAfter };
+    transaction.create(commandRef, { uid, kind: 'reverse_shared_bill_payment', idempotencyKey: key, result, createdAt: now });
     return result;
   });
 });
