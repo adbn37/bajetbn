@@ -172,6 +172,20 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    match /reminderHistory/{reminderId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'uid', 'itemType', 'itemId', 'itemName', 'spaceId', 'dueDate',
+          'action', 'message', 'phone', 'createdAt'
+        ])
+        && request.resource.data.itemType in ['bill', 'instalment', 'goal', 'shared_bill']
+        && request.resource.data.action in ['marked_reminded', 'whatsapp_opened'];
+      allow update, delete: if false;
+    }
+
     match /collaborationCommands/{commandId} {
       allow read, write: if false;
     }

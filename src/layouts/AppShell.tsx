@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { type FormEvent, useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,13 +13,28 @@ const navigation = [
   ['/goals', 'Goals', '◇'],
   ['/bills', 'Bills & instalments', '◷'],
   ['/sharing', 'Sharing', '◎'],
+  ['/calendar', 'Calendar', '▦'],
+  ['/search', 'Search', '⌕'],
   ['/reports', 'Money reports', '⌁'],
 ];
 
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const { profile, user, logOut } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname === '/search') setSearchText(new URLSearchParams(location.search).get('q') || '');
+  }, [location]);
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault();
+    const query = searchText.trim();
+    navigate(query ? `/search?q=${encodeURIComponent(query)}` : '/search');
+  }
 
   return (
     <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
@@ -56,9 +71,12 @@ export function AppShell() {
         <header className="mobile-header">
           <button className="icon-button" onClick={() => setMobileOpen(true)} aria-label="Open menu">☰</button>
           <Brand compact />
-          <span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span>
+          <div className="mobile-header-actions"><button className="icon-button" onClick={() => navigate('/search')} aria-label="Search">⌕</button><span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span></div>
         </header>
-        <div className="desktop-environment"><span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span></div>
+        <div className="desktop-environment">
+          <form className="top-search-form" onSubmit={submitSearch}><span>⌕</span><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search BajetBN" aria-label="Search BajetBN" /></form>
+          <span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span>
+        </div>
         <ConnectivityBanner />
         <Outlet />
       </div>

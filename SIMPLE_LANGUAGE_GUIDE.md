@@ -46,3 +46,13 @@ BajetBN is written for people with little or no accounting knowledge.
 - Expense breakdown → Where your money went
 - Financial health → Simple money check
 - Amount payable → Still to pay
+
+## Calendar and reminder wording
+
+- Overdue → Late
+- Due within 7 days → Coming soon
+- Reminder event → Reminder history
+- Trigger reminder → Mark as reminded
+- Notification channel → WhatsApp
+- Global search → Search
+- Search entity type → Type
