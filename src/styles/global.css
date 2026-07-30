@@ -250,6 +250,8 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
 .shared-bill-card { display:flex; flex-direction:column; gap:.8rem; padding:1rem; border:1px solid var(--border); border-radius:16px; background:linear-gradient(145deg,rgba(16,29,44,.92),rgba(7,17,31,.96)); }
 .shared-bill-card.status-submitted { border-color:rgba(251,191,36,.42); }
 .shared-bill-card.status-confirmed { border-color:rgba(45,212,191,.42); }
+.shared-bill-card.status-paid { border-color:rgba(45,212,191,.55); }
+.shared-bill-card.status-partially_paid { border-color:rgba(96,165,250,.48); }
 .shared-bill-card.status-rejected { border-color:rgba(251,113,133,.42); }
 .shared-bill-card p { margin:0; font-size:.8rem; }
 .activity-list article { display:grid; grid-template-columns:auto 1fr; gap:.75rem; align-items:flex-start; padding:.75rem 0; border-bottom:1px solid var(--border); }

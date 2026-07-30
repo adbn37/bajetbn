@@ -43,3 +43,7 @@ Existing `spaceMembers` and `spaces` records receive collaboration fields withou
 10. Remove the member and confirm activity and assignment history remain.
 
 Production deployment remains blocked until these checks pass on live staging.
+
+## Alpha 2 payment finalisation
+
+Shared bill claims now support partial/full settlement, a payer-selected BajetBN Account or external payment source, ledger-backed expense posting, commitment closure/advancement, linked transaction remarks, and audited reversal. See `SHARED_BILL_PAYMENT_FINALISATION_ALPHA.md`.

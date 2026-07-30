@@ -3,29 +3,31 @@ import {
   doc,
   getDocs,
   query,
+  serverTimestamp,
   updateDoc,
   where,
-  serverTimestamp,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import type {
+  Commitment,
   SharedBillAssignment,
+  SharedBillPayment,
+  SharedBillSettlementMode,
   SpaceActivity,
   SpaceApprovalMode,
   SpaceInvitation,
   SpaceMember,
   SpaceRole,
   UserNotification,
-  Commitment,
 } from '../types/models';
-
 
 export async function listSpaceCommitments(spaceId: string): Promise<Commitment[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'commitments'), where('spaceId', '==', spaceId)));
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Commitment)
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as Commitment)
     .filter((item) => !item.archivedAt && item.status === 'active')
     .sort((a, b) => (a.nextDueDate || a.startDate).localeCompare(b.nextDueDate || b.startDate));
 }
@@ -33,35 +35,48 @@ export async function listSpaceCommitments(spaceId: string): Promise<Commitment[
 export async function listSpaceMembers(spaceId: string): Promise<SpaceMember[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'spaceMembers'), where('spaceId', '==', spaceId)));
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SpaceMember)
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as SpaceMember)
     .sort((a, b) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')));
 }
 
 export async function listSpaceInvitations(spaceId: string): Promise<SpaceInvitation[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'spaceInvitations'), where('spaceId', '==', spaceId)));
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SpaceInvitation)
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as SpaceInvitation)
     .sort((a, b) => a.email.localeCompare(b.email));
 }
 
 export async function listSharedBillAssignments(spaceId: string): Promise<SharedBillAssignment[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'sharedBillAssignments'), where('spaceId', '==', spaceId)));
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SharedBillAssignment)
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as SharedBillAssignment)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+export async function listSharedBillPayments(spaceId: string): Promise<SharedBillPayment[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'sharedBillPayments'), where('spaceId', '==', spaceId)));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as SharedBillPayment)
+    .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
 }
 
 export async function listSpaceActivities(spaceId: string): Promise<SpaceActivity[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'spaceActivities'), where('spaceId', '==', spaceId)));
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SpaceActivity)
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as SpaceActivity)
     .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
 }
 
 export async function listUserNotifications(uid: string): Promise<UserNotification[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'userNotifications'), where('uid', '==', uid)));
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as UserNotification)
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as UserNotification)
     .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
 }
 
@@ -150,6 +165,10 @@ export async function getSharedBillProofUrl(proofPath: string) {
 
 export async function submitSharedBillPayment(input: {
   assignmentId: string;
+  amountMinor: number;
+  settlementMode: SharedBillSettlementMode;
+  accountId?: string;
+  paymentDate: string;
   proofPath?: string;
   proofName?: string;
   note?: string;
@@ -158,7 +177,20 @@ export async function submitSharedBillPayment(input: {
   return httpsCallable(functions, 'submitSharedBillPayment')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
-export async function reviewSharedBillPayment(input: { assignmentId: string; decision: 'confirmed' | 'rejected'; note?: string }) {
+export async function reviewSharedBillPayment(input: {
+  paymentId: string;
+  decision: 'confirmed' | 'rejected';
+  note?: string;
+}) {
   const { functions } = requireFirebase();
   return httpsCallable(functions, 'reviewSharedBillPayment')({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function reverseSharedBillPayment(input: {
+  paymentId: string;
+  reversalDate: string;
+  reason?: string;
+}) {
+  const { functions } = requireFirebase();
+  return httpsCallable(functions, 'reverseSharedBillPayment')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
