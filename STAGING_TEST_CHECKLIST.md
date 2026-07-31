@@ -93,3 +93,12 @@ Notes: ____________________
 - [ ] Mobile summary cards and Overview account tiles use a compact two-column layout where space permits.
 - [ ] Mobile dialogs appear as touch-friendly bottom sheets and all primary actions remain reachable.
 - [ ] Desktop archive pages show search, count, preserved details, restore/reopen, and safe delete controls.
+
+## Pre-v1.0 scope-completion gate
+
+- [ ] Run `node scripts/verify-pre-v1-scope-audit.mjs`
+- [ ] Review `PRE_V1_SCOPE_COMPLETION_AUDIT.md`
+- [ ] Review every non-complete `pre_production` item in `scope/pre-v1-scope.json`
+- [ ] Confirm all Alpha 2 mobile/archive routes and lifecycle actions in the browser
+- [ ] Do not merge to production while a pre-production blocker remains open
+- [ ] Do not tag v1.0.0 while a required pre-v1 item remains open or lacks an explicit scope decision

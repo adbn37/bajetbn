@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -21,9 +22,19 @@ for (const item of ['package.json', 'firebase.json', 'firestore.indexes.json', '
 }
 
 const forbiddenFiles = ['.env', '.env.local', '.env.staging', '.env.production'];
-const presentForbidden = forbiddenFiles.filter((item) => fs.existsSync(path.join(root, item)));
-if (presentForbidden.length) {
-  console.error('Potential secret-bearing files must not be packaged:', presentForbidden.join(', '));
+let trackedForbidden = [];
+try {
+  const tracked = execFileSync('git', ['ls-files', '--', ...forbiddenFiles], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  trackedForbidden = tracked;
+} catch {
+  // A source package has no Git index, so environment files must not be present in it at all.
+  trackedForbidden = forbiddenFiles.filter((item) => fs.existsSync(path.join(root, item)));
+}
+if (trackedForbidden.length) {
+  console.error('Potential secret-bearing environment files must not be tracked or packaged:', trackedForbidden.join(', '));
   process.exit(1);
 }
 
@@ -33,4 +44,4 @@ if (firebaseAliases?.projects?.staging !== 'bajetbn-staging') {
   process.exit(1);
 }
 
-console.log(`BajetBN structure verified (${required.length} required files and staging alias checked).`);
+console.log(`BajetBN structure verified (${required.length} required files, environment-file tracking, and staging alias checked).`);

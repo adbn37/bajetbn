@@ -141,3 +141,13 @@ Use `STAGING_TEST_CHECKLIST.md`. Production work begins only after every critica
 ## v0.1.1 PWA hotfix
 
 The v0.1.1 build generates `dist/sw.js` after Vite finishes so the exact hashed JavaScript and CSS files are precached. Use `npm run build -- --mode staging` for staging; a plain `npm run build` intentionally uses production mode and requires production environment values.
+
+## Current pre-v1.0 scope governance
+
+The current full-scope comparison is recorded in:
+
+- `PRE_V1_SCOPE_COMPLETION_AUDIT.md`
+- `PRE_V1_SCOPE_ROADMAP.md`
+- `scope/pre-v1-scope.json`
+
+Run `npm run verify:pre-v1-scope` whenever a requirement is completed, deferred or reclassified. Production and v1.0.0 remain gated by that register.
