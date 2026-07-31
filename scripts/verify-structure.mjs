@@ -16,15 +16,21 @@ if (missing.length) {
   process.exit(1);
 }
 
-for (const item of ['package.json', 'firebase.json', 'firestore.indexes.json', 'functions/package.json']) {
+for (const item of ['package.json', 'firebase.json', 'firestore.indexes.json', 'functions/package.json', '.firebaserc']) {
   JSON.parse(fs.readFileSync(path.join(root, item), 'utf8'));
 }
 
-const forbiddenFiles = ['.env', '.env.local', '.env.staging', '.env.production', '.firebaserc'];
+const forbiddenFiles = ['.env', '.env.local', '.env.staging', '.env.production'];
 const presentForbidden = forbiddenFiles.filter((item) => fs.existsSync(path.join(root, item)));
 if (presentForbidden.length) {
   console.error('Potential secret-bearing files must not be packaged:', presentForbidden.join(', '));
   process.exit(1);
 }
 
-console.log(`BajetBN structure verified (${required.length} required files).`);
+const firebaseAliases = JSON.parse(fs.readFileSync(path.join(root, '.firebaserc'), 'utf8'));
+if (firebaseAliases?.projects?.staging !== 'bajetbn-staging') {
+  console.error('The Firebase staging alias is missing or points to the wrong project.');
+  process.exit(1);
+}
+
+console.log(`BajetBN structure verified (${required.length} required files and staging alias checked).`);
