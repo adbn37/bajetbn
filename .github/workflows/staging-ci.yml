@@ -54,26 +54,8 @@ jobs:
       - name: Build Firebase Functions
         run: npm run build --prefix functions
 
-      - name: Run feature regression checks
-        run: |
-          node scripts/verify-release-candidate-hardening.mjs
-          node scripts/verify-language-theme-settings.mjs
-          node scripts/verify-calendar-search-reminders.mjs
-          node scripts/verify-reports-money-insights.mjs
-          node scripts/verify-simple-language.mjs
-          node scripts/verify-collaboration-whatsapp.mjs
-          node scripts/verify-shared-bill-payment-finalisation.mjs
-          node scripts/verify-shared-expenses-balances.mjs
-          node scripts/verify-space-centred-workflow.mjs
-          node scripts/verify-invitations-notifications.mjs
-          node scripts/verify-safe-delete-archive-restore.mjs
-          node scripts/verify-mobile-archive-pages.mjs
-          node scripts/verify-budgets-goals-commitments.mjs
-          node scripts/verify-transaction-ledger.mjs
-          node scripts/verify-commitment-amount-labels.mjs
-          node scripts/verify-categories-transaction-ux.mjs
-          node scripts/verify-structure.mjs
-          node scripts/verify-pre-v1-scope-audit.mjs
+      - name: Run all structural and release-safety checks
+        run: npm run verify:all-structural
 
       - name: Build staging
         run: npm run build -- --mode staging

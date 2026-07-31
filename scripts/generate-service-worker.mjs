@@ -4,6 +4,9 @@ import { extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIST_DIR = fileURLToPath(new URL('../dist/', import.meta.url));
+const RELEASE_FILE = fileURLToPath(new URL('../release.json', import.meta.url));
+const release = JSON.parse(await readFile(RELEASE_FILE, 'utf8'));
+const appVersion = release.version;
 const CACHEABLE_EXTENSIONS = new Set([
   '.html', '.js', '.css', '.png', '.svg', '.webmanifest', '.ico',
   '.woff', '.woff2', '.json',
@@ -67,10 +70,10 @@ for (const url of allPrecacheUrls) {
   }
 }
 const buildHash = hash.digest('hex').slice(0, 12);
-const cacheName = `bajetbn-shell-v0.1.2-${buildHash}`;
+const cacheName = `bajetbn-shell-v${appVersion}-${buildHash}`;
 
 const report = {
-  version: '0.1.2',
+  version: appVersion,
   cacheName,
   generatedAt: new Date().toISOString(),
   criticalUrls,

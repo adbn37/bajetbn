@@ -1,8 +1,8 @@
 # BajetBN Pre-v1.0 Scope-Completion Audit
 
-**Audit date:** 31 July 2026  
-**Audited baseline:** BajetBN v0.11.4 Alpha 2  
-**Source basis:** the latest supplied v0.11.4 source plus the Alpha 2 mobile/archive patch.
+**Audit date:** 31 July 2026
+**Audited baseline:** BajetBN v0.11.5 Release Safety Hardening Alpha 1
+**Source basis:** the verified v0.11.4 Alpha 2 staging baseline plus v0.11.5 release-safety hardening.
 
 ## Decision
 
@@ -31,12 +31,11 @@ This audit does not change runtime behaviour. It records the approved scope, cur
 
 These must be completed before the current build is promoted to the public live website as the approved release:
 
-1. **Finish Alpha 2 manual staging tests** on mobile and desktop.
+1. **Finish Alpha 2 and v0.11.5 manual staging tests** on mobile and desktop, including every dedicated archive/closed page and every new confirmation dialog.
 2. **Implement user account and personal-data deletion**, with clear retention rules for shared and financial history.
-3. **Replace the remaining browser `confirm()` boxes** with BajetBN confirmation dialogs.
-4. **Unify release versioning** across package metadata, Settings, service-worker cache and release notes.
-5. **Keep all current verification suites in CI** and require a clean staging run.
-6. **Review the Firebase Functions dependency warning** and complete production smoke/security checks.
+3. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
+
+The remaining browser-native confirmation, version-source, CI-coverage and Firebase Functions dependency-review findings were closed in v0.11.5. See `RELEASE_SAFETY_HARDENING_ALPHA.md`.
 
 ## Required scope gaps before v1.0.0
 

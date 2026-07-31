@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
 import {
   getSpaceFund,
@@ -29,6 +30,8 @@ export function TripMoneyPanel({
   const [contributions, setContributions] = useState<SpaceFundContribution[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contributionOpen, setContributionOpen] = useState(false);
+  const [undoDialog, setUndoDialog] = useState<ActionConfirmState<SpaceFundContribution> | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
@@ -42,6 +45,21 @@ export function TripMoneyPanel({
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [space.id]);
+
+  const runUndoContribution = async () => {
+    if (!undoDialog) return;
+    setUndoBusy(true);
+    setError('');
+    try {
+      await reverseTripMoneyContribution(undoDialog.payload.id);
+      setUndoDialog(null);
+      await load();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setUndoBusy(false);
+    }
+  };
 
   if (loading) return <div className="loading-panel">Loading Trip money…</div>;
 
@@ -60,9 +78,10 @@ export function TripMoneyPanel({
       <div className="trip-contribution-list">{contributions.length === 0 ? <p>No contributions recorded yet.</p> : contributions.map((item) => <article className={`trip-contribution-row status-${item.status}`} key={item.id}>
         <div><strong>{item.memberName || item.memberEmail || 'Member'}</strong><small>{item.contributionDate} · {item.status === 'reversed' ? 'Undone' : item.displayId}</small></div>
         <strong>{formatMoney(item.amountMinor, item.currency)}</strong>
-        {item.status === 'posted' && (canManage || currentMember?.uid === item.memberUid) && <button className="button danger-outline" onClick={() => void (async () => { if (!confirm('Undo this contribution? This works only when the money has not already been spent.')) return; try { await reverseTripMoneyContribution(item.id); await load(); } catch (nextError) { setError(getErrorMessage(nextError)); } })()}>Undo</button>}
+        {item.status === 'posted' && (canManage || currentMember?.uid === item.memberUid) && <button className="button danger-outline" onClick={() => setUndoDialog({ payload: item, title: `Undo ${item.displayId}?`, description: 'This contribution will be reversed if the collected money has not already been spent.', note: 'The original contribution stays in the history as an undone record.', confirmLabel: 'Undo contribution', tone: 'danger' })}>Undo</button>}
       </article>)}</div>
     </>}
+    {undoDialog && <ActionConfirmModal state={undoDialog} busy={undoBusy} error={error} onClose={() => { setUndoDialog(null); setError(''); }} onConfirm={() => void runUndoContribution()} />}
     {settingsOpen && <Modal title="Set up Trip money" onClose={() => setSettingsOpen(false)}><TripMoneySettingsForm space={space} members={activeMembers} fund={fund} onSaved={async () => { setSettingsOpen(false); await load(); }} /></Modal>}
     {contributionOpen && fund && <Modal title="Add Trip contribution" onClose={() => setContributionOpen(false)}><TripContributionForm space={space} members={activeMembers} currentMember={currentMember} canManage={canManage} onSaved={async () => { setContributionOpen(false); await load(); }} /></Modal>}
   </section>;

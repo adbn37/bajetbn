@@ -52,7 +52,7 @@ const checks = [
   [styles, '.data-tool-grid', 'Data tools layout'],
   [workflow, 'npm ci --prefix functions', 'Functions dependency check'],
   [workflow, 'npm run build --prefix functions', 'Functions build check'],
-  [workflow, 'verify-release-candidate-hardening.mjs', 'Release candidate verification in CI'],
+  [workflow, 'npm run verify:all-structural', 'Full structural verification in CI'],
   [workflow, 'verify-build-output.mjs', 'Built bundle verification in CI'],
   [rules, 'allow create, update, delete: if false; // Posted and reversed only by trusted Cloud Functions.', 'Server-only money writes'],
   [rules, 'allow create, update, delete: if false; // Server-controlled because opening balances are financial postings.', 'Server-only account writes'],

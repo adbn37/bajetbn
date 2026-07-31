@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
 import {
   createSharedExpense,
@@ -89,6 +90,8 @@ export function SharedExpensesPanel({
   const [payments, setPayments] = useState<SharedExpensePayment[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [paying, setPaying] = useState<{ toUid: string; amountMinor: number; expenseId?: string; title: string } | null>(null);
+  const [undoDialog, setUndoDialog] = useState<ActionConfirmState<SharedExpensePayment> | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -128,6 +131,21 @@ export function SharedExpensesPanel({
     catch (nextError) { setError(getErrorMessage(nextError)); }
   };
 
+  const runUndoPayment = async () => {
+    if (!undoDialog) return;
+    setUndoBusy(true);
+    setError('');
+    try {
+      await reverseSharedExpensePayment({ paymentId: undoDialog.payload.id, reason: 'Undone from Space' });
+      setUndoDialog(null);
+      await load();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setUndoBusy(false);
+    }
+  };
+
   if (loading) return <div className="loading-panel">Loading shared expenses…</div>;
 
   const month = today().slice(0, 7);
@@ -164,11 +182,12 @@ export function SharedExpensesPanel({
             <div className="button-row">
               {payment.proofPath && <button className="text-button" onClick={() => void getSharedExpenseProofUrl(payment.proofPath || '').then((url) => window.open(url, '_blank', 'noopener,noreferrer'))}>View proof</button>}
               {canReview && <><button className="button primary" onClick={() => void run(() => reviewSharedExpensePayment({ paymentId: payment.id, decision: 'confirmed' }))}>Confirm</button><button className="button danger-outline" onClick={() => void run(() => reviewSharedExpensePayment({ paymentId: payment.id, decision: 'rejected' }))}>Decline</button></>}
-              {canUndo && <button className="button danger-outline" onClick={() => void run(async () => { if (confirm('Undo this member payment? The amount will be shown as owed again.')) await reverseSharedExpensePayment({ paymentId: payment.id, reason: 'Undone from Space' }); })}>Undo payment</button>}
+              {canUndo && <button className="button danger-outline" onClick={() => setUndoDialog({ payload: payment, title: `Undo ${payment.displayId}?`, description: 'The payment will be reversed and the amount will be shown as owed again.', note: 'The original payment stays in the history as an undone record.', confirmLabel: 'Undo member payment', tone: 'danger' })}>Undo payment</button>}
             </div>
           </article>;
         })}
       </div>
+      {undoDialog && <ActionConfirmModal state={undoDialog} busy={undoBusy} error={error} onClose={() => { setUndoDialog(null); setError(''); }} onConfirm={() => void runUndoPayment()} />}
       {paying && <Modal title={paying.title} onClose={() => setPaying(null)}><SharedExpensePaymentForm space={space} payment={paying} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
     </section>;
   }

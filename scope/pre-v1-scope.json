@@ -10,64 +10,581 @@
     "deferred": "Explicitly parked for a later product phase"
   },
   "items": [
-    {"id":"core.spaces","area":"Core","requirement":"Personal, Household, SME, Trip, Goal and Custom Spaces","status":"complete","gate":"pre_v1","evidence":["src/types/models.ts","src/features/spaces/SpacesPage.tsx"]},
-    {"id":"core.multiple_sme","area":"Core","requirement":"Users can create multiple SME Spaces","status":"complete","gate":"pre_v1","evidence":["src/features/spaces/SpacesPage.tsx"]},
-    {"id":"core.accounts_independent","area":"Core","requirement":"Accounts remain independent from Spaces","status":"complete","gate":"pre_v1","evidence":["ARCHITECTURE.md","src/types/models.ts"]},
-    {"id":"core.multiple_accounts","area":"Core","requirement":"Multiple personal and business accounts","status":"complete","gate":"pre_v1","evidence":["src/features/accounts/AccountsPage.tsx"]},
-    {"id":"core.transactions","area":"Core","requirement":"Income, expense, transfer and safe reversal","status":"complete","gate":"pre_v1","evidence":["src/types/models.ts","functions/src/index.ts","src/features/transactions/TransactionsPage.tsx"]},
-    {"id":"core.budgets","area":"Planning","requirement":"Budgets by Space and category","status":"complete","gate":"pre_v1","evidence":["src/features/budgets/BudgetsPage.tsx"]},
-    {"id":"core.goals","area":"Planning","requirement":"Savings goals with contribution history and reversal","status":"complete","gate":"pre_v1","evidence":["src/features/goals/GoalsPage.tsx","functions/src/index.ts"]},
-    {"id":"core.commitments","area":"Planning","requirement":"Bills and instalment tracking","status":"complete","gate":"pre_v1","evidence":["src/features/commitments/CommitmentsPage.tsx"]},
-    {"id":"core.commitment_frequency","area":"Planning","requirement":"Once, weekly, monthly, quarterly and yearly commitments","status":"complete","gate":"pre_v1","evidence":["src/types/models.ts","functions/src/index.ts"]},
-    {"id":"core.calendar","area":"Productivity","requirement":"Calendar view","status":"complete","gate":"pre_v1","evidence":["src/features/calendar/CalendarPage.tsx"]},
-    {"id":"core.search","area":"Productivity","requirement":"Global search","status":"complete","gate":"pre_v1","evidence":["src/features/search/SearchPage.tsx","src/layouts/AppShell.tsx"]},
-    {"id":"core.reports","area":"Reports","requirement":"Core money reports and beginner-friendly insights","status":"complete","gate":"pre_v1","evidence":["src/features/reports/ReportsPage.tsx"]},
-    {"id":"core.language","area":"Accessibility","requirement":"English and Bahasa Melayu","status":"complete","gate":"pre_v1","evidence":["src/services/i18n.ts"]},
-    {"id":"core.theme","area":"Accessibility","requirement":"Dark, light and device appearance","status":"complete","gate":"pre_v1","evidence":["src/contexts/PreferencesContext.tsx"]},
-    {"id":"core.pwa_shell","area":"PWA","requirement":"Installable PWA and offline application shell","status":"complete","gate":"pre_v1","evidence":["public/manifest.webmanifest","scripts/generate-service-worker.mjs","src/components/ConnectivityBanner.tsx"]},
-
-    {"id":"collab.space_centred","area":"Collaboration","requirement":"Collaboration lives inside each Space; no top-level Sharing page","status":"complete","gate":"pre_v1","evidence":["src/app/App.tsx","src/features/spaces/SpaceDetailsPage.tsx","src/layouts/AppShell.tsx"]},
-    {"id":"collab.invitations","area":"Collaboration","requirement":"Incoming invitations can be accepted, declined and revoked","status":"complete","gate":"pre_v1","evidence":["src/pages/NotificationsPage.tsx","src/features/collaboration/JoinSpacePage.tsx","functions/src/index.ts"]},
-    {"id":"collab.roles","area":"Collaboration","requirement":"Owner/admin/member roles and permission controls","status":"complete","gate":"pre_v1","evidence":["src/types/models.ts","src/features/collaboration/CollaborationPage.tsx"]},
-    {"id":"collab.optional_approval","area":"Collaboration","requirement":"Payment approval can be optional per Space","status":"complete","gate":"pre_v1","evidence":["src/types/models.ts","src/features/collaboration/CollaborationPage.tsx"]},
-    {"id":"collab.proof","area":"Collaboration","requirement":"Members can upload payment proof","status":"complete","gate":"pre_v1","evidence":["src/repositories/collaborationRepository.ts","src/repositories/sharedExpenseRepository.ts","storage.rules"]},
-    {"id":"collab.whatsapp","area":"Collaboration","requirement":"Manual WhatsApp notification when a member pays","status":"complete","gate":"pre_v1","evidence":["src/features/collaboration/CollaborationPage.tsx","scripts/verify-collaboration-whatsapp.mjs"]},
-    {"id":"collab.equal_split","area":"Shared expenses","requirement":"Equal expense splitting","status":"complete","gate":"pre_v1","evidence":["src/features/spaces/SharedExpensesPanel.tsx","functions/src/index.ts"]},
-    {"id":"collab.custom_split","area":"Shared expenses","requirement":"Custom amount splitting","status":"complete","gate":"pre_v1","evidence":["src/features/spaces/SharedExpensesPanel.tsx","functions/src/index.ts"]},
-    {"id":"collab.percentage_split","area":"Shared expenses","requirement":"Percentage splitting","status":"complete","gate":"pre_v1","evidence":["src/features/spaces/SharedExpensesPanel.tsx","functions/src/index.ts"]},
-    {"id":"collab.settle_up","area":"Shared expenses","requirement":"Who-owes-whom balances and partial/full settle-up","status":"complete","gate":"pre_v1","evidence":["src/features/spaces/SharedExpensesPanel.tsx","src/repositories/sharedExpenseRepository.ts"]},
-    {"id":"collab.trip_fund","area":"Group funds","requirement":"Trip money holder, contributions and collected-money spending","status":"complete","gate":"pre_v1","evidence":["src/features/spaces/TripMoneyPanel.tsx","functions/src/index.ts"]},
-    {"id":"collab.household_fund","area":"Group funds","requirement":"Optional Household or general group fund, without forcing every group to use a wallet","status":"missing","gate":"pre_v1","evidence":["src/features/spaces/SpaceDetailsPage.tsx","src/features/spaces/TripMoneyPanel.tsx"]},
-
-    {"id":"safety.lifecycle","area":"Safety","requirement":"Edit, Archive/Hide, Restore, Close, Delete, Stop and Undo protections","status":"complete","gate":"pre_v1","evidence":["src/repositories/lifecycleRepository.ts","functions/src/index.ts","scripts/verify-safe-delete-archive-restore.mjs"]},
-    {"id":"safety.archive_pages","area":"Safety","requirement":"Inactive records use dedicated archive/closed pages","status":"manual_test","gate":"pre_production","evidence":["src/app/App.tsx","scripts/verify-mobile-archive-pages.mjs"]},
-    {"id":"safety.financial_history","area":"Safety","requirement":"Financial history is preserved through reversals rather than silent edits","status":"complete","gate":"pre_v1","evidence":["ARCHITECTURE.md","functions/src/index.ts"]},
-    {"id":"safety.native_confirm","area":"Safety","requirement":"All destructive actions use BajetBN mobile-friendly dialogs instead of browser confirm boxes","status":"partial","gate":"pre_production","evidence":["src/components/LifecycleConfirmModal.tsx","src/features/transactions/TransactionsPage.tsx","src/features/collaboration/CollaborationPage.tsx"]},
-
-    {"id":"brunei.currency","area":"Brunei localisation","requirement":"BND and Asia/Brunei defaults","status":"complete","gate":"pre_v1","evidence":["src/features/onboarding/OnboardingPage.tsx","src/types/models.ts"]},
-    {"id":"brunei.categories","area":"Brunei localisation","requirement":"Brunei-friendly personal and SME categories","status":"complete","gate":"pre_v1","evidence":["src/features/categories/defaultCategories.ts","functions/src/index.ts"]},
-    {"id":"brunei.institutions","area":"Brunei localisation","requirement":"Simple presets for common Brunei banks and account providers","status":"partial","gate":"pre_v1","evidence":["src/features/accounts/AccountsPage.tsx"]},
-    {"id":"brunei.payment_methods","area":"Brunei localisation","requirement":"Clear Brunei-relevant payment method choices","status":"partial","gate":"pre_v1","evidence":["src/features/accounts/AccountsPage.tsx","src/features/collaboration/CollaborationPage.tsx"]},
-
-    {"id":"recurring.commitments","area":"Recurring workflows","requirement":"Recurring bills and instalments","status":"complete","gate":"pre_v1","evidence":["src/types/models.ts","src/features/commitments/CommitmentsPage.tsx"]},
-    {"id":"recurring.transactions","area":"Recurring workflows","requirement":"Recurring ordinary income/expense templates such as salary, rent and subscriptions","status":"missing","gate":"pre_v1","evidence":["src/types/models.ts","src/features/transactions/TransactionsPage.tsx"]},
-    {"id":"notifications.in_app","area":"Notifications","requirement":"In-app invitation, payment and goal notifications","status":"complete","gate":"pre_v1","evidence":["src/pages/NotificationsPage.tsx","functions/src/index.ts"]},
-    {"id":"notifications.reminders","area":"Notifications","requirement":"Upcoming/late bill reminders and reminder history","status":"complete","gate":"pre_v1","evidence":["src/features/calendar/CalendarPage.tsx","src/repositories/reminderRepository.ts"]},
-
-    {"id":"sme.foundation","area":"SME","requirement":"SME Spaces, business accounts and business categories","status":"complete","gate":"pre_v1","evidence":["src/features/spaces/SpacesPage.tsx","src/features/accounts/AccountsPage.tsx","src/features/categories/defaultCategories.ts"]},
-    {"id":"sme.essentials","area":"SME","requirement":"Simple SME overview for income, expenses, cash position and upcoming commitments","status":"partial","gate":"pre_v1","evidence":["src/features/reports/ReportsPage.tsx","src/pages/DashboardPage.tsx"]},
-    {"id":"sme.advanced","area":"SME","requirement":"Advanced BusinessBajetBN accounting, invoicing, tax and payroll","status":"deferred","gate":"post_v1","evidence":["PRE_V1_SCOPE_ROADMAP.md"]},
-
-    {"id":"insights.financial_health","area":"Insights","requirement":"Financial health insights beyond static totals","status":"partial","gate":"pre_v1","evidence":["src/features/reports/ReportsPage.tsx"]},
-    {"id":"data.export","area":"Privacy and data","requirement":"User can download a private copy of their BajetBN data","status":"complete","gate":"pre_v1","evidence":["src/pages/SettingsPage.tsx","src/repositories/releaseCandidateRepository.ts"]},
-    {"id":"data.delete_account","area":"Privacy and data","requirement":"User can request account and personal-data deletion with protected financial-history handling","status":"missing","gate":"pre_production","evidence":["src/pages/SettingsPage.tsx"]},
-    {"id":"data.general_receipts","area":"Documents","requirement":"General transaction receipt/document attachments","status":"missing","gate":"pre_v1_decision","evidence":["storage.rules","README.md"]},
-    {"id":"pwa.offline_mutations","area":"PWA","requirement":"Offline financial entry queue with idempotent sync and conflict handling","status":"missing","gate":"pre_v1_decision","evidence":["README.md","ARCHITECTURE.md"]},
-
-    {"id":"release.alpha2_staging","area":"Release readiness","requirement":"Alpha 2 browser testing on staging across mobile and desktop","status":"manual_test","gate":"pre_production","evidence":["STAGING_TEST_CHECKLIST.md"]},
-    {"id":"release.version_source","area":"Release readiness","requirement":"One consistent app version source across package, settings and service worker","status":"partial","gate":"pre_production","evidence":["package.json","src/pages/SettingsPage.tsx","scripts/generate-service-worker.mjs"]},
-    {"id":"release.ci_coverage","area":"Release readiness","requirement":"CI runs every current structural verification suite","status":"complete","gate":"pre_production","evidence":[".github/workflows/staging-ci.yml"]},
-    {"id":"release.dependencies","area":"Release readiness","requirement":"Review Firebase Functions dependency warning before final production release","status":"partial","gate":"pre_production","evidence":["functions/package.json"]},
-    {"id":"release.production","area":"Release readiness","requirement":"Production deploy only after all pre-production blockers are complete and staging is approved","status":"manual_test","gate":"pre_production","evidence":["PRE_V1_SCOPE_ROADMAP.md"]}
+    {
+      "id": "core.spaces",
+      "area": "Core",
+      "requirement": "Personal, Household, SME, Trip, Goal and Custom Spaces",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/types/models.ts",
+        "src/features/spaces/SpacesPage.tsx"
+      ]
+    },
+    {
+      "id": "core.multiple_sme",
+      "area": "Core",
+      "requirement": "Users can create multiple SME Spaces",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/SpacesPage.tsx"
+      ]
+    },
+    {
+      "id": "core.accounts_independent",
+      "area": "Core",
+      "requirement": "Accounts remain independent from Spaces",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "ARCHITECTURE.md",
+        "src/types/models.ts"
+      ]
+    },
+    {
+      "id": "core.multiple_accounts",
+      "area": "Core",
+      "requirement": "Multiple personal and business accounts",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/accounts/AccountsPage.tsx"
+      ]
+    },
+    {
+      "id": "core.transactions",
+      "area": "Core",
+      "requirement": "Income, expense, transfer and safe reversal",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/types/models.ts",
+        "functions/src/index.ts",
+        "src/features/transactions/TransactionsPage.tsx"
+      ]
+    },
+    {
+      "id": "core.budgets",
+      "area": "Planning",
+      "requirement": "Budgets by Space and category",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/budgets/BudgetsPage.tsx"
+      ]
+    },
+    {
+      "id": "core.goals",
+      "area": "Planning",
+      "requirement": "Savings goals with contribution history and reversal",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/goals/GoalsPage.tsx",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "core.commitments",
+      "area": "Planning",
+      "requirement": "Bills and instalment tracking",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/commitments/CommitmentsPage.tsx"
+      ]
+    },
+    {
+      "id": "core.commitment_frequency",
+      "area": "Planning",
+      "requirement": "Once, weekly, monthly, quarterly and yearly commitments",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/types/models.ts",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "core.calendar",
+      "area": "Productivity",
+      "requirement": "Calendar view",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/calendar/CalendarPage.tsx"
+      ]
+    },
+    {
+      "id": "core.search",
+      "area": "Productivity",
+      "requirement": "Global search",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/search/SearchPage.tsx",
+        "src/layouts/AppShell.tsx"
+      ]
+    },
+    {
+      "id": "core.reports",
+      "area": "Reports",
+      "requirement": "Core money reports and beginner-friendly insights",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/reports/ReportsPage.tsx"
+      ]
+    },
+    {
+      "id": "core.language",
+      "area": "Accessibility",
+      "requirement": "English and Bahasa Melayu",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/services/i18n.ts"
+      ]
+    },
+    {
+      "id": "core.theme",
+      "area": "Accessibility",
+      "requirement": "Dark, light and device appearance",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/contexts/PreferencesContext.tsx"
+      ]
+    },
+    {
+      "id": "core.pwa_shell",
+      "area": "PWA",
+      "requirement": "Installable PWA and offline application shell",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "public/manifest.webmanifest",
+        "scripts/generate-service-worker.mjs",
+        "src/components/ConnectivityBanner.tsx"
+      ]
+    },
+    {
+      "id": "collab.space_centred",
+      "area": "Collaboration",
+      "requirement": "Collaboration lives inside each Space; no top-level Sharing page",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/app/App.tsx",
+        "src/features/spaces/SpaceDetailsPage.tsx",
+        "src/layouts/AppShell.tsx"
+      ]
+    },
+    {
+      "id": "collab.invitations",
+      "area": "Collaboration",
+      "requirement": "Incoming invitations can be accepted, declined and revoked",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/pages/NotificationsPage.tsx",
+        "src/features/collaboration/JoinSpacePage.tsx",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "collab.roles",
+      "area": "Collaboration",
+      "requirement": "Owner/admin/member roles and permission controls",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/types/models.ts",
+        "src/features/collaboration/CollaborationPage.tsx"
+      ]
+    },
+    {
+      "id": "collab.optional_approval",
+      "area": "Collaboration",
+      "requirement": "Payment approval can be optional per Space",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/types/models.ts",
+        "src/features/collaboration/CollaborationPage.tsx"
+      ]
+    },
+    {
+      "id": "collab.proof",
+      "area": "Collaboration",
+      "requirement": "Members can upload payment proof",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/repositories/collaborationRepository.ts",
+        "src/repositories/sharedExpenseRepository.ts",
+        "storage.rules"
+      ]
+    },
+    {
+      "id": "collab.whatsapp",
+      "area": "Collaboration",
+      "requirement": "Manual WhatsApp notification when a member pays",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/collaboration/CollaborationPage.tsx",
+        "scripts/verify-collaboration-whatsapp.mjs"
+      ]
+    },
+    {
+      "id": "collab.equal_split",
+      "area": "Shared expenses",
+      "requirement": "Equal expense splitting",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/SharedExpensesPanel.tsx",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "collab.custom_split",
+      "area": "Shared expenses",
+      "requirement": "Custom amount splitting",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/SharedExpensesPanel.tsx",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "collab.percentage_split",
+      "area": "Shared expenses",
+      "requirement": "Percentage splitting",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/SharedExpensesPanel.tsx",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "collab.settle_up",
+      "area": "Shared expenses",
+      "requirement": "Who-owes-whom balances and partial/full settle-up",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/SharedExpensesPanel.tsx",
+        "src/repositories/sharedExpenseRepository.ts"
+      ]
+    },
+    {
+      "id": "collab.trip_fund",
+      "area": "Group funds",
+      "requirement": "Trip money holder, contributions and collected-money spending",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/TripMoneyPanel.tsx",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "collab.household_fund",
+      "area": "Group funds",
+      "requirement": "Optional Household or general group fund, without forcing every group to use a wallet",
+      "status": "missing",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/SpaceDetailsPage.tsx",
+        "src/features/spaces/TripMoneyPanel.tsx"
+      ]
+    },
+    {
+      "id": "safety.lifecycle",
+      "area": "Safety",
+      "requirement": "Edit, Archive/Hide, Restore, Close, Delete, Stop and Undo protections",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/repositories/lifecycleRepository.ts",
+        "functions/src/index.ts",
+        "scripts/verify-safe-delete-archive-restore.mjs"
+      ]
+    },
+    {
+      "id": "safety.archive_pages",
+      "area": "Safety",
+      "requirement": "Inactive records use dedicated archive/closed pages",
+      "status": "manual_test",
+      "gate": "pre_production",
+      "evidence": [
+        "src/app/App.tsx",
+        "scripts/verify-mobile-archive-pages.mjs"
+      ]
+    },
+    {
+      "id": "safety.financial_history",
+      "area": "Safety",
+      "requirement": "Financial history is preserved through reversals rather than silent edits",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "ARCHITECTURE.md",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "safety.native_confirm",
+      "area": "Safety",
+      "requirement": "All destructive actions use BajetBN mobile-friendly dialogs instead of browser confirm boxes",
+      "status": "complete",
+      "gate": "pre_production",
+      "evidence": [
+        "src/components/ActionConfirmModal.tsx",
+        "src/features/transactions/TransactionsPage.tsx",
+        "src/features/goals/GoalsPage.tsx",
+        "src/features/spaces/SharedExpensesPanel.tsx",
+        "src/features/spaces/TripMoneyPanel.tsx",
+        "src/features/collaboration/CollaborationPage.tsx",
+        "scripts/verify-release-safety-hardening.mjs"
+      ]
+    },
+    {
+      "id": "brunei.currency",
+      "area": "Brunei localisation",
+      "requirement": "BND and Asia/Brunei defaults",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/onboarding/OnboardingPage.tsx",
+        "src/types/models.ts"
+      ]
+    },
+    {
+      "id": "brunei.categories",
+      "area": "Brunei localisation",
+      "requirement": "Brunei-friendly personal and SME categories",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/categories/defaultCategories.ts",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "brunei.institutions",
+      "area": "Brunei localisation",
+      "requirement": "Simple presets for common Brunei banks and account providers",
+      "status": "partial",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/accounts/AccountsPage.tsx"
+      ]
+    },
+    {
+      "id": "brunei.payment_methods",
+      "area": "Brunei localisation",
+      "requirement": "Clear Brunei-relevant payment method choices",
+      "status": "partial",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/accounts/AccountsPage.tsx",
+        "src/features/collaboration/CollaborationPage.tsx"
+      ]
+    },
+    {
+      "id": "recurring.commitments",
+      "area": "Recurring workflows",
+      "requirement": "Recurring bills and instalments",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/types/models.ts",
+        "src/features/commitments/CommitmentsPage.tsx"
+      ]
+    },
+    {
+      "id": "recurring.transactions",
+      "area": "Recurring workflows",
+      "requirement": "Recurring ordinary income/expense templates such as salary, rent and subscriptions",
+      "status": "missing",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/types/models.ts",
+        "src/features/transactions/TransactionsPage.tsx"
+      ]
+    },
+    {
+      "id": "notifications.in_app",
+      "area": "Notifications",
+      "requirement": "In-app invitation, payment and goal notifications",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/pages/NotificationsPage.tsx",
+        "functions/src/index.ts"
+      ]
+    },
+    {
+      "id": "notifications.reminders",
+      "area": "Notifications",
+      "requirement": "Upcoming/late bill reminders and reminder history",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/calendar/CalendarPage.tsx",
+        "src/repositories/reminderRepository.ts"
+      ]
+    },
+    {
+      "id": "sme.foundation",
+      "area": "SME",
+      "requirement": "SME Spaces, business accounts and business categories",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/spaces/SpacesPage.tsx",
+        "src/features/accounts/AccountsPage.tsx",
+        "src/features/categories/defaultCategories.ts"
+      ]
+    },
+    {
+      "id": "sme.essentials",
+      "area": "SME",
+      "requirement": "Simple SME overview for income, expenses, cash position and upcoming commitments",
+      "status": "partial",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/reports/ReportsPage.tsx",
+        "src/pages/DashboardPage.tsx"
+      ]
+    },
+    {
+      "id": "sme.advanced",
+      "area": "SME",
+      "requirement": "Advanced BusinessBajetBN accounting, invoicing, tax and payroll",
+      "status": "deferred",
+      "gate": "post_v1",
+      "evidence": [
+        "PRE_V1_SCOPE_ROADMAP.md"
+      ]
+    },
+    {
+      "id": "insights.financial_health",
+      "area": "Insights",
+      "requirement": "Financial health insights beyond static totals",
+      "status": "partial",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/features/reports/ReportsPage.tsx"
+      ]
+    },
+    {
+      "id": "data.export",
+      "area": "Privacy and data",
+      "requirement": "User can download a private copy of their BajetBN data",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "src/pages/SettingsPage.tsx",
+        "src/repositories/releaseCandidateRepository.ts"
+      ]
+    },
+    {
+      "id": "data.delete_account",
+      "area": "Privacy and data",
+      "requirement": "User can request account and personal-data deletion with protected financial-history handling",
+      "status": "missing",
+      "gate": "pre_production",
+      "evidence": [
+        "src/pages/SettingsPage.tsx"
+      ]
+    },
+    {
+      "id": "data.general_receipts",
+      "area": "Documents",
+      "requirement": "General transaction receipt/document attachments",
+      "status": "missing",
+      "gate": "pre_v1_decision",
+      "evidence": [
+        "storage.rules",
+        "README.md"
+      ]
+    },
+    {
+      "id": "pwa.offline_mutations",
+      "area": "PWA",
+      "requirement": "Offline financial entry queue with idempotent sync and conflict handling",
+      "status": "missing",
+      "gate": "pre_v1_decision",
+      "evidence": [
+        "README.md",
+        "ARCHITECTURE.md"
+      ]
+    },
+    {
+      "id": "release.alpha2_staging",
+      "area": "Release readiness",
+      "requirement": "Alpha 2 browser testing on staging across mobile and desktop",
+      "status": "manual_test",
+      "gate": "pre_production",
+      "evidence": [
+        "STAGING_TEST_CHECKLIST.md"
+      ]
+    },
+    {
+      "id": "release.version_source",
+      "area": "Release readiness",
+      "requirement": "One consistent app version source across package, settings and service worker",
+      "status": "complete",
+      "gate": "pre_production",
+      "evidence": [
+        "release.json",
+        "src/config/release.ts",
+        "package.json",
+        "package-lock.json",
+        "src/pages/SettingsPage.tsx",
+        "scripts/generate-service-worker.mjs",
+        "scripts/verify-release-safety-hardening.mjs"
+      ]
+    },
+    {
+      "id": "release.ci_coverage",
+      "area": "Release readiness",
+      "requirement": "CI runs every current structural verification suite",
+      "status": "complete",
+      "gate": "pre_production",
+      "evidence": [
+        ".github/workflows/staging-ci.yml"
+      ]
+    },
+    {
+      "id": "release.dependencies",
+      "area": "Release readiness",
+      "requirement": "Review Firebase Functions dependency warning before final production release",
+      "status": "complete",
+      "gate": "pre_production",
+      "evidence": [
+        "functions/package.json",
+        "functions/package-lock.json",
+        "FUNCTIONS_DEPENDENCY_REVIEW.md",
+        "scripts/verify-release-safety-hardening.mjs"
+      ]
+    },
+    {
+      "id": "release.production",
+      "area": "Release readiness",
+      "requirement": "Production deploy only after all pre-production blockers are complete and staging is approved",
+      "status": "manual_test",
+      "gate": "pre_production",
+      "evidence": [
+        "PRE_V1_SCOPE_ROADMAP.md"
+      ]
+    }
   ]
 }

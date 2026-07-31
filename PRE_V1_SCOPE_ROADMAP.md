@@ -6,13 +6,14 @@
 - Complete mobile and desktop manual testing.
 - Fix Alpha 2 defects without opening a new major scope phase.
 
-## v0.11.5 — Release Governance and Safety Hardening
+## v0.11.5 — Release Governance and Safety Hardening — Completed in source
 
-- Replace every remaining native browser confirmation with the BajetBN lifecycle dialog.
-- Introduce one release-version source used by Settings, package metadata, build and service worker.
-- Require all verification scripts in staging CI.
-- Review Firebase Functions dependencies and production deployment warnings.
-- Add a production smoke-test checklist.
+- [x] Replace every remaining native browser confirmation with a BajetBN mobile-friendly dialog.
+- [x] Introduce one canonical release source used by Settings, package metadata and service-worker generation.
+- [x] Require the full package-level structural suite in staging CI.
+- [x] Review Firebase Functions dependencies and production deployment warnings.
+- [x] Add production smoke-test and rollback checklists.
+- [ ] Complete manual browser testing on staging before merging this phase onward.
 
 ## v0.11.6 — Account and Data Controls
 

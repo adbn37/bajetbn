@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { PageHeader } from '../components/PageHeader';
+import { appBuildLabel } from '../config/release';
 import { useAuth } from '../contexts/AuthContext';
 import { usePreferences } from '../contexts/PreferencesContext';
 import {
@@ -253,7 +254,7 @@ export function SettingsPage() {
           <button type="button" className="button secondary" onClick={() => void logOut()}>Sign out of this device</button>
           <button type="button" className="button danger-outline" disabled>Delete my account — coming later</button>
         </div>
-        <p className="settings-build-info">App: v0.11.0 RC Alpha 1 · {import.meta.env.VITE_APP_ENV || 'local'} · Brunei time</p>
+        <p className="settings-build-info">App: {appBuildLabel()} · Brunei time</p>
       </section>
     </main>
   );
