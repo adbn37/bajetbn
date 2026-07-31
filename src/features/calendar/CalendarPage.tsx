@@ -149,7 +149,7 @@ function ItemList({ items, spaces, accounts, onRemind, onWhatsApp, busyId, local
         <div className="calendar-item-actions">
           <Link className="button secondary" to={item.route}>Open</Link>
           <button className="button secondary" disabled={busyId === item.id} onClick={() => void onRemind(item)}>Mark as reminded</button>
-          {showWhatsApp && <button className="button secondary" disabled={busyId === item.id || !space?.headWhatsapp} onClick={() => void onWhatsApp(item)} title={space?.headWhatsapp ? 'Open WhatsApp with a ready message' : 'Add a WhatsApp number in Sharing first'}>WhatsApp</button>}
+          {showWhatsApp && <button className="button secondary" disabled={busyId === item.id || !space?.headWhatsapp} onClick={() => void onWhatsApp(item)} title={space?.headWhatsapp ? 'Open WhatsApp with a ready message' : 'Add a WhatsApp number in Space settings first'}>WhatsApp</button>}
         </div>
       </article>;
     })}
@@ -264,7 +264,7 @@ export function CalendarPage() {
         spaceId: item.spaceId,
         amountMinor: item.outstandingMinor ?? Math.max(0, item.assignedMinor - (item.settledMinor || 0)),
         currency: item.currency || currency,
-        route: '/sharing',
+        route: `/spaces/${item.spaceId}?tab=bills`,
         detail: 'Your share of a shared bill',
       });
     });
@@ -318,7 +318,7 @@ export function CalendarPage() {
     if (!user) return;
     const phone = spaceMap.get(item.spaceId)?.headWhatsapp || '';
     if (!phone) {
-      setError('Add a WhatsApp number for this Space on the Sharing page first.');
+      setError("Add a WhatsApp number in this Space settings first.");
       return;
     }
     const message = buildReminderMessage(item, locale, language);

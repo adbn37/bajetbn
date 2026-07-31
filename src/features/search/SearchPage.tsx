@@ -158,7 +158,7 @@ export function SearchPage() {
       title: item.name,
       detail: item.description || `${item.type} Space`,
       extra: item.collaborationMode === 'private' ? 'Private' : 'Shared',
-      route: '/spaces',
+      route: `/spaces/${item.id}`,
       searchable: [item.displayId, item.name, item.description, item.type].filter(Boolean).join(' '),
       spaceId: item.id,
       status: 'open' as const,

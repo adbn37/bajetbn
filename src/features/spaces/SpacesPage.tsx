@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
@@ -11,6 +12,7 @@ const labels: Record<SpaceType, string> = { personal: 'Personal', household: 'Ho
 
 export function SpacesPage() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Space | null>(null);
@@ -34,14 +36,40 @@ export function SpacesPage() {
       <div className="info-banner"><strong>How Spaces work</strong><span>Choose a Space when recording money. The same account can be used in more than one Space.</span></div>
       {loading ? <div className="loading-panel">Loading Spaces…</div> : spaces.length === 0 ? <EmptyState title="No Spaces added yet" description="Your Personal Space will appear after onboarding." /> : (
         <section className="card-grid">
-          {spaces.map((space) => (
-            <article key={space.id} className={`space-card ${space.archivedAt ? 'archived' : ''}`}>
+          {spaces.map((space) => {
+            const open = () => navigate(`/spaces/${space.id}`);
+            const stop = (event: MouseEvent<HTMLButtonElement>) => event.stopPropagation();
+            const handleKey = (event: KeyboardEvent<HTMLElement>) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                open();
+              }
+            };
+            return <article
+              key={space.id}
+              className={`space-card space-card-clickable ${space.archivedAt ? 'archived' : ''}`}
+              role="link"
+              tabIndex={0}
+              onClick={open}
+              onKeyDown={handleKey}
+              aria-label={`Open ${space.name}`}
+            >
               <div className="card-top"><span className={`space-icon large ${space.type}`}>{space.name.charAt(0)}</span><span className="type-badge">{labels[space.type]}</span></div>
               <h2>{space.name}</h2><p>{space.description || (space.type === 'personal' ? 'Your private money area.' : `A ${labels[space.type].toLowerCase()} area for its money activity.`)}</p>
               <div className="meta-row"><span>{space.currency}</span><span>{space.collaborationMode === 'private' ? 'Private' : 'Shared'}</span><span>{space.timezone}</span></div>
-              <footer><small>{space.displayId}</small><div><button className="text-button" onClick={() => openEdit(space)}>Edit</button>{space.type !== 'personal' && !space.archivedAt && <button className="text-button danger" onClick={() => void archiveSpace(space.id).then(load)}>Hide</button>}</div></footer>
-            </article>
-          ))}
+              <footer>
+                <small>{space.displayId}</small>
+                <div className="button-row">
+                  <span className="space-open-label">Open Space →</span>
+                  <button className="text-button" onClick={(event) => { stop(event); openEdit(space); }}>Edit</button>
+                  {space.type !== 'personal' && !space.archivedAt && <button className="text-button danger" onClick={(event) => {
+                    stop(event);
+                    if (confirm(`Hide ${space.name}? Its previous money records will stay.`)) void archiveSpace(space.id).then(load);
+                  }}>Hide</button>}
+                </div>
+              </footer>
+            </article>;
+          })}
         </section>
       )}
       {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" onClose={() => setModal(null)} onSubmit={async (values) => { await createSpace({ uid: user.uid, currency: profile.currency, timezone: profile.timezone, ...values }); setModal(null); await load(); }} />}

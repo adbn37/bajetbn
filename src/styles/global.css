@@ -535,3 +535,49 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
 @media (max-width:780px) {
   .data-download-link { width:100%; }
 }
+
+/* v0.11.1 Space-centred workflow */
+.space-card-clickable { cursor:pointer; transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease; }
+.space-card-clickable:hover,.space-card-clickable:focus-visible { transform:translateY(-2px); border-color:rgba(45,212,191,.55); box-shadow:0 14px 34px rgba(0,0,0,.18); outline:none; }
+.space-open-label { color:var(--accent-2); font-size:.72rem; font-weight:800; }
+.space-details-page { max-width:1380px; }
+.space-details-identity { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:1rem; margin-bottom:1rem; padding:1rem; border:1px solid var(--border); border-radius:16px; background:var(--surface); }
+.space-details-identity strong,.space-details-identity span { display:block; }
+.space-details-identity>div>span { margin-top:.2rem; color:var(--muted); font-size:.76rem; }
+.space-details-meta { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:.45rem; }
+.space-details-meta span { padding:.38rem .58rem; border:1px solid var(--border); border-radius:999px; background:var(--surface-2); color:var(--muted); font-size:.68rem; font-weight:700; }
+.space-details-tabs { display:flex; gap:.4rem; overflow-x:auto; margin-bottom:1rem; padding:.35rem; border:1px solid var(--border); border-radius:14px; background:var(--surface); scrollbar-width:thin; }
+.space-details-tabs button { flex:0 0 auto; border:0; border-radius:10px; padding:.68rem .85rem; background:transparent; color:var(--muted); font-size:.74rem; font-weight:800; white-space:nowrap; }
+.space-details-tabs button.active { background:var(--surface-2); color:var(--text); box-shadow:inset 0 0 0 1px var(--border); }
+.space-overview-summary { margin-bottom:1rem; }
+.space-overview-panel { margin-top:1rem; }
+.space-quick-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; }
+.space-quick-card { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.75rem; min-height:82px; padding:.85rem; border:1px solid var(--border); border-radius:13px; background:var(--surface-2); color:var(--text); text-decoration:none; transition:border-color .16s ease,transform .16s ease; }
+.space-quick-card:hover,.space-quick-card:focus-visible { transform:translateY(-1px); border-color:rgba(45,212,191,.52); outline:none; }
+.space-quick-card strong,.space-quick-card small { display:block; }
+.space-quick-card small { margin-top:.25rem; color:var(--muted); font-size:.7rem; line-height:1.45; }
+.space-quick-icon { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--border); border-radius:11px; color:var(--accent-2); background:var(--surface); font-size:1rem; }
+.space-overview-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; margin-top:1rem; }
+.compact-panel { min-height:150px; }
+.compact-panel h2 { margin:.45rem 0 .35rem; }
+.compact-panel p { margin:0; color:var(--muted); line-height:1.55; }
+.space-collaboration-embedded { display:block; }
+.space-collaboration-embedded .collaboration-settings { margin-top:0; }
+.space-settings-panel { max-width:760px; }
+.settings-detail-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; margin-bottom:1rem; }
+.settings-detail-list>div { padding:.8rem; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); }
+.settings-detail-list span,.settings-detail-list strong { display:block; }
+.settings-detail-list span { color:var(--muted); font-size:.7rem; }
+.settings-detail-list strong { margin-top:.2rem; }
+@media (max-width:900px) {
+  .space-overview-grid { grid-template-columns:1fr; }
+  .space-quick-grid { grid-template-columns:1fr; }
+}
+@media (max-width:640px) {
+  .space-details-identity { grid-template-columns:auto minmax(0,1fr); }
+  .space-details-meta { grid-column:1 / -1; justify-content:flex-start; }
+  .space-details-tabs { margin-left:-.25rem; margin-right:-.25rem; }
+  .settings-detail-list { grid-template-columns:1fr; }
+  .space-card footer .button-row { justify-content:flex-start; }
+  .space-open-label { width:100%; }
+}
