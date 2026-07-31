@@ -253,6 +253,7 @@ export interface Account {
   ledgerBalanceMinor: number;
   balanceVersion: number;
   archivedAt?: Timestamp | null;
+  closedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -302,6 +303,7 @@ export interface SavingsGoal {
   status: GoalStatus;
   note?: string;
   archivedAt?: Timestamp | null;
+  closedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -353,6 +355,8 @@ export interface Commitment {
   status: CommitmentStatus;
   note?: string;
   archivedAt?: Timestamp | null;
+  stoppedAt?: Timestamp | null;
+  stoppedPreviousNextDueDate?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

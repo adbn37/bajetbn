@@ -3,11 +3,10 @@ import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
 import type { Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType } from '../types/models';
 
-export async function listCommitments(uid: string): Promise<Commitment[]> {
+export async function listAllCommitments(uid: string): Promise<Commitment[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'commitments'), where('ownerId', '==', uid)));
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Commitment)
-    .filter((item) => !item.archivedAt)
     .sort((a, b) => (a.nextDueDate || '9999-12-31').localeCompare(b.nextDueDate || '9999-12-31'));
 }
 
@@ -63,4 +62,8 @@ export async function archiveCommitment(commitmentId: string) {
 export async function payCommitment(input: { commitmentId: string; accountId: string; amountMinor?: number; paymentDate: string; note?: string }) {
   const { functions } = requireFirebase();
   return httpsCallable(functions, 'payCommitment')({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function listCommitments(uid: string): Promise<Commitment[]> {
+  return (await listAllCommitments(uid)).filter((item) => !item.archivedAt && !item.stoppedAt);
 }

@@ -581,3 +581,18 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   .space-card footer .button-row { justify-content:flex-start; }
   .space-open-label { width:100%; }
 }
+
+/* v0.11.2 Safe delete, close, archive and restore */
+.archived-items-panel { margin-top:1.15rem; border-style:dashed; }
+.archived-items-panel .panel-heading { margin-bottom:.85rem; }
+.archived-items-panel .planning-card,.archived-items-panel .account-card,.archived-items-panel .space-card { opacity:.88; }
+.archived-items-panel h3 { margin:.15rem 0 0; }
+.danger-zone-panel { margin-top:1rem; border-color:rgba(248,113,113,.35); }
+.danger-zone-panel p { color:var(--muted); line-height:1.55; }
+.button.danger { border-color:rgba(248,113,113,.45); background:rgba(248,113,113,.12); color:#fecaca; }
+.button.danger:hover { background:rgba(248,113,113,.2); }
+.account-card.archived,.planning-card.archived,.space-card.archived { filter:saturate(.75); }
+@media (max-width:720px) {
+  .archived-items-panel .button-row,.danger-zone-panel .button-row { align-items:stretch; }
+  .archived-items-panel .button,.danger-zone-panel .button { width:100%; }
+}

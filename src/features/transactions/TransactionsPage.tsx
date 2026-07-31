@@ -12,7 +12,8 @@ import {
 } from '../categories/defaultCategories';
 import { listAccounts } from '../../repositories/accountRepository';
 import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
-import { archiveCategory, createCategory, listCustomCategories, updateCategory } from '../../repositories/categoryRepository';
+import { createCategory, listAllCustomCategories, updateCategory } from '../../repositories/categoryRepository';
+import { manageCategory } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import { listTransactions, postTransaction, reverseTransaction } from '../../repositories/transactionRepository';
 import type {
@@ -101,7 +102,7 @@ export function TransactionsPage() {
         listTransactions(user.uid),
         listAccounts(user.uid),
         listSpaces(user.uid),
-        listCustomCategories(user.uid),
+        listAllCustomCategories(user.uid),
       ]);
       setTransactions(nextTransactions);
       setAccounts(nextAccounts);
@@ -117,7 +118,7 @@ export function TransactionsPage() {
   useEffect(() => { void load(); }, [user]);
 
   const allCategories = useMemo(
-    () => [...DEFAULT_TRANSACTION_CATEGORIES, ...customCategories],
+    () => [...DEFAULT_TRANSACTION_CATEGORIES, ...customCategories.filter((item) => !item.archivedAt)],
     [customCategories],
   );
   const categoryMap = useMemo(() => new Map(allCategories.map((category) => [category.id, category])), [allCategories]);
@@ -451,7 +452,7 @@ function TransactionDetails({ item, source, destination, space, category, onClos
       {item.commitmentId && <Detail label="Bill or instalment">Linked bill or instalment</Detail>}
       {item.sharedBillAssignmentId && <Detail label="Person's bill share">{item.sharedBillAssignmentId}</Detail>}
       {item.sharedBillPaymentId && <Detail label="Payment submitted">{item.sharedBillPaymentId}</Detail>}
-      {item.paymentProofPath && <Detail label="Payment proof">Attached in Sharing</Detail>}
+      {item.paymentProofPath && <Detail label="Payment proof">Attached in its Space</Detail>}
       {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
       {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
     </dl>
@@ -472,31 +473,29 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
   const [showEditor, setShowEditor] = useState(false);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const active = customCategories.filter((item) => !item.archivedAt);
+  const hidden = customCategories.filter((item) => item.archivedAt);
 
-  const archive = async (category: TransactionCategory) => {
-    if (!window.confirm(`Hide “${category.name}”? Past money activity will still keep this category name.`)) return;
-    setBusyId(category.id);
-    setError('');
-    try {
-      await archiveCategory(category.id);
-      await onChanged();
-    } catch (nextError) {
-      setError(getErrorMessage(nextError));
-    } finally {
-      setBusyId('');
-    }
-  };
+  async function lifecycle(category: TransactionCategory, action: 'archive' | 'restore' | 'delete') {
+    const message = action === 'archive'
+      ? `Hide “${category.name}”?\n\nPast money activity will keep this category name.`
+      : action === 'delete'
+        ? `Delete “${category.name}”?\n\nThis only works when it has never been used. This cannot be undone.`
+        : `Restore “${category.name}”?`;
+    if (!window.confirm(message)) return;
+    setBusyId(category.id); setError('');
+    try { await manageCategory(category.id, action); await onChanged(); }
+    catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusyId(''); }
+  }
 
   return <Modal title="Edit categories" onClose={onClose}>
     <div className="category-manager-intro"><div><strong>Brunei-ready defaults</strong><p>{DEFAULT_TRANSACTION_CATEGORIES.length} built-in categories are available automatically. Add custom categories for your own household or SME workflow.</p></div><button className="button primary" onClick={() => { setEditing(null); setShowEditor(true); }}>+ Custom category</button></div>
     {error && <div className="notice error">{error}</div>}
-    {customCategories.length === 0 ? <EmptyState title="No custom categories" description="Ready-made categories are available. Add your own only when you need a different name." /> : <div className="category-manager-list">
-      {customCategories.map((category) => <div className="category-manager-row" key={category.id}>
-        <CategoryBadge category={category} />
-        <span className="category-meta">{category.kind} · {category.scope}</span>
-        <div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => void archive(category)}>{busyId === category.id ? 'Hiding…' : 'Hide'}</button></div>
-      </div>)}
+    {active.length === 0 ? <EmptyState title="No custom categories" description="Ready-made categories are available. Add your own only when you need a different name." /> : <div className="category-manager-list">
+      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} · {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => void lifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => void lifecycle(category, 'delete')}>Delete</button></div></div>)}
     </div>}
+    {hidden.length > 0 && <section className="archived-items-panel"><div className="panel-heading"><div><span className="eyebrow">Not shown in new forms</span><h3>Hidden categories</h3></div><span className="type-badge">{hidden.length}</span></div><div className="category-manager-list">{hidden.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">Hidden</span><button className="button secondary" disabled={busyId === category.id} onClick={() => void lifecycle(category, 'restore')}>Restore</button></div>)}</div></section>}
     <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button></div>
     {showEditor && <CategoryEditor category={editing} onClose={() => setShowEditor(false)} onSaved={async () => { setShowEditor(false); await onChanged(); }} />}
   </Modal>;

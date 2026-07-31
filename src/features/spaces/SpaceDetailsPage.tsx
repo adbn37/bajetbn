@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,6 +11,7 @@ import {
   listSpaceMembers,
 } from '../../repositories/collaborationRepository';
 import { listGoals } from '../../repositories/goalRepository';
+import { manageSpace } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import { listTransactions } from '../../repositories/transactionRepository';
 import type {
@@ -57,6 +58,7 @@ function spaceDescription(space: Space) {
 
 export function SpaceDetailsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { spaceId = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [space, setSpace] = useState<Space | null>(null);
@@ -197,12 +199,10 @@ export function SpaceDetailsPage() {
       openBills={openBills}
       memberCount={activeMembers.length}
       openSharedBillCount={openSharedBills.length}
-    /> : shared ? <CollaborationPage
-      embedded
-      spaceIdOverride={space.id}
-      activeTab={activeTab as CollaborationTab}
-      onSpaceUpdated={load}
-    /> : <PersonalSpaceSettings space={space} />}
+    /> : shared ? <>
+      <CollaborationPage embedded spaceIdOverride={space.id} activeTab={activeTab as CollaborationTab} onSpaceUpdated={load} />
+      {activeTab === 'settings' && currentMember?.role === 'owner' && <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />}
+    </> : <PersonalSpaceSettings space={space} />}
   </main>;
 }
 
@@ -279,5 +279,27 @@ function PersonalSpaceSettings({ space }: { space: Space }) {
     </div>
     <div className="notice">Your Personal Space is always kept because it is the main home for your personal money.</div>
     <Link className="button secondary" to="/spaces">Edit Space name or description</Link>
+  </section>;
+}
+
+
+function SpaceLifecyclePanel({ space, onFinished }: { space: Space; onFinished: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function run(action: 'archive' | 'delete') {
+    const message = action === 'archive'
+      ? `Archive ${space.name}?\n\nIt will be hidden from normal use. Previous records will stay available.`
+      : `Delete ${space.name}?\n\nThis only works when the Space is empty and has no saved history. This cannot be undone.`;
+    if (!confirm(message)) return;
+    setBusy(true); setError('');
+    try { await manageSpace(space.id, action); onFinished(); }
+    catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusy(false); }
+  }
+  return <section className="panel danger-zone-panel">
+    <div className="panel-heading"><div><span className="eyebrow">Space controls</span><h2>Archive or delete this Space</h2></div></div>
+    {error && <div className="notice error">{error}</div>}
+    <p>Archive keeps previous records and lets you restore the Space later. Delete only works for an empty Space.</p>
+    <div className="button-row"><button className="button secondary" disabled={busy} onClick={() => void run('archive')}>Archive Space</button><button className="button danger" disabled={busy} onClick={() => void run('delete')}>Delete Space</button></div>
   </section>;
 }
