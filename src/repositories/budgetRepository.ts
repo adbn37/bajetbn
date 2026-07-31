@@ -3,12 +3,11 @@ import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
 import type { Budget, BudgetPeriodType } from '../types/models';
 
-export async function listBudgets(uid: string): Promise<Budget[]> {
+export async function listAllBudgets(uid: string): Promise<Budget[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'budgets'), where('ownerId', '==', uid)));
   return snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() }) as Budget)
-    .filter((item) => !item.archivedAt)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 }
 
@@ -42,4 +41,8 @@ export async function updateBudget(input: {
 export async function archiveBudget(budgetId: string) {
   const { functions } = requireFirebase();
   return httpsCallable(functions, 'archiveBudget')({ budgetId, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function listBudgets(uid: string): Promise<Budget[]> {
+  return (await listAllBudgets(uid)).filter((item) => !item.archivedAt);
 }

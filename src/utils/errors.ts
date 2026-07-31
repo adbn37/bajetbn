@@ -56,6 +56,9 @@ function makeMessageSimple(message: string): string {
 export function getErrorMessage(error: unknown): string {
   const candidate = error as ErrorLike | null;
   const code = candidate?.code?.toLowerCase();
+  if (code?.includes('failed-precondition') && typeof candidate?.message === 'string' && candidate.message.trim()) {
+    return makeMessageSimple(candidate.message.replace(/^Firebase:\s*/i, '').replace(/^Error\s*\([^)]*\)\.?\s*/i, '').trim());
+  }
   if (code && friendlyMessages[code]) return friendlyMessages[code];
   if (code?.includes('permission-denied') || code?.includes('unauthorized')) return 'You do not have access to do this.';
   if (code?.includes('unavailable') || code?.includes('network')) return 'BajetBN could not connect. Check your internet and try again.';

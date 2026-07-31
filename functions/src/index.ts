@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore, type DocumentData, type DocumentReference, type Transaction } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, type DocumentData, type DocumentReference, type Query, type Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { randomBytes } from 'node:crypto';
 
@@ -340,7 +340,7 @@ export const createAccount = onCall({ region }, async (request) => {
     transaction.create(accountRef, {
       displayId: displayId('ACC'), ownerId: uid, name, institution, type, classification,
       currency, openingBalanceMinor, ledgerBalanceMinor: openingBalanceMinor,
-      balanceVersion: 1, archivedAt: null, createdAt: now, updatedAt: now,
+      balanceVersion: 1, archivedAt: null, closedAt: null, createdAt: now, updatedAt: now,
     });
     transaction.create(ledgerRef, {
       displayId: displayId('LED'), accountId: accountRef.id, ownerId: uid,
@@ -870,7 +870,7 @@ export const archiveBudget = onCall({ region }, async (request) => {
 export const createGoal = onCall({ region }, async (request) => {
   const uid=requireAuth(request.auth?.uid); const name=stringValue(request.data?.name,'Goal name',80); const spaceId=stringValue(request.data?.spaceId,'Space'); const targetMinor=positiveMoney(request.data?.targetMinor); const targetDate=optionalLocalDate(request.data?.targetDate,'Target date'); const note=optionalString(request.data?.note,500); const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);
   const commandRef=db.collection('financialCommands').doc(commandId(uid,key)); const spaceRef=db.collection('spaces').doc(spaceId); const memberRef=db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
-  return db.runTransaction(async transaction=>{const[command,space,member]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');const ref=db.collection('goals').doc();const now=FieldValue.serverTimestamp();const result={goalId:ref.id};transaction.create(ref,{displayId:displayId('GOL'),ownerId:uid,name,spaceId,targetMinor,currentMinor:0,currency:space.data()?.currency,targetDate,status:'active',note,archivedAt:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_goal',idempotencyKey:key,result,createdAt:now});return result;});
+  return db.runTransaction(async transaction=>{const[command,space,member]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');const ref=db.collection('goals').doc();const now=FieldValue.serverTimestamp();const result={goalId:ref.id};transaction.create(ref,{displayId:displayId('GOL'),ownerId:uid,name,spaceId,targetMinor,currentMinor:0,currency:space.data()?.currency,targetDate,status:'active',note,archivedAt:null,closedAt:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_goal',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 export const updateGoal = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const goalId=stringValue(request.data?.goalId,'Goal ID');const name=stringValue(request.data?.name,'Goal name',80);const targetMinor=positiveMoney(request.data?.targetMinor);const targetDate=optionalLocalDate(request.data?.targetDate,'Target date');const note=optionalString(request.data?.note,500);const ref=db.collection('goals').doc(goalId);const snapshot=await ref.get();if(!snapshot.exists)throw new HttpsError('not-found','Goal not found.');if(snapshot.data()?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this goal.');if(snapshot.data()?.archivedAt)throw new HttpsError('failed-precondition','Archived goals cannot be edited.');const current=Number(snapshot.data()?.currentMinor||0);await ref.update({name,targetMinor,targetDate,note,status:current>=targetMinor?'completed':'active',updatedAt:FieldValue.serverTimestamp()});return{goalId};});
@@ -884,7 +884,7 @@ export const reverseGoalContribution = onCall({ region }, async request=>{const 
 export const createCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const type=oneOf(request.data?.type,commitmentTypes,'commitment type');const name=stringValue(request.data?.name,'Commitment name',80);const payee=optionalString(request.data?.payee,120);const spaceId=stringValue(request.data?.spaceId,'Space');const accountId=optionalString(request.data?.accountId,80)||null;const categoryId=stringValue(request.data?.categoryId,'Category ID',80);const amountMinor=positiveMoney(request.data?.amountMinor);const totalAmountMinor=type==='instalment'?positiveMoney(request.data?.totalAmountMinor):null;if(type==='instalment'&&Number(totalAmountMinor)<amountMinor)throw new HttpsError('invalid-argument','Instalment total must be at least one payment amount.');const frequency=oneOf(request.data?.frequency,commitmentFrequencies,'frequency');const startDate=localDate(request.data?.startDate,'Start date');const endDate=optionalLocalDate(request.data?.endDate,'End date');const reminderDays=integerBetween(request.data?.reminderDays,'Reminder days',0,60);const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);
   const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const spaceRef=db.collection('spaces').doc(spaceId);const memberRef=db.collection('spaceMembers').doc(`${spaceId}_${uid}`);const accountRef=accountId?db.collection('accounts').doc(accountId):null;const categoryRef=categoryId.startsWith('custom-')?db.collection('categories').doc(categoryId):null;
-  return db.runTransaction(async transaction=>{const[command,space,member,account,custom]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef),accountRef?transaction.get(accountRef):Promise.resolve(null),categoryRef?transaction.get(categoryRef):Promise.resolve(null)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});const ref=db.collection('commitments').doc();const now=FieldValue.serverTimestamp();const result={commitmentId:ref.id};transaction.create(ref,{displayId:displayId(type==='bill'?'BIL':'INS'),ownerId:uid,type,name,payee,spaceId,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,amountPaidMinor:0,sharedCycleDueDate:startDate,sharedAssignedMinor:0,sharedSettledMinor:0,currency:space.data()?.currency,frequency,startDate,nextDueDate:startDate,endDate,reminderDays,status:'active',note,archivedAt:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+  return db.runTransaction(async transaction=>{const[command,space,member,account,custom]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef),accountRef?transaction.get(accountRef):Promise.resolve(null),categoryRef?transaction.get(categoryRef):Promise.resolve(null)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});const ref=db.collection('commitments').doc();const now=FieldValue.serverTimestamp();const result={commitmentId:ref.id};transaction.create(ref,{displayId:displayId(type==='bill'?'BIL':'INS'),ownerId:uid,type,name,payee,spaceId,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,amountPaidMinor:0,sharedCycleDueDate:startDate,sharedAssignedMinor:0,sharedSettledMinor:0,currency:space.data()?.currency,frequency,startDate,nextDueDate:startDate,endDate,reminderDays,status:'active',note,archivedAt:null,stoppedAt:null,stoppedPreviousNextDueDate:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 export const updateCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const name=stringValue(request.data?.name,'Commitment name',80);const payee=optionalString(request.data?.payee,120);const accountId=optionalString(request.data?.accountId,80)||null;const categoryId=stringValue(request.data?.categoryId,'Category ID',80);const amountMinor=positiveMoney(request.data?.amountMinor);const frequency=oneOf(request.data?.frequency,commitmentFrequencies,'frequency');const nextDueDate=localDate(request.data?.nextDueDate,'Next due date');const endDate=optionalLocalDate(request.data?.endDate,'End date');const reminderDays=integerBetween(request.data?.reminderDays,'Reminder days',0,60);const note=optionalString(request.data?.note,500);const ref=db.collection('commitments').doc(commitmentId);const snapshot=await ref.get();if(!snapshot.exists)throw new HttpsError('not-found','Commitment not found.');const existing=snapshot.data();if(existing?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(existing?.archivedAt)throw new HttpsError('failed-precondition','Archived commitments cannot be edited.');const totalAmountMinor=existing?.type==='instalment'?positiveMoney(request.data?.totalAmountMinor):null;if(totalAmountMinor&&totalAmountMinor<Number(existing?.amountPaidMinor||0))throw new HttpsError('failed-precondition','Total cannot be below the amount already paid.');const space=await db.collection('spaces').doc(String(existing?.spaceId)).get();const account=accountId?await db.collection('accounts').doc(accountId).get():null;if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const custom=categoryId.startsWith('custom-')?await db.collection('categories').doc(categoryId).get():null;const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});await ref.update({name,payee,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,frequency,nextDueDate,endDate,reminderDays,note,status:existing?.status==='completed'&&totalAmountMinor&&Number(existing?.amountPaidMinor||0)<totalAmountMinor?'active':existing?.status,updatedAt:FieldValue.serverTimestamp()});return{commitmentId};});
@@ -1941,6 +1941,246 @@ export const reverseSharedBillPayment = onCall({ region }, async (request) => {
     }
     const result = { paymentId, assignmentId: assignmentRef.id, reversalId: reversalAuditRef.id, reversalTransactionId, ledgerEntryId, outstandingMinor: outstandingAfter };
     transaction.create(commandRef, { uid, kind: 'reverse_shared_bill_payment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+// v0.11.2 safe delete, close, archive and restore
+const spaceLifecycleActions = ['archive', 'restore', 'delete'] as const;
+const accountLifecycleActions = ['close', 'restore', 'delete'] as const;
+const budgetLifecycleActions = ['archive', 'restore', 'delete'] as const;
+const goalLifecycleActions = ['archive', 'restore', 'delete', 'close'] as const;
+const commitmentLifecycleActions = ['stop', 'restore', 'delete'] as const;
+const categoryLifecycleActions = ['archive', 'restore', 'delete'] as const;
+
+async function queryHasDocuments(query: Query): Promise<boolean> {
+  return !(await query.limit(1).get()).empty;
+}
+
+function lifecycleCommand(uid: string, key: string) {
+  return db.collection('lifecycleCommands').doc(commandId(uid, key));
+}
+
+export const manageSpaceLifecycle = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const action = oneOf(request.data?.action, spaceLifecycleActions, 'Space action');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const ref = db.collection('spaces').doc(spaceId);
+  const commandRef = lifecycleCommand(uid, key);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Space not found.');
+  const data = snapshot.data() || {};
+  if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'Only the Space owner can do this.');
+  if (data.type === 'personal' && action !== 'restore') throw new HttpsError('failed-precondition', 'Your Personal Space must stay available.');
+
+  if (action === 'delete') {
+    const memberSnapshot = await db.collection('spaceMembers').where('spaceId', '==', spaceId).get();
+    const hasOtherMembers = memberSnapshot.docs.some((item) => item.data().uid !== uid);
+    const checks = await Promise.all([
+      queryHasDocuments(db.collection('transactions').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('budgets').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('goals').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('commitments').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('sharedBillAssignments').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceInvitations').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
+    ]);
+    if (hasOtherMembers || checks.some(Boolean)) {
+      throw new HttpsError('failed-precondition', 'This Space has members or saved history. Archive it instead.');
+    }
+  }
+
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Space not found.');
+    const now = FieldValue.serverTimestamp();
+    const result = { id: spaceId, action, deleted: action === 'delete', archived: action === 'archive', restored: action === 'restore' };
+    if (action === 'delete') {
+      transaction.delete(db.collection('spaceMembers').doc(`${spaceId}_${uid}`));
+      transaction.delete(ref);
+    } else if (action === 'archive') {
+      transaction.update(ref, { archivedAt: now, updatedAt: now });
+    } else {
+      transaction.update(ref, { archivedAt: null, updatedAt: now });
+    }
+    transaction.create(commandRef, { uid, kind: 'space_lifecycle', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const manageAccountLifecycle = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const accountId = stringValue(request.data?.accountId, 'Account ID', 80);
+  const action = oneOf(request.data?.action, accountLifecycleActions, 'Account action');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const ref = db.collection('accounts').doc(accountId);
+  const commandRef = lifecycleCommand(uid, key);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Account not found.');
+  const data = snapshot.data() || {};
+  if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this account.');
+
+  let openingLedgerRefs: DocumentReference[] = [];
+  if (action === 'delete') {
+    const [sourceUsed, destinationUsed, commitmentUsed, sharedUsed, ledgerSnapshot] = await Promise.all([
+      queryHasDocuments(db.collection('transactions').where('accountId', '==', accountId)),
+      queryHasDocuments(db.collection('transactions').where('destinationAccountId', '==', accountId)),
+      queryHasDocuments(db.collection('commitments').where('accountId', '==', accountId)),
+      queryHasDocuments(db.collection('sharedBillPayments').where('accountId', '==', accountId)),
+      db.collection('ledgerEntries').where('accountId', '==', accountId).get(),
+    ]);
+    const nonOpeningLedger = ledgerSnapshot.docs.some((item) => item.data().entryType !== 'opening_balance');
+    if (sourceUsed || destinationUsed || commitmentUsed || sharedUsed || nonOpeningLedger) {
+      throw new HttpsError('failed-precondition', 'This account has saved money activity. Close it instead.');
+    }
+    openingLedgerRefs = ledgerSnapshot.docs.map((item) => item.ref);
+  }
+
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Account not found.');
+    const now = FieldValue.serverTimestamp();
+    const result = { id: accountId, action, deleted: action === 'delete', closed: action === 'close', restored: action === 'restore' };
+    if (action === 'delete') {
+      openingLedgerRefs.forEach((ledgerRef) => transaction.delete(ledgerRef));
+      transaction.delete(ref);
+    } else if (action === 'close') {
+      transaction.update(ref, { archivedAt: now, closedAt: now, updatedAt: now });
+    } else {
+      transaction.update(ref, { archivedAt: null, closedAt: null, updatedAt: now });
+    }
+    transaction.create(commandRef, { uid, kind: 'account_lifecycle', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const manageBudgetLifecycle = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const budgetId = stringValue(request.data?.budgetId, 'Budget ID', 80);
+  const action = oneOf(request.data?.action, budgetLifecycleActions, 'Budget action');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const ref = db.collection('budgets').doc(budgetId);
+  const commandRef = lifecycleCommand(uid, key);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Budget not found.');
+  if (snapshot.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this budget.');
+  if (action === 'delete') {
+    const used = Number(snapshot.data()?.spentMinor || 0) !== 0 || await queryHasDocuments(db.collection('transactions').where('budgetIds', 'array-contains', budgetId));
+    if (used) throw new HttpsError('failed-precondition', 'This budget has saved spending. Archive it instead.');
+  }
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Budget not found.');
+    const now = FieldValue.serverTimestamp();
+    const result = { id: budgetId, action, deleted: action === 'delete', archived: action === 'archive', restored: action === 'restore' };
+    if (action === 'delete') transaction.delete(ref);
+    else transaction.update(ref, { archivedAt: action === 'archive' ? now : null, updatedAt: now });
+    transaction.create(commandRef, { uid, kind: 'budget_lifecycle', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const manageGoalLifecycle = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const goalId = stringValue(request.data?.goalId, 'Goal ID', 80);
+  const action = oneOf(request.data?.action, goalLifecycleActions, 'Goal action');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const ref = db.collection('goals').doc(goalId);
+  const commandRef = lifecycleCommand(uid, key);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Goal not found.');
+  const data = snapshot.data() || {};
+  if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this goal.');
+  if (action === 'delete') {
+    const used = Number(data.currentMinor || 0) !== 0 || await queryHasDocuments(db.collection('goalContributions').where('goalId', '==', goalId));
+    if (used) throw new HttpsError('failed-precondition', 'This goal has saved progress. Close or archive it instead.');
+  }
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Goal not found.');
+    const now = FieldValue.serverTimestamp();
+    const currentData = current.data() || {};
+    const result = { id: goalId, action, deleted: action === 'delete', archived: action === 'archive', closed: action === 'close', restored: action === 'restore' };
+    if (action === 'delete') transaction.delete(ref);
+    else if (action === 'archive') transaction.update(ref, { archivedAt: now, updatedAt: now });
+    else if (action === 'close') transaction.update(ref, { closedAt: now, status: 'completed', updatedAt: now });
+    else transaction.update(ref, { archivedAt: null, closedAt: null, status: Number(currentData.currentMinor || 0) >= Number(currentData.targetMinor || 0) ? 'completed' : 'active', updatedAt: now });
+    transaction.create(commandRef, { uid, kind: 'goal_lifecycle', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const manageCommitmentLifecycle = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const commitmentId = stringValue(request.data?.commitmentId, 'Bill or instalment ID', 80);
+  const action = oneOf(request.data?.action, commitmentLifecycleActions, 'Bill action');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const ref = db.collection('commitments').doc(commitmentId);
+  const commandRef = lifecycleCommand(uid, key);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Bill or instalment not found.');
+  const data = snapshot.data() || {};
+  if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this bill or instalment.');
+  if (action === 'delete') {
+    const [hasPayments, hasShares] = await Promise.all([
+      queryHasDocuments(db.collection('commitmentPayments').where('commitmentId', '==', commitmentId)),
+      queryHasDocuments(db.collection('sharedBillAssignments').where('commitmentId', '==', commitmentId)),
+    ]);
+    if (hasPayments || hasShares || Number(data.amountPaidMinor || 0) !== 0) {
+      throw new HttpsError('failed-precondition', 'This item has payment history. Stop it instead.');
+    }
+  }
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Bill or instalment not found.');
+    const now = FieldValue.serverTimestamp();
+    const currentData = current.data() || {};
+    const result = { id: commitmentId, action, deleted: action === 'delete', stopped: action === 'stop', restored: action === 'restore' };
+    if (action === 'delete') transaction.delete(ref);
+    else if (action === 'stop') transaction.update(ref, { stoppedAt: now, stoppedPreviousNextDueDate: currentData.nextDueDate || null, status: 'completed', nextDueDate: null, updatedAt: now });
+    else {
+      const fullPaid = currentData.type === 'instalment' && Number(currentData.amountPaidMinor || 0) >= Number(currentData.totalAmountMinor || 0);
+      if (fullPaid) throw new HttpsError('failed-precondition', 'This instalment is already fully paid.');
+      transaction.update(ref, { archivedAt: null, stoppedAt: null, status: 'active', nextDueDate: currentData.stoppedPreviousNextDueDate || currentData.startDate, updatedAt: now });
+    }
+    transaction.create(commandRef, { uid, kind: 'commitment_lifecycle', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const manageCategoryLifecycle = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const categoryId = stringValue(request.data?.categoryId, 'Category ID', 80);
+  const action = oneOf(request.data?.action, categoryLifecycleActions, 'Category action');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const ref = db.collection('categories').doc(categoryId);
+  const commandRef = lifecycleCommand(uid, key);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Category not found.');
+  if (snapshot.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this category.');
+  if (action === 'delete') {
+    const used = (await Promise.all([
+      queryHasDocuments(db.collection('transactions').where('categoryId', '==', categoryId)),
+      queryHasDocuments(db.collection('budgets').where('categoryId', '==', categoryId)),
+      queryHasDocuments(db.collection('commitments').where('categoryId', '==', categoryId)),
+    ])).some(Boolean);
+    if (used) throw new HttpsError('failed-precondition', 'This category is used in saved records. Hide it instead.');
+  }
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Category not found.');
+    const now = FieldValue.serverTimestamp();
+    const result = { id: categoryId, action, deleted: action === 'delete', archived: action === 'archive', restored: action === 'restore' };
+    if (action === 'delete') transaction.delete(ref);
+    else transaction.update(ref, { archivedAt: action === 'archive' ? now : null, updatedAt: now });
+    transaction.create(commandRef, { uid, kind: 'category_lifecycle', idempotencyKey: key, result, createdAt: now });
     return result;
   });
 });

@@ -3,11 +3,10 @@ import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
 import type { GoalContribution, SavingsGoal } from '../types/models';
 
-export async function listGoals(uid: string): Promise<SavingsGoal[]> {
+export async function listAllGoals(uid: string): Promise<SavingsGoal[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'goals'), where('ownerId', '==', uid)));
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SavingsGoal)
-    .filter((item) => !item.archivedAt)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -41,4 +40,8 @@ export async function recordGoalContribution(input: { goalId: string; amountMino
 export async function reverseGoalContribution(contributionId: string) {
   const { functions } = requireFirebase();
   return httpsCallable(functions, 'reverseGoalContribution')({ contributionId, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function listGoals(uid: string): Promise<SavingsGoal[]> {
+  return (await listAllGoals(uid)).filter((item) => !item.archivedAt && !item.closedAt);
 }
