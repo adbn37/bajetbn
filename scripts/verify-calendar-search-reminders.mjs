@@ -20,8 +20,8 @@ const styles = fs.readFileSync('src/styles/global.css', 'utf8');
 const models = fs.readFileSync('src/types/models.ts', 'utf8');
 
 const checks = [
-  [app, "import { CalendarPage } from '../features/calendar/CalendarPage';", 'Calendar page import'],
-  [app, "import { SearchPage } from '../features/search/SearchPage';", 'Search page import'],
+  [app, "import('../features/calendar/CalendarPage')", 'Calendar page import'],
+  [app, "import('../features/search/SearchPage')", 'Search page import'],
   [app, '<Route path="calendar" element={<CalendarPage />} />', 'Calendar route'],
   [app, '<Route path="search" element={<SearchPage />} />', 'Search route'],
   [shell, "['/calendar', 'Calendar', '▦']", 'Calendar navigation'],

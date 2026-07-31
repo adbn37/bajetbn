@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    name: Build and deploy staging
+    name: Validate and deploy staging
     runs-on: ubuntu-latest
 
     environment:
@@ -42,17 +42,38 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install app dependencies
         run: npm ci
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
 
       - name: TypeScript validation
         run: npm run typecheck
 
+      - name: Build Firebase Functions
+        run: npm run build --prefix functions
+
+      - name: Run feature regression checks
+        run: |
+          node scripts/verify-release-candidate-hardening.mjs
+          node scripts/verify-language-theme-settings.mjs
+          node scripts/verify-calendar-search-reminders.mjs
+          node scripts/verify-reports-money-insights.mjs
+          node scripts/verify-simple-language.mjs
+          node scripts/verify-collaboration-whatsapp.mjs
+          node scripts/verify-shared-bill-payment-finalisation.mjs
+          node scripts/verify-budgets-goals-commitments.mjs
+          node scripts/verify-transaction-ledger.mjs
+          node scripts/verify-commitment-amount-labels.mjs
+          node scripts/verify-categories-transaction-ux.mjs
+          node scripts/verify-structure.mjs
+
       - name: Build staging
         run: npm run build -- --mode staging
 
-      - name: Verify build output
-        run: test -f dist/index.html
+      - name: Verify build and PWA output
+        run: node scripts/verify-build-output.mjs
 
       - name: Deploy to Cloudflare Pages
         env:

@@ -2,20 +2,40 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
 import { usePreferences } from '../contexts/PreferencesContext';
+import {
+  buildUserDataExport,
+  checkAccountRecords,
+  downloadJsonFile,
+  releaseDownloadUrl,
+  type DataHealthResult,
+} from '../repositories/releaseCandidateRepository';
 import type { Appearance, Language, TextSize } from '../types/models';
 import { getErrorMessage } from '../utils/errors';
+import { formatMoney } from '../utils/money';
+
+interface ReadyDownload {
+  url: string;
+  filename: string;
+}
 
 export function SettingsPage() {
   const { profile, user, logOut } = useAuth();
   const preferences = usePreferences();
   const [fullName, setFullName] = useState(profile?.fullName || user?.displayName || '');
   const [busy, setBusy] = useState(false);
+  const [dataBusy, setDataBusy] = useState<'check' | 'download' | null>(null);
+  const [dataCheck, setDataCheck] = useState<DataHealthResult | null>(null);
+  const [readyDownload, setReadyDownload] = useState<ReadyDownload | null>(null);
+  const [dataError, setDataError] = useState('');
+  const [dataMessage, setDataMessage] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
     setFullName(profile?.fullName || user?.displayName || '');
   }, [profile, user]);
+
+  useEffect(() => () => releaseDownloadUrl(readyDownload?.url || null), [readyDownload]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -29,6 +49,58 @@ export function SettingsPage() {
       setError(getErrorMessage(nextError));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runDataCheck() {
+    if (!user) {
+      setDataError('Please sign in again before checking your totals.');
+      return;
+    }
+
+    setDataBusy('check');
+    setDataError('');
+    setDataMessage('Checking your account totals…');
+    setDataCheck(null);
+
+    try {
+      const result = await checkAccountRecords(user.uid);
+      setDataCheck(result);
+      setDataMessage(result.allGood
+        ? 'Your account totals match your saved account records.'
+        : 'One or more account totals need attention. Do not change old records. Keep this result for support.');
+    } catch (nextError) {
+      setDataError(getErrorMessage(nextError));
+      setDataMessage('');
+    } finally {
+      setDataBusy(null);
+    }
+  }
+
+  async function downloadMyData() {
+    if (!user) {
+      setDataError('Please sign in again before downloading your data.');
+      return;
+    }
+
+    setDataBusy('download');
+    setDataError('');
+    setDataMessage('Preparing your private data file…');
+
+    try {
+      const data = await buildUserDataExport(user.uid);
+      const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Brunei' }).format(new Date());
+      const filename = `bajetbn-my-data-${date}.json`;
+
+      releaseDownloadUrl(readyDownload?.url || null);
+      const url = downloadJsonFile(data, filename);
+      setReadyDownload({ url, filename });
+      setDataMessage('Your data file is ready. If it did not download automatically, press “Save data file” below. Keep it private because it contains your money information.');
+    } catch (nextError) {
+      setDataError(getErrorMessage(nextError));
+      setDataMessage('');
+    } finally {
+      setDataBusy(null);
     }
   }
 
@@ -116,15 +188,72 @@ export function SettingsPage() {
         </div>
       </form>
 
+      <section className="panel settings-section settings-data-tools">
+        <div className="settings-section-heading">
+          <div><h2>My data</h2><p>Check your account totals or save a private copy of your BajetBN information.</p></div>
+        </div>
+
+        <div className="data-tool-grid">
+          <article className="data-tool-card">
+            <div><strong>Check account totals</strong><p>Compare each shown account total with its saved account records. This check does not change anything.</p></div>
+            <button type="button" className="button secondary" disabled={dataBusy !== null} onClick={() => void runDataCheck()}>
+              {dataBusy === 'check' ? 'Checking…' : 'Check my totals'}
+            </button>
+          </article>
+          <article className="data-tool-card">
+            <div><strong>Save a copy of my data</strong><p>Prepare a JSON file containing your profile, accounts, money activity, bills, goals and reminders.</p></div>
+            <button type="button" className="button secondary" disabled={dataBusy !== null} onClick={() => void downloadMyData()}>
+              {dataBusy === 'download' ? 'Preparing…' : 'Download my data'}
+            </button>
+          </article>
+        </div>
+
+        <div className="data-tool-feedback" aria-live="polite">
+          {dataError && <div className="notice error">{dataError}</div>}
+          {dataMessage && <div className="notice success">{dataMessage}</div>}
+          {readyDownload && (
+            <a className="button primary data-download-link" href={readyDownload.url} download={readyDownload.filename}>
+              Save data file
+            </a>
+          )}
+        </div>
+
+        {dataCheck && (
+          <div className={`data-check-result ${dataCheck.allGood ? 'good' : 'needs-attention'}`}>
+            <div className="data-check-summary">
+              <strong>{dataCheck.allGood ? 'Everything matches' : 'Some totals do not match'}</strong>
+              <small>{dataCheck.accountsChecked} accounts and {dataCheck.recordsChecked} account records checked.</small>
+            </div>
+            <div className="data-check-list">
+              {dataCheck.accounts.length === 0 && (
+                <article>
+                  <div><strong>No accounts yet</strong><small>Add an account before using this check.</small></div>
+                </article>
+              )}
+              {dataCheck.accounts.map((item) => (
+                <article key={item.accountId}>
+                  <div><strong>{item.accountName}</strong><small>{item.matches ? 'Total matches' : 'Needs attention'}</small></div>
+                  <div className="data-check-values">
+                    <span>Shown: {formatMoney(item.shownMinor)}</span>
+                    <span>Records: {formatMoney(item.recordedMinor)}</span>
+                    {!item.matches && <b>Difference: {formatMoney(item.differenceMinor)}</b>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
       <section className="panel settings-section settings-account-controls">
         <div className="settings-section-heading">
-          <div><h2>Account controls</h2><p>Your privacy and data tools will stay available even without a paid plan.</p></div>
+          <div><h2>Account controls</h2><p>Your privacy and data tools stay available without a paid plan.</p></div>
         </div>
         <div className="button-row">
           <button type="button" className="button secondary" onClick={() => void logOut()}>Sign out of this device</button>
-          <button type="button" className="button secondary" disabled>Download my data — coming later</button>
           <button type="button" className="button danger-outline" disabled>Delete my account — coming later</button>
         </div>
+        <p className="settings-build-info">App: v0.11.0 RC Alpha 1 · {import.meta.env.VITE_APP_ENV || 'local'} · Brunei time</p>
       </section>
     </main>
   );

@@ -12,7 +12,7 @@ const page = fs.readFileSync('src/features/reports/ReportsPage.tsx', 'utf8');
 const styles = fs.readFileSync('src/styles/global.css', 'utf8');
 
 const checks = [
-  [app, "import { ReportsPage } from '../features/reports/ReportsPage';", 'Reports page import'],
+  [app, "import('../features/reports/ReportsPage')", 'Reports page import'],
   [app, '<Route path="reports" element={<ReportsPage />} />', 'Reports route'],
   [page, 'Money reports', 'Simple page title'],
   [page, 'Money in', 'Money in summary'],

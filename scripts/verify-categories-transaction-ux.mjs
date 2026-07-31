@@ -29,7 +29,7 @@ if (missingOnServer.length || missingOnClient.length) {
 for (const required of ['createCategory', 'updateCategory', 'archiveCategory', 'categoryId: category.id']) {
   if (!server.includes(required)) throw new Error(`Functions missing ${required}.`);
 }
-for (const required of ['Manage categories', 'Transaction details', 'Top categories this month', 'categoryId: selectedCategory?.id']) {
+for (const required of ['Edit categories', 'Money activity details', 'Top categories this month', 'categoryId: selectedCategory?.id']) {
   if (!page.includes(required)) throw new Error(`Transaction UX missing ${required}.`);
 }
 if (!rules.includes('match /categories/{categoryId}')) throw new Error('Firestore category rules are missing.');

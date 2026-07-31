@@ -17,7 +17,9 @@
     "deploy:functions:staging": "firebase use staging && firebase deploy --only functions",
     "deploy:staging": "npm run build -- --mode staging && firebase use staging && firebase deploy --only firestore:rules,firestore:indexes,storage,functions",
     "verify:structure": "node scripts/verify-structure.mjs",
-    "postbuild": "node scripts/generate-service-worker.mjs"
+    "postbuild": "node scripts/generate-service-worker.mjs",
+    "verify:release-candidate": "node scripts/verify-release-candidate-hardening.mjs",
+    "verify:build-output": "node scripts/verify-build-output.mjs"
   },
   "dependencies": {
     "firebase": "12.16.0",
