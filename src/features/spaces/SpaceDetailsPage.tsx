@@ -300,7 +300,9 @@ function SpaceLifecyclePanel({ space, onFinished }: { space: Space; onFinished: 
   const [error, setError] = useState('');
   async function run(action: 'archive' | 'delete') {
     const message = action === 'archive'
-      ? `Archive ${space.name}?\n\nIt will be hidden from normal use. Previous records will stay available.`
+      ? space.type === 'trip'
+        ? `Close ${space.name}?\n\nThe Trip will move to Archived Spaces. Contributions, spending, balances, and payment history will stay available.`
+        : `Archive ${space.name}?\n\nIt will be hidden from normal use. Previous records will stay available.`
       : `Delete ${space.name}?\n\nThis only works when the Space is empty and has no saved history. This cannot be undone.`;
     if (!confirm(message)) return;
     setBusy(true); setError('');
@@ -312,6 +314,6 @@ function SpaceLifecyclePanel({ space, onFinished }: { space: Space; onFinished: 
     <div className="panel-heading"><div><span className="eyebrow">Space controls</span><h2>Archive or delete this Space</h2></div></div>
     {error && <div className="notice error">{error}</div>}
     <p>Archive keeps previous records and lets you restore the Space later. Delete only works for an empty Space.</p>
-    <div className="button-row"><button className="button secondary" disabled={busy} onClick={() => void run('archive')}>Archive Space</button><button className="button danger" disabled={busy} onClick={() => void run('delete')}>Delete Space</button></div>
+    <div className="button-row"><button className="button secondary" disabled={busy} onClick={() => void run('archive')}>{space.type === 'trip' ? 'Close Trip' : 'Archive Space'}</button><button className="button danger" disabled={busy} onClick={() => void run('delete')}>Delete Space</button></div>
   </section>;
 }

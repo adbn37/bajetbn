@@ -4,9 +4,10 @@ import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
+import { acceptSpaceInvitation, declineSpaceInvitation, listMySpaceInvitations } from '../../repositories/collaborationRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { createSpace, listSpaces, updateSpace } from '../../repositories/spaceRepository';
-import type { Space, SpaceType } from '../../types/models';
+import type { Space, SpaceInvitation, SpaceType } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 
 const labels: Record<SpaceType, string> = { personal: 'Personal', household: 'Household', sme: 'SME', trip: 'Trip', goal: 'Goal', custom: 'Custom' };
@@ -15,6 +16,7 @@ export function SpacesPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [invitations, setInvitations] = useState<SpaceInvitation[]>([]);
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Space | null>(null);
   const [busyId, setBusyId] = useState('');
@@ -24,15 +26,36 @@ export function SpacesPage() {
   const load = async () => {
     if (!user) return;
     setLoading(true); setError('');
-    try { setSpaces(await listSpaces(user.uid)); }
+    try {
+      const email = (profile?.email || user.email || '').trim().toLowerCase();
+      const [nextSpaces, nextInvitations] = await Promise.all([listSpaces(user.uid), listMySpaceInvitations(email)]);
+      setSpaces(nextSpaces);
+      setInvitations(nextInvitations);
+    }
     catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setLoading(false); }
   };
-  useEffect(() => { void load(); }, [user]);
+  useEffect(() => { void load(); }, [user, profile?.email]);
 
   const active = useMemo(() => spaces.filter((item) => !item.archivedAt), [spaces]);
   const archived = useMemo(() => spaces.filter((item) => item.archivedAt), [spaces]);
   const openEdit = (space: Space) => { setSelected(space); setModal('edit'); };
+  const pendingInvitations = useMemo(() => invitations.filter((item) => item.status === 'pending'), [invitations]);
+
+  async function answerInvitation(invitation: SpaceInvitation, decision: 'accept' | 'decline') {
+    setBusyId(invitation.id); setError('');
+    try {
+      if (decision === 'accept') {
+        const result = await acceptSpaceInvitation(invitation.token);
+        await load();
+        navigate(`/spaces/${result.spaceId}`);
+        return;
+      }
+      await declineSpaceInvitation(invitation.id);
+      await load();
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusyId(''); }
+  }
 
   async function lifecycle(space: Space, action: 'archive' | 'restore' | 'delete') {
     const message = action === 'archive'
@@ -51,6 +74,7 @@ export function SpacesPage() {
     <PageHeader eyebrow="Money groups" title="Spaces" description="Use Spaces to separate personal, household, trip, or business money." action={<button className="button primary" onClick={() => setModal('create')}>+ Add Space</button>} />
     {error && <div className="notice error">{error}</div>}
     <div className="info-banner"><strong>Safe Space removal</strong><span>Empty Spaces can be deleted. Spaces with members or money history can be archived and restored later.</span></div>
+    {pendingInvitations.length > 0 && <section className="panel incoming-invitations-panel"><div className="panel-heading"><div><span className="eyebrow">Invitations for me</span><h2>Spaces you can join</h2></div><span className="type-badge">{pendingInvitations.length}</span></div><div className="incoming-invitation-list">{pendingInvitations.map((invitation) => { const expired = Boolean(invitation.expiresAt?.toDate?.().getTime() && invitation.expiresAt.toDate().getTime() < Date.now()); return <article className="incoming-invitation-row" key={invitation.id}><div><strong>{invitation.spaceName || 'Shared Space'}</strong><span>{invitation.spaceType ? `${labels[invitation.spaceType]} Space` : 'Shared Space'} · Invited by {invitation.invitedByName || 'the Space owner'}</span><small>Access: {invitation.role === 'admin' ? 'Manager' : invitation.role === 'viewer' ? 'View only' : invitation.role === 'payer' ? 'Can pay' : 'Can add'}{expired ? ' · Invite expired' : ''}</small></div><div className="button-row">{expired ? <span className="status-pill">Ask for a new invite</span> : <><button className="button primary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'accept')}>{busyId === invitation.id ? 'Working…' : 'Join Space'}</button><button className="button secondary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'decline')}>Decline</button></>}</div></article>; })}</div></section>}
     {loading ? <div className="loading-panel">Loading Spaces…</div> : active.length === 0 ? <EmptyState title="No active Spaces" description="Add a Space or restore one from Archived Spaces below." /> : <SpaceGrid spaces={active} busyId={busyId} navigate={navigate} onEdit={openEdit} onArchive={(space) => void lifecycle(space, 'archive')} onDelete={(space) => void lifecycle(space, 'delete')} />}
 
     {archived.length > 0 && <section className="panel archived-items-panel"><div className="panel-heading"><div><span className="eyebrow">Hidden from normal use</span><h2>Archived Spaces</h2></div><span className="type-badge">{archived.length}</span></div><section className="card-grid">{archived.map((space) => <article key={space.id} className="space-card archived"><div className="card-top"><span className={`space-icon large ${space.type}`}>{space.name.charAt(0)}</span><span className="type-badge">{labels[space.type]}</span></div><h2>{space.name}</h2><p>Previous records are kept.</p><footer><small>{space.displayId}</small><button className="button secondary" disabled={busyId === space.id} onClick={() => void lifecycle(space, 'restore')}>{busyId === space.id ? 'Working…' : 'Restore Space'}</button></footer></article>)}</section></section>}

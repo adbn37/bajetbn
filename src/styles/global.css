@@ -699,3 +699,80 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   }
   .member-split-row { grid-template-columns: 1fr; }
 }
+
+/* v0.11.4 invitations and notification centre */
+.notification-button { position: relative; }
+.notification-count {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 .25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: .62rem;
+  font-weight: 800;
+  border: 2px solid var(--surface);
+}
+.incoming-invitations-panel { margin: 1rem 0; }
+.incoming-invitation-list,
+.notification-list { display: grid; gap: .7rem; }
+.incoming-invitation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: .9rem;
+  border: 1px solid var(--border);
+  border-radius: .9rem;
+  background: var(--surface-2);
+}
+.incoming-invitation-row > div:first-child,
+.notification-copy { display: grid; gap: .25rem; min-width: 0; }
+.incoming-invitation-row span,
+.incoming-invitation-row small,
+.notification-copy span,
+.notification-copy small { color: var(--text-muted); }
+.notification-list.panel { padding: .7rem; }
+.notification-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: .8rem;
+  align-items: center;
+  padding: .9rem;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: .85rem;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.notification-row:hover { background: var(--surface-2); border-color: var(--border); }
+.notification-row.unread { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.notification-row.read { opacity: .76; }
+.notification-row.overdue { background: rgba(248, 113, 113, .09); }
+.notification-dot { width: .62rem; height: .62rem; border-radius: 999px; background: var(--muted); }
+.notification-row.unread .notification-dot { background: var(--accent); }
+.notification-row.overdue .notification-dot { background: #f87171; }
+.notification-action { color: var(--accent); font-size: .82rem; white-space: nowrap; }
+.notification-attention-panel { margin-bottom: 1rem; }
+.notification-summary { margin-bottom: 1rem; }
+.member-split-fieldset {
+  display: grid;
+  gap: .55rem;
+  border: 1px solid var(--border);
+  border-radius: .9rem;
+  padding: .8rem;
+}
+.member-split-fieldset legend { padding: 0 .35rem; font-weight: 700; }
+@media (max-width: 720px) {
+  .incoming-invitation-row,
+  .notification-row { grid-template-columns: 1fr; align-items: stretch; }
+  .notification-dot { display: none; }
+  .notification-action { white-space: normal; }
+}

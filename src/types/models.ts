@@ -7,7 +7,7 @@ export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'cu
 export type SpaceRole = 'owner' | 'admin' | 'contributor' | 'payer' | 'viewer' | 'member';
 export type SpaceMemberStatus = 'active' | 'suspended' | 'removed';
 export type SpaceApprovalMode = 'none' | 'owner_approval';
-export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
 export type SharedBillStatus = 'unpaid' | 'submitted' | 'partially_paid' | 'paid' | 'rejected' | 'confirmed';
 export type SharedBillSettlementMode = 'account' | 'external';
 export type SharedBillPaymentStatus = 'submitted' | 'posted' | 'rejected' | 'reversed';
@@ -149,7 +149,11 @@ export interface SpaceInvitation {
   token: string;
   status: InvitationStatus;
   invitedBy: string;
+  invitedByName?: string;
+  spaceName?: string;
+  spaceType?: SpaceType;
   acceptedBy?: string | null;
+  declinedBy?: string | null;
   expiresAt?: Timestamp;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -235,6 +239,8 @@ export interface UserNotification {
   type: string;
   title: string;
   message: string;
+  targetPath?: string | null;
+  actionLabel?: string | null;
   readAt?: Timestamp | null;
   createdAt?: Timestamp;
 }

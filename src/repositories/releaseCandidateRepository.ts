@@ -129,6 +129,7 @@ export async function buildUserDataExport(uid: string) {
     allTripMoneyContributions,
     reminderHistory,
     notifications,
+    invitations,
   ] = await Promise.all([
     rowsWhere('accountAccess', 'uid', uid),
     rowsWhere('categories', 'ownerId', uid),
@@ -147,6 +148,7 @@ export async function buildUserDataExport(uid: string) {
     rowsForValues('spaceFundContributions', 'spaceId', activeSpaceIds),
     rowsWhere('reminderHistory', 'uid', uid),
     rowsWhere('userNotifications', 'uid', uid),
+    rowsWhere('spaceInvitations', 'email', String(profileSnapshot.data()?.email || '').toLowerCase()),
   ]);
 
   const sharedBillAssignments = allSharedBillAssignments.filter((item) => item.memberUid === uid);
@@ -157,7 +159,7 @@ export async function buildUserDataExport(uid: string) {
       exportedAt: new Date().toISOString(),
       environment: import.meta.env.VITE_APP_ENV || 'local',
       projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-      formatVersion: 3,
+      formatVersion: 4,
     },
     profile: profileSnapshot.exists() ? { id: profileSnapshot.id, ...profileSnapshot.data() } : null,
     spaces,
@@ -181,6 +183,7 @@ export async function buildUserDataExport(uid: string) {
     tripMoneyContributions: allTripMoneyContributions.filter((item) => item.memberUid === uid),
     reminders: reminderHistory,
     notifications,
+    invitations,
   };
 
   return jsonSafe(data);
