@@ -28,6 +28,7 @@ const SearchPage = lazy(() => import('../features/search/SearchPage').then((modu
 const DashboardPage = lazy(() => import('../pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })));
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const NotificationsPage = lazy(() => import('../pages/NotificationsPage').then((module) => ({ default: module.NotificationsPage })));
 
 export default function App() {
   if (!firebaseConfigured) return <SetupRequiredPage />;
@@ -59,6 +60,7 @@ export default function App() {
                   <Route path="reports" element={<ReportsPage />} />
                   <Route path="calendar" element={<CalendarPage />} />
                   <Route path="search" element={<SearchPage />} />
+                  <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 <Route path="*" element={<NotFoundPage />} />

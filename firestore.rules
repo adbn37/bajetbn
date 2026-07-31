@@ -151,7 +151,10 @@ service cloud.firestore {
 
 
     match /spaceInvitations/{invitationId} {
-      allow read: if signedIn() && isSpaceManager(resource.data.spaceId);
+      allow read: if signedIn() && (
+        isSpaceManager(resource.data.spaceId)
+        || (request.auth.token.email is string && resource.data.email == request.auth.token.email.lower())
+      );
       allow create, update, delete: if false;
     }
 

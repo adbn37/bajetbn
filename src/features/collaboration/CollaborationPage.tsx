@@ -5,7 +5,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listAccounts } from '../../repositories/accountRepository';
 import {
-  createSharedBillAssignment,
+  createSharedBillAssignments,
   createSpaceInvitation,
   getSharedBillProofUrl,
   listSharedBillAssignments,
@@ -270,7 +270,7 @@ export function CollaborationPage({
 
     {inviteOpen && selectedSpace && <Modal title={`Invite to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm spaceId={selectedSpace.id} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {editingMember && <Modal title="Change member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
-    {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers.filter((item) => item.role !== 'owner')} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
+    {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {submitting && <Modal title={`Add payment for ${submitting.commitmentName}`} onClose={() => setSubmitting(null)}><SubmitPaymentForm assignment={submitting} accounts={accounts.filter((account) => account.currency === submitting.currency)} onSaved={async () => { setSubmitting(null); await loadSpaceData(spaceId); }} /></Modal>}
   </Root>;
 }
@@ -311,16 +311,58 @@ function MemberForm({ member, onSaved }: { member: SpaceMember; onSaved: () => P
 
 function AssignmentForm({ space, members, commitments, onSaved }: { space: Space; members: SpaceMember[]; commitments: Commitment[]; onSaved: () => Promise<void> }) {
   const [commitmentId, setCommitmentId] = useState(commitments[0]?.id || '');
-  const [memberUid, setMemberUid] = useState(members[0]?.uid || '');
-  const [amount, setAmount] = useState(commitments[0] ? String(commitments[0].amountMinor / 100) : '');
+  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
+  const [selectedMembers, setSelectedMembers] = useState<Record<string, boolean>>(() => Object.fromEntries(members.map((item) => [item.uid, true])));
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [dueDate, setDueDate] = useState(commitments[0]?.nextDueDate || today());
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const selected = commitments.find((item) => item.id === commitmentId);
-  useEffect(() => { if (selected) { setAmount(String(selected.amountMinor / 100)); setDueDate(selected.nextDueDate || selected.startDate); } }, [commitmentId]);
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await createSharedBillAssignment({ spaceId: space.id, commitmentId, memberUid, assignedMinor: toMinorUnits(amount), dueDate, note }); await onSaved(); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}{commitments.length === 0 || members.length === 0 ? <div className="notice">Add a bill and invite at least one person before sharing the bill.</div> : <><label>Bill or instalment<select value={commitmentId} onChange={(event) => setCommitmentId(event.target.value)}>{commitments.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Who will pay<select value={memberUid} onChange={(event) => setMemberUid(event.target.value)}>{members.map((item) => <option value={item.uid} key={item.uid}>{item.displayName || item.email || item.uid}</option>)}</select></label><label>Their share (BND)<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} required/><small>The total shared amount cannot be more than the bill amount due now.</small></label><label>Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required readOnly/></label><label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Give bill share'}</button></>}</form>;
+  const chosen = members.filter((member) => selectedMembers[member.uid]);
+
+  useEffect(() => {
+    if (selected) setDueDate(selected.nextDueDate || selected.startDate);
+  }, [commitmentId, selected]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError('');
+    try {
+      if (!selected) throw new Error('Choose a bill or instalment.');
+      if (chosen.length === 0) throw new Error('Choose at least one person.');
+      let assignments: Array<{ memberUid: string; assignedMinor: number }>;
+      if (splitMode === 'equal') {
+        const base = Math.floor(selected.amountMinor / chosen.length);
+        let remainder = selected.amountMinor - (base * chosen.length);
+        assignments = chosen.map((member) => {
+          const assignedMinor = base + (remainder > 0 ? 1 : 0);
+          remainder = Math.max(0, remainder - 1);
+          return { memberUid: member.uid, assignedMinor };
+        });
+      } else {
+        assignments = chosen.map((member) => ({ memberUid: member.uid, assignedMinor: toMinorUnits(amounts[member.uid] || '0') }));
+        if (assignments.some((item) => item.assignedMinor <= 0)) throw new Error('Enter an amount greater than BND 0.00 for each selected person.');
+        const total = assignments.reduce((sum, item) => sum + item.assignedMinor, 0);
+        if (total > selected.amountMinor) throw new Error('The member shares cannot be more than the amount due.');
+      }
+      await createSharedBillAssignments({ spaceId: space.id, commitmentId, assignments, dueDate, note });
+      await onSaved();
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusy(false); }
+  };
+
+  return <form className="form-stack" onSubmit={submit}>
+    {error && <div className="notice error">{error}</div>}
+    {commitments.length === 0 || members.length === 0 ? <div className="notice">Add a bill and invite at least one person before sharing the bill.</div> : <>
+      <label>Bill or instalment<select value={commitmentId} onChange={(event) => setCommitmentId(event.target.value)}>{commitments.map((item) => <option value={item.id} key={item.id}>{item.name} — {formatMoney(item.amountMinor, item.currency)}</option>)}</select></label>
+      <label>How should it be shared?<select value={splitMode} onChange={(event) => setSplitMode(event.target.value as 'equal' | 'custom')}><option value="equal">Split equally</option><option value="custom">Enter different amounts</option></select></label>
+      <fieldset className="member-split-fieldset"><legend>Who should pay?</legend>{members.map((member) => <div className="member-split-row" key={member.uid}><label className="checkbox-label"><input type="checkbox" checked={Boolean(selectedMembers[member.uid])} onChange={(event) => setSelectedMembers((current) => ({ ...current, [member.uid]: event.target.checked }))} /> {member.displayName || member.email || member.uid}{member.role === 'owner' ? ' (Owner)' : ''}</label>{splitMode === 'custom' && selectedMembers[member.uid] && <input aria-label={`${member.displayName || member.email || 'Member'} share`} inputMode="decimal" placeholder="BND" value={amounts[member.uid] || ''} onChange={(event) => setAmounts((current) => ({ ...current, [member.uid]: event.target.value }))} />}</div>)}</fieldset>
+      {selected && <div className="transaction-preview"><div><span>Amount due</span><strong>{formatMoney(selected.amountMinor, selected.currency)}</strong></div><div><span>People selected</span><strong>{chosen.length}</strong></div><small>{splitMode === 'equal' ? 'BajetBN will divide the full amount equally, including any 1-cent difference.' : 'The amounts can be different, but cannot be more than the bill amount.'}</small></div>}
+      <label>Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required readOnly /></label>
+      <label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      <button className="button primary full" disabled={busy}>{busy ? 'Saving…' : `Give bill share${chosen.length === 1 ? '' : 's'}`}</button>
+    </>}
+  </form>;
 }
 
 function SubmitPaymentForm({ assignment, accounts, onSaved }: { assignment: SharedBillAssignment; accounts: Account[]; onSaved: () => Promise<void> }) {

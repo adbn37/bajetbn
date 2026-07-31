@@ -877,7 +877,7 @@ export const updateGoal = onCall({ region }, async request=>{const uid=requireAu
 
 export const archiveGoal = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const goalId=stringValue(request.data?.goalId,'Goal ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const ref=db.collection('goals').doc(goalId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,g]=await Promise.all([transaction.get(commandRef),transaction.get(ref)]);if(c.exists)return c.data()?.result;if(!g.exists)throw new HttpsError('not-found','Goal not found.');if(g.data()?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this goal.');const now=FieldValue.serverTimestamp();const result={goalId,archived:true};transaction.update(ref,{archivedAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'archive_goal',idempotencyKey:key,result,createdAt:now});return result;});});
 
-export const recordGoalContribution = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const goalId=stringValue(request.data?.goalId,'Goal ID');const amountMinor=positiveMoney(request.data?.amountMinor);const contributionDate=localDate(request.data?.contributionDate,'Contribution date');const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const goalRef=db.collection('goals').doc(goalId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,g]=await Promise.all([transaction.get(commandRef),transaction.get(goalRef)]);if(c.exists)return c.data()?.result;if(!g.exists)throw new HttpsError('not-found','Goal not found.');const goal=g.data();if(goal?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this goal.');if(goal?.archivedAt||goal?.status==='completed')throw new HttpsError('failed-precondition','This goal is not accepting contributions.');const current=Number(goal?.currentMinor||0);if(!Number.isSafeInteger(current))throw new HttpsError('failed-precondition','Goal progress is invalid.');const next=current+amountMinor;const ref=db.collection('goalContributions').doc();const now=FieldValue.serverTimestamp();const result={contributionId:ref.id,goalId};transaction.create(ref,{displayId:displayId('GCT'),ownerId:uid,goalId,amountMinor,currency:goal?.currency,contributionDate,note,status:'posted',reversalOf:null,reversedBy:null,createdAt:now,updatedAt:now});transaction.update(goalRef,{currentMinor:next,status:next>=Number(goal?.targetMinor||0)?'completed':'active',updatedAt:now});transaction.create(commandRef,{uid,kind:'record_goal_contribution',idempotencyKey:key,result,createdAt:now});return result;});});
+export const recordGoalContribution = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const goalId=stringValue(request.data?.goalId,'Goal ID');const amountMinor=positiveMoney(request.data?.amountMinor);const contributionDate=localDate(request.data?.contributionDate,'Contribution date');const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const goalRef=db.collection('goals').doc(goalId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,g]=await Promise.all([transaction.get(commandRef),transaction.get(goalRef)]);if(c.exists)return c.data()?.result;if(!g.exists)throw new HttpsError('not-found','Goal not found.');const goal=g.data();if(goal?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this goal.');if(goal?.archivedAt||goal?.status==='completed')throw new HttpsError('failed-precondition','This goal is not accepting contributions.');const current=Number(goal?.currentMinor||0);if(!Number.isSafeInteger(current))throw new HttpsError('failed-precondition','Goal progress is invalid.');const next=current+amountMinor;const ref=db.collection('goalContributions').doc();const now=FieldValue.serverTimestamp();const result={contributionId:ref.id,goalId};transaction.create(ref,{displayId:displayId('GCT'),ownerId:uid,goalId,amountMinor,currency:goal?.currency,contributionDate,note,status:'posted',reversalOf:null,reversedBy:null,createdAt:now,updatedAt:now});transaction.update(goalRef,{currentMinor:next,status:next>=Number(goal?.targetMinor||0)?'completed':'active',updatedAt:now});createNotification(transaction,{uid,spaceId:String(goal?.spaceId||''),type:'goal_updated',title:next>=Number(goal?.targetMinor||0)?'Savings goal reached':'Savings goal updated',message:`${goal?.name||'Your goal'} now has ${(next/100).toFixed(2)} ${goal?.currency||'BND'}.`,targetPath:'/goals',actionLabel:'Open goals',now});transaction.create(commandRef,{uid,kind:'record_goal_contribution',idempotencyKey:key,result,createdAt:now});return result;});});
 
 export const reverseGoalContribution = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const contributionId=stringValue(request.data?.contributionId,'Contribution ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const originalRef=db.collection('goalContributions').doc(contributionId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,o]=await Promise.all([transaction.get(commandRef),transaction.get(originalRef)]);if(c.exists)return c.data()?.result;if(!o.exists)throw new HttpsError('not-found','Goal contribution not found.');const original=o.data();if(original?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this contribution.');if(original?.status!=='posted'||original?.reversalOf||original?.reversedBy)throw new HttpsError('failed-precondition','This contribution cannot be reversed.');const goalRef=db.collection('goals').doc(String(original?.goalId));const goal=await transaction.get(goalRef);if(!goal.exists)throw new HttpsError('not-found','Goal not found.');const amount=positiveMoney(original?.amountMinor);const next=Math.max(0,Number(goal.data()?.currentMinor||0)-amount);const reversalRef=db.collection('goalContributions').doc();const now=FieldValue.serverTimestamp();const result={contributionId:reversalRef.id,originalContributionId:contributionId};transaction.create(reversalRef,{displayId:displayId('GCT'),ownerId:uid,goalId:original?.goalId,amountMinor:amount,currency:original?.currency,contributionDate:new Date().toISOString().slice(0,10),note:`Reversal of ${original?.displayId||contributionId}`,status:'posted',reversalOf:contributionId,reversedBy:null,createdAt:now,updatedAt:now});transaction.update(originalRef,{status:'reversed',reversedBy:reversalRef.id,updatedAt:now});transaction.update(goalRef,{currentMinor:next,status:next>=Number(goal.data()?.targetMinor||0)?'completed':'active',updatedAt:now});transaction.create(commandRef,{uid,kind:'reverse_goal_contribution',idempotencyKey:key,result,createdAt:now});return result;});});
 
@@ -936,9 +936,12 @@ function createActivity(transaction: Transaction, input: { spaceId: string; acto
   });
 }
 
-function createNotification(transaction: Transaction, input: { uid: string; spaceId?: string | null; type: string; title: string; message: string; now: FieldValue }) {
+function createNotification(transaction: Transaction, input: { uid: string; spaceId?: string | null; type: string; title: string; message: string; targetPath?: string | null; actionLabel?: string | null; now: FieldValue }) {
   const ref = db.collection('userNotifications').doc();
-  transaction.create(ref, { uid: input.uid, spaceId: input.spaceId || null, type: input.type, title: input.title, message: input.message, readAt: null, createdAt: input.now });
+  transaction.create(ref, {
+    uid: input.uid, spaceId: input.spaceId || null, type: input.type, title: input.title, message: input.message,
+    targetPath: input.targetPath || null, actionLabel: input.actionLabel || null, readAt: null, createdAt: input.now,
+  });
 }
 
 export const updateSpaceCollaborationSettings = onCall({ region }, async (request) => {
@@ -974,6 +977,8 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
   if (space.data()?.type === 'personal') throw new HttpsError('failed-precondition', 'Personal Spaces cannot have members.');
   const existing = await db.collection('spaceInvitations').where('spaceId', '==', spaceId).where('email', '==', email).get();
   if (existing.docs.some((item) => item.data().status === 'pending')) throw new HttpsError('already-exists', 'A pending invitation already exists for this email.');
+  const registeredUsers = await db.collection('users').where('email', '==', email).limit(1).get();
+  const invitedUserUid = registeredUsers.empty ? '' : registeredUsers.docs[0].id;
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
   const invitationRef = db.collection('spaceInvitations').doc();
   const token = randomBytes(24).toString('hex');
@@ -983,11 +988,17 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
     const now = FieldValue.serverTimestamp();
     const result = { invitationId: invitationRef.id, token };
     transaction.create(invitationRef, {
-      displayId: displayId('INV'), spaceId, email, role, canUseAccounts, canViewBalances, canViewLedger,
-      token, status: 'pending', invitedBy: uid, acceptedBy: null,
+      displayId: displayId('INV'), spaceId, spaceName: space.data()?.name || 'Shared Space', spaceType: space.data()?.type || 'custom',
+      email, role, canUseAccounts, canViewBalances, canViewLedger,
+      token, status: 'pending', invitedBy: uid, invitedByName: manager.displayName || request.auth?.token.email || 'Space owner', acceptedBy: null, declinedBy: null,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), createdAt: now, updatedAt: now,
     });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_invited', targetType: 'invitation', targetId: invitationRef.id, summary: `Invited ${email} as ${role}.`, now });
+    if (invitedUserUid) createNotification(transaction, {
+      uid: invitedUserUid, spaceId, type: 'invitation_received', title: 'You have a Space invitation',
+      message: `${manager.displayName || 'A Space owner'} invited you to ${space.data()?.name || 'a shared Space'}.`,
+      targetPath: '/spaces', actionLabel: 'View invitation', now,
+    });
     transaction.create(commandRef, { uid, kind: 'create_space_invitation', idempotencyKey: key, result, createdAt: now });
     return result;
   });
@@ -1011,6 +1022,40 @@ export const revokeSpaceInvitation = onCall({ region }, async (request) => {
     transaction.update(invitationRef, { status: 'revoked', updatedAt: now });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'invitation_revoked', targetType: 'invitation', targetId: invitationId, summary: `Revoked the invitation for ${invitation.data()?.email || 'a member'}.`, now });
     transaction.create(commandRef, { uid, kind: 'revoke_space_invitation', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const declineSpaceInvitation = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const invitationId = stringValue(request.data?.invitationId, 'Invitation ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const authEmail = typeof request.auth?.token.email === 'string' ? request.auth.token.email.toLowerCase() : '';
+  if (!authEmail) throw new HttpsError('failed-precondition', 'Your account does not have a verified email address.');
+  const invitationRef = db.collection('spaceInvitations').doc(invitationId);
+  const invitationSnapshot = await invitationRef.get();
+  if (!invitationSnapshot.exists) throw new HttpsError('not-found', 'Invitation not found.');
+  const invitation = invitationSnapshot.data() || {};
+  if (String(invitation.email || '').toLowerCase() !== authEmail) throw new HttpsError('permission-denied', 'This invitation belongs to another email address.');
+  if (invitation.status !== 'pending') throw new HttpsError('failed-precondition', 'This invitation is no longer waiting for an answer.');
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+    const now = FieldValue.serverTimestamp();
+    const result = { invitationId, declined: true };
+    transaction.update(invitationRef, { status: 'declined', declinedBy: uid, updatedAt: now });
+    createActivity(transaction, {
+      spaceId: String(invitation.spaceId || ''), actorUid: uid, actorName: request.auth?.token.name || authEmail,
+      action: 'invitation_declined', targetType: 'invitation', targetId: invitationId,
+      summary: `${request.auth?.token.name || authEmail} declined the invitation.`, now,
+    });
+    if (invitation.invitedBy) createNotification(transaction, {
+      uid: String(invitation.invitedBy), spaceId: String(invitation.spaceId || ''), type: 'invitation_declined',
+      title: 'Invitation declined', message: `${request.auth?.token.name || authEmail} declined the invitation to ${invitation.spaceName || 'your Space'}.`,
+      targetPath: `/spaces/${String(invitation.spaceId || '')}?tab=members`, actionLabel: 'Open members', now,
+    });
+    transaction.create(commandRef, { uid, kind: 'decline_space_invitation', idempotencyKey: key, result, createdAt: now });
     return result;
   });
 });
@@ -1047,7 +1092,8 @@ export const acceptSpaceInvitation = onCall({ region }, async (request) => {
     }, { merge: true });
     transaction.update(invitationRef, { status: 'accepted', acceptedBy: uid, updatedAt: now });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: profile.data()?.fullName || authEmail, action: member.exists ? 'member_reactivated' : 'member_joined', targetType: 'member', targetId: uid, summary: `${profile.data()?.fullName || authEmail} joined ${space.data()?.name || 'the Space'}.`, now });
-    createNotification(transaction, { uid: String(invitation.invitedBy), spaceId, type: 'member_joined', title: 'A member joined your Space', message: `${profile.data()?.fullName || authEmail} accepted the invitation to ${space.data()?.name || 'your Space'}.`, now });
+    createNotification(transaction, { uid: String(invitation.invitedBy), spaceId, type: 'member_joined', title: 'A member joined your Space', message: `${profile.data()?.fullName || authEmail} accepted the invitation to ${space.data()?.name || 'your Space'}.`, targetPath: `/spaces/${spaceId}?tab=members`, actionLabel: 'Open members', now });
+    createNotification(transaction, { uid, spaceId, type: 'space_joined', title: 'Space joined', message: `You joined ${space.data()?.name || 'the shared Space'}.`, targetPath: `/spaces/${spaceId}`, actionLabel: 'Open Space', now });
     transaction.create(commandRef, { uid, kind: 'accept_space_invitation', idempotencyKey: key, result, createdAt: now });
     return result;
   });
@@ -1511,6 +1557,107 @@ export const createSharedBillAssignment = onCall({ region }, async (request) => 
       now,
     });
     transaction.create(commandRef, { uid, kind: 'create_shared_bill_assignment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const createSharedBillAssignments = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const commitmentId = stringValue(request.data?.commitmentId, 'Commitment ID', 80);
+  const dueDate = localDate(request.data?.dueDate, 'Due date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const rawAssignments = request.data?.assignments;
+  if (!Array.isArray(rawAssignments) || rawAssignments.length < 1 || rawAssignments.length > 30) {
+    throw new HttpsError('invalid-argument', 'Choose between 1 and 30 members.');
+  }
+  const seen = new Set<string>();
+  const assignments = rawAssignments.map((item: unknown) => {
+    const row = (item || {}) as Record<string, unknown>;
+    const memberUid = stringValue(row.memberUid, 'Member ID', 128);
+    if (seen.has(memberUid)) throw new HttpsError('invalid-argument', 'Each member can be selected only once.');
+    seen.add(memberUid);
+    return { memberUid, assignedMinor: positiveMoney(row.assignedMinor) };
+  });
+  const totalAssignedMinor = assignments.reduce((sum, item) => sum + item.assignedMinor, 0);
+  if (!Number.isSafeInteger(totalAssignedMinor)) throw new HttpsError('invalid-argument', 'The total amount is too large.');
+
+  const manager = await requireSpaceManager(spaceId, uid);
+  const existingAssignments = await db.collection('sharedBillAssignments').where('spaceId', '==', spaceId).get();
+  const duplicateMembers = new Set(existingAssignments.docs.filter((item) => {
+    const row = item.data();
+    return row.commitmentId === commitmentId && row.dueDate === dueDate && row.status !== 'paid';
+  }).map((item) => String(item.data().memberUid || '')));
+  if (assignments.some((item) => duplicateMembers.has(item.memberUid))) throw new HttpsError('already-exists', 'One of the selected people already has a share for this bill.');
+  const commitmentRef = db.collection('commitments').doc(commitmentId);
+  const memberRefs = assignments.map((item) => db.collection('spaceMembers').doc(`${spaceId}_${item.memberUid}`));
+  const assignmentRefs = assignments.map((item) => db.collection('sharedBillAssignments').doc(`${commitmentId}_${dueDate}_${item.memberUid}`));
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const snapshots = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(commitmentRef),
+      ...memberRefs.map((ref) => transaction.get(ref)),
+      ...assignmentRefs.map((ref) => transaction.get(ref)),
+    ]);
+    const command = snapshots[0];
+    const commitmentSnapshot = snapshots[1];
+    const memberSnapshots = snapshots.slice(2, 2 + memberRefs.length);
+    const existingAssignmentSnapshots = snapshots.slice(2 + memberRefs.length);
+    if (command.exists) return command.data()?.result;
+    if (existingAssignmentSnapshots.some((item) => item.exists)) throw new HttpsError('already-exists', 'One of the selected people already has a share for this bill.');
+    if (!commitmentSnapshot.exists || commitmentSnapshot.data()?.spaceId !== spaceId || commitmentSnapshot.data()?.archivedAt || commitmentSnapshot.data()?.status !== 'active') {
+      throw new HttpsError('failed-precondition', 'Choose an active bill from this Space.');
+    }
+    memberSnapshots.forEach((member, index) => {
+      if (!member.exists || member.data()?.status === 'suspended' || member.data()?.status === 'removed') {
+        throw new HttpsError('failed-precondition', `Member ${index + 1} is not active.`);
+      }
+    });
+    const commitment = commitmentSnapshot.data() || {};
+    const expectedDueDate = String(commitment.nextDueDate || commitment.startDate || '');
+    if (expectedDueDate && dueDate !== expectedDueDate) throw new HttpsError('failed-precondition', `Assign the current cycle due on ${expectedDueDate}.`);
+    const cycleDueDate = String(commitment.sharedCycleDueDate || expectedDueDate || dueDate);
+    const currentAssigned = cycleDueDate === dueDate ? safeMinor(commitment.sharedAssignedMinor, 'Shared assigned amount') : 0;
+    const currentSettled = cycleDueDate === dueDate ? safeMinor(commitment.sharedSettledMinor, 'Shared settled amount') : 0;
+    if (cycleDueDate !== dueDate && currentAssigned > currentSettled) throw new HttpsError('failed-precondition', 'Finish the current shared billing cycle before assigning another cycle.');
+    const cycleTarget = sharedCycleTarget(commitment);
+    if (currentAssigned + totalAssignedMinor > cycleTarget) throw new HttpsError('invalid-argument', 'The selected shares are more than the amount due for this bill.');
+
+    const now = FieldValue.serverTimestamp();
+    assignmentRefs.forEach((assignmentRef, index) => {
+      const assignment = assignments[index];
+      const member = memberSnapshots[index].data() || {};
+      transaction.create(assignmentRef, {
+        displayId: displayId('SHR'), spaceId, commitmentId, commitmentName: commitment.name,
+        memberUid: assignment.memberUid, memberName: member.displayName || '', memberEmail: member.email || '',
+        assignedMinor: assignment.assignedMinor, settledMinor: 0, outstandingMinor: assignment.assignedMinor,
+        currency: commitment.currency, dueDate, status: 'unpaid', note,
+        proofPath: null, proofName: null, currentPaymentId: null, lastPaymentId: null,
+        submittedAt: null, reviewedAt: null, reviewedBy: null, closedAt: null,
+        createdBy: uid, createdAt: now, updatedAt: now,
+      });
+      createNotification(transaction, {
+        uid: assignment.memberUid, spaceId, type: 'bill_assigned', title: 'A bill share was given to you',
+        message: `${commitment.name || 'A bill'} is due on ${dueDate}. Your share is ${(assignment.assignedMinor / 100).toFixed(2)} ${commitment.currency || 'BND'}.`,
+        targetPath: `/spaces/${spaceId}?tab=bills`, actionLabel: 'Open shared bill', now,
+      });
+    });
+    transaction.update(commitmentRef, {
+      sharedCycleDueDate: dueDate,
+      sharedAssignedMinor: currentAssigned + totalAssignedMinor,
+      sharedSettledMinor: currentSettled,
+      updatedAt: now,
+    });
+    createActivity(transaction, {
+      spaceId, actorUid: uid, actorName: manager.displayName, action: 'bill_assigned_to_members',
+      targetType: 'shared_bill', targetId: assignmentRefs[0].id,
+      summary: `Shared ${commitment.name || 'a bill'} with ${assignments.length} member${assignments.length === 1 ? '' : 's'}.`, now,
+    });
+    const result = { assignmentIds: assignmentRefs.map((ref) => ref.id) };
+    transaction.create(commandRef, { uid, kind: 'create_shared_bill_assignments', idempotencyKey: key, result, createdAt: now });
     return result;
   });
 });
@@ -2765,6 +2912,9 @@ export const recordTripMoneyContribution = onCall({ region }, async (request) =>
     transaction.create(contributionRef, { displayId: displayId('TMC'), spaceId, memberUid, memberName: member.data()?.displayName || '', memberEmail: member.data()?.email || '', amountMinor, currency: fund.data()?.currency || 'BND', contributionDate, note, status: 'posted', reversedAt: null, reversedBy: null, createdBy: uid, createdAt: now, updatedAt: now });
     transaction.update(fundRef, { contributedMinor, availableMinor: contributedMinor - spentMinor, updatedAt: now });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: actor.displayName, action: 'trip_money_contribution', targetType: 'space_fund_contribution', targetId: contributionRef.id, summary: `${member.data()?.displayName || 'A member'} added ${amountMinor / 100} ${fund.data()?.currency || 'BND'} to the Trip money.`, now });
+    createNotification(transaction, { uid: memberUid, spaceId, type: 'trip_contribution_added', title: 'Trip contribution added', message: `${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'} was added to the Trip money for ${member.data()?.displayName || 'you'}.`, targetPath: `/spaces/${spaceId}?tab=trip_money`, actionLabel: 'Open Trip money', now });
+    const holderUid = String(fund.data()?.holderUid || '');
+    if (holderUid && holderUid !== memberUid) createNotification(transaction, { uid: holderUid, spaceId, type: 'trip_contribution_received', title: 'Trip money received', message: `${member.data()?.displayName || 'A member'} added ${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'}.`, targetPath: `/spaces/${spaceId}?tab=trip_money`, actionLabel: 'Open Trip money', now });
     const result = { contributionId: contributionRef.id };
     transaction.create(commandRef, { uid, kind: 'record_trip_money_contribution', idempotencyKey: key, result, createdAt: now });
     return result;

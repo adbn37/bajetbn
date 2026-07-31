@@ -6,6 +6,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -48,6 +49,17 @@ export async function listSpaceInvitations(spaceId: string): Promise<SpaceInvita
     .sort((a, b) => a.email.localeCompare(b.email));
 }
 
+
+export async function listMySpaceInvitations(email: string): Promise<SpaceInvitation[]> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return [];
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'spaceInvitations'), where('email', '==', normalized)));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as SpaceInvitation)
+    .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
+}
+
 export async function listSharedBillAssignments(spaceId: string): Promise<SharedBillAssignment[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'sharedBillAssignments'), where('spaceId', '==', spaceId)));
@@ -85,6 +97,15 @@ export async function markNotificationRead(notificationId: string) {
   await updateDoc(doc(db, 'userNotifications', notificationId), { readAt: serverTimestamp() });
 }
 
+export async function markAllNotificationsRead(notificationIds: string[]) {
+  const ids = Array.from(new Set(notificationIds.filter(Boolean)));
+  if (!ids.length) return;
+  const { db } = requireFirebase();
+  const batch = writeBatch(db);
+  ids.forEach((notificationId) => batch.update(doc(db, 'userNotifications', notificationId), { readAt: serverTimestamp() }));
+  await batch.commit();
+}
+
 export async function updateSpaceCollaborationSettings(input: {
   spaceId: string;
   approvalMode: SpaceApprovalMode;
@@ -109,6 +130,11 @@ export async function createSpaceInvitation(input: {
 export async function revokeSpaceInvitation(invitationId: string) {
   const { functions } = requireFirebase();
   return httpsCallable(functions, 'revokeSpaceInvitation')({ invitationId, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function declineSpaceInvitation(invitationId: string) {
+  const { functions } = requireFirebase();
+  return httpsCallable(functions, 'declineSpaceInvitation')({ invitationId, idempotencyKey: crypto.randomUUID() });
 }
 
 export async function acceptSpaceInvitation(token: string): Promise<{ spaceId: string }> {
@@ -148,6 +174,17 @@ export async function createSharedBillAssignment(input: {
 }) {
   const { functions } = requireFirebase();
   return httpsCallable(functions, 'createSharedBillAssignment')({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function createSharedBillAssignments(input: {
+  spaceId: string;
+  commitmentId: string;
+  assignments: Array<{ memberUid: string; assignedMinor: number }>;
+  dueDate: string;
+  note?: string;
+}) {
+  const { functions } = requireFirebase();
+  return httpsCallable(functions, 'createSharedBillAssignments')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
 export async function uploadSharedBillProof(input: { spaceId: string; assignmentId: string; file: File }) {

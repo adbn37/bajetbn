@@ -61,3 +61,18 @@ Notes: ____________________
 - [ ] Offline banner is visible
 - [ ] Cloud data is not falsely presented as current while offline
 - [ ] Reconnection restores cloud data
+
+## v0.11.4 Invitations, Notifications & Space Completion
+
+- [ ] Existing user sees **Invitations for me** on Spaces.
+- [ ] Accept opens the joined Space.
+- [ ] Decline removes the pending invitation and informs the inviter.
+- [ ] Notification bell shows unread count.
+- [ ] Notification Centre opens the correct record.
+- [ ] Mark one and mark all as read work.
+- [ ] Late and coming-soon bills appear under Needs attention.
+- [ ] One household bill can be shared with several members.
+- [ ] Equal shares total exactly the bill amount.
+- [ ] Duplicate shares are blocked.
+- [ ] Goal progress and Trip contribution notifications appear.
+- [ ] Close Trip keeps all previous history in Archived Spaces.
