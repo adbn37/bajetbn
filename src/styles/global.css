@@ -596,3 +596,106 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   .archived-items-panel .button-row,.danger-zone-panel .button-row { align-items:stretch; }
   .archived-items-panel .button,.danger-zone-panel .button { width:100%; }
 }
+
+/* v0.11.3 shared expenses, member balances, and Trip money */
+.shared-expense-panel,
+.trip-money-panel {
+  display: grid;
+  gap: 1rem;
+}
+.shared-expense-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+.shared-expense-card {
+  display: grid;
+  gap: .85rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface-2);
+}
+.shared-expense-card.status-paid { opacity: .82; }
+.expense-share-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+.expense-share-chip {
+  padding: .4rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: .78rem;
+  color: var(--text-muted);
+}
+.expense-share-chip.status-paid {
+  border-color: color-mix(in srgb, #5eead4 45%, var(--border));
+  color: #5eead4;
+}
+.member-split-editor {
+  display: grid;
+  gap: .55rem;
+  border: 1px solid var(--border);
+  border-radius: .9rem;
+  padding: .8rem;
+}
+.member-split-editor legend {
+  padding: 0 .35rem;
+  font-weight: 700;
+}
+.member-split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 130px);
+  align-items: center;
+  gap: .75rem;
+}
+.checkbox-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: .55rem;
+}
+.checkbox-label input { width: auto; }
+.who-owes-list,
+.shared-payment-list,
+.trip-contribution-list {
+  display: grid;
+  gap: .65rem;
+}
+.who-owes-row,
+.shared-payment-row,
+.trip-contribution-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: .9rem;
+  padding: .85rem;
+  border: 1px solid var(--border);
+  border-radius: .85rem;
+  background: var(--surface-2);
+}
+.who-owes-row div,
+.shared-payment-row div,
+.trip-contribution-row div {
+  display: grid;
+  gap: .2rem;
+}
+.who-owes-row small,
+.shared-payment-row small,
+.trip-contribution-row small { color: var(--text-muted); }
+.subheading { margin-top: .75rem; }
+.household-month-summary,
+.trip-money-summary { margin-bottom: 1rem; }
+.trip-contribution-row.status-reversed { opacity: .6; }
+
+@media (max-width: 720px) {
+  .shared-expense-grid { grid-template-columns: 1fr; }
+  .who-owes-row,
+  .shared-payment-row,
+  .trip-contribution-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .member-split-row { grid-template-columns: 1fr; }
+}

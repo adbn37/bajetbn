@@ -80,6 +80,17 @@ async function memberSpaces(memberships: ExportRow[]): Promise<ExportRow[]> {
   return spaces;
 }
 
+
+async function fundsForSpaces(spaceIds: string[]): Promise<ExportRow[]> {
+  const { db } = requireFirebase();
+  const rows: ExportRow[] = [];
+  for (const spaceId of Array.from(new Set(spaceIds.filter(Boolean)))) {
+    const snapshot = await getDoc(doc(db, 'spaceFunds', spaceId));
+    if (snapshot.exists()) rows.push({ id: snapshot.id, ...snapshot.data() });
+  }
+  return rows;
+}
+
 async function ownedAccountsAndRecords(uid: string) {
   const accounts = await rowsWhere('accounts', 'ownerId', uid);
   const accountIds = accounts.map((item) => item.id);
@@ -111,6 +122,11 @@ export async function buildUserDataExport(uid: string) {
     commitmentPayments,
     allSharedBillAssignments,
     allSharedBillPayments,
+    allSharedExpenses,
+    allSharedExpenseShares,
+    allSharedExpensePayments,
+    allTripFunds,
+    allTripMoneyContributions,
     reminderHistory,
     notifications,
   ] = await Promise.all([
@@ -124,6 +140,11 @@ export async function buildUserDataExport(uid: string) {
     rowsWhere('commitmentPayments', 'ownerId', uid),
     rowsForValues('sharedBillAssignments', 'spaceId', activeSpaceIds),
     rowsForValues('sharedBillPayments', 'spaceId', activeSpaceIds),
+    rowsForValues('sharedExpenses', 'spaceId', activeSpaceIds),
+    rowsForValues('sharedExpenseShares', 'spaceId', activeSpaceIds),
+    rowsForValues('sharedExpensePayments', 'spaceId', activeSpaceIds),
+    fundsForSpaces(activeSpaceIds),
+    rowsForValues('spaceFundContributions', 'spaceId', activeSpaceIds),
     rowsWhere('reminderHistory', 'uid', uid),
     rowsWhere('userNotifications', 'uid', uid),
   ]);
@@ -136,7 +157,7 @@ export async function buildUserDataExport(uid: string) {
       exportedAt: new Date().toISOString(),
       environment: import.meta.env.VITE_APP_ENV || 'local',
       projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-      formatVersion: 2,
+      formatVersion: 3,
     },
     profile: profileSnapshot.exists() ? { id: profileSnapshot.id, ...profileSnapshot.data() } : null,
     spaces,
@@ -153,6 +174,11 @@ export async function buildUserDataExport(uid: string) {
     billPayments: commitmentPayments,
     sharedBillShares: sharedBillAssignments,
     sharedPayments: sharedBillPayments,
+    sharedExpenses: allSharedExpenses,
+    sharedExpenseShares: allSharedExpenseShares.filter((item) => item.memberUid === uid),
+    sharedExpensePayments: allSharedExpensePayments.filter((item) => item.fromUid === uid || item.toUid === uid),
+    tripMoney: allTripFunds,
+    tripMoneyContributions: allTripMoneyContributions.filter((item) => item.memberUid === uid),
     reminders: reminderHistory,
     notifications,
   };

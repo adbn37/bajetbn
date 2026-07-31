@@ -1983,6 +1983,9 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('goals').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('commitments').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('sharedBillAssignments').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('sharedExpenses').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('sharedExpensePayments').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceFundContributions').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceInvitations').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
     ]);
@@ -2181,6 +2184,621 @@ export const manageCategoryLifecycle = onCall({ region }, async (request) => {
     if (action === 'delete') transaction.delete(ref);
     else transaction.update(ref, { archivedAt: action === 'archive' ? now : null, updatedAt: now });
     transaction.create(commandRef, { uid, kind: 'category_lifecycle', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+// v0.11.3 complete shared expenses, member balances, and Trip money
+const sharedExpenseSplitModes = ['equal', 'custom', 'percentage'] as const;
+const sharedExpensePaymentDecisions = ['confirmed', 'rejected'] as const;
+type SharedExpenseSplitMode = (typeof sharedExpenseSplitModes)[number];
+
+interface SharedExpenseSplitRequest {
+  memberUid: string;
+  amountMinor?: number;
+  percentageBasisPoints?: number;
+}
+
+interface SharedExpenseAllocation {
+  shareId: string;
+  expenseId: string;
+  amountMinor: number;
+}
+
+interface CalculatedSharedExpenseSplit {
+  memberUid: string;
+  amountMinor: number;
+  percentageBasisPoints: number | null;
+}
+
+function parseSharedExpenseSplits(value: unknown): SharedExpenseSplitRequest[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) {
+    throw new HttpsError('invalid-argument', 'Choose at least one person for this expense.');
+  }
+  const seen = new Set<string>();
+  return value.map((item) => {
+    if (!item || typeof item !== 'object') throw new HttpsError('invalid-argument', 'A selected person is invalid.');
+    const data = item as Record<string, unknown>;
+    const memberUid = stringValue(data.memberUid, 'Member ID', 128);
+    if (seen.has(memberUid)) throw new HttpsError('invalid-argument', 'The same person was selected more than once.');
+    seen.add(memberUid);
+    return {
+      memberUid,
+      amountMinor: data.amountMinor == null ? undefined : positiveMoney(data.amountMinor),
+      percentageBasisPoints: data.percentageBasisPoints == null
+        ? undefined
+        : integerBetween(data.percentageBasisPoints, 'Percentage', 1, 10_000),
+    };
+  });
+}
+
+function calculateSharedExpenseSplits(
+  totalMinor: number,
+  mode: SharedExpenseSplitMode,
+  requests: SharedExpenseSplitRequest[],
+): CalculatedSharedExpenseSplit[] {
+  if (mode === 'equal') {
+    const base = Math.floor(totalMinor / requests.length);
+    let remainder = totalMinor - base * requests.length;
+    return requests.map((item) => {
+      const extra = remainder > 0 ? 1 : 0;
+      remainder -= extra;
+      return { ...item, amountMinor: base + extra, percentageBasisPoints: null };
+    });
+  }
+
+  if (mode === 'custom') {
+    const values = requests.map((item) => ({ ...item, amountMinor: positiveMoney(item.amountMinor), percentageBasisPoints: null }));
+    if (values.reduce((sum, item) => sum + item.amountMinor, 0) !== totalMinor) {
+      throw new HttpsError('invalid-argument', 'The different amounts must add up to the full expense.');
+    }
+    return values;
+  }
+
+  const percentages = requests.map((item) => integerBetween(item.percentageBasisPoints, 'Percentage', 1, 10_000));
+  if (percentages.reduce((sum, item) => sum + item, 0) !== 10_000) {
+    throw new HttpsError('invalid-argument', 'The percentages must add up to 100%.');
+  }
+  let assigned = 0;
+  return requests.map((item, index) => {
+    const percentageBasisPoints = percentages[index];
+    const amountMinor = index === requests.length - 1
+      ? totalMinor - assigned
+      : Math.floor((totalMinor * percentageBasisPoints) / 10_000);
+    assigned += amountMinor;
+    return { ...item, amountMinor, percentageBasisPoints };
+  });
+}
+
+async function sharedExpensePaymentCandidates(input: {
+  spaceId: string;
+  fromUid: string;
+  toUid: string;
+  expenseId?: string | null;
+}) {
+  const shares = await db.collection('sharedExpenseShares')
+    .where('spaceId', '==', input.spaceId)
+    .where('memberUid', '==', input.fromUid)
+    .get();
+  const rows = await Promise.all(shares.docs.map(async (share) => {
+    const expense = await db.collection('sharedExpenses').doc(String(share.data().expenseId || '')).get();
+    return { shareRef: share.ref, shareData: share.data(), expenseRef: expense.ref, expenseData: expense.data() || null };
+  }));
+  return rows
+    .filter((item) => item.expenseData
+      && item.expenseData.paidByUid === input.toUid
+      && (!input.expenseId || item.expenseRef.id === input.expenseId)
+      && safeMinor(item.shareData.amountLeftMinor, 'Amount left') > 0)
+    .sort((a, b) => String(a.expenseData?.expenseDate || '').localeCompare(String(b.expenseData?.expenseDate || '')))
+    .slice(0, 100);
+}
+
+function writeSharedExpensePayment(input: {
+  transaction: Transaction;
+  paymentRef: DocumentReference;
+  paymentIsNew: boolean;
+  payment: DocumentData;
+  actorUid: string;
+  actorName?: string;
+  candidateRows: Array<{ shareRef: DocumentReference; expenseRef: DocumentReference }>;
+  candidateSnapshots: Array<{ share: DocumentData; expense: DocumentData }>;
+  now: FieldValue;
+}) {
+  const amountMinor = positiveMoney(input.payment.amountMinor);
+  let amountLeft = amountMinor;
+  const allocations: SharedExpenseAllocation[] = [];
+  const expenseChanges = new Map<string, { ref: DocumentReference; data: DocumentData; addSettled: number }>();
+
+  input.candidateSnapshots.forEach((candidate, index) => {
+    if (amountLeft <= 0) return;
+    const row = input.candidateRows[index];
+    const share = candidate.share;
+    const expense = candidate.expense;
+    if (!share || !expense) return;
+    if (share.spaceId !== input.payment.spaceId || share.memberUid !== input.payment.fromUid) return;
+    if (expense.spaceId !== input.payment.spaceId || expense.paidByUid !== input.payment.toUid) return;
+    if (input.payment.expenseId && row.expenseRef.id !== input.payment.expenseId) return;
+    const shareLeft = safeMinor(share.amountLeftMinor, 'Share amount left');
+    if (shareLeft <= 0) return;
+    const allocation = Math.min(amountLeft, shareLeft);
+    allocations.push({ shareId: row.shareRef.id, expenseId: row.expenseRef.id, amountMinor: allocation });
+    amountLeft -= allocation;
+
+    const nextSettled = safeMinor(share.settledMinor, 'Share paid amount') + allocation;
+    const nextLeft = Math.max(0, positiveMoney(share.shareMinor) - nextSettled);
+    input.transaction.update(row.shareRef, {
+      settledMinor: nextSettled,
+      amountLeftMinor: nextLeft,
+      status: nextLeft === 0 ? 'paid' : 'partially_paid',
+      currentPaymentId: null,
+      lastPaymentId: input.paymentRef.id,
+      updatedAt: input.now,
+    });
+    const current = expenseChanges.get(row.expenseRef.id);
+    expenseChanges.set(row.expenseRef.id, {
+      ref: row.expenseRef,
+      data: expense,
+      addSettled: (current?.addSettled || 0) + allocation,
+    });
+  });
+
+  if (amountLeft > 0 || allocations.length === 0) {
+    throw new HttpsError('failed-precondition', 'The amount is more than what you currently owe this person. Refresh and try again.');
+  }
+
+  expenseChanges.forEach((change) => {
+    const nextSettled = safeMinor(change.data.totalSettledMinor, 'Expense paid amount') + change.addSettled;
+    const totalMinor = positiveMoney(change.data.totalMinor);
+    const nextLeft = Math.max(0, totalMinor - nextSettled);
+    input.transaction.update(change.ref, {
+      totalSettledMinor: nextSettled,
+      amountLeftMinor: nextLeft,
+      status: nextLeft === 0 ? 'paid' : 'partially_paid',
+      closedAt: nextLeft === 0 ? input.now : null,
+      updatedAt: input.now,
+    });
+  });
+
+  const paymentUpdate = {
+    displayId: input.payment.displayId || displayId('SEP'),
+    spaceId: input.payment.spaceId,
+    fromUid: input.payment.fromUid,
+    fromName: input.payment.fromName || '',
+    fromEmail: input.payment.fromEmail || '',
+    toUid: input.payment.toUid,
+    toName: input.payment.toName || '',
+    toEmail: input.payment.toEmail || '',
+    expenseId: input.payment.expenseId || null,
+    amountMinor,
+    currency: input.payment.currency,
+    paymentDate: input.payment.paymentDate,
+    proofPath: input.payment.proofPath || null,
+    proofName: input.payment.proofName || null,
+    note: optionalString(input.payment.note, 500),
+    status: 'posted',
+    allocations,
+    reviewedAt: input.now,
+    reviewedBy: input.actorUid,
+    postedAt: input.now,
+    reversedAt: null,
+    reversedBy: null,
+    updatedAt: input.now,
+  };
+  if (input.paymentIsNew) input.transaction.create(input.paymentRef, { ...paymentUpdate, createdAt: input.now });
+  else input.transaction.update(input.paymentRef, paymentUpdate);
+
+  createActivity(input.transaction, {
+    spaceId: String(input.payment.spaceId),
+    actorUid: input.actorUid,
+    actorName: input.actorName,
+    action: 'shared_expense_payment_recorded',
+    targetType: 'shared_expense_payment',
+    targetId: input.paymentRef.id,
+    summary: `${input.payment.fromName || 'A member'} paid ${amountMinor / 100} ${input.payment.currency} to ${input.payment.toName || 'another member'}.`,
+    now: input.now,
+  });
+  if (input.actorUid !== input.payment.toUid) {
+    createNotification(input.transaction, {
+      uid: String(input.payment.toUid),
+      spaceId: String(input.payment.spaceId),
+      type: 'shared_expense_payment',
+      title: 'Member payment recorded',
+      message: `${input.payment.fromName || 'A member'} paid ${amountMinor / 100} ${input.payment.currency}.`,
+      now: input.now,
+    });
+  }
+  return allocations;
+}
+
+export const createSharedExpense = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const title = stringValue(request.data?.title, 'Expense name', 100);
+  const totalMinor = positiveMoney(request.data?.totalMinor);
+  const expenseDate = localDate(request.data?.expenseDate, 'Expense date');
+  const paidByUid = stringValue(request.data?.paidByUid, 'Who paid', 128);
+  const splitMode = oneOf(request.data?.splitMode, sharedExpenseSplitModes, 'split method');
+  const requests = parseSharedExpenseSplits(request.data?.splits);
+  const note = optionalString(request.data?.note, 500);
+  const paidFromTripMoney = request.data?.paidFromTripMoney === true;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const creator = await requireActiveSpaceMember(spaceId, uid);
+  if (!['owner', 'admin', 'contributor'].includes(String(creator.role))) {
+    throw new HttpsError('permission-denied', 'Your Space access does not allow adding shared expenses.');
+  }
+  const calculated = calculateSharedExpenseSplits(totalMinor, splitMode, requests);
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const payerRef = db.collection('spaceMembers').doc(`${spaceId}_${paidByUid}`);
+  const memberRefs = calculated.map((item) => db.collection('spaceMembers').doc(`${spaceId}_${item.memberUid}`));
+  const fundRef = db.collection('spaceFunds').doc(spaceId);
+  const expenseRef = db.collection('sharedExpenses').doc();
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const [command, spaceSnapshot, payerSnapshot, fundSnapshot, memberSnapshots] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(spaceRef),
+      transaction.get(payerRef),
+      transaction.get(fundRef),
+      Promise.all(memberRefs.map((ref) => transaction.get(ref))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt || spaceSnapshot.data()?.type === 'personal') {
+      throw new HttpsError('failed-precondition', 'Choose an active shared Space.');
+    }
+    if (!payerSnapshot.exists || ['suspended', 'removed'].includes(String(payerSnapshot.data()?.status || ''))) {
+      throw new HttpsError('failed-precondition', 'Choose an active member who paid.');
+    }
+    memberSnapshots.forEach((member) => {
+      if (!member.exists || ['suspended', 'removed'].includes(String(member.data()?.status || ''))) {
+        throw new HttpsError('failed-precondition', 'One of the selected people is no longer active in this Space.');
+      }
+    });
+    const space = spaceSnapshot.data() || {};
+    const currency = String(space.currency || 'BND');
+    const now = FieldValue.serverTimestamp();
+    const groupMoney = paidFromTripMoney;
+    if (groupMoney) {
+      if (space.type !== 'trip') throw new HttpsError('failed-precondition', 'Group money is available only in Trip Spaces.');
+      if (!fundSnapshot.exists) throw new HttpsError('failed-precondition', 'Set up Trip money before using it.');
+      const fund = fundSnapshot.data() || {};
+      if (fund.holderUid !== paidByUid) throw new HttpsError('failed-precondition', 'Choose the person holding the Trip money as the payer.');
+      if (safeMinor(fund.availableMinor, 'Trip money available') < totalMinor) throw new HttpsError('failed-precondition', 'There is not enough Trip money available for this expense.');
+      const spentMinor = safeMinor(fund.spentMinor, 'Trip money spent') + totalMinor;
+      transaction.update(fundRef, {
+        spentMinor,
+        availableMinor: safeMinor(fund.contributedMinor, 'Trip money collected') - spentMinor,
+        updatedAt: now,
+      });
+    }
+
+    const initialSettled = groupMoney
+      ? totalMinor
+      : calculated.filter((item) => item.memberUid === paidByUid).reduce((sum, item) => sum + item.amountMinor, 0);
+    const amountLeftMinor = Math.max(0, totalMinor - initialSettled);
+    transaction.create(expenseRef, {
+      displayId: displayId('SEX'),
+      spaceId,
+      title,
+      totalMinor,
+      totalSettledMinor: initialSettled,
+      amountLeftMinor,
+      currency,
+      expenseDate,
+      paidByUid,
+      paidByName: payerSnapshot.data()?.displayName || '',
+      paidByEmail: payerSnapshot.data()?.email || '',
+      splitMode,
+      note,
+      paidFromTripMoney: groupMoney,
+      status: amountLeftMinor === 0 ? 'paid' : 'open',
+      createdBy: uid,
+      closedAt: amountLeftMinor === 0 ? now : null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    calculated.forEach((item, index) => {
+      const member = memberSnapshots[index].data() || {};
+      const paidAlready = groupMoney || item.memberUid === paidByUid;
+      const shareRef = db.collection('sharedExpenseShares').doc();
+      transaction.create(shareRef, {
+        displayId: displayId('SES'),
+        expenseId: expenseRef.id,
+        spaceId,
+        memberUid: item.memberUid,
+        memberName: member.displayName || '',
+        memberEmail: member.email || '',
+        shareMinor: item.amountMinor,
+        settledMinor: paidAlready ? item.amountMinor : 0,
+        amountLeftMinor: paidAlready ? 0 : item.amountMinor,
+        percentageBasisPoints: item.percentageBasisPoints,
+        currency,
+        status: paidAlready ? 'paid' : 'open',
+        currentPaymentId: null,
+        lastPaymentId: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (!paidAlready) {
+        createNotification(transaction, {
+          uid: item.memberUid,
+          spaceId,
+          type: 'shared_expense_added',
+          title: 'New shared expense',
+          message: `Your share for ${title} is ${item.amountMinor / 100} ${currency}.`,
+          now,
+        });
+      }
+    });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: creator.displayName,
+      action: 'shared_expense_created',
+      targetType: 'shared_expense',
+      targetId: expenseRef.id,
+      summary: `Added ${title} for ${totalMinor / 100} ${currency}${groupMoney ? ' using Trip money' : ''}.`,
+      now,
+    });
+    const result = { expenseId: expenseRef.id };
+    transaction.create(commandRef, { uid, kind: 'create_shared_expense', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const submitSharedExpensePayment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const toUid = stringValue(request.data?.toUid, 'Person being paid', 128);
+  const expenseId = optionalString(request.data?.expenseId, 80) || null;
+  const amountMinor = positiveMoney(request.data?.amountMinor);
+  const paymentDate = localDate(request.data?.paymentDate, 'Payment date');
+  const proofPath = optionalString(request.data?.proofPath, 500) || null;
+  const proofName = optionalString(request.data?.proofName, 180) || null;
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  if (uid === toUid) throw new HttpsError('invalid-argument', 'Choose another person to pay.');
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  const recipient = await requireActiveSpaceMember(spaceId, toUid);
+  const space = await db.collection('spaces').doc(spaceId).get();
+  if (!space.exists || space.data()?.archivedAt) throw new HttpsError('not-found', 'Space not found.');
+  const candidates = await sharedExpensePaymentCandidates({ spaceId, fromUid: uid, toUid, expenseId });
+  if (!candidates.length) throw new HttpsError('failed-precondition', 'You do not currently owe this person for the selected shared expenses.');
+  const pending = await db.collection('sharedExpensePayments')
+    .where('spaceId', '==', spaceId)
+    .where('fromUid', '==', uid)
+    .where('toUid', '==', toUid)
+    .where('status', '==', 'submitted')
+    .limit(1)
+    .get();
+  if (!pending.empty) throw new HttpsError('failed-precondition', 'A payment to this person is already waiting for a check.');
+  const paymentRef = db.collection('sharedExpensePayments').doc();
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  const paymentData = {
+    displayId: displayId('SEP'), spaceId, fromUid: uid, fromName: member.displayName || '', fromEmail: member.email || '',
+    toUid, toName: recipient.displayName || '', toEmail: recipient.email || '', expenseId, amountMinor,
+    currency: String(space.data()?.currency || 'BND'), paymentDate, proofPath, proofName, note,
+  };
+  const needsApproval = space.data()?.approvalMode === 'owner_approval' && !['owner', 'admin'].includes(String(member.role));
+
+  return db.runTransaction(async (transaction) => {
+    const [command, candidateSnapshots] = await Promise.all([
+      transaction.get(commandRef),
+      Promise.all(candidates.map(async (row) => ({
+        share: (await transaction.get(row.shareRef)).data() || {},
+        expense: (await transaction.get(row.expenseRef)).data() || {},
+      }))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    const now = FieldValue.serverTimestamp();
+    let result;
+    if (needsApproval) {
+      transaction.create(paymentRef, {
+        ...paymentData, status: 'submitted', allocations: [], reviewedAt: null, reviewedBy: null,
+        postedAt: null, reversedAt: null, reversedBy: null, createdAt: now, updatedAt: now,
+      });
+      createActivity(transaction, {
+        spaceId, actorUid: uid, actorName: member.displayName, action: 'shared_expense_payment_submitted',
+        targetType: 'shared_expense_payment', targetId: paymentRef.id,
+        summary: `${member.displayName || 'A member'} submitted ${amountMinor / 100} ${paymentData.currency} for checking.`, now,
+      });
+      const managerUid = String(space.data()?.ownerId || '');
+      if (managerUid) createNotification(transaction, { uid: managerUid, spaceId, type: 'shared_expense_payment_waiting', title: 'Payment needs checking', message: `${member.displayName || 'A member'} submitted a payment.`, now });
+      result = { paymentId: paymentRef.id, status: 'submitted' };
+    } else {
+      const allocations = writeSharedExpensePayment({
+        transaction, paymentRef, paymentIsNew: true, payment: paymentData, actorUid: uid,
+        actorName: member.displayName, candidateRows: candidates, candidateSnapshots, now,
+      });
+      result = { paymentId: paymentRef.id, status: 'posted', allocations };
+    }
+    transaction.create(commandRef, { uid, kind: 'submit_shared_expense_payment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const reviewSharedExpensePayment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const paymentId = stringValue(request.data?.paymentId, 'Payment ID', 80);
+  const decision = oneOf(request.data?.decision, sharedExpensePaymentDecisions, 'decision');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const paymentRef = db.collection('sharedExpensePayments').doc(paymentId);
+  const pre = await paymentRef.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Payment not found.');
+  const payment = pre.data() || {};
+  const manager = await requireSpaceManager(String(payment.spaceId), uid);
+  const candidates = decision === 'confirmed'
+    ? await sharedExpensePaymentCandidates({ spaceId: String(payment.spaceId), fromUid: String(payment.fromUid), toUid: String(payment.toUid), expenseId: payment.expenseId || null })
+    : [];
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, current, candidateSnapshots] = await Promise.all([
+      transaction.get(commandRef), transaction.get(paymentRef),
+      Promise.all(candidates.map(async (row) => ({ share: (await transaction.get(row.shareRef)).data() || {}, expense: (await transaction.get(row.expenseRef)).data() || {} }))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists || current.data()?.status !== 'submitted') throw new HttpsError('failed-precondition', 'Only a payment waiting for a check can be reviewed.');
+    const now = FieldValue.serverTimestamp();
+    let result;
+    if (decision === 'rejected') {
+      transaction.update(paymentRef, { status: 'rejected', reviewNote: note, reviewedAt: now, reviewedBy: uid, updatedAt: now });
+      createActivity(transaction, { spaceId: String(payment.spaceId), actorUid: uid, actorName: manager.displayName, action: 'shared_expense_payment_rejected', targetType: 'shared_expense_payment', targetId: paymentId, summary: `Declined ${payment.fromName || 'a member'}'s payment.`, now });
+      createNotification(transaction, { uid: String(payment.fromUid), spaceId: String(payment.spaceId), type: 'shared_expense_payment_rejected', title: 'Payment not accepted', message: 'Your shared-expense payment was not accepted.', now });
+      result = { paymentId, status: 'rejected' };
+    } else {
+      if (!candidates.length) throw new HttpsError('failed-precondition', 'The related amount is no longer open.');
+      const allocations = writeSharedExpensePayment({ transaction, paymentRef, paymentIsNew: false, payment, actorUid: uid, actorName: manager.displayName, candidateRows: candidates, candidateSnapshots, now });
+      result = { paymentId, status: 'posted', allocations };
+    }
+    transaction.create(commandRef, { uid, kind: 'review_shared_expense_payment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const reverseSharedExpensePayment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const paymentId = stringValue(request.data?.paymentId, 'Payment ID', 80);
+  const reason = optionalString(request.data?.reason, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const paymentRef = db.collection('sharedExpensePayments').doc(paymentId);
+  const pre = await paymentRef.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Payment not found.');
+  const payment = pre.data() || {};
+  const member = await requireActiveSpaceMember(String(payment.spaceId), uid);
+  if (uid !== payment.fromUid && !['owner', 'admin'].includes(String(member.role))) {
+    throw new HttpsError('permission-denied', 'Only the person who paid, the Space owner, or an admin can undo this payment.');
+  }
+  const allocations = Array.isArray(payment.allocations) ? payment.allocations as SharedExpenseAllocation[] : [];
+  if (!allocations.length) throw new HttpsError('failed-precondition', 'This payment has no completed amounts to undo.');
+  const rows = allocations.map((item) => ({
+    allocation: item,
+    shareRef: db.collection('sharedExpenseShares').doc(item.shareId),
+    expenseRef: db.collection('sharedExpenses').doc(item.expenseId),
+  }));
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, current, snapshots] = await Promise.all([
+      transaction.get(commandRef), transaction.get(paymentRef),
+      Promise.all(rows.map(async (row) => ({ share: (await transaction.get(row.shareRef)).data() || {}, expense: (await transaction.get(row.expenseRef)).data() || {} }))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists || current.data()?.status !== 'posted') throw new HttpsError('failed-precondition', 'Only a completed payment can be undone.');
+    snapshots.forEach((snapshot, index) => {
+      if (snapshot.share.lastPaymentId !== paymentId) throw new HttpsError('failed-precondition', 'A newer payment exists. Undo the newest payment first.');
+      const allocation = positiveMoney(rows[index].allocation.amountMinor);
+      const settled = Math.max(0, safeMinor(snapshot.share.settledMinor, 'Share paid amount') - allocation);
+      const shareTotal = positiveMoney(snapshot.share.shareMinor);
+      const shareLeft = Math.max(0, shareTotal - settled);
+      transaction.update(rows[index].shareRef, { settledMinor: settled, amountLeftMinor: shareLeft, status: settled > 0 ? 'partially_paid' : 'open', lastPaymentId: null, updatedAt: FieldValue.serverTimestamp() });
+    });
+    const grouped = new Map<string, number>();
+    allocations.forEach((item) => grouped.set(item.expenseId, (grouped.get(item.expenseId) || 0) + positiveMoney(item.amountMinor)));
+    grouped.forEach((amount, expenseId) => {
+      const index = rows.findIndex((row) => row.expenseRef.id === expenseId);
+      const expense = snapshots[index].expense;
+      const settled = Math.max(0, safeMinor(expense.totalSettledMinor, 'Expense paid amount') - amount);
+      const total = positiveMoney(expense.totalMinor);
+      const left = Math.max(0, total - settled);
+      transaction.update(db.collection('sharedExpenses').doc(expenseId), { totalSettledMinor: settled, amountLeftMinor: left, status: settled > 0 ? 'partially_paid' : 'open', closedAt: null, updatedAt: FieldValue.serverTimestamp() });
+    });
+    const now = FieldValue.serverTimestamp();
+    transaction.update(paymentRef, { status: 'reversed', reversalReason: reason, reversedAt: now, reversedBy: uid, updatedAt: now });
+    createActivity(transaction, { spaceId: String(payment.spaceId), actorUid: uid, actorName: member.displayName, action: 'shared_expense_payment_reversed', targetType: 'shared_expense_payment', targetId: paymentId, summary: `Undid ${safeMinor(payment.amountMinor, 'Payment amount') / 100} ${payment.currency} paid by ${payment.fromName || 'a member'}.`, now });
+    const result = { paymentId, status: 'reversed' };
+    transaction.create(commandRef, { uid, kind: 'reverse_shared_expense_payment', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const updateTripMoneySettings = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const holderUid = stringValue(request.data?.holderUid, 'Person holding the money', 128);
+  const budgetMinor = request.data?.budgetMinor === 0 ? 0 : positiveMoney(request.data?.budgetMinor);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const manager = await requireSpaceManager(spaceId, uid);
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const holderRef = db.collection('spaceMembers').doc(`${spaceId}_${holderUid}`);
+  const fundRef = db.collection('spaceFunds').doc(spaceId);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, space, holder, fund] = await Promise.all([transaction.get(commandRef), transaction.get(spaceRef), transaction.get(holderRef), transaction.get(fundRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!space.exists || space.data()?.type !== 'trip' || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active Trip Space.');
+    if (!holder.exists || ['suspended', 'removed'].includes(String(holder.data()?.status || ''))) throw new HttpsError('failed-precondition', 'Choose an active member to hold the Trip money.');
+    const now = FieldValue.serverTimestamp();
+    const contributedMinor = fund.exists ? safeMinor(fund.data()?.contributedMinor, 'Trip money collected') : 0;
+    const spentMinor = fund.exists ? safeMinor(fund.data()?.spentMinor, 'Trip money spent') : 0;
+    const values = { spaceId, holderUid, holderName: holder.data()?.displayName || '', holderEmail: holder.data()?.email || '', budgetMinor, contributedMinor, spentMinor, availableMinor: contributedMinor - spentMinor, currency: space.data()?.currency || 'BND', updatedAt: now };
+    if (fund.exists) transaction.update(fundRef, values); else transaction.create(fundRef, { ...values, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'trip_money_settings_updated', targetType: 'space_fund', targetId: spaceId, summary: `Updated the Trip budget and person holding the money.`, now });
+    const result = { spaceId };
+    transaction.create(commandRef, { uid, kind: 'update_trip_money_settings', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const recordTripMoneyContribution = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
+  const amountMinor = positiveMoney(request.data?.amountMinor);
+  const contributionDate = localDate(request.data?.contributionDate, 'Contribution date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const actor = await requireActiveSpaceMember(spaceId, uid);
+  if (uid !== memberUid && !['owner', 'admin'].includes(String(actor.role))) throw new HttpsError('permission-denied', 'You can record only your own contribution.');
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`);
+  const fundRef = db.collection('spaceFunds').doc(spaceId);
+  const contributionRef = db.collection('spaceFundContributions').doc();
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, member, fund] = await Promise.all([transaction.get(commandRef), transaction.get(memberRef), transaction.get(fundRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!member.exists || ['suspended', 'removed'].includes(String(member.data()?.status || ''))) throw new HttpsError('failed-precondition', 'Choose an active Trip member.');
+    if (!fund.exists) throw new HttpsError('failed-precondition', 'Set up Trip money first.');
+    const now = FieldValue.serverTimestamp();
+    const contributedMinor = safeMinor(fund.data()?.contributedMinor, 'Trip money collected') + amountMinor;
+    const spentMinor = safeMinor(fund.data()?.spentMinor, 'Trip money spent');
+    transaction.create(contributionRef, { displayId: displayId('TMC'), spaceId, memberUid, memberName: member.data()?.displayName || '', memberEmail: member.data()?.email || '', amountMinor, currency: fund.data()?.currency || 'BND', contributionDate, note, status: 'posted', reversedAt: null, reversedBy: null, createdBy: uid, createdAt: now, updatedAt: now });
+    transaction.update(fundRef, { contributedMinor, availableMinor: contributedMinor - spentMinor, updatedAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: actor.displayName, action: 'trip_money_contribution', targetType: 'space_fund_contribution', targetId: contributionRef.id, summary: `${member.data()?.displayName || 'A member'} added ${amountMinor / 100} ${fund.data()?.currency || 'BND'} to the Trip money.`, now });
+    const result = { contributionId: contributionRef.id };
+    transaction.create(commandRef, { uid, kind: 'record_trip_money_contribution', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const reverseTripMoneyContribution = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const contributionId = stringValue(request.data?.contributionId, 'Contribution ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const contributionRef = db.collection('spaceFundContributions').doc(contributionId);
+  const pre = await contributionRef.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Trip contribution not found.');
+  const contribution = pre.data() || {};
+  const actor = await requireActiveSpaceMember(String(contribution.spaceId), uid);
+  if (uid !== contribution.memberUid && !['owner', 'admin'].includes(String(actor.role))) throw new HttpsError('permission-denied', 'Only the member, Space owner, or admin can undo this contribution.');
+  const fundRef = db.collection('spaceFunds').doc(String(contribution.spaceId));
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, current, fund] = await Promise.all([transaction.get(commandRef), transaction.get(contributionRef), transaction.get(fundRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists || current.data()?.status !== 'posted') throw new HttpsError('failed-precondition', 'This contribution has already been undone.');
+    if (!fund.exists) throw new HttpsError('not-found', 'Trip money record not found.');
+    const amountMinor = positiveMoney(current.data()?.amountMinor);
+    const available = safeMinor(fund.data()?.availableMinor, 'Trip money available');
+    if (available < amountMinor) throw new HttpsError('failed-precondition', 'This Trip money has already been spent and cannot be removed.');
+    const contributedMinor = Math.max(0, safeMinor(fund.data()?.contributedMinor, 'Trip money collected') - amountMinor);
+    const spentMinor = safeMinor(fund.data()?.spentMinor, 'Trip money spent');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(contributionRef, { status: 'reversed', reversedAt: now, reversedBy: uid, updatedAt: now });
+    transaction.update(fundRef, { contributedMinor, availableMinor: contributedMinor - spentMinor, updatedAt: now });
+    createActivity(transaction, { spaceId: String(contribution.spaceId), actorUid: uid, actorName: actor.displayName, action: 'trip_money_contribution_reversed', targetType: 'space_fund_contribution', targetId: contributionId, summary: `Removed ${amountMinor / 100} ${contribution.currency || 'BND'} from the Trip money record.`, now });
+    const result = { contributionId, status: 'reversed' };
+    transaction.create(commandRef, { uid, kind: 'reverse_trip_money_contribution', idempotencyKey: key, result, createdAt: now });
     return result;
   });
 });
