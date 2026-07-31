@@ -76,3 +76,20 @@ Notes: ____________________
 - [ ] Duplicate shares are blocked.
 - [ ] Goal progress and Trip contribution notifications appear.
 - [ ] Close Trip keeps all previous history in Archived Spaces.
+
+## v0.11.4 Alpha 2 — Mobile UX and dedicated archive pages
+
+- [ ] Spaces shows active Spaces only and opens `/spaces/archived` from the header button.
+- [ ] Accounts shows active accounts only and opens `/accounts/closed` from the header or summary count.
+- [ ] Budgets, Goals, Bills & instalments, and custom Categories keep inactive records on their dedicated pages.
+- [ ] Restore/Reopen returns a record to the active page without duplicating balances or history.
+- [ ] Permanent delete works only for an unused record.
+- [ ] A blocked delete explains why and offers Archive, Close, Stop, or Hide instead.
+- [ ] No browser-native confirmation appears for module lifecycle actions.
+- [ ] Overview account tiles show only icon, account name/provider, and balance.
+- [ ] Tapping an Overview account opens Money Activity filtered to that account.
+- [ ] Closed accounts remain visible in historical filters but do not appear in new money activity forms.
+- [ ] At 320px, 375px, 390px, and 430px widths, there is no horizontal page overflow.
+- [ ] Mobile summary cards and Overview account tiles use a compact two-column layout where space permits.
+- [ ] Mobile dialogs appear as touch-friendly bottom sheets and all primary actions remain reachable.
+- [ ] Desktop archive pages show search, count, preserved details, restore/reopen, and safe delete controls.

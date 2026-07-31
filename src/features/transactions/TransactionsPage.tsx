@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
+import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -10,7 +12,7 @@ import {
   categoryApplies,
   categoryIconGlyph,
 } from '../categories/defaultCategories';
-import { listAccounts } from '../../repositories/accountRepository';
+import { listAllAccounts } from '../../repositories/accountRepository';
 import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
 import { createCategory, listAllCustomCategories, updateCategory } from '../../repositories/categoryRepository';
 import { manageCategory } from '../../repositories/lifecycleRepository';
@@ -76,6 +78,7 @@ function accountEffectForPreview(account: Account, type: PrimaryType, amountMino
 
 export function TransactionsPage() {
   const { user, profile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -89,7 +92,7 @@ export function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current_month');
   const [spaceFilter, setSpaceFilter] = useState('all');
-  const [accountFilter, setAccountFilter] = useState('all');
+  const [accountFilter, setAccountFilter] = useState(searchParams.get('accountId') || 'all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -100,7 +103,7 @@ export function TransactionsPage() {
     try {
       const [nextTransactions, nextAccounts, nextSpaces, nextCustomCategories] = await Promise.all([
         listTransactions(user.uid),
-        listAccounts(user.uid),
+        listAllAccounts(user.uid),
         listSpaces(user.uid),
         listAllCustomCategories(user.uid),
       ]);
@@ -123,6 +126,7 @@ export function TransactionsPage() {
   );
   const categoryMap = useMemo(() => new Map(allCategories.map((category) => [category.id, category])), [allCategories]);
   const accountMap = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
+  const activeAccounts = useMemo(() => accounts.filter((account) => !account.archivedAt && !account.closedAt), [accounts]);
   const spaceMap = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
   const currentMonth = monthPrefix(profile?.timezone || 'Asia/Brunei');
   const monthlyPosted = transactions.filter((item) => item.status === 'posted' && item.transactionDate.startsWith(currentMonth));
@@ -259,7 +263,7 @@ export function TransactionsPage() {
       )}
 
       {showForm && profile && <TransactionForm
-        accounts={accounts}
+        accounts={activeAccounts}
         spaces={spaces}
         categories={allCategories}
         timezone={profile.timezone}
@@ -473,29 +477,39 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
   const [showEditor, setShowEditor] = useState(false);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<TransactionCategory, 'archive' | 'delete'> | null>(null);
   const active = customCategories.filter((item) => !item.archivedAt);
   const hidden = customCategories.filter((item) => item.archivedAt);
 
-  async function lifecycle(category: TransactionCategory, action: 'archive' | 'restore' | 'delete') {
-    const message = action === 'archive'
-      ? `Hide “${category.name}”?\n\nPast money activity will keep this category name.`
-      : action === 'delete'
-        ? `Delete “${category.name}”?\n\nThis only works when it has never been used. This cannot be undone.`
-        : `Restore “${category.name}”?`;
-    if (!window.confirm(message)) return;
+  function askLifecycle(category: TransactionCategory, action: 'archive' | 'delete') {
+    setError('');
+    setLifecycleDialog(action === 'archive'
+      ? { record: category, action, title: `Hide ${category.name}?`, description: 'This category will move to Hidden Categories and will not appear in new money activity forms.', note: 'Past money activity will keep this category name.', confirmLabel: 'Hide category' }
+      : { record: category, action, title: `Delete ${category.name} permanently?`, description: 'Permanent deletion only works when this category has never been used.', note: 'This cannot be undone.', confirmLabel: 'Delete permanently', tone: 'danger' });
+  }
+
+  async function runLifecycle() {
+    if (!lifecycleDialog) return;
+    const { record: category, action } = lifecycleDialog;
     setBusyId(category.id); setError('');
-    try { await manageCategory(category.id, action); await onChanged(); }
-    catch (nextError) { setError(getErrorMessage(nextError)); }
+    try { await manageCategory(category.id, action); setLifecycleDialog(null); await onChanged(); }
+    catch (nextError) {
+      const message = getErrorMessage(nextError);
+      if (action === 'delete' && /hide/i.test(message)) {
+        setLifecycleDialog({ record: category, action: 'archive', title: `${category.name} cannot be deleted`, description: message, note: 'Hide it instead. It will disappear from new forms while previous records remain correct.', confirmLabel: 'Hide category instead' });
+      } else setError(message);
+    }
     finally { setBusyId(''); }
   }
 
+
   return <Modal title="Edit categories" onClose={onClose}>
-    <div className="category-manager-intro"><div><strong>Brunei-ready defaults</strong><p>{DEFAULT_TRANSACTION_CATEGORIES.length} built-in categories are available automatically. Add custom categories for your own household or SME workflow.</p></div><button className="button primary" onClick={() => { setEditing(null); setShowEditor(true); }}>+ Custom category</button></div>
+    <div className="category-manager-intro"><div><strong>Brunei-ready defaults</strong><p>{DEFAULT_TRANSACTION_CATEGORIES.length} built-in categories are available automatically. Add custom categories for your own household or SME workflow.</p></div><div className="button-row"><Link className="button secondary archive-button" to="/categories/archived" onClick={onClose}>Hidden Categories <span>{hidden.length}</span></Link><button className="button primary" onClick={() => { setEditing(null); setShowEditor(true); }}>+ Custom category</button></div></div>
     {error && <div className="notice error">{error}</div>}
     {active.length === 0 ? <EmptyState title="No custom categories" description="Ready-made categories are available. Add your own only when you need a different name." /> : <div className="category-manager-list">
-      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} · {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => void lifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => void lifecycle(category, 'delete')}>Delete</button></div></div>)}
+      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} · {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'delete')}>Delete</button></div></div>)}
     </div>}
-    {hidden.length > 0 && <section className="archived-items-panel"><div className="panel-heading"><div><span className="eyebrow">Not shown in new forms</span><h3>Hidden categories</h3></div><span className="type-badge">{hidden.length}</span></div><div className="category-manager-list">{hidden.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">Hidden</span><button className="button secondary" disabled={busyId === category.id} onClick={() => void lifecycle(category, 'restore')}>Restore</button></div>)}</div></section>}
+    {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button></div>
     {showEditor && <CategoryEditor category={editing} onClose={() => setShowEditor(false)} onSaved={async () => { setShowEditor(false); await onChanged(); }} />}
   </Modal>;
@@ -541,3 +555,4 @@ function CategoryEditor({ category, onClose, onSaved }: {
     <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save category'}</button></div>
   </form></Modal>;
 }
+

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
+import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listAccounts } from '../../repositories/accountRepository';
@@ -298,22 +299,48 @@ function PersonalSpaceSettings({ space }: { space: Space }) {
 function SpaceLifecyclePanel({ space, onFinished }: { space: Space; onFinished: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  async function run(action: 'archive' | 'delete') {
-    const message = action === 'archive'
-      ? space.type === 'trip'
-        ? `Close ${space.name}?\n\nThe Trip will move to Archived Spaces. Contributions, spending, balances, and payment history will stay available.`
-        : `Archive ${space.name}?\n\nIt will be hidden from normal use. Previous records will stay available.`
-      : `Delete ${space.name}?\n\nThis only works when the Space is empty and has no saved history. This cannot be undone.`;
-    if (!confirm(message)) return;
+  const [dialog, setDialog] = useState<LifecycleConfirmState<Space, 'archive' | 'delete'> | null>(null);
+
+  function ask(action: 'archive' | 'delete') {
+    setError('');
+    setDialog(action === 'archive'
+      ? {
+          record: space,
+          action,
+          title: space.type === 'trip' ? `Close ${space.name}?` : `Archive ${space.name}?`,
+          description: 'It will move to Archived Spaces and disappear from normal use.',
+          note: 'Contributions, spending, balances, members, and payment history will stay available.',
+          confirmLabel: space.type === 'trip' ? 'Close Trip' : 'Archive Space',
+        }
+      : {
+          record: space,
+          action,
+          title: `Delete ${space.name} permanently?`,
+          description: 'Permanent deletion only works when the Space is empty and has no saved history.',
+          note: 'This cannot be undone.',
+          confirmLabel: 'Delete permanently',
+          tone: 'danger',
+        });
+  }
+
+  async function run() {
+    if (!dialog) return;
     setBusy(true); setError('');
-    try { await manageSpace(space.id, action); onFinished(); }
-    catch (nextError) { setError(getErrorMessage(nextError)); }
+    try { await manageSpace(space.id, dialog.action); setDialog(null); onFinished(); }
+    catch (nextError) {
+      const message = getErrorMessage(nextError);
+      if (dialog.action === 'delete' && /archive/i.test(message)) {
+        setDialog({ record: space, action: 'archive', title: `${space.name} cannot be deleted`, description: message, note: 'Archive it instead. Previous records will stay correct and can be viewed later.', confirmLabel: space.type === 'trip' ? 'Close Trip instead' : 'Archive Space instead' });
+      } else setError(message);
+    }
     finally { setBusy(false); }
   }
+
   return <section className="panel danger-zone-panel">
     <div className="panel-heading"><div><span className="eyebrow">Space controls</span><h2>Archive or delete this Space</h2></div></div>
-    {error && <div className="notice error">{error}</div>}
+    {error && !dialog && <div className="notice error">{error}</div>}
     <p>Archive keeps previous records and lets you restore the Space later. Delete only works for an empty Space.</p>
-    <div className="button-row"><button className="button secondary" disabled={busy} onClick={() => void run('archive')}>{space.type === 'trip' ? 'Close Trip' : 'Archive Space'}</button><button className="button danger" disabled={busy} onClick={() => void run('delete')}>Delete Space</button></div>
+    <div className="button-row"><button className="button secondary" disabled={busy} onClick={() => ask('archive')}>{space.type === 'trip' ? 'Close Trip' : 'Archive Space'}</button><button className="button danger" disabled={busy} onClick={() => ask('delete')}>Delete Space</button></div>
+    {dialog && <LifecycleConfirmModal state={dialog} busy={busy} error={error} onClose={() => { setDialog(null); setError(''); }} onConfirm={() => void run()} />}
   </section>;
 }

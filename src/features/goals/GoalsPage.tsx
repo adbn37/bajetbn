@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,31 +11,50 @@ import type { GoalContribution, SavingsGoal, Space } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
+type GoalLifecycleAction = 'archive' | 'close' | 'delete';
+
 function today() { return new Date().toISOString().slice(0, 10); }
 
 export function GoalsPage() {
   const { user, profile } = useAuth();
   const [goals, setGoals] = useState<SavingsGoal[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [contributions, setContributions] = useState<GoalContribution[]>([]);
   const [editing, setEditing] = useState<SavingsGoal | null>(null); const [contributing, setContributing] = useState<SavingsGoal | null>(null); const [showForm, setShowForm] = useState(false); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
+  const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<SavingsGoal, GoalLifecycleAction> | null>(null);
   const load = async () => { if (!user) return; setError(''); try { const [nextGoals, nextSpaces, nextContributions] = await Promise.all([listAllGoals(user.uid), listSpaces(user.uid), listGoalContributions(user.uid)]); setGoals(nextGoals); setSpaces(nextSpaces.filter((item) => !item.archivedAt)); setContributions(nextContributions); } catch (nextError) { setError(getErrorMessage(nextError)); } };
   useEffect(() => { void load(); }, [user]);
   const active = useMemo(() => goals.filter((item) => !item.archivedAt && !item.closedAt), [goals]);
   const inactive = useMemo(() => goals.filter((item) => item.archivedAt || item.closedAt), [goals]);
   const target = active.reduce((sum, item) => sum + item.targetMinor, 0); const saved = active.reduce((sum, item) => sum + item.currentMinor, 0);
 
-  async function lifecycle(goal: SavingsGoal, action: 'archive' | 'restore' | 'delete' | 'close') {
-    const message = action === 'delete' ? `Delete ${goal.name}?\n\nThis only works when no progress has been saved. This cannot be undone.` : action === 'archive' ? `Archive ${goal.name}?\n\nIts previous progress will stay available.` : action === 'close' ? `Close ${goal.name}?\n\nNo more progress can be added until it is restored.` : `Restore ${goal.name}?`;
-    if (!confirm(message)) return;
+  function askLifecycle(goal: SavingsGoal, action: GoalLifecycleAction) {
+    setError('');
+    const state: Record<GoalLifecycleAction, LifecycleConfirmState<SavingsGoal, GoalLifecycleAction>> = {
+      archive: { record: goal, action, title: `Archive ${goal.name}?`, description: 'It will move to Closed & Archived Goals and disappear from your current goals.', note: 'Previous progress will stay available.', confirmLabel: 'Archive goal' },
+      close: { record: goal, action, title: `Close ${goal.name}?`, description: 'This goal will move to Closed & Archived Goals and no more progress can be added until it is restored.', note: 'Saved progress will remain unchanged.', confirmLabel: 'Close goal' },
+      delete: { record: goal, action, title: `Delete ${goal.name} permanently?`, description: 'Permanent deletion only works when no progress has ever been saved.', note: 'This cannot be undone.', confirmLabel: 'Delete permanently', tone: 'danger' },
+    };
+    setLifecycleDialog(state[action]);
+  }
+
+  async function runLifecycle() {
+    if (!lifecycleDialog) return;
+    const { record: goal, action } = lifecycleDialog;
     setBusyId(goal.id); setError('');
-    try { await manageGoal(goal.id, action); await load(); }
-    catch (nextError) { setError(getErrorMessage(nextError)); }
+    try { await manageGoal(goal.id, action); setLifecycleDialog(null); await load(); }
+    catch (nextError) {
+      const message = getErrorMessage(nextError);
+      if (action === 'delete' && /(close|archive)/i.test(message)) {
+        setLifecycleDialog({ record: goal, action: 'archive', title: `${goal.name} cannot be deleted`, description: message, note: 'Archive it instead. Its saved progress will remain available and reports will stay correct.', confirmLabel: 'Archive goal instead' });
+      } else setError(message);
+    }
     finally { setBusyId(''); }
   }
 
-  return <main className="page"><PageHeader eyebrow="Planning" title="Savings goals" description="Track money you plan to save for emergencies, school, travel, equipment, or anything else." action={<button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Add savings goal</button>} />
+
+  return <main className="page"><PageHeader eyebrow="Planning" title="Savings goals" description="Track money you plan to save for emergencies, school, travel, equipment, or anything else." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/goals/archived">Previous Goals <span>{inactive.length}</span></Link><button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Add savings goal</button></div>} />
     {error && <div className="notice error">{error}</div>}<section className="summary-grid"><article className="summary-card featured"><span>Total needed</span><strong>{formatMoney(target, profile?.currency || 'BND')}</strong><small>Across current goals</small></article><article className="summary-card"><span>Saved so far</span><strong>{formatMoney(saved, profile?.currency || 'BND')}</strong><small>Progress you entered</small></article><article className="summary-card"><span>Still needed</span><strong>{formatMoney(target - saved, profile?.currency || 'BND')}</strong><small>To finish all goals</small></article><article className="summary-card"><span>Closed or archived</span><strong>{inactive.length}</strong><small>Can be restored</small></article></section>
-    <GoalGrid goals={active} spaces={spaces} contributions={contributions} busyId={busyId} onLoad={load} onEdit={(goal) => { setEditing(goal); setShowForm(true); }} onContribute={setContributing} onArchive={(goal) => void lifecycle(goal, 'archive')} onClose={(goal) => void lifecycle(goal, 'close')} onDelete={(goal) => void lifecycle(goal, 'delete')} />
-    {inactive.length > 0 && <section className="panel archived-items-panel"><div className="panel-heading"><div><span className="eyebrow">Previous goals</span><h2>Closed and archived goals</h2></div><span className="type-badge">{inactive.length}</span></div><GoalGrid goals={inactive} spaces={spaces} contributions={contributions} busyId={busyId} inactive onLoad={load} onRestore={(goal) => void lifecycle(goal, 'restore')} /></section>}
+    <GoalGrid goals={active} spaces={spaces} contributions={contributions} busyId={busyId} onLoad={load} onEdit={(goal) => { setEditing(goal); setShowForm(true); }} onContribute={setContributing} onArchive={(goal) => askLifecycle(goal, 'archive')} onClose={(goal) => askLifecycle(goal, 'close')} onDelete={(goal) => askLifecycle(goal, 'delete')} />
+    {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit goal' : 'Add savings goal'} onClose={() => setShowForm(false)}><GoalForm goal={editing} spaces={spaces} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
     {contributing && <Modal title={`Add progress to ${contributing.name}`} onClose={() => setContributing(null)}><ContributionForm goal={contributing} onSaved={async () => { setContributing(null); await load(); }} /></Modal>}
   </main>;

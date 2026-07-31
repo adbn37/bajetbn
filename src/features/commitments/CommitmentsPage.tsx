@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,6 +14,8 @@ import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, Commi
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
+type CommitmentLifecycleAction = 'stop' | 'delete';
+
 function today() { return new Date().toISOString().slice(0, 10); }
 const dueLabels = { completed: 'Finished', overdue: 'Overdue', due: 'Due today', upcoming: 'Coming up' } as const;
 const frequencyLabels: Record<CommitmentFrequency, string> = { once: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Every 3 months', yearly: 'Yearly' };
@@ -21,6 +25,7 @@ export function CommitmentsPage() {
   const { user, profile } = useAuth();
   const [items, setItems] = useState<Commitment[]>([]); const [payments, setPayments] = useState<CommitmentPayment[]>([]); const [accounts, setAccounts] = useState<Account[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [editing, setEditing] = useState<Commitment | null>(null); const [paying, setPaying] = useState<Commitment | null>(null); const [showForm, setShowForm] = useState(false); const [typeFilter, setTypeFilter] = useState<'all' | CommitmentType>('all'); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
+  const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Commitment, CommitmentLifecycleAction> | null>(null);
   const load = async () => { if (!user) return; setError(''); try { const [nextItems, nextPayments, nextAccounts, nextSpaces, custom] = await Promise.all([listAllCommitments(user.uid), listCommitmentPayments(user.uid), listAccounts(user.uid), listSpaces(user.uid), listCustomCategories(user.uid)]); setItems(nextItems); setPayments(nextPayments); setAccounts(nextAccounts); setSpaces(nextSpaces.filter((item) => !item.archivedAt)); setCategories([...DEFAULT_TRANSACTION_CATEGORIES.filter((item) => item.kind === 'expense'), ...custom.filter((item) => item.kind === 'expense')]); } catch (nextError) { setError(getErrorMessage(nextError)); } };
   useEffect(() => { void load(); }, [user]);
   const active = items.filter((item) => !item.archivedAt && !item.stoppedAt);
@@ -28,12 +33,30 @@ export function CommitmentsPage() {
   const visible = active.filter((item) => typeFilter === 'all' || item.type === typeFilter);
   const upcoming = active.filter((item) => dueState(item) === 'upcoming' || dueState(item) === 'due').length; const overdue = active.filter((item) => dueState(item) === 'overdue').length; const outstanding = active.reduce((sum, item) => sum + (item.type === 'instalment' && item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : item.status === 'active' ? item.amountMinor : 0), 0);
   const accountMap = useMemo(() => new Map(accounts.map((item) => [item.id, item])), [accounts]);
-  async function lifecycle(item: Commitment, action: 'stop' | 'restore' | 'delete') { const message = action === 'delete' ? `Delete ${item.name}?\n\nThis only works when no payment or shared bill has used it. This cannot be undone.` : action === 'stop' ? `Stop ${item.name}?\n\nFuture payment dates will stop. Previous payments will stay available.` : `Restore ${item.name}?\n\nFuture payment dates will continue.`; if (!confirm(message)) return; setBusyId(item.id); setError(''); try { await manageCommitment(item.id, action); await load(); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusyId(''); } }
-  return <main className="page"><PageHeader eyebrow="Planning" title="Bills & instalments" description="Track bills and instalments, then record payments from the account you used." action={<button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Add bill or instalment</button>} />{error && <div className="notice error">{error}</div>}
+  function askLifecycle(item: Commitment, action: CommitmentLifecycleAction) {
+    setError('');
+    setLifecycleDialog(action === 'stop'
+      ? { record: item, action, title: `Stop ${item.name}?`, description: 'It will move to Stopped Bills & Instalments and future payment dates will stop.', note: 'Previous payments and account history will stay available.', confirmLabel: `Stop ${item.type === 'bill' ? 'bill' : 'instalment'}` }
+      : { record: item, action, title: `Delete ${item.name} permanently?`, description: 'Permanent deletion only works when no payment or shared bill has used this item.', note: 'This cannot be undone.', confirmLabel: 'Delete permanently', tone: 'danger' });
+  }
+  async function runLifecycle() {
+    if (!lifecycleDialog) return;
+    const { record: item, action } = lifecycleDialog;
+    setBusyId(item.id); setError('');
+    try { await manageCommitment(item.id, action); setLifecycleDialog(null); await load(); }
+    catch (nextError) {
+      const message = getErrorMessage(nextError);
+      if (action === 'delete' && /stop/i.test(message)) {
+        setLifecycleDialog({ record: item, action: 'stop', title: `${item.name} cannot be deleted`, description: message, note: 'Stop it instead. It will be hidden from current bills while previous payments remain correct.', confirmLabel: `Stop ${item.type === 'bill' ? 'bill' : 'instalment'} instead` });
+      } else setError(message);
+    }
+    finally { setBusyId(''); }
+  }
+  return <main className="page"><PageHeader eyebrow="Planning" title="Bills & instalments" description="Track bills and instalments, then record payments from the account you used." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/bills/archived">Stopped Items <span>{inactive.length}</span></Link><button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Add bill or instalment</button></div>} />{error && <div className="notice error">{error}</div>}
     <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>
-    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} busyId={busyId} onPay={setPaying} onEdit={(item) => { setEditing(item); setShowForm(true); }} onStop={(item) => void lifecycle(item, 'stop')} onDelete={(item) => void lifecycle(item, 'delete')} />
-    {inactive.length > 0 && <section className="panel archived-items-panel"><div className="panel-heading"><div><span className="eyebrow">No future dates</span><h2>Stopped bills and instalments</h2></div><span className="type-badge">{inactive.length}</span></div><CommitmentGrid items={inactive} payments={payments} accountMap={accountMap} busyId={busyId} inactive onRestore={(item) => void lifecycle(item, 'restore')} /></section>}
+    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} busyId={busyId} onPay={setPaying} onEdit={(item) => { setEditing(item); setShowForm(true); }} onStop={(item) => askLifecycle(item, 'stop')} onDelete={(item) => askLifecycle(item, 'delete')} />
+    {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit bill or instalment' : 'Add bill or instalment'} onClose={() => setShowForm(false)}><CommitmentForm item={editing} accounts={accounts} spaces={spaces} categories={categories} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
     {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accounts} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
   </main>;
