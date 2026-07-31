@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -10,6 +12,8 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import type { Budget, BudgetPeriodType, Space, TransactionCategory } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
+
+type BudgetLifecycleAction = 'archive' | 'delete';
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function monthRange(date = today()) { const [year, month] = date.split('-').map(Number); return { start: `${year}-${String(month).padStart(2, '0')}-01`, end: new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10) }; }
@@ -24,6 +28,7 @@ export function BudgetsPage() {
   const [busyId, setBusyId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Budget, BudgetLifecycleAction> | null>(null);
 
   const load = async () => {
     if (!user) return;
@@ -43,21 +48,34 @@ export function BudgetsPage() {
   const overCount = active.filter((item) => item.spentMinor > item.limitMinor).length;
   const spaceMap = useMemo(() => new Map(spaces.map((item) => [item.id, item])), [spaces]);
 
-  async function lifecycle(budget: Budget, action: 'archive' | 'restore' | 'delete') {
-    const text = action === 'archive' ? `Archive ${budget.name}?\n\nIts past spending will stay in reports.` : action === 'delete' ? `Delete ${budget.name}?\n\nThis only works when no spending has used it. This cannot be undone.` : `Restore ${budget.name}?`;
-    if (!confirm(text)) return;
+  function askLifecycle(budget: Budget, action: BudgetLifecycleAction) {
+    setError('');
+    setLifecycleDialog(action === 'archive'
+      ? { record: budget, action, title: `Archive ${budget.name}?`, description: 'It will move to Archived Budgets and disappear from current planning.', note: 'Its past spending will stay in reports.', confirmLabel: 'Archive budget' }
+      : { record: budget, action, title: `Delete ${budget.name} permanently?`, description: 'Permanent deletion only works when no saved spending has used this budget.', note: 'This cannot be undone.', confirmLabel: 'Delete permanently', tone: 'danger' });
+  }
+
+  async function runLifecycle() {
+    if (!lifecycleDialog) return;
+    const { record: budget, action } = lifecycleDialog;
     setBusyId(budget.id); setError('');
-    try { await manageBudget(budget.id, action); await load(); }
-    catch (nextError) { setError(getErrorMessage(nextError)); }
+    try { await manageBudget(budget.id, action); setLifecycleDialog(null); await load(); }
+    catch (nextError) {
+      const message = getErrorMessage(nextError);
+      if (action === 'delete' && /archive/i.test(message)) {
+        setLifecycleDialog({ record: budget, action: 'archive', title: `${budget.name} cannot be deleted`, description: message, note: 'Archive it instead. It will be hidden from current planning while past reports remain correct.', confirmLabel: 'Archive budget instead' });
+      } else setError(message);
+    }
     finally { setBusyId(''); }
   }
 
+
   return <main className="page">
-    <PageHeader eyebrow="Planning" title="Budgets" description="Set how much you plan to spend. Saved expenses update the matching budget automatically." action={<button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Add budget</button>} />
+    <PageHeader eyebrow="Planning" title="Budgets" description="Set how much you plan to spend. Saved expenses update the matching budget automatically." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/budgets/archived">Archived Budgets <span>{archived.length}</span></Link><button className="button primary" onClick={() => { setEditing(null); setShowForm(true); }}>Add budget</button></div>} />
     {error && <div className="notice error">{error}</div>}
     <section className="summary-grid"><article className="summary-card featured"><span>Planned to spend</span><strong>{formatMoney(totalLimit, profile?.currency || 'BND')}</strong><small>Across current budgets</small></article><article className="summary-card"><span>Spent</span><strong>{formatMoney(totalSpent, profile?.currency || 'BND')}</strong><small>From saved expenses</small></article><article className="summary-card"><span>Left to spend</span><strong>{formatMoney(totalLimit - totalSpent, profile?.currency || 'BND')}</strong><small>May go below zero</small></article><article className="summary-card"><span>Over budget</span><strong>{overCount}</strong><small>Check these budgets</small></article></section>
-    <section className="panel planning-panel"><div className="panel-heading"><div><span className="eyebrow">Current budgets</span><h2>{loading ? 'Loading…' : `${active.length} budget${active.length === 1 ? '' : 's'}`}</h2></div></div>{active.length ? <BudgetGrid budgets={active} spaceMap={spaceMap} busyId={busyId} onEdit={(budget) => { setEditing(budget); setShowForm(true); }} onArchive={(budget) => void lifecycle(budget, 'archive')} onDelete={(budget) => void lifecycle(budget, 'delete')} /> : !loading && <div className="mini-empty"><p>No active budgets yet.</p></div>}</section>
-    {archived.length > 0 && <section className="panel archived-items-panel"><div className="panel-heading"><div><span className="eyebrow">Kept for past reports</span><h2>Archived budgets</h2></div><span className="type-badge">{archived.length}</span></div><BudgetGrid budgets={archived} spaceMap={spaceMap} busyId={busyId} archived onRestore={(budget) => void lifecycle(budget, 'restore')} /></section>}
+    <section className="panel planning-panel"><div className="panel-heading"><div><span className="eyebrow">Current budgets</span><h2>{loading ? 'Loading…' : `${active.length} budget${active.length === 1 ? '' : 's'}`}</h2></div></div>{active.length ? <BudgetGrid budgets={active} spaceMap={spaceMap} busyId={busyId} onEdit={(budget) => { setEditing(budget); setShowForm(true); }} onArchive={(budget) => askLifecycle(budget, 'archive')} onDelete={(budget) => askLifecycle(budget, 'delete')} /> : !loading && <div className="mini-empty"><p>No active budgets yet.</p></div>}</section>
+    {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit budget' : 'Add budget'} onClose={() => setShowForm(false)}><BudgetForm budget={editing} spaces={spaces} categories={categories} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
   </main>;
 }

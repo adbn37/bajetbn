@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
+import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,6 +13,7 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 
 const accountLabels: Record<AccountType, string> = { bank: 'Bank', cash: 'Cash', e_wallet: 'E-wallet', credit_card: 'Credit card' };
 const useLabels: Record<AccountClassification, string> = { personal: 'Personal', business: 'Business' };
+type AccountLifecycleAction = 'close' | 'delete';
 
 export function AccountsPage() {
   const { user, profile } = useAuth();
@@ -20,6 +23,8 @@ export function AccountsPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Account, AccountLifecycleAction> | null>(null);
+
   const load = async () => {
     if (!user) return;
     setLoading(true); setError('');
@@ -33,35 +38,71 @@ export function AccountsPage() {
   const closed = useMemo(() => accounts.filter((item) => item.archivedAt || item.closedAt), [accounts]);
   const total = active.filter((item) => item.type !== 'credit_card').reduce((sum, item) => sum + item.ledgerBalanceMinor, 0);
 
-  async function action(account: Account, type: 'close' | 'restore' | 'delete') {
-    const message = type === 'close'
-      ? `Close ${account.name}?\n\nYou cannot use it for new payments. Previous money activity will stay available.`
-      : type === 'delete'
-        ? `Delete ${account.name}?\n\nThis only works when the account has never been used. This cannot be undone.`
-        : `Restore ${account.name}?\n\nYou can use it for new payments again.`;
-    if (!confirm(message)) return;
-    setBusyId(account.id); setError('');
-    try { await manageAccount(account.id, type); await load(); }
-    catch (nextError) { setError(getErrorMessage(nextError)); }
-    finally { setBusyId(''); }
+  function askLifecycle(account: Account, action: AccountLifecycleAction) {
+    setError('');
+    setLifecycleDialog(action === 'close'
+      ? {
+          record: account,
+          action,
+          title: `Close ${account.name}?`,
+          description: 'This account will move to Closed Accounts and will no longer appear in new payment forms.',
+          note: 'Its last balance and all previous money activity will stay available.',
+          confirmLabel: 'Close account',
+        }
+      : {
+          record: account,
+          action,
+          title: `Delete ${account.name} permanently?`,
+          description: 'Permanent deletion only works when this account has never been used for saved money activity.',
+          note: 'This cannot be undone.',
+          confirmLabel: 'Delete permanently',
+          tone: 'danger',
+        });
   }
 
-  return <main className="page">
-    <PageHeader eyebrow="Money sources" title="Accounts" description="Add your bank, cash, e-wallet, or credit card accounts. Choose one when recording money in or out." action={<button className="button primary" onClick={() => setModal('create')}>+ Add account</button>} />
-    {error && <div className="notice error">{error}</div>}
-    <section className="account-summary"><div><span>Total money available</span><strong>{formatMoney(total, profile?.currency || 'BND')}</strong></div><div><span>Accounts in use</span><strong>{active.length}</strong></div><div><span>Closed accounts</span><strong>{closed.length}</strong></div></section>
-    <div className="info-banner"><strong>Safe account removal</strong><span>Unused accounts can be deleted. Accounts with money history can only be closed, so old records stay correct.</span></div>
-    {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountList accounts={active} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onClose={(account) => void action(account, 'close')} onDelete={(account) => void action(account, 'delete')} />}
+  async function runLifecycle() {
+    if (!lifecycleDialog) return;
+    const { record: account, action } = lifecycleDialog;
+    setBusyId(account.id); setError('');
+    try {
+      await manageAccount(account.id, action);
+      setLifecycleDialog(null);
+      await load();
+    } catch (nextError) {
+      const message = getErrorMessage(nextError);
+      if (action === 'delete' && /close/i.test(message)) {
+        setLifecycleDialog({
+          record: account,
+          action: 'close',
+          title: `${account.name} cannot be deleted`,
+          description: message,
+          note: 'Close it instead. It will be hidden from new payments while its financial history remains correct.',
+          confirmLabel: 'Close account instead',
+        });
+      } else setError(message);
+    } finally { setBusyId(''); }
+  }
 
-    {closed.length > 0 && <section className="panel archived-items-panel"><div className="panel-heading"><div><span className="eyebrow">Not used for new payments</span><h2>Closed accounts</h2></div><span className="type-badge">{closed.length}</span></div><div className="account-list">{closed.map((account) => <article className="account-card archived" key={account.id}><span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span><div className="account-main"><div><h2>{account.name}</h2><p>{account.institution || accountLabels[account.type]} · Closed</p></div><small>{account.displayId}</small></div><div className="account-balance"><span>Last balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small>Previous activity is kept</small></div><div className="account-actions"><button className="button secondary" disabled={busyId === account.id} onClick={() => void action(account, 'restore')}>{busyId === account.id ? 'Working…' : 'Restore account'}</button></div></article>)}</div></section>}
+  return <main className="page accounts-page">
+    <PageHeader eyebrow="Money sources" title="Accounts" description="Add your bank, cash, e-wallet, or credit card accounts. Choose one when recording money in or out." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/accounts/closed">Closed Accounts <span>{closed.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add account</button></div>} />
+    {error && !lifecycleDialog && <div className="notice error">{error}</div>}
+    <section className="account-summary"><div><span>Total money available</span><strong>{formatMoney(total, profile?.currency || 'BND')}</strong></div><div><span>Accounts in use</span><strong>{active.length}</strong></div><Link to="/accounts/closed" className="account-summary-link"><span>Closed accounts</span><strong>{closed.length}</strong><small>Open archive →</small></Link></section>
+    <div className="info-banner"><strong>Safe account removal</strong><span>Unused accounts can be deleted. Accounts with money history are closed instead, so old records stay correct.</span></div>
+    {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountList accounts={active} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onClose={(account) => askLifecycle(account, 'close')} onDelete={(account) => askLifecycle(account, 'delete')} />}
 
+    {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {modal === 'create' && profile && <AccountForm currency={profile.currency} onClose={() => setModal(null)} onSubmit={async (values) => { await createAccount(values); setModal(null); await load(); }} />}
     {modal === 'edit' && selected && <AccountForm currency={selected.currency} initial={selected} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, type: values.type, classification: values.classification }); setModal(null); await load(); }} />}
   </main>;
 }
 
 function AccountList({ accounts, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
-  return <section className="account-list">{accounts.map((account) => <article className="account-card" key={account.id}><span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span><div className="account-main"><div><h2>{account.name}</h2><p>{account.institution || accountLabels[account.type]} · {useLabels[account.classification]}</p></div><small>{account.displayId}</small></div><div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small>Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div><div className="account-actions"><button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close account</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div></article>)}</section>;
+  return <section className="account-list">{accounts.map((account) => <article className="account-card" key={account.id}>
+    <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
+    <div className="account-main"><div><h2>{account.name}</h2><p>{account.institution || accountLabels[account.type]} · {useLabels[account.classification]}</p></div><small>{account.displayId}</small></div>
+    <div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div>
+    <div className="account-actions"><Link className="text-button account-view-activity" to={`/transactions?accountId=${encodeURIComponent(account.id)}`}>View activity</Link><button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div>
+  </article>)}</section>;
 }
 
 function AccountForm({ currency, initial, onClose, onSubmit }: { currency: string; initial?: Account; onClose: () => void; onSubmit: (values: { name: string; institution?: string; type: AccountType; classification: AccountClassification; currency: string; openingBalanceMinor: number }) => Promise<void> }) {
