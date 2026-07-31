@@ -111,9 +111,13 @@ export async function revokeSpaceInvitation(invitationId: string) {
   return httpsCallable(functions, 'revokeSpaceInvitation')({ invitationId, idempotencyKey: crypto.randomUUID() });
 }
 
-export async function acceptSpaceInvitation(token: string) {
+export async function acceptSpaceInvitation(token: string): Promise<{ spaceId: string }> {
   const { functions } = requireFirebase();
-  return httpsCallable(functions, 'acceptSpaceInvitation')({ token, idempotencyKey: crypto.randomUUID() });
+  const result = await httpsCallable<{ token: string; idempotencyKey: string }, { spaceId: string }>(
+    functions,
+    'acceptSpaceInvitation',
+  )({ token, idempotencyKey: crypto.randomUUID() });
+  return result.data;
 }
 
 export async function updateSpaceMember(input: {

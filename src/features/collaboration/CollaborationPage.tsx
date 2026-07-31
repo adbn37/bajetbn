@@ -64,7 +64,21 @@ function outstandingAmount(assignment: SharedBillAssignment) {
   return assignment.outstandingMinor ?? Math.max(0, assignment.assignedMinor - settledAmount(assignment));
 }
 
-export function CollaborationPage() {
+export type CollaborationTab = 'members' | 'bills' | 'activity' | 'settings';
+
+interface CollaborationPageProps {
+  spaceIdOverride?: string;
+  activeTab?: CollaborationTab;
+  embedded?: boolean;
+  onSpaceUpdated?: () => Promise<void> | void;
+}
+
+export function CollaborationPage({
+  spaceIdOverride,
+  activeTab,
+  embedded = false,
+  onSpaceUpdated,
+}: CollaborationPageProps = {}) {
   const { user } = useAuth();
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [spaceId, setSpaceId] = useState('');
@@ -76,7 +90,7 @@ export function CollaborationPage() {
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [activities, setActivities] = useState<SpaceActivity[]>([]);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
-  const [tab, setTab] = useState<'members' | 'bills' | 'activity'>('members');
+  const [tab, setTab] = useState<Exclude<CollaborationTab, 'settings'>>('members');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<SpaceMember | null>(null);
@@ -85,6 +99,7 @@ export function CollaborationPage() {
   const [loading, setLoading] = useState(true);
 
   const selectedSpace = spaces.find((item) => item.id === spaceId) || null;
+  const displayTab: CollaborationTab = activeTab || tab;
   const currentMember = members.find((item) => item.uid === user?.uid) || null;
   const canManage = currentMember?.role === 'owner' || currentMember?.role === 'admin';
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
@@ -96,7 +111,10 @@ export function CollaborationPage() {
     if (!user) return;
     const next = (await listSpaces(user.uid)).filter((item) => !item.archivedAt && item.type !== 'personal');
     setSpaces(next);
-    setSpaceId((current) => current && next.some((item) => item.id === current) ? current : next[0]?.id || '');
+    setSpaceId((current) => {
+      if (spaceIdOverride && next.some((item) => item.id === spaceIdOverride)) return spaceIdOverride;
+      return current && next.some((item) => item.id === current) ? current : next[0]?.id || '';
+    });
   };
 
   const loadSpaceData = async (selectedId: string) => {
@@ -131,7 +149,10 @@ export function CollaborationPage() {
     }
   };
 
-  useEffect(() => { void loadSpaces(); }, [user]);
+  useEffect(() => { void loadSpaces(); }, [user, spaceIdOverride]);
+  useEffect(() => {
+    if (spaceIdOverride) setSpaceId(spaceIdOverride);
+  }, [spaceIdOverride]);
   useEffect(() => { if (spaceId) void loadSpaceData(spaceId); }, [spaceId]);
 
   const runAction = async (action: () => Promise<unknown>) => {
@@ -145,48 +166,56 @@ export function CollaborationPage() {
   };
 
   if (!loading && spaces.length === 0) {
-    return <main className="page">
-      <PageHeader eyebrow="Share with others" title="Sharing" description="Invite family, friends, or team members to a shared Space." />
-      <div className="info-banner"><strong>No shared Space yet</strong><span>Create a non-personal Space first, then invite members and share bills.</span></div>
-      <Link className="button primary" to="/spaces">Create a Space</Link>
-    </main>;
+    const emptyContent = <>
+      {!embedded && <PageHeader eyebrow="Share with others" title="Shared Spaces" description="Invite family, friends, or team members inside a Space." />}
+      <div className="info-banner"><strong>{spaceIdOverride ? 'This Space is not available' : 'No shared Space yet'}</strong><span>{spaceIdOverride ? 'Go back to Spaces and choose another Space.' : 'Create a non-personal Space first, then invite members and share bills.'}</span></div>
+      <Link className="button primary" to="/spaces">Back to Spaces</Link>
+    </>;
+    return embedded ? <section className="space-collaboration-embedded">{emptyContent}</section> : <main className="page">{emptyContent}</main>;
   }
 
-  return <main className="page collaboration-page">
-    <PageHeader
+  const Root = embedded ? 'section' : 'main';
+
+  return <Root className={embedded ? 'space-collaboration-embedded' : 'page collaboration-page'}>
+    {!embedded && <PageHeader
       eyebrow="Shared money"
-      title="Sharing"
-      description="Manage members, split bills, check payments, view proof, and send WhatsApp notices."
+      title="Shared Spaces"
+      description="Manage members and shared bills inside the selected Space."
       action={canManage ? <button className="button primary" onClick={() => setInviteOpen(true)}>Invite member</button> : undefined}
-    />
+    />}
     {error && <div className="notice error">{error}</div>}
 
-    <section className="collaboration-space-bar">
+    {!embedded && <section className="collaboration-space-bar">
       <label>Choose a shared Space<select value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} — {space.type}</option>)}</select></label>
       {selectedSpace && <div className="collaboration-space-summary"><strong>{selectedSpace.name}</strong><span>{roleLabel[currentMember?.role || 'viewer']} · {selectedSpace.collaborationMode === 'private' ? 'Private' : 'Shared'}</span></div>}
       {unreadForSpace.length > 0 && <button className="notification-pill" onClick={() => void runAction(async () => {
         await Promise.all(unreadForSpace.map((item) => markNotificationRead(item.id)));
       })}>{unreadForSpace.length} new</button>}
-    </section>
+    </section>}
 
-    {selectedSpace && canManage && <CollaborationSettings space={selectedSpace} onSaved={async () => { await loadSpaces(); await loadSpaceData(spaceId); }} />}
+    {selectedSpace && canManage && (!embedded || displayTab === 'settings') && <CollaborationSettings space={selectedSpace} onSaved={async () => {
+      await loadSpaces();
+      await loadSpaceData(spaceId);
+      await onSpaceUpdated?.();
+    }} />}
+    {embedded && displayTab === 'settings' && !canManage && <div className="notice">Only the Space owner or manager can change these settings.</div>}
 
-    <section className="summary-grid collaboration-summary">
+    {!embedded && <section className="summary-grid collaboration-summary">
       <article className="summary-card featured"><span>Active members</span><strong>{activeMembers.length}</strong><small>Including the Space owner</small></article>
       <article className="summary-card"><span>Invites not accepted</span><strong>{invitations.filter((item) => item.status === 'pending').length}</strong><small>Waiting for the person to join</small></article>
       <article className="summary-card"><span>Bills still open</span><strong>{pendingAssignments.length}</strong><small>Not paid, partly paid, or waiting for a check</small></article>
       <article className="summary-card"><span>Payment check</span><strong>{selectedSpace?.approvalMode === 'owner_approval' ? 'Owner checks' : 'Automatic'}</strong><small>How member payments are checked</small></article>
-    </section>
+    </section>}
 
-    <div className="segmented-control planning-filter collaboration-tabs">
+    {!embedded && <div className="segmented-control planning-filter collaboration-tabs">
       <button className={tab === 'members' ? 'active' : ''} onClick={() => setTab('members')}>Members</button>
       <button className={tab === 'bills' ? 'active' : ''} onClick={() => setTab('bills')}>Shared bills</button>
       <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>Activity</button>
-    </div>
+    </div>}
 
-    {loading ? <div className="loading-panel">Loading sharing information…</div> : tab === 'members' ? <>
+    {loading ? <div className="loading-panel">Loading Space information…</div> : displayTab === 'settings' ? null : displayTab === 'members' ? <>
       <section className="panel collaboration-panel">
-        <div className="panel-heading"><div><span className="eyebrow">Access</span><h2>Members</h2></div></div>
+        <div className="panel-heading"><div><span className="eyebrow">Access</span><h2>Members</h2></div>{embedded && canManage && <button className="button primary" onClick={() => setInviteOpen(true)}>Invite member</button>}</div>
         <div className="member-list">{members.map((member) => <article className={`member-row status-${member.status || 'active'}`} key={member.id}>
           <span className="avatar">{(member.displayName || member.email || 'M').charAt(0).toUpperCase()}</span>
           <div><strong>{member.displayName || member.email || member.uid}</strong><small>{member.email || member.uid}</small></div>
@@ -204,7 +233,7 @@ export function CollaborationPage() {
           {invitation.status === 'pending' && <><button className="button secondary" onClick={() => void navigator.clipboard.writeText(inviteUrl(invitation.token))}>Copy invite link</button><a className="button secondary" href={`https://wa.me/?text=${encodeURIComponent(`Join ${selectedSpace?.name || 'my BajetBN Space'}: ${inviteUrl(invitation.token)}`)}`} target="_blank" rel="noreferrer">WhatsApp</a><button className="text-button danger" onClick={() => void runAction(() => revokeSpaceInvitation(invitation.id))}>Cancel invite</button></>}
         </article>)}</div>
       </section>}
-    </> : tab === 'bills' ? <section className="panel collaboration-panel">
+    </> : displayTab === 'bills' ? <section className="panel collaboration-panel">
       <div className="panel-heading"><div><span className="eyebrow">Payments</span><h2>Shared bills</h2></div>{canManage && <button className="button primary" onClick={() => setAssignmentOpen(true)}>Give bill share</button>}</div>
       <div className="info-banner"><strong>Choose how you paid</strong><span>Use a BajetBN account to update its balance, or choose another method to mark the bill paid without changing an account.</span></div>
       <div className="shared-bill-grid">{assignments.length === 0 ? <p>No bill shares yet.</p> : assignments.map((assignment) => {
@@ -229,7 +258,7 @@ export function CollaborationPage() {
             {whatsapp && isMine && (assignment.status === 'submitted' || assignment.status === 'partially_paid' || assignment.status === 'paid') && <a className="button secondary" href={whatsapp} target="_blank" rel="noreferrer">Tell group head on WhatsApp</a>}
             {canReview && currentPayment && <><button className="button primary" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'confirmed' }))}>Confirm payment</button><button className="button danger-outline" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'rejected' }))}>Decline</button></>}
             {canReverse && lastPayment && <button className="button danger-outline" onClick={() => void runAction(async () => {
-              if (confirm(`Undo ${lastPayment.displayId}? The account balance will be restored and the bill will open again.`)) await reverseSharedBillPayment({ paymentId: lastPayment.id, reversalDate: today(), reason: 'Undone from Sharing' });
+              if (confirm(`Undo ${lastPayment.displayId}? The account balance will be restored and the bill will open again.`)) await reverseSharedBillPayment({ paymentId: lastPayment.id, reversalDate: today(), reason: 'Undone from Space' });
             })}>Undo payment</button>}
           </div>
         </article>;
@@ -243,7 +272,7 @@ export function CollaborationPage() {
     {editingMember && <Modal title="Change member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
     {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers.filter((item) => item.role !== 'owner')} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {submitting && <Modal title={`Add payment for ${submitting.commitmentName}`} onClose={() => setSubmitting(null)}><SubmitPaymentForm assignment={submitting} accounts={accounts.filter((account) => account.currency === submitting.currency)} onSaved={async () => { setSubmitting(null); await loadSpaceData(spaceId); }} /></Modal>}
-  </main>;
+  </Root>;
 }
 
 function CollaborationSettings({ space, onSaved }: { space: Space; onSaved: () => Promise<void> }) {

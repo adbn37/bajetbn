@@ -12,7 +12,6 @@ const navigation = [
   ['/budgets', 'Budgets', '▤'],
   ['/goals', 'Goals', '◇'],
   ['/bills', 'Bills & instalments', '◷'],
-  ['/sharing', 'Sharing', '◎'],
   ['/calendar', 'Calendar', '▦'],
   ['/search', 'Search', '⌕'],
   ['/reports', 'Money reports', '⌁'],

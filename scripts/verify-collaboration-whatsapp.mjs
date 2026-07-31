@@ -4,9 +4,9 @@ import path from 'node:path';
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const checks = [
-  ['src/app/App.tsx', 'path="sharing"'],
+  ['src/app/App.tsx', 'path="spaces/:spaceId"'],
   ['src/app/App.tsx', 'path="join"'],
-  ['src/layouts/AppShell.tsx', "'/sharing', 'Sharing'"],
+  ['src/features/spaces/SpaceDetailsPage.tsx', 'Shared bills'],
   ['src/types/models.ts', 'SpaceInvitation'],
   ['src/types/models.ts', 'SharedBillAssignment'],
   ['src/types/models.ts', 'SpaceApprovalMode'],
@@ -32,6 +32,9 @@ for (const [file, marker] of checks) {
   const content = read(file);
   if (!content.includes(marker)) throw new Error(`${file} is missing: ${marker}`);
 }
+
+const shell = read('src/layouts/AppShell.tsx');
+if (shell.includes("'/sharing', 'Sharing'")) throw new Error('Sharing must live inside Spaces, not in the main menu.');
 
 const roleText = read('functions/src/index.ts');
 for (const role of ['admin', 'contributor', 'payer', 'viewer']) {
