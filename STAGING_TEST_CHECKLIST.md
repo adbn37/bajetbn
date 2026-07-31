@@ -102,3 +102,16 @@ Notes: ____________________
 - [ ] Confirm all Alpha 2 mobile/archive routes and lifecycle actions in the browser
 - [ ] Do not merge to production while a pre-production blocker remains open
 - [ ] Do not tag v1.0.0 while a required pre-v1 item remains open or lacks an explicit scope decision
+
+## v0.11.5 — Release Safety Hardening
+
+- [ ] Settings displays the same version and release label recorded in `release.json`.
+- [ ] Money Activity Undo uses a BajetBN dialog and creates a correction record.
+- [ ] Goal progress Undo uses a BajetBN dialog and reduces the goal total correctly.
+- [ ] Shared-expense payment Undo uses a BajetBN dialog and restores the owed amount.
+- [ ] Trip contribution Undo uses a BajetBN dialog and is blocked when the money is already spent.
+- [ ] Remove Member uses a BajetBN dialog and preserves previous shared-money history.
+- [ ] Shared-bill payment Undo uses a BajetBN dialog and restores the linked account when applicable.
+- [ ] No browser-native `confirm()` or `alert()` box appears anywhere in the tested workflows.
+- [ ] `npm run verify:all-structural` passes in GitHub staging CI.
+- [ ] Production smoke-test and rollback documents are reviewed before any live deployment.

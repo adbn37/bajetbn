@@ -45,6 +45,7 @@ requireText('src/features/spaces/SpaceDetailsPage.tsx', "space.type === 'trip'")
 requireText('README.md', 'Offline mutation queues are deferred');
 requireText('storage.rules', 'General receipts remain reserved');
 
+const itemById = new Map(audit.items.map((item) => [item.id, item]));
 const nativeConfirmFiles = [
   'src/features/transactions/TransactionsPage.tsx',
   'src/features/goals/GoalsPage.tsx',
@@ -52,28 +53,23 @@ const nativeConfirmFiles = [
   'src/features/spaces/TripMoneyPanel.tsx',
   'src/features/collaboration/CollaborationPage.tsx',
 ];
-if (!nativeConfirmFiles.some((file) => /\b(?:window\.)?confirm\s*\(/.test(read(file)))) {
-  fail('The audit still marks native confirmations as partial, but no native confirm calls remain. Update the scope register.');
+const nativeConfirmOffenders = nativeConfirmFiles.filter((file) => /\b(?:window\.)?(?:confirm|alert)\s*\(/.test(read(file)));
+if (itemById.get('safety.native_confirm')?.status === 'complete' && nativeConfirmOffenders.length) {
+  fail(`Native browser dialogs remain in: ${nativeConfirmOffenders.join(', ')}`);
 }
 
+const release = JSON.parse(read('release.json'));
 const packageVersion = JSON.parse(read('package.json')).version;
-const settingsVersionMatch = read('src/pages/SettingsPage.tsx').match(/App:\s*(v[^·<]+)/);
-if (!settingsVersionMatch) fail('Could not find the user-facing Settings version.');
-if (`v${packageVersion}` === settingsVersionMatch[1].trim()) {
-  fail('Version sources now match. Update the audit item release.version_source to complete.');
+if (itemById.get('release.version_source')?.status === 'complete') {
+  if (packageVersion !== release.version) fail('package.json does not match the canonical release version.');
+  requireText('src/pages/SettingsPage.tsx', 'appBuildLabel()');
+  requireText('scripts/generate-service-worker.mjs', "new URL('../release.json'");
 }
 
-// CI must include all current regression suites after this audit patch.
+// CI uses the package-level suite so newly registered checks cannot be silently omitted.
 const ci = read('.github/workflows/staging-ci.yml');
-const requiredCiChecks = [
-  'verify-safe-delete-archive-restore.mjs',
-  'verify-mobile-archive-pages.mjs',
-  'verify-invitations-notifications.mjs',
-  'verify-shared-expenses-balances.mjs',
-  'verify-space-centred-workflow.mjs',
-  'verify-pre-v1-scope-audit.mjs',
-];
-for (const check of requiredCiChecks) if (!ci.includes(check)) fail(`Staging CI does not run ${check}`);
+requireText('.github/workflows/staging-ci.yml', 'npm run verify:all-structural');
+requireText('package.json', 'verify-release-safety-hardening.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

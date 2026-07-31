@@ -1,4 +1,4 @@
-# BajetBN v0.1.1 — Phase 1
+# BajetBN v0.11.5 — Release Safety Hardening Alpha 1
 
 BajetBN is a budget tracker and modular life-management platform designed around **Spaces**. Accounts exist independently; future Transactions connect Accounts to Spaces.
 
@@ -151,3 +151,17 @@ The current full-scope comparison is recorded in:
 - `scope/pre-v1-scope.json`
 
 Run `npm run verify:pre-v1-scope` whenever a requirement is completed, deferred or reclassified. Production and v1.0.0 remain gated by that register.
+## Current release metadata
+
+`release.json` is the canonical BajetBN application version and release label. Settings, package metadata, service-worker generation and release verification must match it.
+
+Run the full release gate with:
+
+```powershell
+npm run typecheck
+npm run build --prefix functions
+npm run verify:all-structural
+npm run build -- --mode staging
+```
+
+See `RELEASE_SAFETY_HARDENING_ALPHA.md`, `PRODUCTION_SMOKE_TEST_CHECKLIST.md` and `PRODUCTION_ROLLBACK_PLAN.md` before any production deployment.

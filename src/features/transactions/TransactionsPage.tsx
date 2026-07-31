@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
@@ -88,6 +89,8 @@ export function TransactionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
+  const [reverseDialog, setReverseDialog] = useState<ActionConfirmState<FinancialTransaction> | null>(null);
+  const [reverseBusy, setReverseBusy] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current_month');
@@ -160,8 +163,24 @@ export function TransactionsPage() {
       .some((value) => value?.toLowerCase().includes(needle));
   });
 
-  const handleReverse = async (item: FinancialTransaction) => {
-    if (!window.confirm(`Undo ${item.displayId}? BajetBN will add a correction record and restore the balance.`)) return;
+  const askReverse = (item: FinancialTransaction) => {
+    setError('');
+    setReverseDialog({
+      payload: item,
+      title: `Undo ${item.displayId}?`,
+      description: 'BajetBN will add a correction record instead of changing or deleting the original money record.',
+      note: item.sharedBillPaymentId
+        ? 'The account balance will be restored and the shared bill will open again.'
+        : 'The affected account balance will be restored.',
+      confirmLabel: 'Undo money activity',
+      tone: 'danger',
+    });
+  };
+
+  const handleReverse = async () => {
+    if (!reverseDialog) return;
+    const item = reverseDialog.payload;
+    setReverseBusy(true);
     setError('');
     try {
       if (item.sharedBillPaymentId) {
@@ -173,10 +192,13 @@ export function TransactionsPage() {
       } else {
         await reverseTransaction(item.id, dateInTimezone(profile?.timezone || 'Asia/Brunei'), 'Undone from money activity details');
       }
+      setReverseDialog(null);
       setSelectedTransaction(null);
       await load();
     } catch (nextError) {
       setError(getErrorMessage(nextError));
+    } finally {
+      setReverseBusy(false);
     }
   };
 
@@ -288,8 +310,10 @@ export function TransactionsPage() {
         space={spaceMap.get(selectedTransaction.spaceId)}
         category={selectedTransaction.categoryId ? categoryMap.get(selectedTransaction.categoryId) || transactionCategorySnapshot(selectedTransaction) : transactionCategorySnapshot(selectedTransaction)}
         onClose={() => setSelectedTransaction(null)}
-        onReverse={() => void handleReverse(selectedTransaction)}
+        onReverse={() => askReverse(selectedTransaction)}
       />}
+
+      {reverseDialog && <ActionConfirmModal state={reverseDialog} busy={reverseBusy} error={error} onClose={() => { setReverseDialog(null); setError(''); }} onConfirm={() => void handleReverse()} />}
     </main>
   );
 }

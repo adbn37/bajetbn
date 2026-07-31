@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -66,6 +67,10 @@ function outstandingAmount(assignment: SharedBillAssignment) {
 
 export type CollaborationTab = 'members' | 'bills' | 'activity' | 'settings';
 
+type CollaborationConfirmation =
+  | { kind: 'remove-member'; member: SpaceMember }
+  | { kind: 'reverse-payment'; payment: SharedBillPayment };
+
 interface CollaborationPageProps {
   spaceIdOverride?: string;
   activeTab?: CollaborationTab;
@@ -95,6 +100,8 @@ export function CollaborationPage({
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<SpaceMember | null>(null);
   const [submitting, setSubmitting] = useState<SharedBillAssignment | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ActionConfirmState<CollaborationConfirmation> | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -165,6 +172,29 @@ export function CollaborationPage({
     }
   };
 
+  const runConfirmedAction = async () => {
+    if (!confirmDialog) return;
+    setConfirmBusy(true);
+    setError('');
+    try {
+      if (confirmDialog.payload.kind === 'remove-member') {
+        await removeSpaceMember(spaceId, confirmDialog.payload.member.uid);
+      } else {
+        await reverseSharedBillPayment({
+          paymentId: confirmDialog.payload.payment.id,
+          reversalDate: today(),
+          reason: 'Undone from Space',
+        });
+      }
+      setConfirmDialog(null);
+      await loadSpaceData(spaceId);
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
   if (!loading && spaces.length === 0) {
     const emptyContent = <>
       {!embedded && <PageHeader eyebrow="Share with others" title="Shared Spaces" description="Invite family, friends, or team members inside a Space." />}
@@ -221,8 +251,13 @@ export function CollaborationPage({
           <div><strong>{member.displayName || member.email || member.uid}</strong><small>{member.email || member.uid}</small></div>
           <span className="type-badge">{roleLabel[member.role] || member.role}</span>
           <div className="permission-chips"><span>{member.canUseAccounts ? 'Use accounts' : 'No account use'}</span><span>{member.canViewBalances ? 'See balances' : 'Balances hidden'}</span><span>{member.canViewLedger ? 'See account activity' : 'Account activity hidden'}</span></div>
-          {canManage && member.role !== 'owner' && <div className="button-row"><button className="text-button" onClick={() => setEditingMember(member)}>Manage</button><button className="text-button danger" onClick={() => void runAction(async () => {
-            if (confirm(`Remove ${member.displayName || member.email || 'this member'}? Their past money records will stay.`)) await removeSpaceMember(spaceId, member.uid);
+          {canManage && member.role !== 'owner' && <div className="button-row"><button className="text-button" onClick={() => setEditingMember(member)}>Manage</button><button className="text-button danger" onClick={() => setConfirmDialog({
+            payload: { kind: 'remove-member', member },
+            title: `Remove ${member.displayName || member.email || 'this member'}?`,
+            description: 'They will lose access to this Space. Their previous shared bills, payments and activity will stay in the history.',
+            note: 'You can invite them again later if needed.',
+            confirmLabel: 'Remove member',
+            tone: 'danger',
           })}>Remove</button></div>}
         </article>)}</div>
       </section>
@@ -257,8 +292,13 @@ export function CollaborationPage({
             {proofPath && <button className="button secondary" onClick={() => void getSharedBillProofUrl(proofPath).then((url) => window.open(url, '_blank', 'noopener,noreferrer'))}>View proof</button>}
             {whatsapp && isMine && (assignment.status === 'submitted' || assignment.status === 'partially_paid' || assignment.status === 'paid') && <a className="button secondary" href={whatsapp} target="_blank" rel="noreferrer">Tell group head on WhatsApp</a>}
             {canReview && currentPayment && <><button className="button primary" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'confirmed' }))}>Confirm payment</button><button className="button danger-outline" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'rejected' }))}>Decline</button></>}
-            {canReverse && lastPayment && <button className="button danger-outline" onClick={() => void runAction(async () => {
-              if (confirm(`Undo ${lastPayment.displayId}? The account balance will be restored and the bill will open again.`)) await reverseSharedBillPayment({ paymentId: lastPayment.id, reversalDate: today(), reason: 'Undone from Space' });
+            {canReverse && lastPayment && <button className="button danger-outline" onClick={() => setConfirmDialog({
+              payload: { kind: 'reverse-payment', payment: lastPayment },
+              title: `Undo ${lastPayment.displayId}?`,
+              description: 'The payment will be reversed and the shared bill will open again.',
+              note: lastPayment.settlementMode === 'account' ? 'The linked BajetBN account balance will be restored.' : 'No BajetBN account balance was changed by this payment.',
+              confirmLabel: 'Undo shared-bill payment',
+              tone: 'danger',
             })}>Undo payment</button>}
           </div>
         </article>;
@@ -268,6 +308,7 @@ export function CollaborationPage({
       <div className="activity-list">{activities.length === 0 ? <p>No activity recorded yet.</p> : activities.map((activity) => <article key={activity.id}><span className="activity-dot"/><div><strong>{activity.summary}</strong><small>{activity.actorName || activity.actorUid} · {activity.createdAt?.toDate?.().toLocaleString() || 'recently'}</small></div></article>)}</div>
     </section>}
 
+    {confirmDialog && <ActionConfirmModal state={confirmDialog} busy={confirmBusy} error={error} onClose={() => { setConfirmDialog(null); setError(''); }} onConfirm={() => void runConfirmedAction()} />}
     {inviteOpen && selectedSpace && <Modal title={`Invite to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm spaceId={selectedSpace.id} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {editingMember && <Modal title="Change member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
     {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
