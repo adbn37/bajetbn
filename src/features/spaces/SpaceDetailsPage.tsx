@@ -11,6 +11,7 @@ import {
   listSpaceMembers,
 } from '../../repositories/collaborationRepository';
 import { listGoals } from '../../repositories/goalRepository';
+import { listSharedExpenses } from '../../repositories/sharedExpenseRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import { listTransactions } from '../../repositories/transactionRepository';
@@ -21,6 +22,7 @@ import type {
   FinancialTransaction,
   SavingsGoal,
   SharedBillAssignment,
+  SharedExpense,
   Space,
   SpaceMember,
   SpaceType,
@@ -28,8 +30,10 @@ import type {
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
+import { SharedExpensesPanel } from './SharedExpensesPanel';
+import { TripMoneyPanel } from './TripMoneyPanel';
 
-type SpaceDetailsTab = 'overview' | CollaborationTab;
+type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money';
 
 const spaceTypeLabel: Record<SpaceType, string> = {
   personal: 'Personal',
@@ -42,7 +46,7 @@ const spaceTypeLabel: Record<SpaceType, string> = {
 
 function tabFromSearch(value: string | null, shared: boolean): SpaceDetailsTab {
   if (value === 'settings') return 'settings';
-  if (shared && (value === 'members' || value === 'bills' || value === 'activity')) return value;
+  if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'activity')) return value;
   return 'overview';
 }
 
@@ -69,6 +73,7 @@ export function SpaceDetailsPage() {
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [sharedBills, setSharedBills] = useState<SharedBillAssignment[]>([]);
+  const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -100,15 +105,18 @@ export function SpaceDetailsPage() {
       setCommitments(nextCommitments.filter((item) => item.spaceId === spaceId));
 
       if (nextSpace.type !== 'personal') {
-        const [nextMembers, nextSharedBills] = await Promise.all([
+        const [nextMembers, nextSharedBills, nextSharedExpenses] = await Promise.all([
           listSpaceMembers(spaceId),
           listSharedBillAssignments(spaceId),
+          listSharedExpenses(spaceId),
         ]);
         setMembers(nextMembers);
         setSharedBills(nextSharedBills);
+        setSharedExpenses(nextSharedExpenses);
       } else {
         setMembers([]);
         setSharedBills([]);
+        setSharedExpenses([]);
       }
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -136,6 +144,7 @@ export function SpaceDetailsPage() {
   const accountsUsed = accounts.filter((item) => accountIdsUsed.has(item.id));
   const openBills = commitments.filter((item) => item.status === 'active');
   const openSharedBills = sharedBills.filter((item) => item.status !== 'paid');
+  const openSharedExpenses = sharedExpenses.filter((item) => item.status !== 'paid');
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
   const currentMember = members.find((item) => item.uid === user?.uid);
 
@@ -157,7 +166,10 @@ export function SpaceDetailsPage() {
     ? [
       { id: 'overview', label: 'Overview' },
       { id: 'members', label: 'Members' },
-      { id: 'bills', label: space.type === 'trip' ? 'Shared expenses' : 'Shared bills' },
+      ...(space.type === 'trip' ? [{ id: 'trip_money' as const, label: 'Trip money' }] : []),
+      { id: 'expenses', label: 'Shared expenses' },
+      { id: 'balances', label: 'Who owes whom' },
+      { id: 'bills', label: 'Shared bills' },
       { id: 'activity', label: 'Activity' },
       { id: 'settings', label: 'Space settings' },
     ]
@@ -198,8 +210,8 @@ export function SpaceDetailsPage() {
       goals={goals}
       openBills={openBills}
       memberCount={activeMembers.length}
-      openSharedBillCount={openSharedBills.length}
-    /> : shared ? <>
+      openSharedBillCount={openSharedBills.length + openSharedExpenses.length}
+    /> : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && activeTab === 'trip_money' && space.type === 'trip' ? <TripMoneyPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
       <CollaborationPage embedded spaceIdOverride={space.id} activeTab={activeTab as CollaborationTab} onSpaceUpdated={load} />
       {activeTab === 'settings' && currentMember?.role === 'owner' && <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />}
     </> : <PersonalSpaceSettings space={space} />}

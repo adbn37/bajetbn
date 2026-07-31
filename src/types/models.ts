@@ -399,3 +399,119 @@ export interface ReminderHistory {
   phone?: string | null;
   createdAt?: Timestamp;
 }
+
+export type SharedExpenseSplitMode = 'equal' | 'custom' | 'percentage';
+export type SharedExpenseStatus = 'open' | 'partially_paid' | 'paid';
+export type SharedExpenseShareStatus = 'open' | 'partially_paid' | 'paid';
+export type SharedExpensePaymentStatus = 'submitted' | 'posted' | 'rejected' | 'reversed';
+
+export interface SharedExpense {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  totalMinor: number;
+  totalSettledMinor: number;
+  amountLeftMinor: number;
+  currency: string;
+  expenseDate: string;
+  paidByUid: string;
+  paidByName?: string;
+  paidByEmail?: string;
+  splitMode: SharedExpenseSplitMode;
+  note?: string;
+  paidFromTripMoney?: boolean;
+  status: SharedExpenseStatus;
+  createdBy: string;
+  closedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SharedExpenseShare {
+  id: string;
+  displayId: string;
+  expenseId: string;
+  spaceId: string;
+  memberUid: string;
+  memberName?: string;
+  memberEmail?: string;
+  shareMinor: number;
+  settledMinor: number;
+  amountLeftMinor: number;
+  percentageBasisPoints?: number | null;
+  currency: string;
+  status: SharedExpenseShareStatus;
+  currentPaymentId?: string | null;
+  lastPaymentId?: string | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SharedExpensePaymentAllocation {
+  shareId: string;
+  expenseId: string;
+  amountMinor: number;
+}
+
+export interface SharedExpensePayment {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  fromUid: string;
+  fromName?: string;
+  fromEmail?: string;
+  toUid: string;
+  toName?: string;
+  toEmail?: string;
+  expenseId?: string | null;
+  amountMinor: number;
+  currency: string;
+  paymentDate: string;
+  proofPath?: string | null;
+  proofName?: string | null;
+  note?: string;
+  status: SharedExpensePaymentStatus;
+  allocations?: SharedExpensePaymentAllocation[];
+  reviewedAt?: Timestamp | null;
+  reviewedBy?: string | null;
+  postedAt?: Timestamp | null;
+  reversedAt?: Timestamp | null;
+  reversedBy?: string | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SpaceFund {
+  id: string;
+  spaceId: string;
+  holderUid: string;
+  holderName?: string;
+  holderEmail?: string;
+  budgetMinor: number;
+  contributedMinor: number;
+  spentMinor: number;
+  availableMinor: number;
+  currency: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SpaceFundContribution {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  memberUid: string;
+  memberName?: string;
+  memberEmail?: string;
+  amountMinor: number;
+  currency: string;
+  contributionDate: string;
+  note?: string;
+  status: 'posted' | 'reversed';
+  reversedAt?: Timestamp | null;
+  reversedBy?: string | null;
+  createdBy: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
