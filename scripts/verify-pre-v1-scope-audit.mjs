@@ -39,13 +39,22 @@ requireText('src/app/App.tsx', '<Navigate to="/spaces" replace />');
 requireText('src/pages/SettingsPage.tsx', 'Download my data');
 
 // Known gaps must remain explicitly represented until fixed and the audit is updated.
-requireText('src/pages/SettingsPage.tsx', 'Delete my account — coming later');
+const itemById = new Map(audit.items.map((item) => [item.id, item]));
+const deletionStatus = itemById.get('data.delete_account')?.status;
+if (['complete', 'manual_test'].includes(deletionStatus)) {
+  requireText('src/pages/SettingsPage.tsx', 'AccountDeletionModal');
+  requireText('functions/src/index.ts', 'export const processAccountDeletionRequests');
+  requireText('functions/src/index.ts', 'getAuth().deleteUser(uid)');
+  requireText('firestore.rules', 'match /accountDeletionRequests/{uid}');
+  requireText('ACCOUNT_DATA_DELETION_ALPHA.md', 'seven-day cooling-off period');
+} else {
+  requireText('src/pages/SettingsPage.tsx', 'Delete my account — coming later');
+}
 requireText('src/features/accounts/AccountsPage.tsx', 'Institution or provider');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', "space.type === 'trip'");
 requireText('README.md', 'Offline mutation queues are deferred');
 requireText('storage.rules', 'General receipts remain reserved');
 
-const itemById = new Map(audit.items.map((item) => [item.id, item]));
 const nativeConfirmFiles = [
   'src/features/transactions/TransactionsPage.tsx',
   'src/features/goals/GoalsPage.tsx',
@@ -70,6 +79,7 @@ if (itemById.get('release.version_source')?.status === 'complete') {
 const ci = read('.github/workflows/staging-ci.yml');
 requireText('.github/workflows/staging-ci.yml', 'npm run verify:all-structural');
 requireText('package.json', 'verify-release-safety-hardening.mjs');
+requireText('package.json', 'verify-account-data-deletion.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

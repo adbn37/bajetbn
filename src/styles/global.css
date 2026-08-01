@@ -911,3 +911,40 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   .overview-account-copy b { font-size:.82rem; }
   .archive-record-meta { grid-template-columns:1fr; }
 }
+
+/* v0.11.6 account and data deletion */
+.account-deletion-dialog { display:grid; gap:1rem; }
+.account-deletion-dialog label { display:grid; gap:.45rem; }
+.deletion-explanation-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.65rem; }
+.deletion-explanation-grid article { padding:.8rem; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); }
+.deletion-explanation-grid strong { display:block; margin-bottom:.25rem; }
+.deletion-explanation-grid p { margin:0; color:var(--muted); font-size:.78rem; line-height:1.5; }
+.deletion-blockers { padding:.9rem; border:1px solid rgba(251,113,133,.35); border-radius:14px; background:rgba(190,18,60,.08); }
+.deletion-blockers>strong { display:block; margin-bottom:.55rem; }
+.deletion-blockers ul { display:grid; gap:.55rem; padding:0; margin:0 0 .8rem; list-style:none; }
+.deletion-blockers li { display:flex; justify-content:space-between; align-items:flex-start; gap:.75rem; padding:.65rem; border-radius:10px; background:rgba(5,11,20,.42); }
+.deletion-blockers li span { color:var(--muted); line-height:1.45; }
+.deletion-blockers li a { flex:0 0 auto; color:var(--accent-2); font-size:.78rem; }
+.deletion-export-gate { display:flex; justify-content:space-between; gap:1rem; align-items:center; padding:.85rem; border:1px solid rgba(245,158,11,.35); border-radius:14px; background:rgba(245,158,11,.08); }
+.deletion-export-gate.ready { border-color:rgba(45,212,191,.35); background:rgba(45,212,191,.08); }
+.deletion-export-gate strong { display:block; }
+.deletion-export-gate p { margin:.25rem 0 0; color:var(--muted); font-size:.78rem; line-height:1.45; }
+.deletion-understanding { grid-template-columns:auto 1fr !important; align-items:flex-start; gap:.65rem !important; padding:.75rem; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); }
+.deletion-understanding input { width:18px; height:18px; margin-top:.1rem; }
+.deletion-understanding span { color:var(--muted); line-height:1.5; }
+.account-deletion-status { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding:1rem; border:1px solid rgba(251,113,133,.3); border-radius:14px; background:rgba(190,18,60,.07); }
+.account-deletion-status.pending { border-color:rgba(245,158,11,.35); background:rgba(245,158,11,.07); }
+.account-deletion-status.processing { border-color:rgba(45,212,191,.35); background:rgba(45,212,191,.07); }
+.account-deletion-status h3 { margin:.35rem 0; }
+.account-deletion-status p { margin:0; color:var(--muted); line-height:1.5; }
+.account-deletion-status small { display:block; margin-top:.45rem; color:var(--danger); }
+.account-deletion-status .status-badge { display:inline-flex; padding:.25rem .55rem; border-radius:999px; background:var(--surface-2); color:var(--muted); font-size:.72rem; font-weight:700; }
+.account-deletion-error { margin-top:.75rem; }
+.notice.warning { border-color:rgba(245,158,11,.4); background:rgba(245,158,11,.09); color:#fde68a; }
+
+@media (max-width:720px) {
+  .deletion-explanation-grid { grid-template-columns:1fr; }
+  .deletion-export-gate,.account-deletion-status { align-items:stretch; flex-direction:column; }
+  .deletion-export-gate .button,.account-deletion-status .button { width:100%; }
+  .deletion-blockers li { flex-direction:column; }
+}

@@ -1,8 +1,18 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import type { Timestamp } from 'firebase/firestore';
+import { AccountDeletionModal } from '../components/AccountDeletionModal';
+import { ActionConfirmModal, type ActionConfirmState } from '../components/ActionConfirmModal';
 import { PageHeader } from '../components/PageHeader';
 import { appBuildLabel } from '../config/release';
 import { useAuth } from '../contexts/AuthContext';
 import { usePreferences } from '../contexts/PreferencesContext';
+import {
+  cancelAccountDeletion,
+  checkAccountDeletionEligibility,
+  getAccountDeletionRequest,
+  recordAccountDataExport,
+  requestAccountDeletion,
+} from '../repositories/accountDeletionRepository';
 import {
   buildUserDataExport,
   checkAccountRecords,
@@ -10,7 +20,7 @@ import {
   releaseDownloadUrl,
   type DataHealthResult,
 } from '../repositories/releaseCandidateRepository';
-import type { Appearance, Language, TextSize } from '../types/models';
+import type { AccountDeletionEligibility, AccountDeletionRequest, Appearance, Language, TextSize } from '../types/models';
 import { getErrorMessage } from '../utils/errors';
 import { formatMoney } from '../utils/money';
 
@@ -19,8 +29,20 @@ interface ReadyDownload {
   filename: string;
 }
 
+function timestampToDate(value?: Timestamp | null): Date | null {
+  if (!value) return null;
+  return typeof value.toDate === 'function' ? value.toDate() : null;
+}
+
+function formatBruneiDate(value?: Timestamp | null): string {
+  const date = timestampToDate(value);
+  return date
+    ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Brunei' }).format(date)
+    : 'Not available';
+}
+
 export function SettingsPage() {
-  const { profile, user, logOut } = useAuth();
+  const { profile, user, logOut, refreshProfile, reauthenticateForSensitiveAction } = useAuth();
   const preferences = usePreferences();
   const [fullName, setFullName] = useState(profile?.fullName || user?.displayName || '');
   const [busy, setBusy] = useState(false);
@@ -31,12 +53,41 @@ export function SettingsPage() {
   const [dataMessage, setDataMessage] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [deletionRequest, setDeletionRequest] = useState<AccountDeletionRequest | null>(null);
+  const [deletionEligibility, setDeletionEligibility] = useState<AccountDeletionEligibility | null>(null);
+  const [deletionModalOpen, setDeletionModalOpen] = useState(false);
+  const [deletionLoading, setDeletionLoading] = useState(false);
+  const [deletionBusy, setDeletionBusy] = useState(false);
+  const [deletionError, setDeletionError] = useState('');
+  const [cancelDialog, setCancelDialog] = useState<ActionConfirmState<'cancel'> | null>(null);
+
+  const passwordRequired = useMemo(
+    () => Boolean(user?.providerData.some((item) => item.providerId === 'password')),
+    [user],
+  );
+  const exportReady = useMemo(() => {
+    const date = timestampToDate(profile?.lastDataExportAt);
+    return Boolean(
+      deletionEligibility?.exportPrepared
+      || (date && Date.now() - date.getTime() <= 24 * 60 * 60 * 1000),
+    );
+  }, [deletionEligibility?.exportPrepared, profile?.lastDataExportAt]);
 
   useEffect(() => {
     setFullName(profile?.fullName || user?.displayName || '');
   }, [profile, user]);
 
   useEffect(() => () => releaseDownloadUrl(readyDownload?.url || null), [readyDownload]);
+
+  useEffect(() => {
+    if (!user) {
+      setDeletionRequest(null);
+      return;
+    }
+    void getAccountDeletionRequest(user.uid)
+      .then(setDeletionRequest)
+      .catch((nextError) => setDeletionError(getErrorMessage(nextError)));
+  }, [user]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -96,12 +147,64 @@ export function SettingsPage() {
       releaseDownloadUrl(readyDownload?.url || null);
       const url = downloadJsonFile(data, filename);
       setReadyDownload({ url, filename });
-      setDataMessage('Your data file is ready. If it did not download automatically, press “Save data file” below. Keep it private because it contains your money information.');
+      await recordAccountDataExport();
+      await refreshProfile();
+      setDataMessage('Your data file is ready and the export check is recorded for 24 hours. If it did not download automatically, press “Save data file” below. Keep it private because it contains your money information.');
     } catch (nextError) {
       setDataError(getErrorMessage(nextError));
       setDataMessage('');
     } finally {
       setDataBusy(null);
+    }
+  }
+
+
+  async function loadDeletionEligibility(openModal = false) {
+    setDeletionLoading(true);
+    setDeletionError('');
+    if (openModal) setDeletionModalOpen(true);
+    try {
+      const result = await checkAccountDeletionEligibility();
+      setDeletionEligibility(result);
+    } catch (nextError) {
+      setDeletionError(getErrorMessage(nextError));
+    } finally {
+      setDeletionLoading(false);
+    }
+  }
+
+  async function submitDeletionRequest(password: string) {
+    if (!user) return;
+    setDeletionBusy(true);
+    setDeletionError('');
+    try {
+      await reauthenticateForSensitiveAction(password);
+      const result = await requestAccountDeletion({ confirmation: 'DELETE', exportAcknowledged: true });
+      setDeletionRequest(result);
+      setDeletionModalOpen(false);
+      await refreshProfile();
+      setSuccess('Account deletion requested. You can cancel before the scheduled date.');
+    } catch (nextError) {
+      setDeletionError(getErrorMessage(nextError));
+      await loadDeletionEligibility();
+    } finally {
+      setDeletionBusy(false);
+    }
+  }
+
+  async function runCancellation() {
+    setDeletionBusy(true);
+    setDeletionError('');
+    try {
+      await cancelAccountDeletion();
+      setDeletionRequest(null);
+      setCancelDialog(null);
+      await refreshProfile();
+      setSuccess('Account deletion request cancelled.');
+    } catch (nextError) {
+      setDeletionError(getErrorMessage(nextError));
+    } finally {
+      setDeletionBusy(false);
     }
   }
 
@@ -250,12 +353,63 @@ export function SettingsPage() {
         <div className="settings-section-heading">
           <div><h2>Account controls</h2><p>Your privacy and data tools stay available without a paid plan.</p></div>
         </div>
-        <div className="button-row">
-          <button type="button" className="button secondary" onClick={() => void logOut()}>Sign out of this device</button>
-          <button type="button" className="button danger-outline" disabled>Delete my account — coming later</button>
-        </div>
+
+        {deletionRequest && ['pending', 'processing', 'blocked', 'failed'].includes(deletionRequest.status) ? (
+          <article className={`account-deletion-status ${deletionRequest.status}`}>
+            <div>
+              <span className="status-badge">{deletionRequest.status === 'pending' ? 'Cooling-off period' : deletionRequest.status === 'processing' ? 'Deletion in progress' : deletionRequest.status === 'blocked' ? 'Action required' : 'Needs attention'}</span>
+              <h3>{deletionRequest.status === 'pending' ? 'Your deletion request is scheduled' : deletionRequest.status === 'processing' ? 'BajetBN is removing your private data' : deletionRequest.status === 'blocked' ? 'Deletion is paused' : 'Deletion could not be completed'}</h3>
+              <p>{deletionRequest.status === 'pending'
+                ? `Scheduled for ${formatBruneiDate(deletionRequest.scheduledFor)}. You can cancel any time before processing begins.`
+                : deletionRequest.status === 'processing'
+                  ? 'Do not add new records. Your sign-in will stop working when the process finishes.'
+                  : deletionRequest.status === 'blocked'
+                    ? 'A shared-Space responsibility still needs to be resolved. Open the deletion details and check again.'
+                    : 'Your account remains available. You may cancel this request and try again after reviewing the message.'}</p>
+              {deletionRequest.lastError && <small>{deletionRequest.lastError}</small>}
+            </div>
+            <div className="button-row">
+              {deletionRequest.status === 'blocked' && <button type="button" className="button secondary" disabled={deletionBusy} onClick={() => void loadDeletionEligibility(true)}>Review blockers</button>}
+              {deletionRequest.status !== 'processing' && <button type="button" className="button danger-outline" disabled={deletionBusy} onClick={() => setCancelDialog({
+                payload: 'cancel',
+                title: 'Cancel account deletion?',
+                description: 'Your BajetBN account and records will remain available. You can submit a new request later.',
+                confirmLabel: 'Cancel deletion request',
+                tone: 'danger',
+              })}>Cancel deletion</button>}
+            </div>
+          </article>
+        ) : (
+          <div className="button-row">
+            <button type="button" className="button secondary" onClick={() => void logOut()}>Sign out of this device</button>
+            <button type="button" className="button danger-outline" onClick={() => void loadDeletionEligibility(true)}>Delete my account</button>
+          </div>
+        )}
+
+        {deletionError && !deletionModalOpen && <div className="notice error account-deletion-error">{deletionError}</div>}
         <p className="settings-build-info">App: {appBuildLabel()} · Brunei time</p>
       </section>
+
+      {deletionModalOpen && <AccountDeletionModal
+        eligibility={deletionEligibility}
+        loading={deletionLoading}
+        busy={deletionBusy || dataBusy === 'download'}
+        error={deletionError}
+        passwordRequired={passwordRequired}
+        exportReady={exportReady}
+        onRefresh={() => void loadDeletionEligibility()}
+        onDownload={() => void downloadMyData()}
+        onClose={() => { setDeletionModalOpen(false); setDeletionError(''); }}
+        onConfirm={(password) => void submitDeletionRequest(password)}
+      />}
+
+      {cancelDialog && <ActionConfirmModal
+        state={cancelDialog}
+        busy={deletionBusy}
+        error={deletionError}
+        onClose={() => { setCancelDialog(null); setDeletionError(''); }}
+        onConfirm={() => void runCancellation()}
+      />}
     </main>
   );
 }

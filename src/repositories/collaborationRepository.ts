@@ -164,6 +164,15 @@ export async function removeSpaceMember(spaceId: string, memberUid: string) {
   return httpsCallable(functions, 'removeSpaceMember')({ spaceId, memberUid, idempotencyKey: crypto.randomUUID() });
 }
 
+export async function transferSpaceOwnership(spaceId: string, newOwnerUid: string) {
+  const { functions } = requireFirebase();
+  return httpsCallable(functions, 'transferSpaceOwnership')({
+    spaceId,
+    newOwnerUid,
+    idempotencyKey: crypto.randomUUID(),
+  });
+}
+
 export async function createSharedBillAssignment(input: {
   spaceId: string;
   commitmentId: string;

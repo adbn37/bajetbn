@@ -115,3 +115,48 @@ Notes: ____________________
 - [ ] No browser-native `confirm()` or `alert()` box appears anywhere in the tested workflows.
 - [ ] `npm run verify:all-structural` passes in GitHub staging CI.
 - [ ] Production smoke-test and rollback documents are reviewed before any live deployment.
+
+## v0.11.6 — Account and Data Deletion
+
+### Deployment and access
+
+- [ ] Deploy `firestore.rules` to the staging Firebase project.
+- [ ] Deploy all v0.11.6 Firebase Functions to staging, including the scheduled finalizer and ownership transfer.
+- [ ] Confirm a signed-in user can read only their own `accountDeletionRequests/{uid}` record.
+- [ ] Confirm clients cannot directly create, update or delete deletion requests, commands, audit records or tombstones.
+
+### Export, authentication and request
+
+- [ ] Use a disposable email/password user and confirm deletion is blocked until a current data export is prepared.
+- [ ] Confirm the export gate expires after 24 hours.
+- [ ] Confirm an incorrect password cannot submit the request.
+- [ ] Confirm the correct password reauthentication, typed `DELETE` and acknowledgement create exactly one pending request.
+- [ ] Repeat the submit action and confirm idempotency prevents duplicate requests/audit entries.
+- [ ] Repeat the flow with a disposable Google user and confirm the Google reauthentication popup works.
+- [ ] Confirm Settings shows the seven-day scheduled date in Brunei time.
+
+### Shared responsibility blockers
+
+- [ ] Confirm deletion is blocked when the user owns a Space with another member record.
+- [ ] Transfer ownership to an active member and confirm the former owner becomes an admin and the new owner receives owner controls.
+- [ ] Confirm Personal Space ownership cannot be transferred.
+- [ ] Confirm deletion is blocked when the user holds Trip money for another owner’s Space.
+- [ ] Change the Trip money holder and confirm the blocker clears.
+
+### Cancellation and finalisation
+
+- [ ] Cancel a pending request and confirm the account, request status and sign-in remain available.
+- [ ] Confirm a cancelled request is not processed by the scheduled function.
+- [ ] In the staging emulator or with an approved shortened test date, process a due request and confirm Authentication is first disabled, refresh tokens are revoked, the two-hour token-drain gate is respected, and the Authentication record is removed only after data cleanup succeeds.
+- [ ] Confirm private profile, Accounts, ledger entries, private Spaces, transactions, budgets, goals, reminders and private uploads are removed.
+- [ ] Confirm proof files belonging to the deleted user are removed from Storage.
+- [ ] Confirm shared bills, shared expenses, settlements, Trip contributions and Space activity remain readable to other members as `Deleted member` without name/email/proof links.
+- [ ] Confirm account totals and who-owes-whom calculations remain unchanged for remaining members.
+- [ ] Confirm the minimal `deletedUsers` tombstone and deletion audit are not readable by clients.
+- [ ] Simulate a processing failure and confirm the request becomes `failed`, the user is not falsely logged as deleted, and a later retry can complete safely.
+
+### Release gate
+
+- [ ] Run `node scripts/verify-account-data-deletion.mjs`.
+- [ ] Run the full structural suite, Functions build and staging web build.
+- [ ] Do not mark `data.delete_account` complete or deploy to production until every disposable-user test above passes.

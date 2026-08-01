@@ -1,8 +1,8 @@
 # BajetBN Pre-v1.0 Scope-Completion Audit
 
 **Audit date:** 31 July 2026
-**Audited baseline:** BajetBN v0.11.5 Release Safety Hardening Alpha 1
-**Source basis:** the verified v0.11.4 Alpha 2 staging baseline plus v0.11.5 release-safety hardening.
+**Audited baseline:** BajetBN v0.11.6 Account and Data Deletion Alpha 1
+**Source basis:** the verified v0.11.5 staging baseline plus the v0.11.6 account and data deletion implementation.
 
 ## Decision
 
@@ -26,16 +26,17 @@ This audit does not change runtime behaviour. It records the approved scope, cur
 - Trip money holder, contributions and collected-money spending.
 - Safe Archive, Restore, Close, Stop, Delete and Undo foundations.
 - Dedicated archive/closed pages introduced in Alpha 2.
+- Self-service account deletion with export, recent authentication, a seven-day cooling-off period, cancellation, ownership blockers and shared-history anonymisation implemented in v0.11.6 source.
 
 ## Pre-production blockers
 
 These must be completed before the current build is promoted to the public live website as the approved release:
 
 1. **Finish Alpha 2 and v0.11.5 manual staging tests** on mobile and desktop, including every dedicated archive/closed page and every new confirmation dialog.
-2. **Implement user account and personal-data deletion**, with clear retention rules for shared and financial history.
+2. **Deploy and manually verify v0.11.6 account deletion on staging** with disposable password and Google users, ownership-transfer blockers, cancellation, scheduled finalisation, Storage cleanup and retained anonymous shared history.
 3. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
 
-The remaining browser-native confirmation, version-source, CI-coverage and Firebase Functions dependency-review findings were closed in v0.11.5. See `RELEASE_SAFETY_HARDENING_ALPHA.md`.
+The browser-native confirmation, version-source, CI-coverage and Firebase Functions dependency-review findings were closed in v0.11.5. The account-deletion source implementation is documented in `ACCOUNT_DATA_DELETION_ALPHA.md`; it remains a staging-test gate until the scheduled backend flow is proven end to end.
 
 ## Required scope gaps before v1.0.0
 

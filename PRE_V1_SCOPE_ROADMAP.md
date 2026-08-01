@@ -15,13 +15,16 @@
 - [x] Add production smoke-test and rollback checklists.
 - [ ] Complete manual browser testing on staging before merging this phase onward.
 
-## v0.11.6 — Account and Data Controls
+## v0.11.6 — Account and Data Controls — Completed in source
 
-- Add “Delete my account” request flow.
-- Explain what is deleted immediately, anonymised, retained or blocked.
-- Protect shared bills, member settlements, audit trails and financial history.
-- Add reauthentication, typed confirmation, cooling-off/cancellation where appropriate, and an audited deletion request state.
-- Verify data export before deletion.
+- [x] Add “Delete my account” request flow.
+- [x] Explain what is deleted, anonymised, retained or blocked.
+- [x] Protect shared bills, member settlements, audit trails and financial history.
+- [x] Add password/Google reauthentication, typed confirmation, seven-day cooling-off, cancellation and audited request states.
+- [x] Require a current data export before deletion.
+- [x] Add ownership transfer for shared Spaces and Trip-fund-holder blockers.
+- [x] Add scheduled finalisation, Firebase Auth removal, Firestore cleanup, Storage cleanup and anonymous shared-history retention.
+- [ ] Deploy Firestore rules and Functions to staging and complete the disposable-user test matrix.
 
 ## v0.11.7 — Recurring Money and Documents
 
