@@ -124,14 +124,12 @@ includes('firestore.indexes.json', [
   '"fieldPath": "scheduledDate"',
 ]);
 includes('package.json', [
-  '"version": "0.11.7"',
   'verify:recurring-transactions',
   'verify-recurring-transactions.mjs',
 ]);
-includes('release.json', [
-  '"version": "0.11.7"',
-  'Recurring Transactions Alpha 1',
-]);
+const packageJson = JSON.parse(read('package.json'));
+const releaseJson = JSON.parse(read('release.json'));
+if (Number(packageJson.version.split('.')[2]) < 7 || Number(releaseJson.version.split('.')[2]) < 7) fail('Recurring transactions require v0.11.7 or later.');
 
 function lastDay(year, month) { return new Date(Date.UTC(year, month, 0)).getUTCDate(); }
 function nextDate(date, frequency, preferredDay, monthEnd) {

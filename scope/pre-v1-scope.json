@@ -380,21 +380,30 @@
       "id": "brunei.institutions",
       "area": "Brunei localisation",
       "requirement": "Simple presets for common Brunei banks and account providers",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
-        "src/features/accounts/AccountsPage.tsx"
+        "src/config/bruneiMoneyOptions.ts",
+        "src/features/accounts/AccountsPage.tsx",
+        "functions/src/index.ts",
+        "BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md",
+        "scripts/verify-brunei-money-options.mjs"
       ]
     },
     {
       "id": "brunei.payment_methods",
       "area": "Brunei localisation",
       "requirement": "Clear Brunei-relevant payment method choices",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
-        "src/features/accounts/AccountsPage.tsx",
-        "src/features/collaboration/CollaborationPage.tsx"
+        "src/config/bruneiMoneyOptions.ts",
+        "src/components/PaymentMethodField.tsx",
+        "src/features/transactions/TransactionsPage.tsx",
+        "src/features/collaboration/CollaborationPage.tsx",
+        "functions/src/index.ts",
+        "BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md",
+        "scripts/verify-brunei-money-options.mjs"
       ]
     },
     {

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import { paymentMethodLabel, suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { listAccounts } from '../../repositories/accountRepository';
 import {
@@ -31,6 +33,7 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import type {
   Account,
   Commitment,
+  PaymentMethodCode,
   SharedBillAssignment,
   SharedBillPayment,
   SharedBillSettlementMode,
@@ -300,7 +303,7 @@ export function CollaborationPage({
         return <article className={`shared-bill-card status-${assignment.status}`} key={assignment.id}>
           <div className="planning-card-head"><div><span className="eyebrow">{statusLabel[assignment.status] || assignment.status}</span><h3>{assignment.commitmentName}</h3></div><strong>{formatMoney(assignment.assignedMinor, assignment.currency)}</strong></div>
           <div className="planning-meta"><span>{assignment.memberName || assignment.memberEmail || assignment.memberUid}</span><span>Due {assignment.dueDate}</span></div>
-          <div className="transaction-preview"><div><span>Paid</span><strong>{formatMoney(settled, assignment.currency)}</strong></div><div><span>Left to pay</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div>{currentPayment && <small>Payment {currentPayment.displayId}: {formatMoney(currentPayment.amountMinor, currentPayment.currency)} · {currentPayment.settlementMode === 'account' ? 'My BajetBN account' : 'Another method'}</small>}{lastPayment && !currentPayment && <small>Last payment {lastPayment.displayId}: {lastPayment.settlementMode === 'account' ? 'Account updated' : 'Paid another way'}.</small>}</div>
+          <div className="transaction-preview"><div><span>Paid</span><strong>{formatMoney(settled, assignment.currency)}</strong></div><div><span>Left to pay</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div>{currentPayment && <small>Payment {currentPayment.displayId}: {formatMoney(currentPayment.amountMinor, currentPayment.currency)} · {paymentMethodLabel(currentPayment.paymentMethod, currentPayment.paymentMethodLabel)}</small>}{lastPayment && !currentPayment && <small>Last payment {lastPayment.displayId}: {lastPayment.settlementMode === 'account' ? 'Account updated' : 'Paid another way'}.</small>}</div>
           {assignment.note && <p>{assignment.note}</p>}
           <div className="button-row">
             {maySubmit && <button className="button primary" onClick={() => setSubmitting(assignment)}>{assignment.status === 'confirmed' ? 'Finish old payment' : 'Add payment'}</button>}
@@ -427,6 +430,8 @@ function SubmitPaymentForm({ assignment, accounts, onSaved }: { assignment: Shar
   const [settlementMode, setSettlementMode] = useState<SharedBillSettlementMode>(accounts.length ? 'account' : 'external');
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
   const [paymentDate, setPaymentDate] = useState(today());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(suggestedPaymentMethod(accounts[0]));
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -441,7 +446,7 @@ function SubmitPaymentForm({ assignment, accounts, onSaved }: { assignment: Shar
       if (amountMinor > outstanding) throw new Error('The amount paid cannot be more than the amount left to pay.');
       if (settlementMode === 'account' && !accountId) throw new Error('Choose the account used for this payment.');
       const proof = file ? await uploadSharedBillProof({ spaceId: assignment.spaceId, assignmentId: assignment.id, file }) : {};
-      await submitSharedBillPayment({ assignmentId: assignment.id, amountMinor, settlementMode, accountId: settlementMode === 'account' ? accountId : undefined, paymentDate, ...proof, note });
+      await submitSharedBillPayment({ assignmentId: assignment.id, amountMinor, settlementMode, accountId: settlementMode === 'account' ? accountId : undefined, paymentMethod, paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined, paymentDate, ...proof, note });
       await onSaved();
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -454,7 +459,8 @@ function SubmitPaymentForm({ assignment, accounts, onSaved }: { assignment: Shar
     <div className="transaction-preview"><div><span>Amount to pay</span><strong>{formatMoney(assignment.assignedMinor, assignment.currency)}</strong></div><div><span>Amount left before payment</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div><small>You can pay part of it. Any amount left will stay open.</small></div>
     <label>Amount paid now (BND)<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} required/><small>Enter the amount you paid now.</small></label>
     <label>How did you pay?<select value={settlementMode} onChange={(event) => setSettlementMode(event.target.value as SharedBillSettlementMode)}><option value="account" disabled={accounts.length === 0}>Paid from my BajetBN account</option><option value="external">Paid using another method</option></select></label>
-    {settlementMode === 'account' ? <><label>Account used<select value={accountId} onChange={(event) => setAccountId(event.target.value)} required>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name} — {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label><div className="notice">After the payment is confirmed, BajetBN records the expense and updates this account once.</div></> : <div className="notice">This marks the shared bill as paid without changing any BajetBN account balance.</div>}
+    {settlementMode === 'account' ? <><label>Account used<select value={accountId} onChange={(event) => { const nextId = event.target.value; setAccountId(nextId); setPaymentMethod(suggestedPaymentMethod(accounts.find((account) => account.id === nextId))); setPaymentMethodCustom(''); }} required>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name} — {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label><div className="notice">After the payment is confirmed, BajetBN records the expense and updates this account once.</div></> : <div className="notice">This marks the shared bill as paid without changing any BajetBN account balance.</div>}
+    <PaymentMethodField value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
     <label>Payment date<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required/></label>
     <label>Proof of payment<input type="file" accept="image/*,application/pdf" onChange={(event) => setFile(event.target.files?.[0] || null)}/><small>Optional unless your group requires it. Images and PDFs up to 10 MB.</small></label>
     <label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Receipt number or short message"/></label>

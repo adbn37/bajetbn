@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import { suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_TRANSACTION_CATEGORIES, categoryIconGlyph } from '../categories/defaultCategories';
 import { listAccounts } from '../../repositories/accountRepository';
@@ -10,7 +12,7 @@ import { listCustomCategories } from '../../repositories/categoryRepository';
 import { createCommitment, listAllCommitments, listCommitmentPayments, payCommitment, updateCommitment } from '../../repositories/commitmentRepository';
 import { manageCommitment } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
-import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, Space, TransactionCategory } from '../../types/models';
+import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, PaymentMethodCode, Space, TransactionCategory } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
@@ -72,4 +74,39 @@ function CommitmentForm({item,accounts,spaces,categories,onSaved}:{item:Commitme
   const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const amountMinor=toMinorUnits(amount);if(amountMinor<=0)throw new Error('Enter an amount greater than BND 0.00.');const totalAmountMinor=type==='instalment'?toMinorUnits(total):undefined;if(type==='instalment'&&(!totalAmountMinor||totalAmountMinor<amountMinor))throw new Error('The full instalment total must be the same as or more than one payment.');const base={name,payee:payee||undefined,accountId:accountId||undefined,categoryId,amountMinor,totalAmountMinor,frequency,nextDueDate:dueDate,endDate:endDate||undefined,reminderDays:Number(reminderDays),note};if(item)await updateCommitment({commitmentId:item.id,...base});else await createCommitment({type,spaceId,startDate:dueDate,...base});await onSaved();}catch(x){setError(getErrorMessage(x));}finally{setBusy(false);}};
   return <form className="form-stack" onSubmit={submit}>{error&&<div className="notice error">{error}</div>}<div className="form-grid"><label>Type<select value={type} onChange={e=>setType(e.target.value as CommitmentType)} disabled={Boolean(item)}><option value="bill">Bill</option><option value="instalment">Instalment</option></select></label><label>Name<input value={name} onChange={e=>setName(e.target.value)} required/></label><label>Paid to<input value={payee} onChange={e=>setPayee(e.target.value)} placeholder="DST, landlord, supplier"/></label><label>Space<select value={spaceId} onChange={e=>{setSpaceId(e.target.value);setCategoryId('');setAccountId('');}} disabled={Boolean(item)}>{spaces.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>Usual account<select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Choose when paying</option>{scopedAccounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Spending category<select value={categoryId} onChange={e=>setCategoryId(e.target.value)} required>{scopedCategories.map(c=><option key={c.id} value={c.id}>{categoryIconGlyph(c.icon)} {c.name}</option>)}</select></label>{type==='bill'?<label>Amount due each cycle (BND)<input value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal" required/><small>The amount you normally pay each time this bill is due.</small></label>:<><label>Full instalment total (BND)<input value={total} onChange={e=>setTotal(e.target.value)} inputMode="decimal" required/><small>The full amount you need to pay from start to finish.</small></label><label>Instalment amount per cycle (BND)<input value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal" required/><small>The amount you normally pay each time.</small></label></>}<label>How often<select value={frequency} onChange={e=>setFrequency(e.target.value as CommitmentFrequency)}><option value="once">One time</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option></select></label><label>Next due date<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} required/></label><label>End date<input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)}/></label><label>Remind me this many days early<input type="number" min="0" max="60" value={reminderDays} onChange={e=>setReminderDays(e.target.value)}/></label></div><label>Note<textarea value={note} onChange={e=>setNote(e.target.value)} rows={2}/></label><button className="button primary full" disabled={busy}>{busy?'Saving…':'Save bill or instalment'}</button></form>
 }
-function PaymentForm({item,accounts,onSaved}:{item:Commitment;accounts:Account[];onSaved:()=>Promise<void>}){const[accountId,setAccountId]=useState(item.accountId||accounts[0]?.id||'');const[amount,setAmount]=useState(String((item.type==='instalment'&&item.totalAmountMinor?Math.min(item.amountMinor,item.totalAmountMinor-item.amountPaidMinor):item.amountMinor)/100));const[date,setDate]=useState(today());const[note,setNote]=useState('');const[busy,setBusy]=useState(false);const[error,setError]=useState('');const available=accounts.filter(a=>a.currency===item.currency);const parsedAmountMinor=useMemo(()=>{try{return Math.max(0,toMinorUnits(amount));}catch{return 0;}},[amount]);const remainingBefore=item.type==='instalment'&&item.totalAmountMinor?Math.max(0,item.totalAmountMinor-item.amountPaidMinor):0;const remainingAfter=Math.max(0,remainingBefore-parsedAmountMinor);const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const amountMinor=toMinorUnits(amount);if(amountMinor<=0)throw new Error('Enter a payment greater than BND 0.00.');await payCommitment({commitmentId:item.id,accountId,amountMinor,paymentDate:date,note});await onSaved();}catch(x){setError(getErrorMessage(x));}finally{setBusy(false);}};return <form className="form-stack" onSubmit={submit}>{error&&<div className="notice error">{error}</div>}<div className="notice">This saves a payment and updates the selected account balance once.</div><label>Account used<select value={accountId} onChange={e=>setAccountId(e.target.value)} required>{available.map(a=><option value={a.id} key={a.id}>{a.name} — {formatMoney(a.ledgerBalanceMinor,a.currency)}</option>)}</select></label><label>Amount paid now (BND)<input value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal" required/><small>The amount you are paying now.</small></label>{item.type==='instalment'&&item.totalAmountMinor&&<div className="transaction-preview"><div><span>Amount left before payment</span><strong>{formatMoney(remainingBefore,item.currency)}</strong></div><div><span>Amount left after payment</span><strong>{formatMoney(remainingAfter,item.currency)}</strong></div><small>The amount left cannot go below BND 0.00.</small></div>}<label>Payment date<input type="date" value={date} onChange={e=>setDate(e.target.value)} required/></label><label>Note<textarea value={note} onChange={e=>setNote(e.target.value)} rows={2}/></label><button className="button primary full" disabled={busy}>{busy?'Saving…':'Save payment'}</button></form>}
+function PaymentForm({ item, accounts, onSaved }: { item: Commitment; accounts: Account[]; onSaved: () => Promise<void> }) {
+  const [accountId, setAccountId] = useState(item.accountId || accounts[0]?.id || '');
+  const available = accounts.filter((account) => account.currency === item.currency);
+  const selectedAccount = available.find((account) => account.id === accountId);
+  const [amount, setAmount] = useState(String((item.type === 'instalment' && item.totalAmountMinor ? Math.min(item.amountMinor, item.totalAmountMinor - item.amountPaidMinor) : item.amountMinor) / 100));
+  const [date, setDate] = useState(today());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(suggestedPaymentMethod(selectedAccount));
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const parsedAmountMinor = useMemo(() => { try { return Math.max(0, toMinorUnits(amount)); } catch { return 0; } }, [amount]);
+  const remainingBefore = item.type === 'instalment' && item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0;
+  const remainingAfter = Math.max(0, remainingBefore - parsedAmountMinor);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError('');
+    try {
+      const amountMinor = toMinorUnits(amount);
+      if (amountMinor <= 0) throw new Error('Enter a payment greater than BND 0.00.');
+      await payCommitment({ commitmentId: item.id, accountId, amountMinor, paymentDate: date, paymentMethod, paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined, note });
+      await onSaved();
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusy(false); }
+  };
+  return <form className="form-stack" onSubmit={submit}>
+    {error && <div className="notice error">{error}</div>}
+    <div className="notice">This saves a payment and updates the selected account balance once.</div>
+    <label>Account used<select value={accountId} onChange={(event) => { const nextId = event.target.value; setAccountId(nextId); setPaymentMethod(suggestedPaymentMethod(available.find((account) => account.id === nextId))); setPaymentMethodCustom(''); }} required>{available.map((account) => <option value={account.id} key={account.id}>{account.name} — {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
+    <PaymentMethodField value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
+    <label>Amount paid now (BND)<input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" required/><small>The amount you are paying now.</small></label>
+    {item.type === 'instalment' && item.totalAmountMinor && <div className="transaction-preview"><div><span>Amount left before payment</span><strong>{formatMoney(remainingBefore, item.currency)}</strong></div><div><span>Amount left after payment</span><strong>{formatMoney(remainingAfter, item.currency)}</strong></div><small>The amount left cannot go below BND 0.00.</small></div>}
+    <label>Payment date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required/></label>
+    <label>Note<textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2}/></label>
+    <button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Save payment'}</button>
+  </form>;
+}

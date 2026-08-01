@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
+import { institutionDisplay, paymentMethodLabel } from '../../config/bruneiMoneyOptions';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listAccounts } from '../../repositories/accountRepository';
@@ -105,10 +106,10 @@ export function SearchPage() {
       id: `account:${item.id}`,
       kind: 'account' as const,
       title: item.name,
-      detail: item.institution || (item.type === 'cash' ? 'Cash account' : 'Money account'),
+      detail: institutionDisplay(item),
       extra: item.classification === 'business' ? 'Business' : 'Personal',
       route: '/accounts',
-      searchable: [item.displayId, item.name, item.institution, item.type, item.classification].filter(Boolean).join(' '),
+      searchable: [item.displayId, item.name, item.institution, item.institutionCode, item.type, item.classification].filter(Boolean).join(' '),
       accountId: item.id,
       amountMinor: item.ledgerBalanceMinor,
       currency: item.currency,
@@ -120,7 +121,7 @@ export function SearchPage() {
       detail: item.note || item.category || 'Money activity',
       extra: `${spaceNames.get(item.spaceId) || 'Personal'} · ${accountNames.get(item.accountId) || 'Account'}`,
       route: '/transactions',
-      searchable: [item.displayId, item.counterparty, item.note, item.category, item.type, item.transactionDate].filter(Boolean).join(' '),
+      searchable: [item.displayId, item.counterparty, item.note, item.category, paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel), item.type, item.transactionDate].filter(Boolean).join(' '),
       date: item.transactionDate,
       spaceId: item.spaceId,
       accountId: item.accountId,
@@ -135,7 +136,7 @@ export function SearchPage() {
       detail: `${item.type === 'income' ? 'Money in' : 'Money out'} · ${item.category}`,
       extra: `${spaceNames.get(item.spaceId) || 'Personal'} · ${item.nextRunDate ? `Next date ${item.nextRunDate}` : 'No next date'}`,
       route: item.status === 'stopped' || item.status === 'completed' ? '/recurring/stopped' : '/recurring',
-      searchable: [item.displayId, item.name, item.category, item.counterparty, item.note, item.frequency, item.status].filter(Boolean).join(' '),
+      searchable: [item.displayId, item.name, item.category, item.counterparty, item.note, paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel), item.frequency, item.status].filter(Boolean).join(' '),
       date: item.nextRunDate || item.lastRunDate || undefined,
       spaceId: item.spaceId,
       accountId: item.accountId,

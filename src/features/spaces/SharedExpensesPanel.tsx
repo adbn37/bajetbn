@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import { paymentMethodLabel } from '../../config/bruneiMoneyOptions';
 import {
   createSharedExpense,
   getSharedExpenseProofUrl,
@@ -13,6 +15,7 @@ import {
   uploadSharedExpenseProof,
 } from '../../repositories/sharedExpenseRepository';
 import type {
+  PaymentMethodCode,
   SharedExpense,
   SharedExpensePayment,
   SharedExpenseShare,
@@ -278,6 +281,8 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
 function SharedExpensePaymentForm({ space, payment, onSaved }: { space: Space; payment: { toUid: string; amountMinor: number; expenseId?: string }; onSaved: () => Promise<void> }) {
   const [amount, setAmount] = useState(String(payment.amountMinor / 100));
   const [paymentDate, setPaymentDate] = useState(today());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>('bank_transfer');
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -288,7 +293,7 @@ function SharedExpensePaymentForm({ space, payment, onSaved }: { space: Space; p
       const amountMinor = toMinorUnits(amount);
       if (amountMinor <= 0 || amountMinor > payment.amountMinor) throw new Error('Enter an amount up to the amount you owe.');
       const proof = file ? await uploadSharedExpenseProof({ spaceId: space.id, referenceId: payment.expenseId || `balance-${payment.toUid}`, file }) : {};
-      await submitSharedExpensePayment({ spaceId: space.id, toUid: payment.toUid, expenseId: payment.expenseId, amountMinor, paymentDate, note, ...proof });
+      await submitSharedExpensePayment({ spaceId: space.id, toUid: payment.toUid, expenseId: payment.expenseId, amountMinor, paymentDate, paymentMethod, paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined, note, ...proof });
       await onSaved();
     } catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusy(false); }
@@ -297,6 +302,7 @@ function SharedExpensePaymentForm({ space, payment, onSaved }: { space: Space; p
     {error && <div className="notice error">{error}</div>}
     <div className="transaction-preview"><div><span>Amount you owe</span><strong>{formatMoney(payment.amountMinor, space.currency)}</strong></div><small>You can pay part of it. This records a payment between members and does not change a bank account balance.</small></div>
     <label>Amount paid now (BND)<input required inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+    <PaymentMethodField value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
     <label>Payment date<input required type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
     <label>Proof of payment<input type="file" accept="image/*,application/pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} /><small>Optional unless this Space requires it.</small></label>
     <label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label>

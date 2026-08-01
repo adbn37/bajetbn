@@ -11,6 +11,8 @@ const db = getFirestore();
 const region = 'asia-southeast1';
 
 const accountTypes = ['bank', 'cash', 'e_wallet', 'credit_card'] as const;
+const institutionCodes = ['bibd', 'baiduri', 'taib', 'standard_chartered_brunei', 'cash', 'other_e_wallet', 'other'] as const;
+const paymentMethodCodes = ['bank_transfer', 'cash', 'debit_card', 'credit_card', 'e_wallet', 'qr_payment', 'bank_deposit', 'cheque', 'other'] as const;
 const transactionTypes = ['income', 'expense', 'transfer'] as const;
 const categoryKinds = ['income', 'expense'] as const;
 const categoryScopes = ['personal', 'business', 'both'] as const;
@@ -24,6 +26,8 @@ const recurringTransactionFrequencies = ['weekly', 'monthly', 'quarterly', 'year
 const recurringTransactionStatuses = ['active', 'paused', 'needs_attention', 'stopped', 'completed'] as const;
 const recurringTransactionActions = ['pause', 'resume', 'skip', 'stop', 'restart', 'delete'] as const;
 type AccountType = (typeof accountTypes)[number];
+type InstitutionCode = (typeof institutionCodes)[number];
+type PaymentMethodCode = (typeof paymentMethodCodes)[number];
 type PostedTransactionType = (typeof transactionTypes)[number];
 type CategoryKind = (typeof categoryKinds)[number];
 type CategoryScope = (typeof categoryScopes)[number];
@@ -110,6 +114,19 @@ function optionalString(value: unknown, max = 120): string {
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
   if (typeof value !== 'string' || !allowed.includes(value as T)) throw new HttpsError('invalid-argument', `Invalid ${field}.`);
   return value as T;
+}
+
+function optionalInstitutionCode(value: unknown): InstitutionCode | null {
+  if (value == null || value === '') return null;
+  return oneOf(value, institutionCodes, 'institution');
+}
+
+function paymentMethodValues(data: Record<string, unknown>): { paymentMethod: PaymentMethodCode | null; paymentMethodLabel: string | null } {
+  if (data.paymentMethod == null || data.paymentMethod === '') return { paymentMethod: null, paymentMethodLabel: null };
+  const paymentMethod = oneOf(data.paymentMethod, paymentMethodCodes, 'payment method');
+  const custom = optionalString(data.paymentMethodLabel, 80);
+  if (paymentMethod === 'other' && !custom) throw new HttpsError('invalid-argument', 'Type the other payment method.');
+  return { paymentMethod, paymentMethodLabel: paymentMethod === 'other' ? custom : null };
 }
 
 function displayId(prefix: string): string {
@@ -424,6 +441,7 @@ export const createAccount = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const name = stringValue(request.data?.name, 'Account name');
   const institution = optionalString(request.data?.institution);
+  const institutionCode = optionalInstitutionCode(request.data?.institutionCode);
   const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
   const currency = oneOf(request.data?.currency, ['BND', 'MYR', 'SGD', 'USD'] as const, 'currency');
@@ -444,7 +462,7 @@ export const createAccount = onCall({ region }, async (request) => {
     const result = { accountId: accountRef.id, ledgerEntryId: ledgerRef.id };
 
     transaction.create(accountRef, {
-      displayId: displayId('ACC'), ownerId: uid, name, institution, type, classification,
+      displayId: displayId('ACC'), ownerId: uid, name, institution, institutionCode, type, classification,
       currency, openingBalanceMinor, ledgerBalanceMinor: openingBalanceMinor,
       balanceVersion: 1, archivedAt: null, closedAt: null, createdAt: now, updatedAt: now,
     });
@@ -466,13 +484,14 @@ export const updateAccountProfile = onCall({ region }, async (request) => {
   const accountId = stringValue(request.data?.accountId, 'Account ID');
   const name = stringValue(request.data?.name, 'Account name');
   const institution = optionalString(request.data?.institution);
+  const institutionCode = optionalInstitutionCode(request.data?.institutionCode);
   const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
   const ref = db.collection('accounts').doc(accountId);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Account not found.');
   if (snapshot.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this account.');
-  await ref.update({ name, institution, type, classification, updatedAt: FieldValue.serverTimestamp() });
+  await ref.update({ name, institution, institutionCode, type, classification, updatedAt: FieldValue.serverTimestamp() });
   return { accountId };
 });
 
@@ -580,6 +599,7 @@ export const postTransaction = onCall({ region }, async (request) => {
   const categoryId = type === 'transfer' ? 'system-transfer' : stringValue(request.data?.categoryId, 'Category ID', 80);
   const counterparty = optionalString(request.data?.counterparty, 120);
   const note = optionalString(request.data?.note, 500);
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
 
   const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
@@ -704,6 +724,8 @@ export const postTransaction = onCall({ region }, async (request) => {
       categoryIsSystem: category.isSystem,
       counterparty,
       note,
+      paymentMethod,
+      paymentMethodLabel,
       transactionDate,
       reversalOf: null,
       reversedBy: null,
@@ -998,8 +1020,8 @@ export const updateCommitment = onCall({ region }, async request=>{const uid=req
 export const archiveCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const ref=db.collection('commitments').doc(commitmentId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,i]=await Promise.all([transaction.get(commandRef),transaction.get(ref)]);if(c.exists)return c.data()?.result;if(!i.exists)throw new HttpsError('not-found','Commitment not found.');if(i.data()?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');const now=FieldValue.serverTimestamp();const result={commitmentId,archived:true};transaction.update(ref,{archivedAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'archive_commitment',idempotencyKey:key,result,createdAt:now});return result;});});
 
 export const payCommitment = onCall({ region }, async request=>{
-  const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const accountId=stringValue(request.data?.accountId,'Account');const requestedAmount=request.data?.amountMinor==null?null:positiveMoney(request.data?.amountMinor);const paymentDate=localDate(request.data?.paymentDate,'Payment date');const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const commitmentRef=db.collection('commitments').doc(commitmentId);const accountRef=db.collection('accounts').doc(accountId);const budgetCandidateRefs=(await db.collection('budgets').where('ownerId','==',uid).get()).docs.map(item=>item.ref);
-  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');if(Number(commitment?.sharedAssignedMinor||0)>Number(commitment?.sharedSettledMinor||0))throw new HttpsError('failed-precondition','This commitment has open shared bill assignments. Complete or reverse them from Sharing first.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,sharedCycleDueDate:nextDueDate,sharedAssignedMinor:0,sharedSettledMinor:0,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+  const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const accountId=stringValue(request.data?.accountId,'Account');const requestedAmount=request.data?.amountMinor==null?null:positiveMoney(request.data?.amountMinor);const paymentDate=localDate(request.data?.paymentDate,'Payment date');const{paymentMethod,paymentMethodLabel}=paymentMethodValues(request.data||{});const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const commitmentRef=db.collection('commitments').doc(commitmentId);const accountRef=db.collection('accounts').doc(accountId);const budgetCandidateRefs=(await db.collection('budgets').where('ownerId','==',uid).get()).docs.map(item=>item.ref);
+  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');if(Number(commitment?.sharedAssignedMinor||0)>Number(commitment?.sharedSettledMinor||0))throw new HttpsError('failed-precondition','This commitment has open shared bill assignments. Complete or reverse them from Sharing first.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,paymentMethod,paymentMethodLabel,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,paymentMethod,paymentMethodLabel,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,sharedCycleDueDate:nextDueDate,sharedAssignedMinor:0,sharedSettledMinor:0,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 // v0.7 Collaboration and WhatsApp coordination
@@ -1499,6 +1521,8 @@ function writeFinalizedSharedPayment(transaction: Transaction, input: {
       categoryScope: 'both',
       categoryIsSystem: !String(input.commitment.categoryId).startsWith('custom-'),
       counterparty: input.commitment.payee || input.commitment.name,
+      paymentMethod: input.payment.paymentMethod || null,
+      paymentMethodLabel: input.payment.paymentMethodLabel || null,
       note: sharedPaymentNote({
         commitmentName: String(input.assignment.commitmentName || input.commitment.name || 'Shared bill'),
         memberLabel,
@@ -1848,6 +1872,7 @@ export const submitSharedBillPayment = onCall({ region }, async (request) => {
   const amountMinor = positiveMoney(request.data?.amountMinor);
   const settlementMode = oneOf(request.data?.settlementMode, sharedSettlementModes, 'settlement mode');
   const accountId = optionalString(request.data?.accountId, 80) || null;
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const paymentDate = localDate(request.data?.paymentDate, 'Payment date');
   const proofPathInput = optionalString(request.data?.proofPath, 500) || null;
   const proofNameInput = optionalString(request.data?.proofName, 180) || null;
@@ -1914,6 +1939,8 @@ export const submitSharedBillPayment = onCall({ region }, async (request) => {
       currency: assignment.currency,
       settlementMode,
       accountId,
+      paymentMethod,
+      paymentMethodLabel,
       paymentDate,
       proofPath,
       proofName,
@@ -2889,6 +2916,7 @@ export const submitSharedExpensePayment = onCall({ region }, async (request) => 
   const expenseId = optionalString(request.data?.expenseId, 80) || null;
   const amountMinor = positiveMoney(request.data?.amountMinor);
   const paymentDate = localDate(request.data?.paymentDate, 'Payment date');
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const proofPath = optionalString(request.data?.proofPath, 500) || null;
   const proofName = optionalString(request.data?.proofName, 180) || null;
   const note = optionalString(request.data?.note, 500);
@@ -2913,7 +2941,7 @@ export const submitSharedExpensePayment = onCall({ region }, async (request) => 
   const paymentData = {
     displayId: displayId('SEP'), spaceId, fromUid: uid, fromName: member.displayName || '', fromEmail: member.email || '',
     toUid, toName: recipient.displayName || '', toEmail: recipient.email || '', expenseId, amountMinor,
-    currency: String(space.data()?.currency || 'BND'), paymentDate, proofPath, proofName, note,
+    currency: String(space.data()?.currency || 'BND'), paymentDate, paymentMethod, paymentMethodLabel, proofPath, proofName, note,
   };
   const needsApproval = space.data()?.approvalMode === 'owner_approval' && !['owner', 'admin'].includes(String(member.role));
 
@@ -3081,6 +3109,7 @@ export const recordTripMoneyContribution = onCall({ region }, async (request) =>
   const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
   const amountMinor = positiveMoney(request.data?.amountMinor);
   const contributionDate = localDate(request.data?.contributionDate, 'Contribution date');
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const note = optionalString(request.data?.note, 500);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const actor = await requireActiveSpaceMember(spaceId, uid);
@@ -3097,7 +3126,7 @@ export const recordTripMoneyContribution = onCall({ region }, async (request) =>
     const now = FieldValue.serverTimestamp();
     const contributedMinor = safeMinor(fund.data()?.contributedMinor, 'Trip money collected') + amountMinor;
     const spentMinor = safeMinor(fund.data()?.spentMinor, 'Trip money spent');
-    transaction.create(contributionRef, { displayId: displayId('TMC'), spaceId, memberUid, memberName: member.data()?.displayName || '', memberEmail: member.data()?.email || '', amountMinor, currency: fund.data()?.currency || 'BND', contributionDate, note, status: 'posted', reversedAt: null, reversedBy: null, createdBy: uid, createdAt: now, updatedAt: now });
+    transaction.create(contributionRef, { displayId: displayId('TMC'), spaceId, memberUid, memberName: member.data()?.displayName || '', memberEmail: member.data()?.email || '', amountMinor, currency: fund.data()?.currency || 'BND', contributionDate, paymentMethod, paymentMethodLabel, note, status: 'posted', reversedAt: null, reversedBy: null, createdBy: uid, createdAt: now, updatedAt: now });
     transaction.update(fundRef, { contributedMinor, availableMinor: contributedMinor - spentMinor, updatedAt: now });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: actor.displayName, action: 'trip_money_contribution', targetType: 'space_fund_contribution', targetId: contributionRef.id, summary: `${member.data()?.displayName || 'A member'} added ${amountMinor / 100} ${fund.data()?.currency || 'BND'} to the Trip money.`, now });
     createNotification(transaction, { uid: memberUid, spaceId, type: 'trip_contribution_added', title: 'Trip contribution added', message: `${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'} was added to the Trip money for ${member.data()?.displayName || 'you'}.`, targetPath: `/spaces/${spaceId}?tab=trip_money`, actionLabel: 'Open Trip money', now });
@@ -3161,6 +3190,7 @@ export const createRecurringTransactionTemplate = onCall({ region }, async (requ
   const categoryId = stringValue(request.data?.categoryId, 'Category ID', 80);
   const counterparty = optionalString(request.data?.counterparty, 120);
   const note = optionalString(request.data?.note, 500);
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const frequency = oneOf(request.data?.frequency, recurringTransactionFrequencies, 'repeat frequency');
   const nextRunDate = localDate(request.data?.nextRunDate, 'Next date');
   const endDate = optionalLocalDate(request.data?.endDate, 'End date');
@@ -3202,7 +3232,7 @@ export const createRecurringTransactionTemplate = onCall({ region }, async (requ
       displayId: displayId('RCT'), ownerId: uid, name, type, spaceId, accountId, amountMinor,
       currency: account.currency, categoryId: category.id, category: category.name,
       categoryIcon: category.icon, categoryColor: category.color, categoryScope: category.scope,
-      counterparty, note, frequency, startDate: nextRunDate, nextRunDate, endDate,
+      counterparty, note, paymentMethod, paymentMethodLabel, frequency, startDate: nextRunDate, nextRunDate, endDate,
       preferredDay, preferMonthEnd: isMonthEndDate(nextRunDate), timezone, status: 'active',
       generatedCount: 0, skippedCount: 0, lastRunDate: null, lastTransactionId: null,
       lastError: null, pausedAt: null, stoppedAt: null, stoppedPreviousNextRunDate: null,
@@ -3224,6 +3254,7 @@ export const updateRecurringTransactionTemplate = onCall({ region }, async (requ
   const categoryId = stringValue(request.data?.categoryId, 'Category ID', 80);
   const counterparty = optionalString(request.data?.counterparty, 120);
   const note = optionalString(request.data?.note, 500);
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const frequency = oneOf(request.data?.frequency, recurringTransactionFrequencies, 'repeat frequency');
   const nextRunDate = localDate(request.data?.nextRunDate, 'Next date');
   const endDate = optionalLocalDate(request.data?.endDate, 'End date');
@@ -3262,7 +3293,7 @@ export const updateRecurringTransactionTemplate = onCall({ region }, async (requ
     transaction.update(ref, {
       name, type, spaceId, accountId, amountMinor, currency: account.currency,
       categoryId: category.id, category: category.name, categoryIcon: category.icon,
-      categoryColor: category.color, categoryScope: category.scope, counterparty, note,
+      categoryColor: category.color, categoryScope: category.scope, counterparty, note, paymentMethod, paymentMethodLabel,
       frequency, nextRunDate, endDate, preferredDay: recurringDateParts(nextRunDate).day,
       preferMonthEnd: isMonthEndDate(nextRunDate), timezone, status, lastError: null, updatedAt: now,
     });
@@ -3423,7 +3454,8 @@ async function postRecurringOccurrence(templateId: string, expectedOwnerId?: str
       category: current.category, categoryId: current.categoryId, categoryIcon: current.categoryIcon,
       categoryColor: current.categoryColor, categoryScope: current.categoryScope,
       categoryIsSystem: !String(current.categoryId).startsWith('custom-'), counterparty: current.counterparty || '',
-      note: current.note || '', transactionDate: scheduledDate, reversalOf: null, reversedBy: null,
+      note: current.note || '', paymentMethod: current.paymentMethod || null, paymentMethodLabel: current.paymentMethodLabel || null,
+      transactionDate: scheduledDate, reversalOf: null, reversedBy: null,
       budgetIds, commitmentId: null, commitmentPaymentId: null,
       recurringTemplateId: templateId, recurringRunId: runRef.id, recurringScheduledDate: scheduledDate,
       createdAt: now, postedAt: now, updatedAt: now,

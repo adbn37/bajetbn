@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
 import type {
   CategoryScope,
+  PaymentMethodCode,
   RecurringTransactionFrequency,
   RecurringTransactionTemplate,
   RecurringTransactionType,
@@ -30,6 +31,8 @@ export interface RecurringTransactionInput {
   categoryId: string;
   counterparty?: string;
   note?: string;
+  paymentMethod?: PaymentMethodCode;
+  paymentMethodLabel?: string;
   frequency: RecurringTransactionFrequency;
   nextRunDate: string;
   endDate?: string;

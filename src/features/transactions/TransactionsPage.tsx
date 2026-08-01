@@ -5,6 +5,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import { paymentMethodLabel, suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   CATEGORY_COLORS,
@@ -24,6 +26,7 @@ import type {
   CategoryKind,
   CategoryScope,
   FinancialTransaction,
+  PaymentMethodCode,
   Space,
   TransactionCategory,
 } from '../../types/models';
@@ -158,8 +161,9 @@ export function TransactionsPage() {
     if (!needle) return true;
     const source = accountMap.get(item.accountId)?.name || '';
     const destination = item.destinationAccountId ? accountMap.get(item.destinationAccountId)?.name || '' : '';
+    const method = paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel);
     const space = spaceMap.get(item.spaceId)?.name || '';
-    return [item.displayId, item.category, item.counterparty, item.note, source, destination, space]
+    return [item.displayId, item.category, item.counterparty, item.note, source, destination, space, method]
       .some((value) => value?.toLowerCase().includes(needle));
   });
 
@@ -343,6 +347,8 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
     categoryScope?: CategoryScope;
     counterparty?: string;
     note?: string;
+    paymentMethod?: PaymentMethodCode;
+    paymentMethodLabel?: string;
   }) => Promise<void>;
 }) {
   const [type, setType] = useState<PrimaryType>('expense');
@@ -356,6 +362,8 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
   const [categoryId, setCategoryId] = useState('');
   const [counterparty, setCounterparty] = useState('');
   const [note, setNote] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(suggestedPaymentMethod(accounts[0]));
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -379,6 +387,7 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
 
   const sourceAccount = accounts.find((account) => account.id === accountId);
   const destinationAccount = accounts.find((account) => account.id === destinationAccountId);
+  useEffect(() => { setPaymentMethod(suggestedPaymentMethod(sourceAccount)); setPaymentMethodCustom(''); }, [accountId]);
   const destinationOptions = compatibleAccounts.filter((account) => account.id !== accountId);
   let amountMinor = 0;
   try { amountMinor = amount ? toMinorUnits(amount) : 0; } catch { amountMinor = 0; }
@@ -410,6 +419,8 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
         categoryScope: selectedCategory?.scope,
         counterparty,
         note,
+        paymentMethod,
+        paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined,
       });
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -440,7 +451,8 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
 
     <div className="form-grid">
       {type !== 'transfer' && <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} placeholder="Optional" maxLength={120} /></label>}
-      <label className={type === 'transfer' ? 'span-2' : ''}>Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional details" maxLength={500} /></label>
+      <PaymentMethodField className={type === 'transfer' ? 'span-2' : ''} label={type === 'transfer' ? 'How was the money moved?' : 'Payment method'} value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
+      <label className="span-2">Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional details" maxLength={500} /></label>
     </div>
 
     {sourceAccount && amountMinor > 0 && <div className="transaction-preview">
@@ -476,6 +488,7 @@ function TransactionDetails({ item, source, destination, space, category, onClos
       <Detail label="Space">{space?.name || 'Unknown Space'}</Detail>
       <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ` → ${destination.name}` : ''}</Detail>
       <Detail label={item.type === 'income' ? 'Money from' : 'Paid to'}>{item.counterparty || '—'}</Detail>
+      <Detail label="Payment method">{paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel)}</Detail>
       <Detail label="Note">{item.note || '—'}</Detail>
       {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
       {item.commitmentId && <Detail label="Bill or instalment">Linked bill or instalment</Detail>}

@@ -1,7 +1,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
-import type { Account, AccountClassification, AccountType } from '../types/models';
+import type { Account, AccountClassification, AccountType, InstitutionCode } from '../types/models';
 
 export async function listAllAccounts(uid: string): Promise<Account[]> {
   const { db } = requireFirebase();
@@ -14,6 +14,7 @@ export async function listAllAccounts(uid: string): Promise<Account[]> {
 export async function createAccount(input: {
   name: string;
   institution?: string;
+  institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
   currency: string;
@@ -28,6 +29,7 @@ export async function updateAccount(input: {
   accountId: string;
   name: string;
   institution?: string;
+  institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
 }) {
