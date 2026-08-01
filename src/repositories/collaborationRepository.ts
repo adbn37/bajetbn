@@ -15,6 +15,7 @@ import type {
   Commitment,
   SharedBillAssignment,
   SharedBillPayment,
+  PaymentMethodCode,
   SharedBillSettlementMode,
   SpaceActivity,
   SpaceApprovalMode,
@@ -218,6 +219,8 @@ export async function submitSharedBillPayment(input: {
   amountMinor: number;
   settlementMode: SharedBillSettlementMode;
   accountId?: string;
+  paymentMethod?: PaymentMethodCode;
+  paymentMethodLabel?: string;
   paymentDate: string;
   proofPath?: string;
   proofName?: string;

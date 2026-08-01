@@ -1,7 +1,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
-import type { CategoryScope, FinancialTransaction } from '../types/models';
+import type { CategoryScope, FinancialTransaction, PaymentMethodCode } from '../types/models';
 
 export async function listTransactions(uid: string): Promise<FinancialTransaction[]> {
   const { db } = requireFirebase();
@@ -29,6 +29,8 @@ export async function postTransaction(input: {
   categoryScope?: CategoryScope;
   counterparty?: string;
   note?: string;
+  paymentMethod?: PaymentMethodCode;
+  paymentMethodLabel?: string;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'postTransaction');

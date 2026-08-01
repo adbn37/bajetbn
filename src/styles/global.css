@@ -1009,3 +1009,33 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   .recurring-actions .button { flex: 1 1 calc(50% - .5rem); min-height: 44px; }
   .recurring-actions .text-button { min-height: 44px; }
 }
+
+
+/* v0.11.8 Brunei institutions and payment methods */
+.institution-preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.institution-preset {
+  min-height: 2.35rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.institution-preset:hover,
+.institution-preset:focus-visible {
+  border-color: var(--accent);
+}
+.form-grid label > input + input,
+.form-stack label > select + input {
+  margin-top: 0.5rem;
+}
+@media (max-width: 640px) {
+  .institution-preset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .institution-preset { width: 100%; border-radius: 0.75rem; }
+}

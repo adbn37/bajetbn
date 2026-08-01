@@ -1,8 +1,8 @@
 # BajetBN Pre-v1.0 Scope-Completion Audit
 
 **Audit date:** 31 July 2026
-**Audited baseline:** BajetBN v0.11.7 Recurring Transactions Alpha 1
-**Source basis:** the verified v0.11.6 staging baseline plus the v0.11.7 recurring transaction implementation.
+**Audited baseline:** BajetBN v0.11.8 Brunei Banks and Payment Methods Alpha 1
+**Source basis:** the verified v0.11.7 staging baseline plus the v0.11.8 Brunei money-option implementation.
 
 ## Decision
 
@@ -48,7 +48,7 @@ Trip money is implemented, but collected-money handling is limited to Trip Space
 
 ### Brunei account and payment presets
 
-BND and Brunei examples are present, but the Account form still relies mainly on free text. BajetBN needs simple presets for common Brunei institutions/providers and clear local payment-method choices while retaining an “Other” option.
+Common Brunei institutions and clear payment-method choices are implemented in v0.11.8 source, including custom provider/method entries and backward compatibility. This item remains a staging-test gate until the forms and generated records are verified end to end.
 
 ### SME essentials
 

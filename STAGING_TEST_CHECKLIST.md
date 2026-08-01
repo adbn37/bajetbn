@@ -188,3 +188,16 @@ Notes: ____________________
 - [ ] Break Account/Space access and confirm Needs attention plus one notification.
 - [ ] Confirm Calendar and Search show the recurring template.
 - [ ] Verify mobile cards, forms and action buttons without horizontal scrolling.
+
+
+## v0.11.8 Brunei banks and payment methods
+
+- [ ] Create Accounts using BIBD, Baiduri, TAIB and Standard Chartered presets.
+- [ ] Create Cash, e-wallet and custom-provider Accounts.
+- [ ] Edit an older custom Account and confirm its provider name is preserved.
+- [ ] Record each standard payment method in Money activity.
+- [ ] Record an Other method and confirm a custom label is required.
+- [ ] Confirm transaction details and Search show the method/provider.
+- [ ] Confirm recurring generated transactions keep their selected method.
+- [ ] Confirm bills, shared bills, shared expenses and Trip contributions save the selected method.
+- [ ] Verify English/Malay and mobile layouts without horizontal scrolling.

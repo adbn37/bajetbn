@@ -14,6 +14,8 @@ export type SharedBillPaymentStatus = 'submitted' | 'posted' | 'rejected' | 'rev
 export type CollaborationMode = 'private' | 'owner_managed' | 'collaborative';
 export type AccountType = 'bank' | 'cash' | 'e_wallet' | 'credit_card';
 export type AccountClassification = 'personal' | 'business';
+export type InstitutionCode = 'bibd' | 'baiduri' | 'taib' | 'standard_chartered_brunei' | 'cash' | 'other_e_wallet' | 'other';
+export type PaymentMethodCode = 'bank_transfer' | 'cash' | 'debit_card' | 'credit_card' | 'e_wallet' | 'qr_payment' | 'bank_deposit' | 'cheque' | 'other';
 
 export type FinancialTransactionType = 'income' | 'expense' | 'transfer' | 'reversal';
 export type FinancialTransactionStatus = 'posted' | 'reversed';
@@ -58,6 +60,8 @@ export interface FinancialTransaction {
   categoryScope?: CategoryScope;
   counterparty?: string;
   note?: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
   transactionDate: string;
   reversalOf?: string | null;
   reversedBy?: string | null;
@@ -92,6 +96,8 @@ export interface RecurringTransactionTemplate {
   categoryScope: CategoryScope;
   counterparty?: string;
   note?: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
   frequency: RecurringTransactionFrequency;
   startDate: string;
   nextRunDate?: string | null;
@@ -297,6 +303,8 @@ export interface SharedBillPayment {
   currency: string;
   settlementMode: SharedBillSettlementMode;
   accountId?: string | null;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
   paymentDate: string;
   proofPath?: string | null;
   proofName?: string | null;
@@ -347,6 +355,7 @@ export interface Account {
   ownerId: string;
   name: string;
   institution?: string;
+  institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
   currency: string;
@@ -417,6 +426,8 @@ export interface GoalContribution {
   amountMinor: number;
   currency: string;
   contributionDate: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
   note?: string;
   status: 'posted' | 'reversed';
   reversalOf?: string | null;
@@ -472,6 +483,8 @@ export interface CommitmentPayment {
   amountMinor: number;
   currency: string;
   paymentDate: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
   dueDateApplied?: string | null;
   previousNextDueDate?: string | null;
   previousStatus: CommitmentStatus;
@@ -570,6 +583,8 @@ export interface SharedExpensePayment {
   amountMinor: number;
   currency: string;
   paymentDate: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
   proofPath?: string | null;
   proofName?: string | null;
   note?: string;

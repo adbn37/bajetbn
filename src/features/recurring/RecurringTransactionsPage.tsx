@@ -4,6 +4,8 @@ import { ActionConfirmModal, type ActionConfirmState } from '../../components/Ac
 import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import { suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   DEFAULT_TRANSACTION_CATEGORIES,
@@ -23,6 +25,7 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import type {
   Account,
   CategoryScope,
+  PaymentMethodCode,
   RecurringTransactionFrequency,
   RecurringTransactionStatus,
   RecurringTransactionTemplate,
@@ -87,6 +90,8 @@ interface TemplateFormValues {
   categoryId: string;
   counterparty?: string;
   note?: string;
+  paymentMethod?: PaymentMethodCode;
+  paymentMethodLabel?: string;
   frequency: RecurringTransactionFrequency;
   nextRunDate: string;
   endDate?: string;
@@ -111,6 +116,8 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
   const [categoryId, setCategoryId] = useState(template?.categoryId || '');
   const [counterparty, setCounterparty] = useState(template?.counterparty || '');
   const [note, setNote] = useState(template?.note || '');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(template?.paymentMethod || suggestedPaymentMethod(accounts.find((account) => account.id === (template?.accountId || accountId))));
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState(template?.paymentMethod === 'other' ? template.paymentMethodLabel || '' : '');
   const [frequency, setFrequency] = useState<RecurringTransactionFrequency>(template?.frequency || 'monthly');
   const [nextRunDate, setNextRunDate] = useState(template?.nextRunDate || todayInTimezone(timezone));
   const [endDate, setEndDate] = useState(template?.endDate || '');
@@ -124,6 +131,10 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
   useEffect(() => {
     if (!compatibleAccounts.some((account) => account.id === accountId)) setAccountId(compatibleAccounts[0]?.id || '');
   }, [accountId, compatibleAccounts]);
+
+  useEffect(() => {
+    if (!template) { setPaymentMethod(suggestedPaymentMethod(accounts.find((account) => account.id === accountId))); setPaymentMethodCustom(''); }
+  }, [accountId, accounts, template]);
 
   useEffect(() => {
     if (!categoryOptions.some((category) => category.id === categoryId)) setCategoryId(categoryOptions[0]?.id || '');
@@ -152,6 +163,8 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
         categoryId: selectedCategory.id,
         counterparty: counterparty.trim(),
         note: note.trim(),
+        paymentMethod,
+        paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined,
         frequency,
         nextRunDate,
         endDate: endDate || undefined,
@@ -184,6 +197,7 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
       </div></fieldset>
       <div className="form-grid">
         <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} maxLength={120} placeholder="Optional" /></label>
+        <PaymentMethodField value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
         <label>Repeats<select value={frequency} onChange={(event) => setFrequency(event.target.value as RecurringTransactionFrequency)}><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="quarterly">Every 3 months</option><option value="yearly">Every year</option></select></label>
         <label>Next date<input required type="date" min={todayInTimezone(timezone)} value={nextRunDate} onChange={(event) => setNextRunDate(event.target.value)} /></label>
         <label>End date<input type="date" min={nextRunDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} /><small>Leave blank to keep repeating.</small></label>

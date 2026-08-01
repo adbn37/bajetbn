@@ -40,12 +40,15 @@ Includes the seven-day deletion cooling-off period, safe anonymisation and a 30-
 
 General receipt/document attachments and offline mutation synchronisation remain explicit pre-v1 decisions; they were not silently added to this financial scheduling phase.
 
-## v0.11.8 — Brunei Presets and SME Essentials
+## v0.11.8 — Brunei Banks and Payment Methods — Completed in source
 
-- Add common Brunei institution/provider presets with “Other”.
-- Add clear local payment-method choices.
-- Add a simple SME overview and SME-focused report filter/presentation.
-- Keep advanced BusinessBajetBN outside the v1 scope.
+- [x] Add common Brunei institution/provider presets with “Other”.
+- [x] Add clear local payment-method choices and custom methods.
+- [x] Keep old custom Accounts and historic records compatible.
+- [x] Carry payment methods into normal, recurring, bill, shared and Trip-money records.
+- [ ] Deploy Functions to staging and complete the Brunei money-options test matrix.
+
+The simple SME overview remains a separate pre-v1 item and is not silently bundled into this localisation phase. Advanced BusinessBajetBN remains outside v1 scope.
 
 ## v0.11.9 — Household/Group Funds and Financial Health
 

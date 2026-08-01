@@ -1,0 +1,41 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
+
+const root = process.cwd();
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const exists = (file) => fs.existsSync(path.join(root, file));
+const fail = (message) => { throw new Error(message); };
+const includes = (file, tokens) => {
+  if (!exists(file)) fail(`Missing ${file}`);
+  const source = read(file);
+  for (const token of tokens) if (!source.includes(token)) fail(`${file} is missing: ${token}`);
+};
+
+includes('release.json', ['"version": "0.11.8"', 'Brunei Banks and Payment Methods Alpha 1']);
+includes('src/config/bruneiMoneyOptions.ts', [
+  "code: 'bibd'", "code: 'baiduri'", "code: 'taib'", "code: 'standard_chartered_brunei'",
+  "code: 'bank_transfer'", "code: 'cash'", "code: 'debit_card'", "code: 'credit_card'",
+  "code: 'e_wallet'", "code: 'qr_payment'", "code: 'bank_deposit'", "code: 'cheque'", "code: 'other'",
+  'institutionCodeForLabel', 'suggestedPaymentMethod', 'paymentMethodLabel',
+]);
+includes('src/components/PaymentMethodField.tsx', ['PaymentMethodField', 'Type the payment method', 'PAYMENT_METHODS.map']);
+includes('src/features/accounts/AccountsPage.tsx', ['brunei-institution-options', 'Choose a common Brunei option or type another institution', 'institutionCodeForLabel']);
+for (const file of [
+  'src/features/transactions/TransactionsPage.tsx',
+  'src/features/recurring/RecurringTransactionsPage.tsx',
+  'src/features/collaboration/CollaborationPage.tsx',
+  'src/features/spaces/SharedExpensesPanel.tsx',
+  'src/features/spaces/TripMoneyPanel.tsx',
+  'src/features/commitments/CommitmentsPage.tsx',
+]) includes(file, ['PaymentMethodField']);
+includes('src/types/models.ts', ['export type InstitutionCode', 'export type PaymentMethodCode', 'institutionCode?: InstitutionCode', 'paymentMethod?: PaymentMethodCode']);
+includes('functions/src/index.ts', ['const institutionCodes', 'const paymentMethodCodes', 'paymentMethodValues', 'institutionCode', 'paymentMethodLabel']);
+includes('BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md', ['Existing Accounts', 'Older records display `Not recorded`', 'Staging checks']);
+
+const audit = JSON.parse(read('scope/pre-v1-scope.json'));
+for (const id of ['brunei.institutions', 'brunei.payment_methods']) {
+  const item = audit.items.find((entry) => entry.id === id);
+  if (!item || item.status !== 'manual_test') fail(`${id} must remain manual_test until staging verification.`);
+}
+console.log('Brunei institution and payment-method checks passed (presets, custom options, compatibility and workflow coverage).');

@@ -1,7 +1,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
-import type { Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType } from '../types/models';
+import type { Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, PaymentMethodCode } from '../types/models';
 
 export async function listAllCommitments(uid: string): Promise<Commitment[]> {
   const { db } = requireFirebase();
@@ -59,7 +59,7 @@ export async function archiveCommitment(commitmentId: string) {
   return httpsCallable(functions, 'archiveCommitment')({ commitmentId, idempotencyKey: crypto.randomUUID() });
 }
 
-export async function payCommitment(input: { commitmentId: string; accountId: string; amountMinor?: number; paymentDate: string; note?: string }) {
+export async function payCommitment(input: { commitmentId: string; accountId: string; amountMinor?: number; paymentDate: string; paymentMethod?: PaymentMethodCode; paymentMethodLabel?: string; note?: string }) {
   const { functions } = requireFirebase();
   return httpsCallable(functions, 'payCommitment')({ ...input, idempotencyKey: crypto.randomUUID() });
 }

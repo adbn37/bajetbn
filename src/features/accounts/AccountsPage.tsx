@@ -4,10 +4,11 @@ import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
+import { institutionCodeForLabel, institutionDisplay, institutionOptionsForType } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { createAccount, listAllAccounts, updateAccount } from '../../repositories/accountRepository';
 import { manageAccount } from '../../repositories/lifecycleRepository';
-import type { Account, AccountClassification, AccountType } from '../../types/models';
+import type { Account, AccountClassification, AccountType, InstitutionCode } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
@@ -92,21 +93,65 @@ export function AccountsPage() {
 
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {modal === 'create' && profile && <AccountForm currency={profile.currency} onClose={() => setModal(null)} onSubmit={async (values) => { await createAccount(values); setModal(null); await load(); }} />}
-    {modal === 'edit' && selected && <AccountForm currency={selected.currency} initial={selected} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, type: values.type, classification: values.classification }); setModal(null); await load(); }} />}
+    {modal === 'edit' && selected && <AccountForm currency={selected.currency} initial={selected} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification }); setModal(null); await load(); }} />}
   </main>;
 }
 
 function AccountList({ accounts, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
   return <section className="account-list">{accounts.map((account) => <article className="account-card" key={account.id}>
     <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
-    <div className="account-main"><div><h2>{account.name}</h2><p>{account.institution || accountLabels[account.type]} · {useLabels[account.classification]}</p></div><small>{account.displayId}</small></div>
+    <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {useLabels[account.classification]}</p></div><small>{account.displayId}</small></div>
     <div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div>
     <div className="account-actions"><Link className="text-button account-view-activity" to={`/transactions?accountId=${encodeURIComponent(account.id)}`}>View activity</Link><button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div>
   </article>)}</section>;
 }
 
-function AccountForm({ currency, initial, onClose, onSubmit }: { currency: string; initial?: Account; onClose: () => void; onSubmit: (values: { name: string; institution?: string; type: AccountType; classification: AccountClassification; currency: string; openingBalanceMinor: number }) => Promise<void> }) {
-  const [name, setName] = useState(initial?.name || ''); const [institution, setInstitution] = useState(initial?.institution || ''); const [type, setType] = useState<AccountType>(initial?.type || 'bank'); const [classification, setClassification] = useState<AccountClassification>(initial?.classification || 'personal'); const [opening, setOpening] = useState(initial ? String(initial.openingBalanceMinor / 100) : '0.00'); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await onSubmit({ name, institution, type, classification, currency, openingBalanceMinor: initial ? initial.openingBalanceMinor : toMinorUnits(opening) }); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <Modal title={initial ? 'Edit account' : 'Add account'} onClose={onClose}><form className="form-grid" onSubmit={submit}>{error && <div className="notice error span-2">{error}</div>}<label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label><label>Type<select value={type} onChange={(event) => setType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label><label>Used for<select value={classification} onChange={(event) => setClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label><label className="span-2">Institution or provider<input value={institution} onChange={(event) => setInstitution(event.target.value)} placeholder="BIBD, Baiduri, Cash Wallet…" /></label><label className="span-2">Opening balance ({currency})<input disabled={Boolean(initial)} inputMode="decimal" value={opening} onChange={(event) => setOpening(event.target.value)} />{initial && <small>The starting balance cannot be changed here. Use Money activity to correct it safely.</small>}</label><div className="modal-actions span-2"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Create account'}</button></div></form></Modal>;
+function AccountForm({ currency, initial, onClose, onSubmit }: { currency: string; initial?: Account; onClose: () => void; onSubmit: (values: { name: string; institution?: string; institutionCode?: InstitutionCode | null; type: AccountType; classification: AccountClassification; currency: string; openingBalanceMinor: number }) => Promise<void> }) {
+  const [name, setName] = useState(initial?.name || '');
+  const [institution, setInstitution] = useState(initial?.institution || institutionDisplay(initial || { type: 'bank' }));
+  const [type, setType] = useState<AccountType>(initial?.type || 'bank');
+  const [classification, setClassification] = useState<AccountClassification>(initial?.classification || 'personal');
+  const [opening, setOpening] = useState(initial ? String(initial.openingBalanceMinor / 100) : '0.00');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const options = institutionOptionsForType(type);
+
+  const changeType = (nextType: AccountType) => {
+    setType(nextType);
+    if (nextType === 'cash') setInstitution('Cash');
+    else if (nextType === 'e_wallet' && institution === 'Cash') setInstitution('');
+    else if (type === 'cash' && institution === 'Cash') setInstitution('');
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError('');
+    try {
+      const cleanInstitution = institution.trim();
+      await onSubmit({
+        name: name.trim(),
+        institution: cleanInstitution,
+        institutionCode: institutionCodeForLabel(cleanInstitution),
+        type,
+        classification,
+        currency,
+        openingBalanceMinor: initial ? initial.openingBalanceMinor : toMinorUnits(opening),
+      });
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusy(false); }
+  };
+
+  return <Modal title={initial ? 'Edit account' : 'Add account'} onClose={onClose}><form className="form-grid" onSubmit={submit}>
+    {error && <div className="notice error span-2">{error}</div>}
+    <label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label>
+    <label>Type<select value={type} onChange={(event) => changeType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label>
+    <label>Used for<select value={classification} onChange={(event) => setClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
+    <label className="span-2">Institution or provider
+      <input list="brunei-institution-options" value={institution} onChange={(event) => setInstitution(event.target.value)} placeholder={type === 'cash' ? 'Cash' : type === 'e_wallet' ? 'Choose or type an e-wallet' : 'Choose or type a bank'} />
+      <datalist id="brunei-institution-options">{options.map((item) => <option key={item.code} value={item.shortLabel}>{item.label}</option>)}</datalist>
+      <small>Choose a common Brunei option or type another institution. Existing custom names still work.</small>
+    </label>
+    <div className="institution-preset-grid span-2" aria-label="Common Brunei institutions">{options.filter((item) => item.code !== 'other').map((item) => <button type="button" className="institution-preset" key={item.code} onClick={() => setInstitution(item.shortLabel)}>{item.shortLabel}</button>)}</div>
+    <label className="span-2">Opening balance ({currency})<input disabled={Boolean(initial)} inputMode="decimal" value={opening} onChange={(event) => setOpening(event.target.value)} />{initial && <small>The starting balance cannot be changed here. Use Money activity to correct it safely.</small>}</label>
+    <div className="modal-actions span-2"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Create account'}</button></div>
+  </form></Modal>;
 }

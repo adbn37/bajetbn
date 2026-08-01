@@ -178,3 +178,7 @@ See `ACCOUNT_DATA_DELETION_ALPHA.md` for the staging workflow and `DATA_RETENTIO
 ## v0.11.7 recurring transactions
 
 See `RECURRING_TRANSACTIONS_ALPHA.md`. Recurring templates are server-controlled, use deterministic per-date run records, and update Account balances, ledgers and matching Budgets exactly once.
+
+## v0.11.8 Brunei banks and payment methods
+
+See `BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md`. Accounts support common Brunei presets plus custom providers. Financial workflows save clear payment methods while older records remain valid.

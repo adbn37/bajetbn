@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import { paymentMethodLabel } from '../../config/bruneiMoneyOptions';
 import {
   getSpaceFund,
   listSpaceFundContributions,
@@ -8,7 +10,7 @@ import {
   reverseTripMoneyContribution,
   updateTripMoneySettings,
 } from '../../repositories/sharedExpenseRepository';
-import type { Space, SpaceFund, SpaceFundContribution, SpaceMember } from '../../types/models';
+import type { PaymentMethodCode, Space, SpaceFund, SpaceFundContribution, SpaceMember } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
@@ -105,14 +107,16 @@ function TripContributionForm({ space, members, currentMember, canManage, onSave
   const [memberUid, setMemberUid] = useState(currentMember?.uid || members[0]?.uid || '');
   const [amount, setAmount] = useState('');
   const [contributionDate, setContributionDate] = useState(today());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>('bank_transfer');
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
-    try { await recordTripMoneyContribution({ spaceId: space.id, memberUid, amountMinor: toMinorUnits(amount), contributionDate, note }); await onSaved(); }
+    try { await recordTripMoneyContribution({ spaceId: space.id, memberUid, amountMinor: toMinorUnits(amount), contributionDate, paymentMethod, paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined, note }); await onSaved(); }
     catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusy(false); }
   };
-  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Who added the money?<select value={memberUid} disabled={!canManage} onChange={(event) => setMemberUid(event.target.value)}>{members.map((member) => <option key={member.uid} value={member.uid}>{memberLabel(member)}</option>)}</select></label><label>Amount added (BND)<input inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label><label>Date<input type="date" required value={contributionDate} onChange={(event) => setContributionDate(event.target.value)} /></label><label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Add to Trip money'}</button></form>;
+  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Who added the money?<select value={memberUid} disabled={!canManage} onChange={(event) => setMemberUid(event.target.value)}>{members.map((member) => <option key={member.uid} value={member.uid}>{memberLabel(member)}</option>)}</select></label><label>Amount added (BND)<input inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label><PaymentMethodField value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} /><label>Date<input type="date" required value={contributionDate} onChange={(event) => setContributionDate(event.target.value)} /></label><label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Add to Trip money'}</button></form>;
 }

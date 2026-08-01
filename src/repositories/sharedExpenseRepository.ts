@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import type {
+  PaymentMethodCode,
   SharedExpense,
   SharedExpensePayment,
   SharedExpenseSplitMode,
@@ -98,6 +99,8 @@ export async function submitSharedExpensePayment(input: {
   expenseId?: string;
   amountMinor: number;
   paymentDate: string;
+  paymentMethod?: PaymentMethodCode;
+  paymentMethodLabel?: string;
   proofPath?: string;
   proofName?: string;
   note?: string;
@@ -137,6 +140,8 @@ export async function recordTripMoneyContribution(input: {
   memberUid: string;
   amountMinor: number;
   contributionDate: string;
+  paymentMethod?: PaymentMethodCode;
+  paymentMethodLabel?: string;
   note?: string;
 }) {
   const { functions } = requireFirebase();
