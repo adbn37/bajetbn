@@ -17,10 +17,13 @@ interface PreferenceState {
   appearance: Appearance;
   textSize: TextSize;
   notificationsEnabled: boolean;
+  backgroundRemindersEnabled: boolean;
   dueSoonReminders: boolean;
   lateReminders: boolean;
+  goalReminders: boolean;
   sharedPaymentNotifications: boolean;
   whatsappRemindersEnabled: boolean;
+  browserPushEnabled: boolean;
   reminderDaysBefore: number;
 }
 
@@ -30,7 +33,7 @@ interface PreferencesContextValue extends PreferenceState {
   setAppearance: (value: Appearance) => void;
   setTextSize: (value: TextSize) => void;
   setNotificationPreference: (
-    key: 'notificationsEnabled' | 'dueSoonReminders' | 'lateReminders' | 'sharedPaymentNotifications' | 'whatsappRemindersEnabled',
+    key: 'notificationsEnabled' | 'backgroundRemindersEnabled' | 'dueSoonReminders' | 'lateReminders' | 'goalReminders' | 'sharedPaymentNotifications' | 'whatsappRemindersEnabled' | 'browserPushEnabled',
     value: boolean,
   ) => void;
   setReminderDaysBefore: (value: number) => void;
@@ -42,10 +45,13 @@ const defaultPreferences: PreferenceState = {
   appearance: 'dark',
   textSize: 'normal',
   notificationsEnabled: true,
+  backgroundRemindersEnabled: true,
   dueSoonReminders: true,
   lateReminders: true,
+  goalReminders: true,
   sharedPaymentNotifications: true,
   whatsappRemindersEnabled: true,
+  browserPushEnabled: false,
   reminderDaysBefore: 3,
 };
 
@@ -70,10 +76,13 @@ function profilePreferences(profile: ReturnType<typeof useAuth>['profile']): Pre
     appearance: profile?.appearance || defaultPreferences.appearance,
     textSize: profile?.textSize || defaultPreferences.textSize,
     notificationsEnabled: profile?.notificationsEnabled ?? defaultPreferences.notificationsEnabled,
+    backgroundRemindersEnabled: profile?.backgroundRemindersEnabled ?? defaultPreferences.backgroundRemindersEnabled,
     dueSoonReminders: profile?.dueSoonReminders ?? defaultPreferences.dueSoonReminders,
     lateReminders: profile?.lateReminders ?? defaultPreferences.lateReminders,
+    goalReminders: profile?.goalReminders ?? defaultPreferences.goalReminders,
     sharedPaymentNotifications: profile?.sharedPaymentNotifications ?? defaultPreferences.sharedPaymentNotifications,
     whatsappRemindersEnabled: profile?.whatsappRemindersEnabled ?? defaultPreferences.whatsappRemindersEnabled,
+    browserPushEnabled: profile?.browserPushEnabled ?? defaultPreferences.browserPushEnabled,
     reminderDaysBefore: profile?.reminderDaysBefore ?? defaultPreferences.reminderDaysBefore,
   };
 }

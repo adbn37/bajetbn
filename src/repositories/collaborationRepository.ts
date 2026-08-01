@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
@@ -91,6 +92,21 @@ export async function listUserNotifications(uid: string): Promise<UserNotificati
   return snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() }) as UserNotification)
     .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
+}
+
+export function subscribeUserNotifications(
+  uid: string,
+  onItems: (items: UserNotification[]) => void,
+  onError?: (error: Error) => void,
+) {
+  const { db } = requireFirebase();
+  return onSnapshot(
+    query(collection(db, 'userNotifications'), where('uid', '==', uid)),
+    (snapshot) => onItems(snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }) as UserNotification)
+      .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0))),
+    (error) => onError?.(error),
+  );
 }
 
 export async function markNotificationRead(notificationId: string) {

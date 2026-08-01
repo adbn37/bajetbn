@@ -31,7 +31,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-type CachedProfile = Pick<UserProfile, 'uid' | 'fullName' | 'email' | 'language' | 'currency' | 'timezone' | 'appearance' | 'textSize' | 'notificationsEnabled' | 'dueSoonReminders' | 'lateReminders' | 'sharedPaymentNotifications' | 'whatsappRemindersEnabled' | 'reminderDaysBefore' | 'onboardingCompleted' | 'personalSpaceId'>;
+type CachedProfile = Pick<UserProfile, 'uid' | 'fullName' | 'email' | 'language' | 'currency' | 'timezone' | 'appearance' | 'textSize' | 'notificationsEnabled' | 'backgroundRemindersEnabled' | 'dueSoonReminders' | 'lateReminders' | 'goalReminders' | 'sharedPaymentNotifications' | 'whatsappRemindersEnabled' | 'browserPushEnabled' | 'reminderDaysBefore' | 'onboardingCompleted' | 'personalSpaceId'>;
 
 const profileCacheNamespace = import.meta.env.VITE_FIREBASE_PROJECT_ID || import.meta.env.VITE_APP_ENV || 'local';
 function profileCacheKey(uid: string) { return `bajetbn.${profileCacheNamespace}.profile.${uid}`; }
@@ -73,9 +73,10 @@ function writeCachedProfile(profile: UserProfile | null, uid?: string) {
     uid: profile.uid, fullName: profile.fullName, email: profile.email, language: profile.language,
     currency: profile.currency, timezone: profile.timezone, appearance: profile.appearance,
     textSize: profile.textSize, notificationsEnabled: profile.notificationsEnabled,
+    backgroundRemindersEnabled: profile.backgroundRemindersEnabled,
     dueSoonReminders: profile.dueSoonReminders, lateReminders: profile.lateReminders,
-    sharedPaymentNotifications: profile.sharedPaymentNotifications,
-    whatsappRemindersEnabled: profile.whatsappRemindersEnabled,
+    goalReminders: profile.goalReminders, sharedPaymentNotifications: profile.sharedPaymentNotifications,
+    whatsappRemindersEnabled: profile.whatsappRemindersEnabled, browserPushEnabled: profile.browserPushEnabled,
     reminderDaysBefore: profile.reminderDaysBefore, onboardingCompleted: profile.onboardingCompleted,
     personalSpaceId: profile.personalSpaceId,
   };

@@ -57,15 +57,23 @@ service cloud.firestore {
       allow update: if isSelf(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'fullName', 'language', 'currency', 'timezone', 'appearance', 'textSize',
-          'notificationsEnabled', 'dueSoonReminders', 'lateReminders',
-          'sharedPaymentNotifications', 'whatsappRemindersEnabled',
-          'reminderDaysBefore', 'updatedAt'
+          'notificationsEnabled', 'backgroundRemindersEnabled', 'dueSoonReminders', 'lateReminders',
+          'goalReminders', 'sharedPaymentNotifications', 'whatsappRemindersEnabled',
+          'browserPushEnabled', 'reminderDaysBefore', 'updatedAt'
         ])
         && request.resource.data.currency == 'BND'
         && request.resource.data.timezone == 'Asia/Brunei'
         && request.resource.data.language in ['en', 'ms']
         && request.resource.data.appearance in ['dark', 'light', 'system']
         && request.resource.data.textSize in ['normal', 'large']
+        && request.resource.data.notificationsEnabled is bool
+        && request.resource.data.backgroundRemindersEnabled is bool
+        && request.resource.data.dueSoonReminders is bool
+        && request.resource.data.lateReminders is bool
+        && request.resource.data.goalReminders is bool
+        && request.resource.data.sharedPaymentNotifications is bool
+        && request.resource.data.whatsappRemindersEnabled is bool
+        && request.resource.data.browserPushEnabled is bool
         && request.resource.data.reminderDaysBefore is int
         && request.resource.data.reminderDaysBefore >= 0
         && request.resource.data.reminderDaysBefore <= 30;
@@ -243,6 +251,10 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    match /pushDevices/{deviceId} {
+      allow read, create, update, delete: if false; // Managed only by trusted Cloud Functions.
+    }
+
     match /reminderHistory/{reminderId} {
       allow read: if signedIn() && resource.data.uid == request.auth.uid;
       allow create: if signedIn()
@@ -252,7 +264,7 @@ service cloud.firestore {
           'uid', 'itemType', 'itemId', 'itemName', 'spaceId', 'dueDate',
           'action', 'message', 'phone', 'createdAt'
         ])
-        && request.resource.data.itemType in ['bill', 'instalment', 'goal', 'shared_bill']
+        && request.resource.data.itemType in ['bill', 'instalment', 'goal', 'shared_bill', 'recurring_transaction']
         && request.resource.data.action in ['marked_reminded', 'whatsapp_opened'];
       allow update, delete: if false;
     }

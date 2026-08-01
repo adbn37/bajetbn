@@ -8,10 +8,13 @@ export interface UserPreferenceUpdate {
   appearance: Appearance;
   textSize: TextSize;
   notificationsEnabled: boolean;
+  backgroundRemindersEnabled: boolean;
   dueSoonReminders: boolean;
   lateReminders: boolean;
+  goalReminders: boolean;
   sharedPaymentNotifications: boolean;
   whatsappRemindersEnabled: boolean;
+  browserPushEnabled: boolean;
   reminderDaysBefore: number;
 }
 
@@ -35,10 +38,13 @@ export async function updateUserPreferences(uid: string, input: UserPreferenceUp
     appearance: input.appearance,
     textSize: input.textSize,
     notificationsEnabled: input.notificationsEnabled,
+    backgroundRemindersEnabled: input.backgroundRemindersEnabled,
     dueSoonReminders: input.dueSoonReminders,
     lateReminders: input.lateReminders,
+    goalReminders: input.goalReminders,
     sharedPaymentNotifications: input.sharedPaymentNotifications,
     whatsappRemindersEnabled: input.whatsappRemindersEnabled,
+    browserPushEnabled: input.browserPushEnabled,
     reminderDaysBefore,
     updatedAt: serverTimestamp(),
   });

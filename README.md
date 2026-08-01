@@ -182,3 +182,7 @@ See `RECURRING_TRANSACTIONS_ALPHA.md`. Recurring templates are server-controlled
 ## v0.11.8 Brunei banks and payment methods
 
 See `BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md`. Accounts support common Brunei presets plus custom providers. Financial workflows save clear payment methods while older records remain valid.
+
+## v0.11.9 background notifications
+
+See `BACKGROUND_NOTIFICATIONS_ALPHA.md`. Scheduled Functions prepare due-soon, due-today, late and goal-date reminders even when the app is closed. Reminder document IDs are deterministic, so retries do not create duplicates. Optional browser/device delivery requires `VITE_FIREBASE_VAPID_KEY` in the staging Cloudflare environment.

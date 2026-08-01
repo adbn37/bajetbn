@@ -60,6 +60,15 @@ if (['complete', 'manual_test'].includes(recurringStatus)) {
   requireText('firestore.rules', 'match /recurringTransactionTemplates/{templateId}');
   requireText('RECURRING_TRANSACTIONS_ALPHA.md', 'duplicate-safe');
 }
+
+const backgroundReminderStatus = itemById.get('notifications.reminders')?.status;
+if (['complete', 'manual_test'].includes(backgroundReminderStatus)) {
+  requireText('functions/src/index.ts', 'export const generateBackgroundReminders');
+  requireText('functions/src/index.ts', 'backgroundReminderId(reminderKey)');
+  requireText('src/pages/SettingsPage.tsx', 'Prepare reminders while BajetBN is closed');
+  requireText('scripts/generate-service-worker.mjs', "self.addEventListener('push'");
+  requireText('BACKGROUND_NOTIFICATIONS_ALPHA.md', 'duplicate');
+}
 requireText('src/features/accounts/AccountsPage.tsx', 'Institution or provider');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', "space.type === 'trip'");
 requireText('README.md', 'Offline mutation queues are deferred');
@@ -91,6 +100,7 @@ requireText('.github/workflows/staging-ci.yml', 'npm run verify:all-structural')
 requireText('package.json', 'verify-release-safety-hardening.mjs');
 requireText('package.json', 'verify-account-data-deletion.mjs');
 requireText('package.json', 'verify-recurring-transactions.mjs');
+requireText('package.json', 'verify-background-notifications.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

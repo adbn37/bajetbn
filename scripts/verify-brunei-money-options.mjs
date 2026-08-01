@@ -12,7 +12,8 @@ const includes = (file, tokens) => {
   for (const token of tokens) if (!source.includes(token)) fail(`${file} is missing: ${token}`);
 };
 
-includes('release.json', ['"version": "0.11.8"', 'Brunei Banks and Payment Methods Alpha 1']);
+const release = JSON.parse(read('release.json'));
+if (Number(release.version.split('.')[2]) < 8) fail('Brunei money options require v0.11.8 or later.');
 includes('src/config/bruneiMoneyOptions.ts', [
   "code: 'bibd'", "code: 'baiduri'", "code: 'taib'", "code: 'standard_chartered_brunei'",
   "code: 'bank_transfer'", "code: 'cash'", "code: 'debit_card'", "code: 'credit_card'",

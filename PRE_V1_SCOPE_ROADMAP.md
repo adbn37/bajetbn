@@ -50,7 +50,16 @@ General receipt/document attachments and offline mutation synchronisation remain
 
 The simple SME overview remains a separate pre-v1 item and is not silently bundled into this localisation phase. Advanced BusinessBajetBN remains outside v1 scope.
 
-## v0.11.9 — Household/Group Funds and Financial Health
+## v0.11.9 — Background Notifications and Reminders — Completed in source
+
+- [x] Generate bill, instalment and goal-date reminders from scheduled Functions while the app is closed.
+- [x] Respect due-soon, late, goal and reminder-days preferences.
+- [x] Use deterministic reminder keys to prevent duplicate notifications and history records.
+- [x] Add optional Firebase browser/device notifications with token cleanup.
+- [x] Update unread counts in real time and add a safe manual reminder check.
+- [ ] Deploy rules and Functions, configure the staging Web Push public key and complete the notification test matrix.
+
+## v0.11.10 — Household/Group Funds and Financial Health
 
 - Add an optional Household/general Space fund using the proven Trip-money pattern.
 - Keep direct member-to-member payment and proof-only flows available.

@@ -191,10 +191,13 @@ export interface UserProfile {
   appearance?: Appearance;
   textSize?: TextSize;
   notificationsEnabled?: boolean;
+  backgroundRemindersEnabled?: boolean;
   dueSoonReminders?: boolean;
   lateReminders?: boolean;
+  goalReminders?: boolean;
   sharedPaymentNotifications?: boolean;
   whatsappRemindersEnabled?: boolean;
+  browserPushEnabled?: boolean;
   reminderDaysBefore?: number;
   onboardingCompleted: boolean;
   personalSpaceId?: string;
@@ -344,6 +347,14 @@ export interface UserNotification {
   message: string;
   targetPath?: string | null;
   actionLabel?: string | null;
+  source?: 'activity' | 'background_reminder';
+  itemType?: ReminderItemType | null;
+  itemId?: string | null;
+  dueDate?: string | null;
+  reminderKey?: string | null;
+  pushAttemptedAt?: Timestamp | null;
+  pushSentAt?: Timestamp | null;
+  pushFailureCount?: number;
   readAt?: Timestamp | null;
   createdAt?: Timestamp;
 }
@@ -499,7 +510,27 @@ export interface CommitmentPayment {
 }
 
 export type ReminderItemType = 'bill' | 'instalment' | 'goal' | 'shared_bill' | 'recurring_transaction';
-export type ReminderAction = 'marked_reminded' | 'whatsapp_opened';
+export type ReminderAction = 'marked_reminded' | 'whatsapp_opened' | 'background_generated' | 'browser_push_sent';
+
+export interface PushDevice {
+  id: string;
+  uid: string;
+  token: string;
+  userAgent?: string | null;
+  platform?: string | null;
+  active: boolean;
+  createdAt?: Timestamp;
+  lastSeenAt?: Timestamp;
+  removedAt?: Timestamp | null;
+}
+
+export interface BackgroundReminderCheckResult {
+  checked: number;
+  created: number;
+  pushSent: number;
+  duplicates: number;
+  today: string;
+}
 
 export interface ReminderHistory {
   id: string;
