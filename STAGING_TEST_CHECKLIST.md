@@ -159,4 +159,12 @@ Notes: ____________________
 
 - [ ] Run `node scripts/verify-account-data-deletion.mjs`.
 - [ ] Run the full structural suite, Functions build and staging web build.
+- [ ] Confirm completed normal deletion creates a server-only 30-day re-registration restriction.
+- [ ] Confirm email/password and Google registration are blocked before the allowed date.
+- [ ] Confirm the blocked temporary Firebase Auth user is removed.
+- [ ] Confirm registration after the allowed date creates a completely fresh account.
+- [ ] Confirm old private data, Spaces, balances and memberships are not restored.
+- [ ] Confirm anonymised shared history remains `Deleted member` and is not reconnected.
+- [ ] Confirm a `manual_review` restriction remains blocked until administrator approval.
+- [ ] Confirm an existing active account is not blocked by a stale restriction.
 - [ ] Do not mark `data.delete_account` complete or deploy to production until every disposable-user test above passes.

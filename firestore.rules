@@ -95,6 +95,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /accountRegistrationRestrictions/{emailHash} {
+      allow read, write: if false;
+    }
+
     match /spaces/{spaceId} {
       allow read: if isSpaceMember(spaceId);
       allow create: if signedIn()

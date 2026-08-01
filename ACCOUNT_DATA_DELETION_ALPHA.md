@@ -1,4 +1,4 @@
-# BajetBN v0.11.6 — Account and Data Deletion Alpha 1
+# BajetBN v0.11.6 — Account Deletion and Re-registration Alpha 2
 
 ## Purpose
 
@@ -57,3 +57,7 @@ A minimal deletion tombstone and restricted audit record remain so the deletion 
 ## Staging requirement
 
 This phase changes Firestore rules and Firebase Functions. Deploy both to the staging Firebase project before testing the web interface. Do not merge to production until the full deletion matrix in `STAGING_TEST_CHECKLIST.md` passes with disposable test users.
+
+## Re-registration after deletion
+
+After completed self-service deletion, the same email or Google account must wait 30 days before creating a fresh BajetBN account. Ordinary self-deletion is allowed automatically after the cooldown; administrator approval is not required. Fraud, abuse, security and legal-hold restrictions require manual review. Re-registration never restores old private data, Spaces, balances or memberships. See `ACCOUNT_REREGISTRATION_POLICY_ALPHA.md`.

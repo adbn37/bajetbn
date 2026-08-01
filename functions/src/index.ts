@@ -280,6 +280,11 @@ function updateBudgetsSpent(
 
 export const completeOnboarding = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
+  const registrationEligibility = await registrationEligibilityForAuthenticatedUser(uid, request.auth?.token.email);
+  if (!registrationEligibility.allowed) {
+    await removeBlockedRegistrationAuthUser(uid);
+    throw new HttpsError('failed-precondition', registrationEligibility.message || 'This email cannot create a BajetBN account yet.', registrationEligibility);
+  }
   const fullName = stringValue(request.data?.fullName, 'Full name');
   const language = oneOf(request.data?.language, ['en', 'ms'] as const, 'language');
   const currency = oneOf(request.data?.currency, ['BND'] as const, 'currency');
@@ -3032,6 +3037,7 @@ export const reverseTripMoneyContribution = onCall({ region }, async (request) =
 
 // v0.11.6 account and personal-data deletion
 const accountDeletionCoolingOffDays = 7;
+const accountReRegistrationCooldownDays = 30;
 const recentAuthenticationSeconds = 5 * 60;
 const recentExportMilliseconds = 24 * 60 * 60 * 1000;
 const accountDeletionTokenDrainMilliseconds = 2 * 60 * 60 * 1000;
@@ -3054,6 +3060,127 @@ interface AccountDeletionEligibilityResult {
   exportPrepared: boolean;
   exportPreparedAt: string | null;
   exportExpiresAt: string | null;
+}
+
+type RegistrationRestrictionMode = 'cooldown' | 'manual_review';
+type RegistrationRestrictionReason = 'cooldown' | 'manual_review' | 'already_re_registered' | null;
+
+interface RegistrationEligibilityResult {
+  allowed: boolean;
+  existingAccount: boolean;
+  freshStart: boolean;
+  reason: RegistrationRestrictionReason;
+  reRegistrationAllowedAt: string | null;
+  cooldownDays: number;
+  message: string | null;
+}
+
+function normalizeRegistrationEmail(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function registrationEmailHash(email: string): string {
+  return createHash('sha256').update(`bajetbn-registration-v1:${normalizeRegistrationEmail(email)}`).digest('hex');
+}
+
+function registrationDateLabel(milliseconds: number): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Brunei', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(new Date(milliseconds));
+}
+
+async function registrationEligibilityForAuthenticatedUser(uid: string, emailValue: unknown): Promise<RegistrationEligibilityResult> {
+  const email = normalizeRegistrationEmail(emailValue);
+  if (!email) throw new HttpsError('failed-precondition', 'A verified email address is required to use BajetBN.');
+
+  const profileRef = db.collection('users').doc(uid);
+  const restrictionRef = db.collection('accountRegistrationRestrictions').doc(registrationEmailHash(email));
+
+  return db.runTransaction(async (transaction) => {
+    const [profile, restriction] = await Promise.all([
+      transaction.get(profileRef),
+      transaction.get(restrictionRef),
+    ]);
+
+    if (profile.exists) {
+      return {
+        allowed: true, existingAccount: true, freshStart: false, reason: null,
+        reRegistrationAllowedAt: null, cooldownDays: accountReRegistrationCooldownDays, message: null,
+      };
+    }
+
+    if (!restriction.exists) {
+      return {
+        allowed: true, existingAccount: false, freshStart: false, reason: null,
+        reRegistrationAllowedAt: null, cooldownDays: accountReRegistrationCooldownDays, message: null,
+      };
+    }
+
+    const data = restriction.data() || {};
+    const restrictionMode = String(data.restrictionMode || 'cooldown') as RegistrationRestrictionMode;
+    const reRegisteredUid = typeof data.reRegisteredUid === 'string' ? data.reRegisteredUid : '';
+    const approvedAt = timestampMilliseconds(data.manualReviewApprovedAt);
+    const allowedAt = timestampMilliseconds(data.reRegistrationAllowedAt);
+
+    if (reRegisteredUid === uid) {
+      return {
+        allowed: true, existingAccount: false, freshStart: true, reason: null,
+        reRegistrationAllowedAt: allowedAt === null ? null : new Date(allowedAt).toISOString(),
+        cooldownDays: accountReRegistrationCooldownDays,
+        message: 'This is a new BajetBN account. Previous Spaces, balances and memberships are not restored.',
+      };
+    }
+
+    if (reRegisteredUid && reRegisteredUid !== uid) {
+      return {
+        allowed: false, existingAccount: false, freshStart: false, reason: 'already_re_registered',
+        reRegistrationAllowedAt: allowedAt === null ? null : new Date(allowedAt).toISOString(),
+        cooldownDays: accountReRegistrationCooldownDays,
+        message: 'This email has already been used to create a new BajetBN account after deletion. Sign in to that account or contact support.',
+      };
+    }
+
+    if (restrictionMode === 'manual_review' && approvedAt === null) {
+      return {
+        allowed: false, existingAccount: false, freshStart: false, reason: 'manual_review',
+        reRegistrationAllowedAt: null, cooldownDays: accountReRegistrationCooldownDays,
+        message: 'This account requires a security review before a new BajetBN account can be created.',
+      };
+    }
+
+    if (restrictionMode === 'cooldown' && allowedAt !== null && allowedAt > Date.now()) {
+      return {
+        allowed: false, existingAccount: false, freshStart: false, reason: 'cooldown',
+        reRegistrationAllowedAt: new Date(allowedAt).toISOString(),
+        cooldownDays: accountReRegistrationCooldownDays,
+        message: `This email was linked to a recently deleted BajetBN account. You may create a new account after ${registrationDateLabel(allowedAt)}.`,
+      };
+    }
+
+    const now = Timestamp.now();
+    transaction.set(restrictionRef, {
+      status: 'fulfilled',
+      reRegisteredUid: uid,
+      reRegisteredAt: now,
+      updatedAt: now,
+    }, { merge: true });
+
+    return {
+      allowed: true, existingAccount: false, freshStart: true, reason: null,
+      reRegistrationAllowedAt: allowedAt === null ? null : new Date(allowedAt).toISOString(),
+      cooldownDays: accountReRegistrationCooldownDays,
+      message: 'A completely new BajetBN account will be created. Previous Spaces, balances and memberships will not be restored.',
+    };
+  });
+}
+
+async function removeBlockedRegistrationAuthUser(uid: string) {
+  try {
+    await getAuth().revokeRefreshTokens(uid);
+    await getAuth().deleteUser(uid);
+  } catch (error) {
+    if (!authUserMissing(error)) throw error;
+  }
 }
 
 interface MutationPlan {
@@ -3149,6 +3276,16 @@ async function accountDeletionEligibility(uid: string): Promise<AccountDeletionE
     exportExpiresAt,
   };
 }
+
+export const enforceRegistrationEligibility = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const result = await registrationEligibilityForAuthenticatedUser(uid, request.auth?.token.email);
+  if (!result.allowed) {
+    await removeBlockedRegistrationAuthUser(uid);
+    throw new HttpsError('failed-precondition', result.message || 'This email cannot create a BajetBN account yet.', result);
+  }
+  return result;
+});
 
 export const checkAccountDeletionEligibility = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
@@ -3478,7 +3615,11 @@ async function finalizeAccountDeletion(uid: string) {
         throw error;
       }),
     ]);
-    const email = String(profile.data()?.email || authRecord?.email || '').trim().toLowerCase();
+    const email = normalizeRegistrationEmail(profile.data()?.email || authRecord?.email || '');
+    const emailHash = email ? registrationEmailHash(email) : '';
+    const registrationRestrictionRef = emailHash ? db.collection('accountRegistrationRestrictions').doc(emailHash) : null;
+    const existingRegistrationRestriction = registrationRestrictionRef ? await registrationRestrictionRef.get() : null;
+    const preserveManualReview = String(existingRegistrationRestriction?.data()?.restrictionMode || '') === 'manual_review';
     const ownedSpaceIds = new Set(ownedSpaces.docs.map((item) => item.id));
 
     for (const space of ownedSpaces.docs) await queueOwnedSpaceDeletion(plan, space.id, proofPaths);
@@ -3606,12 +3747,30 @@ async function finalizeAccountDeletion(uid: string) {
     catch (error) { if (!authUserMissing(error)) throw error; }
 
     const finalWriter = db.bulkWriter();
+    const reRegistrationAllowedAt = Timestamp.fromMillis(now.toMillis() + accountReRegistrationCooldownDays * 24 * 60 * 60 * 1000);
+    if (registrationRestrictionRef) {
+      finalWriter.set(registrationRestrictionRef, {
+        emailHash,
+        restrictionMode: preserveManualReview ? 'manual_review' : 'cooldown',
+        status: 'active',
+        deletionType: 'user_requested',
+        completedAt: now,
+        reRegistrationAllowedAt: preserveManualReview ? null : reRegistrationAllowedAt,
+        manualReviewRequired: preserveManualReview,
+        previousAnonymousId: anonymousId,
+        policyVersion: 1,
+        updatedAt: now,
+      }, { merge: true });
+    }
     finalWriter.set(db.collection('deletedUsers').doc(anonymousId), {
       anonymousId,
       deletionVersion: 1,
       completedAt: now,
       retainedSharedHistory: true,
       source: 'self_service_account_deletion',
+      emailHash: emailHash || null,
+      reRegistrationPolicy: preserveManualReview ? 'manual_review' : 'automatic_after_cooldown',
+      reRegistrationAllowedAt: preserveManualReview ? null : reRegistrationAllowedAt,
     });
     finalWriter.set(db.collection('accountDeletionAudit').doc(), {
       subjectId: anonymousId,

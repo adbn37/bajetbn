@@ -31,6 +31,7 @@ const requiredFiles = [
   'src/components/AccountDeletionModal.tsx',
   'src/repositories/accountDeletionRepository.ts',
   'scripts/verify-account-data-deletion.mjs',
+  'ACCOUNT_REREGISTRATION_POLICY_ALPHA.md',
 ];
 for (const file of requiredFiles) requireFile(file);
 
@@ -68,6 +69,7 @@ requireText('functions/src/index.ts', 'export const cancelAccountDeletion');
 requireText('functions/src/index.ts', 'export const processAccountDeletionRequests');
 requireText('functions/src/index.ts', 'export const transferSpaceOwnership');
 requireText('functions/src/index.ts', 'accountDeletionCoolingOffDays = 7');
+requireText('functions/src/index.ts', 'accountReRegistrationCooldownDays = 30');
 requireText('functions/src/index.ts', 'recentAuthenticationSeconds = 5 * 60');
 requireText('functions/src/index.ts', 'recentExportMilliseconds = 24 * 60 * 60 * 1000');
 requireText('functions/src/index.ts', 'accountDeletionTokenDrainMilliseconds = 2 * 60 * 60 * 1000');
@@ -92,6 +94,7 @@ requireText('firestore.rules', 'allow read: if isSelf(uid)');
 requireText('firestore.rules', 'match /accountDeletionCommands/{commandId}');
 requireText('firestore.rules', 'match /accountDeletionAudit/{auditId}');
 requireText('firestore.rules', 'match /deletedUsers/{anonymousId}');
+requireText('firestore.rules', 'match /accountRegistrationRestrictions/{emailHash}');
 
 const audit = JSON.parse(read('scope/pre-v1-scope.json'));
 const deletionItem = audit.items.find((item) => item.id === 'data.delete_account');

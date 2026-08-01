@@ -26,13 +26,20 @@ export function RegisterPage() {
     finally { setBusy(false); }
   };
 
+  const registerWithGoogle = async () => {
+    setBusy(true); setError('');
+    try { await signInWithGoogle(); }
+    catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div className="auth-card">
       <span className="eyebrow">Create your account</span>
       <h2>Start with your Personal Space</h2>
       <p>We will help you set up your first private Space.</p>
       {error && <div className="notice error">{error}</div>}
-      <button className="button secondary full" onClick={() => void signInWithGoogle()} disabled={busy}>Register with Google</button>
+      <button className="button secondary full" onClick={() => void registerWithGoogle()} disabled={busy}>{busy ? 'Checking…' : 'Register with Google'}</button>
       <div className="divider"><span>or use email</span></div>
       <form onSubmit={submit} className="form-stack">
         <label>Email<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
@@ -40,6 +47,7 @@ export function RegisterPage() {
         <label>Confirm password<input type="password" required autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /></label>
         <button className="button primary full" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
       </form>
+      <p className="auth-policy-note">A new registration after account deletion starts fresh. Previous Spaces, balances and memberships are not restored.</p>
       <p className="auth-switch">Already registered? <Link to="/login">Sign in</Link></p>
     </div>
   );
