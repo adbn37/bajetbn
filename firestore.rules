@@ -146,6 +146,16 @@ service cloud.firestore {
       allow create, update, delete: if false; // Posted and reversed only by trusted Cloud Functions.
     }
 
+    match /recurringTransactionTemplates/{templateId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false; // Created, generated and managed by trusted Cloud Functions.
+    }
+
+    match /recurringTransactionRuns/{runId} {
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
     match /budgets/{budgetId} {
       allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
       allow create, update, delete: if false;

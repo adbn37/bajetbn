@@ -174,3 +174,7 @@ See `RELEASE_SAFETY_HARDENING_ALPHA.md`, `PRODUCTION_SMOKE_TEST_CHECKLIST.md` an
 ## Account deletion and retention
 
 See `ACCOUNT_DATA_DELETION_ALPHA.md` for the staging workflow and `DATA_RETENTION_AND_DELETION.md` for the implemented retention rules. Use disposable accounts for all deletion tests.
+
+## v0.11.7 recurring transactions
+
+See `RECURRING_TRANSACTIONS_ALPHA.md`. Recurring templates are server-controlled, use deterministic per-date run records, and update Account balances, ledgers and matching Budgets exactly once.

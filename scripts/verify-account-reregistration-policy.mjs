@@ -33,8 +33,8 @@ for (const file of [
 
 const release = JSON.parse(read('release.json'));
 checks += 2;
-if (release.version !== '0.11.6') fail(`Expected v0.11.6, found ${release.version}.`);
-if (!/Re-registration Alpha 2/i.test(release.label)) fail('release.json does not identify Re-registration Alpha 2.');
+if (release.version.localeCompare('0.11.6', undefined, { numeric: true }) < 0) fail(`Expected v0.11.6 or later, found ${release.version}.`);
+if (release.version === '0.11.6' && !/Re-registration Alpha 2/i.test(release.label)) fail('release.json does not identify Re-registration Alpha 2.');
 
 requireText('functions/src/index.ts', 'accountReRegistrationCooldownDays = 30');
 requireText('functions/src/index.ts', 'registrationEmailHash');

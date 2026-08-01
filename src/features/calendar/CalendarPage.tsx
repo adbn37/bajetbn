@@ -9,6 +9,7 @@ import { listSharedBillAssignments } from '../../repositories/collaborationRepos
 import { listCommitments } from '../../repositories/commitmentRepository';
 import { listGoals } from '../../repositories/goalRepository';
 import { listReminderHistory, recordReminder } from '../../repositories/reminderRepository';
+import { listRecurringTransactionTemplates } from '../../repositories/recurringTransactionRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import type {
   Account,
@@ -16,6 +17,7 @@ import type {
   Language,
   ReminderHistory,
   ReminderItemType,
+  RecurringTransactionTemplate,
   SavingsGoal,
   SharedBillAssignment,
   Space,
@@ -105,6 +107,7 @@ function itemTypeLabel(type: ReminderItemType) {
   if (type === 'bill') return 'Bill';
   if (type === 'instalment') return 'Instalment';
   if (type === 'goal') return 'Goal';
+  if (type === 'recurring_transaction') return 'Recurring';
   return 'Shared bill';
 }
 
@@ -165,6 +168,7 @@ export function CalendarPage() {
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [sharedBills, setSharedBills] = useState<SharedBillAssignment[]>([]);
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTransactionTemplate[]>([]);
   const [history, setHistory] = useState<ReminderHistory[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(monthValue());
   const [selectedDate, setSelectedDate] = useState(localDateString());
@@ -194,7 +198,8 @@ export function CalendarPage() {
       listCommitments(user.uid),
       listGoals(user.uid),
       listReminderHistory(user.uid),
-    ]).then(async ([nextSpaces, nextAccounts, nextCommitments, nextGoals, nextHistory]) => {
+      listRecurringTransactionTemplates(user.uid),
+    ]).then(async ([nextSpaces, nextAccounts, nextCommitments, nextGoals, nextHistory, nextRecurringTemplates]) => {
       const activeSpaces = nextSpaces.filter((item) => !item.archivedAt);
       const assignmentGroups = await Promise.all(activeSpaces.map((space) => listSharedBillAssignments(space.id).catch(() => [] as SharedBillAssignment[])));
       setSpaces(activeSpaces);
@@ -202,6 +207,7 @@ export function CalendarPage() {
       setCommitments(nextCommitments);
       setGoals(nextGoals);
       setHistory(nextHistory);
+      setRecurringTemplates(nextRecurringTemplates);
       setSharedBills(assignmentGroups.flat().filter((item) => item.memberUid === user.uid));
     }).catch((nextError) => setError(getErrorMessage(nextError))).finally(() => setLoading(false));
   }, [user]);
@@ -253,6 +259,23 @@ export function CalendarPage() {
       });
     });
 
+    recurringTemplates.filter((item) => item.status === 'active' && item.nextRunDate).forEach((item) => {
+      next.push({
+        id: `recurring:${item.id}`,
+        itemId: item.id,
+        itemType: 'recurring_transaction',
+        title: item.name,
+        date: item.nextRunDate as string,
+        state: reminderState(item.nextRunDate as string),
+        spaceId: item.spaceId,
+        accountId: item.accountId,
+        amountMinor: item.amountMinor,
+        currency: item.currency || currency,
+        route: '/recurring',
+        detail: `${item.type === 'income' ? 'Money in' : 'Money out'} · ${item.category}`,
+      });
+    });
+
     sharedBills.filter((item) => !['paid', 'confirmed'].includes(item.status)).forEach((item) => {
       next.push({
         id: `shared:${item.id}`,
@@ -270,7 +293,7 @@ export function CalendarPage() {
     });
 
     return next.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
-  }, [commitments, goals, sharedBills, currency]);
+  }, [commitments, goals, recurringTemplates, sharedBills, currency]);
 
   const filteredItems = useMemo(() => items.filter((item) => (
     (!selectedSpace || item.spaceId === selectedSpace)
@@ -384,7 +407,7 @@ export function CalendarPage() {
 
       <article className="panel selected-date-panel">
         <div className="panel-heading"><div><span className="eyebrow">Selected date</span><h2>{readableDate(selectedDate, locale)}</h2></div><span className="type-badge">{selectedDateItems.length}</span></div>
-        {selectedDateItems.length ? <ItemList items={selectedDateItems} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} locale={locale} showWhatsApp={whatsappRemindersEnabled} /> : <EmptyState title="Nothing planned" description="There are no bills, instalments, shared bills, or goal dates on this day." />}
+        {selectedDateItems.length ? <ItemList items={selectedDateItems} spaces={spaceMap} accounts={accountMap} onRemind={markReminded} onWhatsApp={openWhatsApp} busyId={busyId} locale={locale} showWhatsApp={whatsappRemindersEnabled} /> : <EmptyState title="Nothing planned" description="There are no bills, instalments, recurring money, shared bills, or goal dates on this day." />}
       </article>
     </section>
 

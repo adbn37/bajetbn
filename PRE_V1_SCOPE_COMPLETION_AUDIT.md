@@ -1,8 +1,8 @@
 # BajetBN Pre-v1.0 Scope-Completion Audit
 
 **Audit date:** 31 July 2026
-**Audited baseline:** BajetBN v0.11.6 Account Deletion and Re-registration Alpha 2
-**Source basis:** the verified v0.11.5 staging baseline plus the v0.11.6 account deletion and re-registration implementation.
+**Audited baseline:** BajetBN v0.11.7 Recurring Transactions Alpha 1
+**Source basis:** the verified v0.11.6 staging baseline plus the v0.11.7 recurring transaction implementation.
 
 ## Decision
 
@@ -27,6 +27,7 @@ This audit does not change runtime behaviour. It records the approved scope, cur
 - Safe Archive, Restore, Close, Stop, Delete and Undo foundations.
 - Dedicated archive/closed pages introduced in Alpha 2.
 - Self-service account deletion with export, recent authentication, a seven-day cooling-off period, cancellation, ownership blockers, shared-history anonymisation and the approved 30-day fresh-account re-registration policy implemented in v0.11.6 source.
+- Recurring salary, allowance, rental income, subscriptions and ordinary repeating expenses with pause, resume, skip, stop, month-end scheduling and duplicate-safe automatic posting implemented in v0.11.7 source.
 
 ## Pre-production blockers
 
@@ -34,7 +35,8 @@ These must be completed before the current build is promoted to the public live 
 
 1. **Finish Alpha 2 and v0.11.5 manual staging tests** on mobile and desktop, including every dedicated archive/closed page and every new confirmation dialog.
 2. **Deploy and manually verify v0.11.6 account deletion on staging** with disposable password and Google users, ownership-transfer blockers, cancellation, scheduled finalisation, Storage cleanup, retained anonymous shared history and the 30-day re-registration policy.
-3. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
+3. **Deploy and manually verify v0.11.7 recurring transactions on staging**, including scheduler execution, month-end dates, duplicate prevention, Budget effects, pause/resume/skip/stop and closed Account/archived Space safeguards.
+4. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
 
 The browser-native confirmation, version-source, CI-coverage and Firebase Functions dependency-review findings were closed in v0.11.5. The account-deletion source implementation is documented in `ACCOUNT_DATA_DELETION_ALPHA.md`; it remains a staging-test gate until the scheduled backend flow is proven end to end.
 
@@ -43,10 +45,6 @@ The browser-native confirmation, version-source, CI-coverage and Firebase Functi
 ### Optional Household/general group fund
 
 Trip money is implemented, but collected-money handling is limited to Trip Spaces. The agreed Household/group model requires an optional fund that can be enabled where useful without forcing every family or group to use a wallet.
-
-### General recurring transactions
-
-Recurring bills and instalments exist. Ordinary recurring income/expense templates—salary, rent income, subscriptions and similar repeat transactions—are not represented in the transaction model.
 
 ### Brunei account and payment presets
 

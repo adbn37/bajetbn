@@ -168,3 +168,23 @@ Notes: ____________________
 - [ ] Confirm a `manual_review` restriction remains blocked until administrator approval.
 - [ ] Confirm an existing active account is not blocked by a stale restriction.
 - [ ] Do not mark `data.delete_account` complete or deploy to production until every disposable-user test above passes.
+
+
+## v0.11.7 recurring transactions
+
+- [ ] Create monthly salary, allowance, rental income and subscription templates.
+- [ ] Confirm the due occurrence posts one transaction, one ledger entry and one run record.
+- [ ] Run the scheduler/callable twice for the same due date and confirm no duplicate transaction.
+- [ ] Confirm recurring expenses update matching Budgets exactly once.
+- [ ] Pause a template and confirm no transaction is generated.
+- [ ] Resume with a chosen date and confirm missed dates are not silently backfilled.
+- [ ] Skip next and confirm the Account balance does not change.
+- [ ] Edit future amount/account/category and confirm old transactions remain unchanged.
+- [ ] Stop a template and confirm it moves to the separate Stopped page.
+- [ ] Restart a stopped template from a new date.
+- [ ] Confirm delete is allowed only when generated and skipped counts are zero.
+- [ ] Verify 31 January monthly -> 28 February -> 31 March month-end behaviour.
+- [ ] Close/archive protection blocks Accounts and Spaces with active recurring money.
+- [ ] Break Account/Space access and confirm Needs attention plus one notification.
+- [ ] Confirm Calendar and Search show the recurring template.
+- [ ] Verify mobile cards, forms and action buttons without horizontal scrolling.

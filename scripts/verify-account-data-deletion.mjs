@@ -38,7 +38,7 @@ for (const file of requiredFiles) requireFile(file);
 const release = JSON.parse(read('release.json'));
 const packageJson = JSON.parse(read('package.json'));
 checks += 2;
-if (release.version !== '0.11.6') fail(`Expected release 0.11.6, found ${release.version}.`);
+if (release.version.localeCompare('0.11.6', undefined, { numeric: true }) < 0) fail(`Expected release 0.11.6 or later, found ${release.version}.`);
 if (packageJson.version !== release.version) fail('package.json and release.json versions do not match.');
 
 requireText('src/pages/SettingsPage.tsx', 'Delete my account');

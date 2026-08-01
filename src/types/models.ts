@@ -17,6 +17,10 @@ export type AccountClassification = 'personal' | 'business';
 
 export type FinancialTransactionType = 'income' | 'expense' | 'transfer' | 'reversal';
 export type FinancialTransactionStatus = 'posted' | 'reversed';
+export type RecurringTransactionType = 'income' | 'expense';
+export type RecurringTransactionFrequency = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+export type RecurringTransactionStatus = 'active' | 'paused' | 'needs_attention' | 'stopped' | 'completed';
+export type RecurringTransactionRunStatus = 'posted' | 'skipped' | 'failed';
 export type CategoryKind = 'income' | 'expense';
 export type CategoryScope = 'personal' | 'business' | 'both';
 
@@ -63,8 +67,61 @@ export interface FinancialTransaction {
   sharedBillAssignmentId?: string | null;
   sharedBillPaymentId?: string | null;
   paymentProofPath?: string | null;
+  recurringTemplateId?: string | null;
+  recurringRunId?: string | null;
+  recurringScheduledDate?: string | null;
   createdAt?: Timestamp;
   postedAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface RecurringTransactionTemplate {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  name: string;
+  type: RecurringTransactionType;
+  spaceId: string;
+  accountId: string;
+  amountMinor: number;
+  currency: string;
+  categoryId: string;
+  category: string;
+  categoryIcon: string;
+  categoryColor: string;
+  categoryScope: CategoryScope;
+  counterparty?: string;
+  note?: string;
+  frequency: RecurringTransactionFrequency;
+  startDate: string;
+  nextRunDate?: string | null;
+  endDate?: string | null;
+  preferredDay: number;
+  preferMonthEnd: boolean;
+  timezone: string;
+  status: RecurringTransactionStatus;
+  generatedCount: number;
+  skippedCount: number;
+  lastRunDate?: string | null;
+  lastTransactionId?: string | null;
+  lastError?: string | null;
+  pausedAt?: Timestamp | null;
+  stoppedAt?: Timestamp | null;
+  stoppedPreviousNextRunDate?: string | null;
+  completedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface RecurringTransactionRun {
+  id: string;
+  ownerId: string;
+  templateId: string;
+  scheduledDate: string;
+  status: RecurringTransactionRunStatus;
+  transactionId?: string | null;
+  error?: string | null;
+  createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
 
@@ -400,6 +457,7 @@ export interface Commitment {
   note?: string;
   archivedAt?: Timestamp | null;
   stoppedAt?: Timestamp | null;
+  stoppedPreviousNextRunDate?: string | null;
   stoppedPreviousNextDueDate?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -427,7 +485,7 @@ export interface CommitmentPayment {
   updatedAt?: Timestamp;
 }
 
-export type ReminderItemType = 'bill' | 'instalment' | 'goal' | 'shared_bill';
+export type ReminderItemType = 'bill' | 'instalment' | 'goal' | 'shared_bill' | 'recurring_transaction';
 export type ReminderAction = 'marked_reminded' | 'whatsapp_opened';
 
 export interface ReminderHistory {

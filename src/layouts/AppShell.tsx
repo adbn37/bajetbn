@@ -10,6 +10,7 @@ const navigation = [
   ['/spaces', 'Spaces', '◫'],
   ['/accounts', 'Accounts', '◉'],
   ['/transactions', 'Money activity', '↔'],
+  ['/recurring', 'Recurring money', '↻'],
   ['/budgets', 'Budgets', '▤'],
   ['/goals', 'Goals', '◇'],
   ['/bills', 'Bills & instalments', '◷'],

@@ -19,11 +19,18 @@ const categoryColors = ['teal', 'blue', 'violet', 'amber', 'rose', 'green', 'sla
 const budgetPeriodTypes = ['monthly', 'custom'] as const;
 const commitmentTypes = ['bill', 'instalment'] as const;
 const commitmentFrequencies = ['once', 'weekly', 'monthly', 'quarterly', 'yearly'] as const;
+const recurringTransactionTypes = ['income', 'expense'] as const;
+const recurringTransactionFrequencies = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
+const recurringTransactionStatuses = ['active', 'paused', 'needs_attention', 'stopped', 'completed'] as const;
+const recurringTransactionActions = ['pause', 'resume', 'skip', 'stop', 'restart', 'delete'] as const;
 type AccountType = (typeof accountTypes)[number];
 type PostedTransactionType = (typeof transactionTypes)[number];
 type CategoryKind = (typeof categoryKinds)[number];
 type CategoryScope = (typeof categoryScopes)[number];
 type CommitmentFrequency = (typeof commitmentFrequencies)[number];
+type RecurringTransactionType = (typeof recurringTransactionTypes)[number];
+type RecurringTransactionFrequency = (typeof recurringTransactionFrequencies)[number];
+type RecurringTransactionStatus = (typeof recurringTransactionStatuses)[number];
 
 budgetPeriodTypes
 commitmentTypes
@@ -79,6 +86,7 @@ interface AccountRecord extends DocumentData {
   ledgerBalanceMinor: number;
   balanceVersion: number;
   archivedAt?: unknown;
+  closedAt?: unknown;
 }
 
 function requireAuth(uid?: string): string {
@@ -139,7 +147,7 @@ function assertAccount(data: DocumentData | undefined, uid: string, label: strin
   if (!data) throw new HttpsError('not-found', `${label} was not found.`);
   if (data.ownerId !== uid) throw new HttpsError('permission-denied', `You do not own the ${label.toLowerCase()}.`);
   if (!accountTypes.includes(data.type as AccountType)) throw new HttpsError('failed-precondition', `${label} has an unsupported type.`);
-  if (!allowArchived && data.archivedAt) throw new HttpsError('failed-precondition', `${label} is archived.`);
+  if (!allowArchived && (data.archivedAt || data.closedAt)) throw new HttpsError('failed-precondition', `${label} is closed or archived.`);
   if (!Number.isSafeInteger(data.ledgerBalanceMinor) || !Number.isSafeInteger(data.balanceVersion)) {
     throw new HttpsError('failed-precondition', `${label} has an invalid ledger balance.`);
   }
@@ -215,6 +223,96 @@ function addFrequency(date: string, frequency: CommitmentFrequency): string | nu
     parsed.setUTCDate(Math.min(day, lastDay));
   }
   return parsed.toISOString().slice(0, 10);
+}
+
+interface RecurringTemplateRecord extends DocumentData {
+  ownerId: string;
+  name: string;
+  type: RecurringTransactionType;
+  spaceId: string;
+  accountId: string;
+  amountMinor: number;
+  currency: string;
+  categoryId: string;
+  category: string;
+  categoryIcon: string;
+  categoryColor: string;
+  categoryScope: CategoryScope;
+  counterparty?: string;
+  note?: string;
+  frequency: RecurringTransactionFrequency;
+  startDate: string;
+  nextRunDate?: string | null;
+  endDate?: string | null;
+  preferredDay: number;
+  preferMonthEnd: boolean;
+  timezone: string;
+  status: RecurringTransactionStatus;
+  generatedCount: number;
+  skippedCount: number;
+}
+
+function recurringDateParts(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return { year, month, day };
+}
+
+function monthLastDay(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function isMonthEndDate(value: string) {
+  const { year, month, day } = recurringDateParts(value);
+  return day === monthLastDay(year, month);
+}
+
+function recurringDateFromParts(year: number, month: number, day: number) {
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function addRecurringFrequency(date: string, frequency: RecurringTransactionFrequency, preferredDay: number, preferMonthEnd: boolean) {
+  if (frequency === 'weekly') {
+    const parsed = new Date(`${date}T00:00:00Z`);
+    parsed.setUTCDate(parsed.getUTCDate() + 7);
+    return parsed.toISOString().slice(0, 10);
+  }
+  const { year, month } = recurringDateParts(date);
+  const monthStep = frequency === 'monthly' ? 1 : frequency === 'quarterly' ? 3 : 12;
+  const zeroBasedTarget = (year * 12 + (month - 1)) + monthStep;
+  const targetYear = Math.floor(zeroBasedTarget / 12);
+  const targetMonth = (zeroBasedTarget % 12) + 1;
+  const last = monthLastDay(targetYear, targetMonth);
+  const targetDay = preferMonthEnd ? last : Math.min(preferredDay, last);
+  return recurringDateFromParts(targetYear, targetMonth, targetDay);
+}
+
+function localDateForTimezone(timezone: string) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function recurringRunId(templateId: string, scheduledDate: string) {
+  return `${templateId}_${scheduledDate.replace(/-/g, '')}`;
+}
+
+function recurringCommand(uid: string, key: string) {
+  return db.collection('recurringTransactionCommands').doc(commandId(uid, key));
+}
+
+function safeRecurringError(error: unknown) {
+  if (error instanceof HttpsError) return error.message.slice(0, 240);
+  if (error instanceof Error && error.message) return error.message.slice(0, 240);
+  return 'BajetBN could not post this recurring money. Check its Account, Space, and category.';
 }
 
 function categorySnapshotFromData(input: {
@@ -2202,6 +2300,9 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
   const data = snapshot.data() || {};
   if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'Only the Space owner can do this.');
   if (data.type === 'personal' && action !== 'restore') throw new HttpsError('failed-precondition', 'Your Personal Space must stay available.');
+  const recurringInSpace = await db.collection('recurringTransactionTemplates').where('spaceId', '==', spaceId).get();
+  const activeRecurringInSpace = recurringInSpace.docs.some((item) => ['active', 'paused', 'needs_attention'].includes(String(item.data().status || '')));
+  if (action === 'archive' && activeRecurringInSpace) throw new HttpsError('failed-precondition', 'Stop or move the recurring money in this Space before archiving it.');
 
   if (action === 'delete') {
     const memberSnapshot = await db.collection('spaceMembers').where('spaceId', '==', spaceId).get();
@@ -2218,7 +2319,7 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('spaceInvitations').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
     ]);
-    if (hasOtherMembers || checks.some(Boolean)) {
+    if (hasOtherMembers || checks.some(Boolean) || !recurringInSpace.empty) {
       throw new HttpsError('failed-precondition', 'This Space has members or saved history. Archive it instead.');
     }
   }
@@ -2254,6 +2355,10 @@ export const manageAccountLifecycle = onCall({ region }, async (request) => {
   const data = snapshot.data() || {};
   if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this account.');
 
+  const recurringForAccount = await db.collection('recurringTransactionTemplates').where('accountId', '==', accountId).get();
+  const activeRecurringForAccount = recurringForAccount.docs.some((item) => ['active', 'paused', 'needs_attention'].includes(String(item.data().status || '')));
+  if (action === 'close' && activeRecurringForAccount) throw new HttpsError('failed-precondition', 'Stop or move recurring money that uses this account before closing it.');
+
   let openingLedgerRefs: DocumentReference[] = [];
   if (action === 'delete') {
     const [sourceUsed, destinationUsed, commitmentUsed, sharedUsed, ledgerSnapshot] = await Promise.all([
@@ -2264,7 +2369,7 @@ export const manageAccountLifecycle = onCall({ region }, async (request) => {
       db.collection('ledgerEntries').where('accountId', '==', accountId).get(),
     ]);
     const nonOpeningLedger = ledgerSnapshot.docs.some((item) => item.data().entryType !== 'opening_balance');
-    if (sourceUsed || destinationUsed || commitmentUsed || sharedUsed || nonOpeningLedger) {
+    if (sourceUsed || destinationUsed || commitmentUsed || sharedUsed || nonOpeningLedger || !recurringForAccount.empty) {
       throw new HttpsError('failed-precondition', 'This account has saved money activity. Close it instead.');
     }
     openingLedgerRefs = ledgerSnapshot.docs.map((item) => item.ref);
@@ -2401,8 +2506,9 @@ export const manageCategoryLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('transactions').where('categoryId', '==', categoryId)),
       queryHasDocuments(db.collection('budgets').where('categoryId', '==', categoryId)),
       queryHasDocuments(db.collection('commitments').where('categoryId', '==', categoryId)),
+      queryHasDocuments(db.collection('recurringTransactionTemplates').where('categoryId', '==', categoryId)),
     ])).some(Boolean);
-    if (used) throw new HttpsError('failed-precondition', 'This category is used in saved records. Hide it instead.');
+    if (used) throw new HttpsError('failed-precondition', 'This category is used in saved records or recurring money. Hide it instead.');
   }
   return db.runTransaction(async (transaction) => {
     const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
@@ -3044,6 +3150,352 @@ const accountDeletionTokenDrainMilliseconds = 2 * 60 * 60 * 1000;
 const deletedMemberName = 'Deleted member';
 
 type AccountDeletionBlockerCode = 'space_ownership' | 'trip_fund_holder';
+// v0.11.7 recurring ordinary income and expense templates
+export const createRecurringTransactionTemplate = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const name = stringValue(request.data?.name, 'Recurring money name', 80);
+  const type = oneOf(request.data?.type, recurringTransactionTypes, 'recurring money type');
+  const accountId = stringValue(request.data?.accountId, 'Account', 80);
+  const spaceId = stringValue(request.data?.spaceId, 'Space', 80);
+  const amountMinor = positiveMoney(request.data?.amountMinor);
+  const categoryId = stringValue(request.data?.categoryId, 'Category ID', 80);
+  const counterparty = optionalString(request.data?.counterparty, 120);
+  const note = optionalString(request.data?.note, 500);
+  const frequency = oneOf(request.data?.frequency, recurringTransactionFrequencies, 'repeat frequency');
+  const nextRunDate = localDate(request.data?.nextRunDate, 'Next date');
+  const endDate = optionalLocalDate(request.data?.endDate, 'End date');
+  if (endDate && endDate < nextRunDate) throw new HttpsError('invalid-argument', 'End date must be on or after the next date.');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  const commandRef = recurringCommand(uid, key);
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
+  const accountRef = db.collection('accounts').doc(accountId);
+  const customCategoryRef = categoryId.startsWith('custom-') ? db.collection('categories').doc(categoryId) : null;
+
+  return db.runTransaction(async (transaction) => {
+    const [command, spaceSnapshot, memberSnapshot, accountSnapshot, customCategorySnapshot] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(spaceRef),
+      transaction.get(memberRef),
+      transaction.get(accountRef),
+      customCategoryRef ? transaction.get(customCategoryRef) : Promise.resolve(null),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'The selected Space is unavailable.');
+    const member = memberSnapshot.data();
+    if (!memberSnapshot.exists || member?.status === 'removed' || member?.status === 'suspended' || member?.canUseAccounts !== true) {
+      throw new HttpsError('permission-denied', 'You cannot use Accounts in this Space.');
+    }
+    const account = assertAccount(accountSnapshot.data(), uid, 'Account');
+    const space = spaceSnapshot.data() || {};
+    if (account.currency !== space.currency) throw new HttpsError('failed-precondition', 'Account and Space currencies must match.');
+    const timezone = typeof space.timezone === 'string' && space.timezone ? space.timezone : 'Asia/Brunei';
+    if (nextRunDate < localDateForTimezone(timezone)) throw new HttpsError('invalid-argument', 'Choose today or a future date.');
+    const selectedScope: Exclude<CategoryScope, 'both'> = space.type === 'sme' ? 'business' : 'personal';
+    const category = categorySnapshotFromData({ categoryId, requiredKind: type, selectedScope, uid, customData: customCategorySnapshot?.data() });
+    const ref = db.collection('recurringTransactionTemplates').doc();
+    const now = FieldValue.serverTimestamp();
+    const preferredDay = recurringDateParts(nextRunDate).day;
+    const result = { templateId: ref.id };
+    transaction.create(ref, {
+      displayId: displayId('RCT'), ownerId: uid, name, type, spaceId, accountId, amountMinor,
+      currency: account.currency, categoryId: category.id, category: category.name,
+      categoryIcon: category.icon, categoryColor: category.color, categoryScope: category.scope,
+      counterparty, note, frequency, startDate: nextRunDate, nextRunDate, endDate,
+      preferredDay, preferMonthEnd: isMonthEndDate(nextRunDate), timezone, status: 'active',
+      generatedCount: 0, skippedCount: 0, lastRunDate: null, lastTransactionId: null,
+      lastError: null, pausedAt: null, stoppedAt: null, stoppedPreviousNextRunDate: null,
+      completedAt: null, createdAt: now, updatedAt: now,
+    });
+    transaction.create(commandRef, { uid, kind: 'create_recurring_transaction_template', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const updateRecurringTransactionTemplate = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const templateId = stringValue(request.data?.templateId, 'Recurring money ID', 80);
+  const name = stringValue(request.data?.name, 'Recurring money name', 80);
+  const type = oneOf(request.data?.type, recurringTransactionTypes, 'recurring money type');
+  const accountId = stringValue(request.data?.accountId, 'Account', 80);
+  const spaceId = stringValue(request.data?.spaceId, 'Space', 80);
+  const amountMinor = positiveMoney(request.data?.amountMinor);
+  const categoryId = stringValue(request.data?.categoryId, 'Category ID', 80);
+  const counterparty = optionalString(request.data?.counterparty, 120);
+  const note = optionalString(request.data?.note, 500);
+  const frequency = oneOf(request.data?.frequency, recurringTransactionFrequencies, 'repeat frequency');
+  const nextRunDate = localDate(request.data?.nextRunDate, 'Next date');
+  const endDate = optionalLocalDate(request.data?.endDate, 'End date');
+  if (endDate && endDate < nextRunDate) throw new HttpsError('invalid-argument', 'End date must be on or after the next date.');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  const ref = db.collection('recurringTransactionTemplates').doc(templateId);
+  const commandRef = recurringCommand(uid, key);
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
+  const accountRef = db.collection('accounts').doc(accountId);
+  const customCategoryRef = categoryId.startsWith('custom-') ? db.collection('categories').doc(categoryId) : null;
+
+  return db.runTransaction(async (transaction) => {
+    const [command, current, spaceSnapshot, memberSnapshot, accountSnapshot, customCategorySnapshot] = await Promise.all([
+      transaction.get(commandRef), transaction.get(ref), transaction.get(spaceRef), transaction.get(memberRef), transaction.get(accountRef),
+      customCategoryRef ? transaction.get(customCategoryRef) : Promise.resolve(null),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Recurring money was not found.');
+    const currentData = current.data() || {};
+    if (currentData.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this recurring money.');
+    if (['stopped', 'completed'].includes(String(currentData.status || ''))) throw new HttpsError('failed-precondition', 'Restart this recurring money before editing it.');
+    if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'The selected Space is unavailable.');
+    const member = memberSnapshot.data();
+    if (!memberSnapshot.exists || member?.status === 'removed' || member?.status === 'suspended' || member?.canUseAccounts !== true) throw new HttpsError('permission-denied', 'You cannot use Accounts in this Space.');
+    const account = assertAccount(accountSnapshot.data(), uid, 'Account');
+    const space = spaceSnapshot.data() || {};
+    if (account.currency !== space.currency) throw new HttpsError('failed-precondition', 'Account and Space currencies must match.');
+    const timezone = typeof space.timezone === 'string' && space.timezone ? space.timezone : 'Asia/Brunei';
+    if (nextRunDate < localDateForTimezone(timezone)) throw new HttpsError('invalid-argument', 'Choose today or a future date.');
+    const selectedScope: Exclude<CategoryScope, 'both'> = space.type === 'sme' ? 'business' : 'personal';
+    const category = categorySnapshotFromData({ categoryId, requiredKind: type, selectedScope, uid, customData: customCategorySnapshot?.data() });
+    const now = FieldValue.serverTimestamp();
+    const status = currentData.status === 'paused' ? 'paused' : 'active';
+    transaction.update(ref, {
+      name, type, spaceId, accountId, amountMinor, currency: account.currency,
+      categoryId: category.id, category: category.name, categoryIcon: category.icon,
+      categoryColor: category.color, categoryScope: category.scope, counterparty, note,
+      frequency, nextRunDate, endDate, preferredDay: recurringDateParts(nextRunDate).day,
+      preferMonthEnd: isMonthEndDate(nextRunDate), timezone, status, lastError: null, updatedAt: now,
+    });
+    const result = { templateId, updated: true };
+    transaction.create(commandRef, { uid, kind: 'update_recurring_transaction_template', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const manageRecurringTransactionTemplate = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const templateId = stringValue(request.data?.templateId, 'Recurring money ID', 80);
+  const action = oneOf(request.data?.action, recurringTransactionActions, 'recurring money action');
+  const nextRunDate = action === 'resume' || action === 'restart' ? localDate(request.data?.nextRunDate, 'Next date') : null;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const ref = db.collection('recurringTransactionTemplates').doc(templateId);
+  const commandRef = recurringCommand(uid, key);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) throw new HttpsError('not-found', 'Recurring money was not found.');
+  const data = snapshot.data() as RecurringTemplateRecord;
+  if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this recurring money.');
+
+  if ((action === 'resume' || action === 'restart') && nextRunDate) {
+    if (nextRunDate < localDateForTimezone(data.timezone || 'Asia/Brunei')) throw new HttpsError('invalid-argument', 'Choose today or a future date.');
+    if (data.endDate && nextRunDate > data.endDate) throw new HttpsError('failed-precondition', 'The selected date is after this recurring money ends. Edit the end date first.');
+  }
+  if (action === 'delete') {
+    const used = Number(data.generatedCount || 0) > 0 || await queryHasDocuments(db.collection('recurringTransactionRuns').where('templateId', '==', templateId));
+    if (used) throw new HttpsError('failed-precondition', 'This recurring money has saved history. Stop it instead.');
+  }
+
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(ref)]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'Recurring money was not found.');
+    const currentData = current.data() as RecurringTemplateRecord;
+    const now = FieldValue.serverTimestamp();
+    let result: Record<string, unknown> = { templateId, action };
+
+    if (action === 'delete') {
+      transaction.delete(ref);
+      result = { ...result, deleted: true };
+    } else if (action === 'pause') {
+      if (currentData.status !== 'active' && currentData.status !== 'needs_attention') throw new HttpsError('failed-precondition', 'Only active recurring money can be paused.');
+      transaction.update(ref, { status: 'paused', pausedAt: now, lastError: null, updatedAt: now });
+    } else if (action === 'resume' || action === 'restart') {
+      if (!nextRunDate) throw new HttpsError('invalid-argument', 'Choose the next date.');
+      if (action === 'restart' && !['stopped', 'completed'].includes(currentData.status)) throw new HttpsError('failed-precondition', 'This recurring money has not ended.');
+      if (action === 'resume' && !['paused', 'needs_attention'].includes(currentData.status)) throw new HttpsError('failed-precondition', 'This recurring money is not paused.');
+      transaction.update(ref, {
+        status: 'active', nextRunDate, preferredDay: recurringDateParts(nextRunDate).day,
+        preferMonthEnd: isMonthEndDate(nextRunDate), pausedAt: null, stoppedAt: null,
+        stoppedPreviousNextRunDate: null, completedAt: null, lastError: null, updatedAt: now,
+      });
+    } else if (action === 'skip') {
+      if (currentData.status !== 'active' || !currentData.nextRunDate) throw new HttpsError('failed-precondition', 'There is no active date to skip.');
+      const runRef = db.collection('recurringTransactionRuns').doc(recurringRunId(templateId, currentData.nextRunDate));
+      const existingRun = await transaction.get(runRef);
+      if (existingRun.exists) throw new HttpsError('already-exists', 'This date has already been handled. Refresh the page.');
+      const calculatedNext = addRecurringFrequency(currentData.nextRunDate, currentData.frequency, currentData.preferredDay, currentData.preferMonthEnd);
+      const completed = Boolean(currentData.endDate && calculatedNext > currentData.endDate);
+      transaction.create(runRef, {
+        ownerId: uid, templateId, scheduledDate: currentData.nextRunDate, status: 'skipped',
+        transactionId: null, error: null, createdAt: now, updatedAt: now,
+      });
+      transaction.update(ref, {
+        skippedCount: Number(currentData.skippedCount || 0) + 1,
+        nextRunDate: completed ? null : calculatedNext,
+        status: completed ? 'completed' : 'active', completedAt: completed ? now : null,
+        lastError: null, updatedAt: now,
+      });
+      result = { ...result, skippedDate: currentData.nextRunDate, nextRunDate: completed ? null : calculatedNext };
+    } else if (action === 'stop') {
+      if (['stopped', 'completed'].includes(currentData.status)) throw new HttpsError('failed-precondition', 'This recurring money has already ended.');
+      transaction.update(ref, {
+        status: 'stopped', stoppedAt: now, stoppedPreviousNextRunDate: currentData.nextRunDate || null,
+        nextRunDate: null, lastError: null, updatedAt: now,
+      });
+    }
+    transaction.create(commandRef, { uid, kind: `recurring_transaction_${action}`, idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+async function markRecurringNeedsAttention(templateId: string, message: string) {
+  const ref = db.collection('recurringTransactionTemplates').doc(templateId);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) return;
+    const data = snapshot.data() || {};
+    if (data.status === 'stopped' || data.status === 'completed') return;
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, { status: 'needs_attention', lastError: message, updatedAt: now });
+    if (data.status !== 'needs_attention') {
+      createNotification(transaction, {
+        uid: String(data.ownerId || ''), spaceId: String(data.spaceId || ''), type: 'recurring_transaction_attention',
+        title: 'Recurring money needs attention', message: `${data.name || 'Recurring money'} could not be posted. ${message}`,
+        targetPath: '/recurring', actionLabel: 'Check recurring money', now,
+      });
+    }
+  });
+}
+
+async function postRecurringOccurrence(templateId: string, expectedOwnerId?: string) {
+  const templateRef = db.collection('recurringTransactionTemplates').doc(templateId);
+  const initialSnapshot = await templateRef.get();
+  if (!initialSnapshot.exists) throw new HttpsError('not-found', 'Recurring money was not found.');
+  const initial = initialSnapshot.data() as RecurringTemplateRecord;
+  if (expectedOwnerId && initial.ownerId !== expectedOwnerId) throw new HttpsError('permission-denied', 'You do not own this recurring money.');
+  if (initial.status !== 'active') throw new HttpsError('failed-precondition', 'This recurring money is not active.');
+  if (!initial.nextRunDate) throw new HttpsError('failed-precondition', 'This recurring money has no next date.');
+  const scheduledDate = initial.nextRunDate;
+  if (scheduledDate > localDateForTimezone(initial.timezone || 'Asia/Brunei')) throw new HttpsError('failed-precondition', 'This recurring money is not due yet.');
+
+  const accountRef = db.collection('accounts').doc(initial.accountId);
+  const spaceRef = db.collection('spaces').doc(initial.spaceId);
+  const memberRef = db.collection('spaceMembers').doc(`${initial.spaceId}_${initial.ownerId}`);
+  const runRef = db.collection('recurringTransactionRuns').doc(recurringRunId(templateId, scheduledDate));
+  const budgetCandidateRefs = initial.type === 'expense'
+    ? (await db.collection('budgets').where('ownerId', '==', initial.ownerId).where('spaceId', '==', initial.spaceId).get()).docs.map((item) => item.ref)
+    : [];
+
+  return db.runTransaction(async (transaction) => {
+    const [currentSnapshot, existingRun, accountSnapshot, spaceSnapshot, memberSnapshot, budgetSnapshots] = await Promise.all([
+      transaction.get(templateRef), transaction.get(runRef), transaction.get(accountRef), transaction.get(spaceRef), transaction.get(memberRef),
+      Promise.all(budgetCandidateRefs.map((ref) => transaction.get(ref))),
+    ]);
+    if (existingRun.exists) return { templateId, scheduledDate, transactionId: existingRun.data()?.transactionId || null, duplicate: true };
+    if (!currentSnapshot.exists) throw new HttpsError('not-found', 'Recurring money was not found.');
+    const current = currentSnapshot.data() as RecurringTemplateRecord;
+    if (current.status !== 'active' || current.nextRunDate !== scheduledDate) throw new HttpsError('failed-precondition', 'This recurring date changed. Refresh the page.');
+    if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'The selected Space is archived or unavailable.');
+    const member = memberSnapshot.data();
+    if (!memberSnapshot.exists || member?.status === 'removed' || member?.status === 'suspended' || member?.canUseAccounts !== true) throw new HttpsError('failed-precondition', 'Account access in this Space is no longer available.');
+    const account = assertAccount(accountSnapshot.data(), current.ownerId, 'Account');
+    if (account.currency !== current.currency || spaceSnapshot.data()?.currency !== current.currency) throw new HttpsError('failed-precondition', 'The Account or Space currency changed.');
+    const amountMinor = positiveMoney(current.amountMinor);
+    const transactionRef = db.collection('transactions').doc();
+    const now = FieldValue.serverTimestamp();
+    const flow = current.type === 'income' ? 'in' : 'out';
+    const delta = accountEffect(account.type, flow, amountMinor);
+    updateAccountBalance(transaction, accountRef, account, delta);
+    const occurrenceKey = `rct-${templateId.slice(0, 20)}-${scheduledDate.replace(/-/g, '')}`;
+    const ledgerEntryId = createLedgerEntry(transaction, {
+      accountId: current.accountId, ownerId: current.ownerId, spaceId: current.spaceId,
+      transactionId: transactionRef.id, entryType: `recurring_${current.type}`, amountMinor: delta,
+      currency: current.currency, idempotencyKey: occurrenceKey, now,
+    });
+    const budgetIds = current.type === 'expense'
+      ? matchingBudgetIds(budgetSnapshots, { spaceId: current.spaceId, categoryId: current.categoryId, transactionDate: scheduledDate })
+      : [];
+    if (budgetIds.length) updateBudgetsSpent(transaction, budgetSnapshots, budgetIds, amountMinor);
+
+    transaction.create(transactionRef, {
+      displayId: displayId('TXN'), ownerId: current.ownerId, createdBy: current.ownerId,
+      type: current.type, status: 'posted', spaceId: current.spaceId, accountId: current.accountId,
+      destinationAccountId: null, amountMinor, currency: current.currency,
+      category: current.category, categoryId: current.categoryId, categoryIcon: current.categoryIcon,
+      categoryColor: current.categoryColor, categoryScope: current.categoryScope,
+      categoryIsSystem: !String(current.categoryId).startsWith('custom-'), counterparty: current.counterparty || '',
+      note: current.note || '', transactionDate: scheduledDate, reversalOf: null, reversedBy: null,
+      budgetIds, commitmentId: null, commitmentPaymentId: null,
+      recurringTemplateId: templateId, recurringRunId: runRef.id, recurringScheduledDate: scheduledDate,
+      createdAt: now, postedAt: now, updatedAt: now,
+    });
+    transaction.create(runRef, {
+      ownerId: current.ownerId, templateId, scheduledDate, status: 'posted', transactionId: transactionRef.id,
+      error: null, createdAt: now, updatedAt: now,
+    });
+    const calculatedNext = addRecurringFrequency(scheduledDate, current.frequency, current.preferredDay, current.preferMonthEnd);
+    const completed = Boolean(current.endDate && calculatedNext > current.endDate);
+    transaction.update(templateRef, {
+      generatedCount: Number(current.generatedCount || 0) + 1, lastRunDate: scheduledDate,
+      lastTransactionId: transactionRef.id, nextRunDate: completed ? null : calculatedNext,
+      status: completed ? 'completed' : 'active', completedAt: completed ? now : null,
+      lastError: null, updatedAt: now,
+    });
+    createNotification(transaction, {
+      uid: current.ownerId, spaceId: current.spaceId, type: 'recurring_transaction_posted',
+      title: 'Recurring money saved', message: `${current.name} was posted for ${scheduledDate}.`,
+      targetPath: '/transactions', actionLabel: 'Open money activity', now,
+    });
+    return { templateId, scheduledDate, transactionId: transactionRef.id, ledgerEntryId, nextRunDate: completed ? null : calculatedNext };
+  });
+}
+
+export const postDueRecurringTransaction = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const templateId = stringValue(request.data?.templateId, 'Recurring money ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const commandRef = recurringCommand(uid, key);
+  const command = await commandRef.get();
+  if (command.exists) return command.data()?.result;
+  try {
+    const result = await postRecurringOccurrence(templateId, uid);
+    await commandRef.create({ uid, kind: 'post_due_recurring_transaction', idempotencyKey: key, result, createdAt: FieldValue.serverTimestamp() });
+    return result;
+  } catch (error) {
+    const message = safeRecurringError(error);
+    await markRecurringNeedsAttention(templateId, message).catch(() => undefined);
+    throw error;
+  }
+});
+
+export const processRecurringTransactions = onSchedule({
+  region,
+  schedule: '10 * * * *',
+  timeZone: 'Asia/Brunei',
+  retryCount: 3,
+}, async () => {
+  const activeSnapshot = await db.collection('recurringTransactionTemplates').where('status', '==', 'active').limit(200).get();
+  let processed = 0;
+  for (const item of activeSnapshot.docs) {
+    for (let catchUp = 0; catchUp < 12 && processed < 100; catchUp += 1) {
+      const current = await item.ref.get();
+      if (!current.exists) break;
+      const data = current.data() as RecurringTemplateRecord;
+      if (data.status !== 'active' || !data.nextRunDate || data.nextRunDate > localDateForTimezone(data.timezone || 'Asia/Brunei')) break;
+      try {
+        await postRecurringOccurrence(item.id);
+        processed += 1;
+      } catch (error) {
+        const message = safeRecurringError(error);
+        console.error(`Recurring transaction failed for ${item.id}.`, error);
+        await markRecurringNeedsAttention(item.id, message).catch(() => undefined);
+        break;
+      }
+    }
+  }
+  console.log(`Processed ${processed} recurring transaction occurrence(s).`);
+});
+
+
 interface AccountDeletionBlocker {
   code: AccountDeletionBlockerCode;
   message: string;
@@ -3516,7 +3968,7 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
     'transactions', 'budgets', 'goals', 'commitments', 'sharedBillAssignments', 'sharedBillPayments',
     'sharedBillPaymentReversals', 'spaceActivities', 'sharedExpenses', 'sharedExpenseShares',
     'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
-    'userNotifications', 'reminderHistory',
+    'userNotifications', 'reminderHistory', 'recurringTransactionTemplates', 'recurringTransactionRuns',
   ];
   for (const collectionName of collections) {
     const rows = await documentsWhere(collectionName, 'spaceId', spaceId);
@@ -3651,7 +4103,7 @@ async function finalizeAccountDeletion(uid: string) {
       for (const access of await documentsWhere('accountAccess', 'accountId', account.id)) queueDelete(plan, access.ref);
     }
 
-    for (const collectionName of ['accounts', 'ledgerEntries', 'transactions', 'budgets', 'goals', 'goalContributions', 'categories']) {
+    for (const collectionName of ['accounts', 'ledgerEntries', 'transactions', 'budgets', 'goals', 'goalContributions', 'categories', 'recurringTransactionTemplates', 'recurringTransactionRuns']) {
       for (const row of await documentsWhere(collectionName, 'ownerId', uid)) {
         addProofPath(proofPaths, row.data());
         queueDelete(plan, row.ref);

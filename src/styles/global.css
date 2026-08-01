@@ -950,3 +950,62 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
 }
 
 .auth-policy-note { margin:.85rem 0 0; color:var(--muted); font-size:.78rem; line-height:1.5; }
+
+/* v0.11.7 recurring money */
+.recurring-page .info-banner { margin-bottom: 1rem; }
+.recurring-summary-grid { margin-bottom: 1rem; }
+.warning-card { border-color: rgba(245, 158, 11, .45); }
+.recurring-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.recurring-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+}
+.recurring-card.status-needs_attention { border-color: rgba(245, 158, 11, .55); }
+.recurring-card.status-paused { opacity: .9; }
+.recurring-card-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .7rem;
+}
+.recurring-card-heading h2 { margin: .12rem 0 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+.recurring-amount { display: block; margin: 1rem 0; font-size: 1.45rem; }
+.recurring-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  margin: 0 0 1rem;
+}
+.recurring-details div { min-width: 0; }
+.recurring-details dt { color: var(--muted); font-size: .78rem; }
+.recurring-details dd { margin: .15rem 0 0; font-weight: 650; overflow-wrap: anywhere; }
+.recurring-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.compact-notice { margin: .75rem 0; padding: .65rem .75rem; }
+.recurring-form { display: grid; gap: 1rem; }
+.recurring-form > label { display: grid; gap: .4rem; }
+.status-badge.needs_attention { background: rgba(245, 158, 11, .16); color: var(--warning-text, #d97706); }
+.status-badge.paused { background: rgba(148, 163, 184, .16); color: var(--muted); }
+.status-badge.completed, .status-badge.stopped { background: rgba(148, 163, 184, .14); color: var(--muted); }
+.search-result-icon.kind-recurring { background: rgba(45, 212, 191, .14); }
+
+@media (max-width: 1100px) {
+  .recurring-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .recurring-card-grid { grid-template-columns: 1fr; gap: .75rem; }
+  .recurring-card { padding: .85rem; }
+  .recurring-details { gap: .5rem; }
+  .recurring-card-heading { grid-template-columns: auto minmax(0, 1fr); }
+  .recurring-card-heading .status-badge { grid-column: 2; justify-self: start; }
+  .recurring-actions .button { flex: 1 1 calc(50% - .5rem); min-height: 44px; }
+  .recurring-actions .text-button { min-height: 44px; }
+}

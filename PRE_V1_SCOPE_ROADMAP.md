@@ -28,13 +28,17 @@ Includes the seven-day deletion cooling-off period, safe anonymisation and a 30-
 - [x] Add scheduled finalisation, Firebase Auth removal, Firestore cleanup, Storage cleanup and anonymous shared-history retention.
 - [ ] Deploy Firestore rules and Functions to staging and complete the disposable-user test matrix.
 
-## v0.11.7 — Recurring Money and Documents
+## v0.11.7 — Recurring Transactions — Completed in source
 
-- Add recurring income and expense templates.
-- Support pause, resume, skip next, edit future only and stop recurrence.
-- Prevent duplicate generated transactions with idempotency keys.
-- Decide and implement or formally defer general receipt/document attachments.
-- Decide and implement or formally defer offline mutation queue/synchronisation.
+- [x] Add recurring income and expense templates for salary, allowance, rental income, subscriptions and regular costs.
+- [x] Support pause, resume from a chosen date, skip next, edit future only, stop and restart.
+- [x] Prevent duplicate generated transactions with deterministic occurrence records.
+- [x] Preserve month-end and preferred-day schedules across short months.
+- [x] Update Accounts, ledgers and matching Budgets through trusted Functions.
+- [x] Add dedicated active and stopped pages plus Calendar and Search visibility.
+- [ ] Deploy rules, indexes and Functions to staging and complete the recurring-transaction test matrix.
+
+General receipt/document attachments and offline mutation synchronisation remain explicit pre-v1 decisions; they were not silently added to this financial scheduling phase.
 
 ## v0.11.8 — Brunei Presets and SME Essentials
 
