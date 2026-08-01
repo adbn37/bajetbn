@@ -1,8 +1,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -21,6 +24,7 @@ interface AuthContextValue {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string) => Promise<void>;
+  reauthenticateForSensitiveAction: (password?: string) => Promise<void>;
   logOut: () => Promise<void>;
 }
 
@@ -112,6 +116,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { auth } = requireFirebase();
       const result = await createUserWithEmailAndPassword(auth, email, password);
       await sendEmailVerification(result.user);
+    },
+    reauthenticateForSensitiveAction: async (password) => {
+      if (!user) throw new Error('Please sign in again.');
+      const providers = new Set(user.providerData.map((item) => item.providerId));
+      if (providers.has('password')) {
+        if (!user.email) throw new Error('This account does not have an email address.');
+        if (!password) throw new Error('Enter your current password.');
+        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+      } else if (providers.has('google.com')) {
+        await reauthenticateWithPopup(user, new GoogleAuthProvider());
+      } else {
+        throw new Error('This sign-in method cannot be confirmed here. Sign out, sign in again, then retry.');
+      }
+      await user.getIdToken(true);
     },
     logOut: async () => {
       const { auth } = requireFirebase();

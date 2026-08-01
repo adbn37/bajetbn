@@ -1,7 +1,7 @@
 {
-  "auditVersion": "2026-07-31.1",
-  "auditedRelease": "BajetBN v0.11.4 Alpha 2",
-  "sourceBasis": "Latest supplied v0.11.4 source plus the Alpha 2 mobile/archive patch",
+  "auditVersion": "2026-07-31.2",
+  "auditedRelease": "BajetBN v0.11.6 Account and Data Deletion Alpha 1",
+  "sourceBasis": "Verified v0.11.5 staging baseline plus the v0.11.6 account and data deletion implementation",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -499,10 +499,19 @@
       "id": "data.delete_account",
       "area": "Privacy and data",
       "requirement": "User can request account and personal-data deletion with protected financial-history handling",
-      "status": "missing",
+      "status": "manual_test",
       "gate": "pre_production",
       "evidence": [
-        "src/pages/SettingsPage.tsx"
+        "src/pages/SettingsPage.tsx",
+        "src/components/AccountDeletionModal.tsx",
+        "src/repositories/accountDeletionRepository.ts",
+        "src/contexts/AuthContext.tsx",
+        "src/features/collaboration/CollaborationPage.tsx",
+        "functions/src/index.ts",
+        "firestore.rules",
+        "ACCOUNT_DATA_DELETION_ALPHA.md",
+        "DATA_RETENTION_AND_DELETION.md",
+        "scripts/verify-account-data-deletion.mjs"
       ]
     },
     {

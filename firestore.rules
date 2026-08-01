@@ -77,6 +77,24 @@ service cloud.firestore {
       }
     }
 
+
+    match /accountDeletionRequests/{uid} {
+      allow read: if isSelf(uid);
+      allow create, update, delete: if false;
+    }
+
+    match /accountDeletionCommands/{commandId} {
+      allow read, write: if false;
+    }
+
+    match /accountDeletionAudit/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /deletedUsers/{anonymousId} {
+      allow read, write: if false;
+    }
+
     match /spaces/{spaceId} {
       allow read: if isSpaceMember(spaceId);
       allow create: if signedIn()

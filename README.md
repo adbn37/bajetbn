@@ -1,4 +1,4 @@
-# BajetBN v0.11.5 — Release Safety Hardening Alpha 1
+# BajetBN v0.11.6 — Account and Data Deletion Alpha 1
 
 BajetBN is a budget tracker and modular life-management platform designed around **Spaces**. Accounts exist independently; future Transactions connect Accounts to Spaces.
 
@@ -18,6 +18,10 @@ BajetBN is a budget tracker and modular life-management platform designed around
 - Server-controlled, idempotent opening-balance posting
 - Minimal posted ledger entry for each opening balance
 - Firestore and Storage rules
+- Self-service account deletion with recent authentication and a seven-day cooling-off period
+- Required data export and cancellation before processing
+- Shared-Space ownership transfer and Trip-fund-holder safety blockers
+- Scheduled Auth, Firestore and Storage cleanup with anonymised shared financial history
 - Firebase emulator configuration
 - PWA manifest and service worker
 - Cloudflare Pages staging configuration and SPA redirects
@@ -99,7 +103,7 @@ npm run deploy:rules:staging
 npm run deploy:functions:staging
 ```
 
-This deploys only Firebase staging resources. It does not deploy the web app to production.
+This deploys only Firebase staging resources. It does not deploy the web app to production. v0.11.6 changes both Firestore rules and Firebase Functions, so deploy both before testing account deletion.
 
 ## 7. Cloudflare Pages staging
 
@@ -165,3 +169,7 @@ npm run build -- --mode staging
 ```
 
 See `RELEASE_SAFETY_HARDENING_ALPHA.md`, `PRODUCTION_SMOKE_TEST_CHECKLIST.md` and `PRODUCTION_ROLLBACK_PLAN.md` before any production deployment.
+
+## Account deletion and retention
+
+See `ACCOUNT_DATA_DELETION_ALPHA.md` for the staging workflow and `DATA_RETENTION_AND_DELETION.md` for the implemented retention rules. Use disposable accounts for all deletion tests.

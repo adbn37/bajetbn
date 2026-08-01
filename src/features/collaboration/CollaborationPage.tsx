@@ -22,6 +22,7 @@ import {
   reverseSharedBillPayment,
   revokeSpaceInvitation,
   submitSharedBillPayment,
+  transferSpaceOwnership,
   updateSpaceCollaborationSettings,
   updateSpaceMember,
   uploadSharedBillProof,
@@ -69,6 +70,7 @@ export type CollaborationTab = 'members' | 'bills' | 'activity' | 'settings';
 
 type CollaborationConfirmation =
   | { kind: 'remove-member'; member: SpaceMember }
+  | { kind: 'transfer-owner'; member: SpaceMember }
   | { kind: 'reverse-payment'; payment: SharedBillPayment };
 
 interface CollaborationPageProps {
@@ -109,6 +111,7 @@ export function CollaborationPage({
   const displayTab: CollaborationTab = activeTab || tab;
   const currentMember = members.find((item) => item.uid === user?.uid) || null;
   const canManage = currentMember?.role === 'owner' || currentMember?.role === 'admin';
+  const isOwner = currentMember?.role === 'owner';
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
   const unreadForSpace = notifications.filter((item) => item.spaceId === spaceId);
   const pendingAssignments = assignments.filter((item) => item.status !== 'paid');
@@ -179,6 +182,8 @@ export function CollaborationPage({
     try {
       if (confirmDialog.payload.kind === 'remove-member') {
         await removeSpaceMember(spaceId, confirmDialog.payload.member.uid);
+      } else if (confirmDialog.payload.kind === 'transfer-owner') {
+        await transferSpaceOwnership(spaceId, confirmDialog.payload.member.uid);
       } else {
         await reverseSharedBillPayment({
           paymentId: confirmDialog.payload.payment.id,
@@ -251,14 +256,24 @@ export function CollaborationPage({
           <div><strong>{member.displayName || member.email || member.uid}</strong><small>{member.email || member.uid}</small></div>
           <span className="type-badge">{roleLabel[member.role] || member.role}</span>
           <div className="permission-chips"><span>{member.canUseAccounts ? 'Use accounts' : 'No account use'}</span><span>{member.canViewBalances ? 'See balances' : 'Balances hidden'}</span><span>{member.canViewLedger ? 'See account activity' : 'Account activity hidden'}</span></div>
-          {canManage && member.role !== 'owner' && <div className="button-row"><button className="text-button" onClick={() => setEditingMember(member)}>Manage</button><button className="text-button danger" onClick={() => setConfirmDialog({
-            payload: { kind: 'remove-member', member },
-            title: `Remove ${member.displayName || member.email || 'this member'}?`,
-            description: 'They will lose access to this Space. Their previous shared bills, payments and activity will stay in the history.',
-            note: 'You can invite them again later if needed.',
-            confirmLabel: 'Remove member',
-            tone: 'danger',
-          })}>Remove</button></div>}
+          {canManage && member.role !== 'owner' && <div className="button-row">
+            <button className="text-button" onClick={() => setEditingMember(member)}>Manage</button>
+            {isOwner && (member.status || 'active') === 'active' && <button className="text-button" onClick={() => setConfirmDialog({
+              payload: { kind: 'transfer-owner', member },
+              title: `Make ${member.displayName || member.email || 'this member'} the owner?`,
+              description: 'They will become the Space owner. You will remain as a manager and can then delete your BajetBN account without removing this shared history.',
+              note: 'Only transfer ownership to someone you trust. The new owner will control members and Space settings.',
+              confirmLabel: 'Transfer ownership',
+            })}>Make owner</button>}
+            <button className="text-button danger" onClick={() => setConfirmDialog({
+              payload: { kind: 'remove-member', member },
+              title: `Remove ${member.displayName || member.email || 'this member'}?`,
+              description: 'They will lose access to this Space. Their previous shared bills, payments and activity will stay in the history.',
+              note: 'You can invite them again later if needed.',
+              confirmLabel: 'Remove member',
+              tone: 'danger',
+            })}>Remove</button>
+          </div>}
         </article>)}</div>
       </section>
       {canManage && <section className="panel collaboration-panel">

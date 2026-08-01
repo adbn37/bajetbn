@@ -1,7 +1,10 @@
 import { initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore, type DocumentData, type DocumentReference, type Query, type Transaction } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
+import { getStorage } from 'firebase-admin/storage';
+import { FieldValue, getFirestore, Timestamp, type DocumentData, type DocumentReference, type Query, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { randomBytes } from 'node:crypto';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { createHash, randomBytes } from 'node:crypto';
 
 initializeApp();
 const db = getFirestore();
@@ -1142,6 +1145,80 @@ export const removeSpaceMember = onCall({ region }, async (request) => {
     createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_removed', targetType: 'member', targetId: memberUid, summary: `Removed ${member.data()?.displayName || member.data()?.email || 'a member'} while preserving their financial history.`, now });
     createNotification(transaction, { uid: memberUid, spaceId, type: 'member_removed', title: 'Space access removed', message: 'Your access to a shared Space has been removed. Existing history is preserved.', now });
     transaction.create(commandRef, { uid, kind: 'remove_space_member', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const transferSpaceOwnership = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const newOwnerUid = stringValue(request.data?.newOwnerUid, 'New owner ID', 128);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  if (newOwnerUid === uid) throw new HttpsError('invalid-argument', 'Choose another active member.');
+
+  const spaceRef = db.collection('spaces').doc(spaceId);
+  const currentOwnerRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
+  const newOwnerRef = db.collection('spaceMembers').doc(`${spaceId}_${newOwnerUid}`);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const [command, space, currentOwner, newOwner] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(spaceRef),
+      transaction.get(currentOwnerRef),
+      transaction.get(newOwnerRef),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!space.exists) throw new HttpsError('not-found', 'Space not found.');
+    const spaceData = space.data() || {};
+    if (spaceData.type === 'personal') throw new HttpsError('failed-precondition', 'Your Personal Space cannot be transferred.');
+    if (spaceData.ownerId !== uid || currentOwner.data()?.role !== 'owner') {
+      throw new HttpsError('permission-denied', 'Only the current Space owner can transfer ownership.');
+    }
+    if (!newOwner.exists || ['suspended', 'removed'].includes(String(newOwner.data()?.status || ''))) {
+      throw new HttpsError('failed-precondition', 'Choose an active member as the new owner.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const newOwnerName = String(newOwner.data()?.displayName || newOwner.data()?.email || 'the new owner');
+    const result = { spaceId, previousOwnerUid: uid, newOwnerUid, transferred: true };
+    transaction.update(spaceRef, { ownerId: newOwnerUid, updatedAt: now });
+    transaction.update(currentOwnerRef, {
+      role: 'admin',
+      canUseAccounts: true,
+      canViewBalances: true,
+      canViewLedger: true,
+      updatedAt: now,
+    });
+    transaction.update(newOwnerRef, {
+      role: 'owner',
+      status: 'active',
+      canUseAccounts: true,
+      canViewBalances: true,
+      canViewLedger: true,
+      updatedAt: now,
+    });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: currentOwner.data()?.displayName || currentOwner.data()?.email,
+      action: 'ownership_transferred',
+      targetType: 'member',
+      targetId: newOwnerUid,
+      summary: `Transferred Space ownership to ${newOwnerName}.`,
+      now,
+    });
+    createNotification(transaction, {
+      uid: newOwnerUid,
+      spaceId,
+      type: 'ownership_transferred',
+      title: 'You are now the Space owner',
+      message: `Ownership of ${String(spaceData.name || 'a shared Space')} was transferred to you.`,
+      targetPath: `/spaces/${spaceId}?tab=settings`,
+      actionLabel: 'Open Space',
+      now,
+    });
+    transaction.create(commandRef, { uid, kind: 'transfer_space_ownership', idempotencyKey: key, result, createdAt: now });
     return result;
   });
 });
@@ -2951,4 +3028,630 @@ export const reverseTripMoneyContribution = onCall({ region }, async (request) =
     transaction.create(commandRef, { uid, kind: 'reverse_trip_money_contribution', idempotencyKey: key, result, createdAt: now });
     return result;
   });
+});
+
+// v0.11.6 account and personal-data deletion
+const accountDeletionCoolingOffDays = 7;
+const recentAuthenticationSeconds = 5 * 60;
+const recentExportMilliseconds = 24 * 60 * 60 * 1000;
+const accountDeletionTokenDrainMilliseconds = 2 * 60 * 60 * 1000;
+const deletedMemberName = 'Deleted member';
+
+type AccountDeletionBlockerCode = 'space_ownership' | 'trip_fund_holder';
+interface AccountDeletionBlocker {
+  code: AccountDeletionBlockerCode;
+  message: string;
+  spaceId?: string;
+  spaceName?: string;
+}
+
+interface AccountDeletionEligibilityResult {
+  eligible: boolean;
+  blockers: AccountDeletionBlocker[];
+  coolingOffDays: number;
+  ownedSpaces: number;
+  sharedMemberships: number;
+  exportPrepared: boolean;
+  exportPreparedAt: string | null;
+  exportExpiresAt: string | null;
+}
+
+interface MutationPlan {
+  sets: Map<string, { ref: DocumentReference; data: DocumentData }>;
+  updates: Map<string, { ref: DocumentReference; data: DocumentData }>;
+  deletes: Map<string, DocumentReference>;
+}
+
+function requireRecentAuthentication(authTime: unknown) {
+  if (!Number.isFinite(authTime)) throw new HttpsError('unauthenticated', 'Sign in again before deleting your account.');
+  const ageSeconds = Math.floor(Date.now() / 1000) - Number(authTime);
+  if (ageSeconds < 0 || ageSeconds > recentAuthenticationSeconds) {
+    throw new HttpsError('unauthenticated', 'Confirm your sign-in again before deleting your account.');
+  }
+}
+
+function timestampMilliseconds(value: unknown): number | null {
+  if (value instanceof Timestamp) return value.toMillis();
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
+    return Number((value as { toMillis: () => number }).toMillis());
+  }
+  return null;
+}
+
+function accountDeletionRequestResult(uid: string, data: DocumentData): DocumentData {
+  return {
+    uid,
+    status: data.status,
+    requestedAt: data.requestedAt || null,
+    scheduledFor: data.scheduledFor || null,
+    cancelledAt: data.cancelledAt || null,
+    processingAt: data.processingAt || null,
+    blockedAt: data.blockedAt || null,
+    failedAt: data.failedAt || null,
+    updatedAt: data.updatedAt || null,
+    blockers: Array.isArray(data.blockers) ? data.blockers : [],
+    lastError: data.lastError || null,
+  };
+}
+
+async function accountDeletionEligibility(uid: string): Promise<AccountDeletionEligibilityResult> {
+  const [profile, ownedSpaces, memberships, heldFunds] = await Promise.all([
+    db.collection('users').doc(uid).get(),
+    db.collection('spaces').where('ownerId', '==', uid).get(),
+    db.collection('spaceMembers').where('uid', '==', uid).get(),
+    db.collection('spaceFunds').where('holderUid', '==', uid).get(),
+  ]);
+
+  const blockers: AccountDeletionBlocker[] = [];
+  const membershipSpaces = new Set(memberships.docs.map((item) => String(item.data().spaceId || '')).filter(Boolean));
+
+  const ownershipChecks = await Promise.all(ownedSpaces.docs.map(async (space) => {
+    const members = await db.collection('spaceMembers').where('spaceId', '==', space.id).get();
+    const otherMembers = members.docs.filter((item) => String(item.data().uid || '') !== uid);
+    return { space, otherMembers };
+  }));
+
+  for (const { space, otherMembers } of ownershipChecks) {
+    if (!otherMembers.length) continue;
+    const data = space.data();
+    blockers.push({
+      code: 'space_ownership',
+      spaceId: space.id,
+      spaceName: String(data.name || 'Shared Space'),
+      message: `${String(data.name || 'A shared Space')} still has other member records. Transfer ownership or resolve the Space before deleting your account.`,
+    });
+  }
+
+  for (const fund of heldFunds.docs) {
+    const spaceId = fund.id;
+    const space = await db.collection('spaces').doc(spaceId).get();
+    if (!space.exists || String(space.data()?.ownerId || '') === uid) continue;
+    blockers.push({
+      code: 'trip_fund_holder',
+      spaceId,
+      spaceName: String(space.data()?.name || 'Trip Space'),
+      message: `You are holding Trip money for ${String(space.data()?.name || 'a shared Space')}. Ask the Space owner to choose another holder first.`,
+    });
+  }
+
+  const exportAtMillis = timestampMilliseconds(profile.data()?.lastDataExportAt);
+  const exportPrepared = exportAtMillis !== null && Date.now() - exportAtMillis <= recentExportMilliseconds;
+  const exportExpiresAt = exportAtMillis === null ? null : new Date(exportAtMillis + recentExportMilliseconds).toISOString();
+
+  return {
+    eligible: blockers.length === 0,
+    blockers,
+    coolingOffDays: accountDeletionCoolingOffDays,
+    ownedSpaces: ownedSpaces.size,
+    sharedMemberships: Array.from(membershipSpaces).filter((spaceId) => !ownedSpaces.docs.some((item) => item.id === spaceId)).length,
+    exportPrepared,
+    exportPreparedAt: exportAtMillis === null ? null : new Date(exportAtMillis).toISOString(),
+    exportExpiresAt,
+  };
+}
+
+export const checkAccountDeletionEligibility = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  return accountDeletionEligibility(uid);
+});
+
+export const recordAccountDataExport = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const userRef = db.collection('users').doc(uid);
+  if (!(await userRef.get()).exists) throw new HttpsError('not-found', 'Your BajetBN profile was not found.');
+  await userRef.update({ lastDataExportAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  return { recorded: true };
+});
+
+export const requestAccountDeletion = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  requireRecentAuthentication(request.auth?.token.auth_time);
+  if (request.data?.confirmation !== 'DELETE') throw new HttpsError('invalid-argument', 'Type DELETE to confirm.');
+  if (request.data?.exportAcknowledged !== true) throw new HttpsError('failed-precondition', 'Download your data before continuing.');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const userRef = db.collection('users').doc(uid);
+  const requestRef = db.collection('accountDeletionRequests').doc(uid);
+  const commandRef = db.collection('accountDeletionCommands').doc(commandId(uid, key));
+  const [userSnapshot, currentRequest, commandSnapshot, eligibility] = await Promise.all([
+    userRef.get(), requestRef.get(), commandRef.get(), accountDeletionEligibility(uid),
+  ]);
+  if (commandSnapshot.exists) return commandSnapshot.data()?.result;
+  if (!userSnapshot.exists) throw new HttpsError('not-found', 'Your BajetBN profile was not found.');
+  if (currentRequest.exists && ['pending', 'processing'].includes(String(currentRequest.data()?.status || ''))) {
+    return accountDeletionRequestResult(uid, currentRequest.data() || {});
+  }
+  if (!eligibility.eligible) {
+    throw new HttpsError('failed-precondition', 'Resolve the shared-Space items shown before deleting your account.', { blockers: eligibility.blockers });
+  }
+  if (!eligibility.exportPrepared) {
+    throw new HttpsError('failed-precondition', 'Download a current copy of your data before requesting deletion.');
+  }
+
+  const requestedAt = Timestamp.now();
+  const scheduledFor = Timestamp.fromMillis(requestedAt.toMillis() + accountDeletionCoolingOffDays * 24 * 60 * 60 * 1000);
+  const result = {
+    uid,
+    status: 'pending',
+    requestedAt,
+    scheduledFor,
+    cancelledAt: null,
+    processingAt: null,
+    blockedAt: null,
+    failedAt: null,
+    blockers: [],
+    lastError: null,
+  };
+
+  await db.runTransaction(async (transaction) => {
+    const [latestUser, latestRequest, command] = await Promise.all([
+      transaction.get(userRef), transaction.get(requestRef), transaction.get(commandRef),
+    ]);
+    if (command.exists) return;
+    if (!latestUser.exists) throw new HttpsError('not-found', 'Your BajetBN profile was not found.');
+    if (latestRequest.exists && ['pending', 'processing'].includes(String(latestRequest.data()?.status || ''))) return;
+    transaction.set(requestRef, {
+      ...result,
+      idempotencyKey: key,
+      requestVersion: 1,
+      eligibilitySnapshot: eligibility,
+      updatedAt: requestedAt,
+    });
+    transaction.update(userRef, {
+      accountDeletionStatus: 'pending',
+      accountDeletionScheduledFor: scheduledFor,
+      updatedAt: requestedAt,
+    });
+    transaction.create(db.collection('accountDeletionAudit').doc(), {
+      subjectId: uid,
+      action: 'requested',
+      requestedAt,
+      scheduledFor,
+      requestVersion: 1,
+      createdAt: requestedAt,
+    });
+    transaction.create(commandRef, { uid, kind: 'request_account_deletion', idempotencyKey: key, result, createdAt: requestedAt });
+  });
+
+  return result;
+});
+
+export const cancelAccountDeletion = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const userRef = db.collection('users').doc(uid);
+  const requestRef = db.collection('accountDeletionRequests').doc(uid);
+  const commandRef = db.collection('accountDeletionCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [current, command, user] = await Promise.all([
+      transaction.get(requestRef), transaction.get(commandRef), transaction.get(userRef),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!current.exists) throw new HttpsError('not-found', 'No account deletion request was found.');
+    const status = String(current.data()?.status || '');
+    const authenticationDisabled = timestampMilliseconds(current.data()?.authDisabledAt) !== null;
+    if (!['pending', 'blocked', 'failed'].includes(status) || authenticationDisabled) {
+      throw new HttpsError('failed-precondition', 'This deletion request can no longer be cancelled.');
+    }
+    const now = Timestamp.now();
+    const result = { cancelled: true };
+    transaction.update(requestRef, { status: 'cancelled', cancelledAt: now, updatedAt: now, blockers: [], lastError: null });
+    if (user.exists) transaction.update(userRef, {
+      accountDeletionStatus: FieldValue.delete(),
+      accountDeletionScheduledFor: FieldValue.delete(),
+      updatedAt: now,
+    });
+    transaction.create(db.collection('accountDeletionAudit').doc(), {
+      subjectId: uid,
+      action: 'cancelled',
+      requestId: requestRef.id,
+      createdAt: now,
+    });
+    transaction.create(commandRef, { uid, kind: 'cancel_account_deletion', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+function createMutationPlan(): MutationPlan {
+  return { sets: new Map(), updates: new Map(), deletes: new Map() };
+}
+
+function queueSet(plan: MutationPlan, ref: DocumentReference, data: DocumentData) {
+  if (plan.deletes.has(ref.path)) return;
+  plan.sets.set(ref.path, { ref, data: { ...(plan.sets.get(ref.path)?.data || {}), ...data } });
+}
+
+function queueUpdate(plan: MutationPlan, ref: DocumentReference, data: DocumentData) {
+  if (plan.deletes.has(ref.path)) return;
+  plan.updates.set(ref.path, { ref, data: { ...(plan.updates.get(ref.path)?.data || {}), ...data } });
+}
+
+function queueDelete(plan: MutationPlan, ref: DocumentReference) {
+  plan.sets.delete(ref.path);
+  plan.updates.delete(ref.path);
+  plan.deletes.set(ref.path, ref);
+}
+
+async function commitMutationPlan(plan: MutationPlan) {
+  const writer = db.bulkWriter();
+  for (const item of plan.sets.values()) writer.set(item.ref, item.data, { merge: true });
+  for (const item of plan.updates.values()) writer.update(item.ref, item.data);
+  for (const ref of plan.deletes.values()) writer.delete(ref);
+  await writer.close();
+}
+
+async function documentsWhere(collectionName: string, field: string, value: string): Promise<QueryDocumentSnapshot[]> {
+  return (await db.collection(collectionName).where(field, '==', value).get()).docs;
+}
+
+function addProofPath(paths: Set<string>, data: DocumentData) {
+  for (const field of ['proofPath', 'paymentProofPath']) {
+    const value = data[field];
+    if (typeof value === 'string' && value.trim()) paths.add(value.trim());
+  }
+}
+
+function anonymizedReferenceUpdates(anonymousId: string, now: Timestamp): DocumentData {
+  return { privacyAnonymizedAt: now, privacyAnonymousId: anonymousId, updatedAt: now };
+}
+
+async function queueFieldAnonymization(input: {
+  plan: MutationPlan;
+  collectionName: string;
+  field: string;
+  uid: string;
+  updates: (data: DocumentData) => DocumentData;
+  proofPaths?: Set<string>;
+}) {
+  const rows = await documentsWhere(input.collectionName, input.field, input.uid);
+  for (const row of rows) {
+    if (input.proofPaths) addProofPath(input.proofPaths, row.data());
+    queueUpdate(input.plan, row.ref, input.updates(row.data()));
+  }
+}
+
+
+function anonymousSharedBillAssignmentId(anonymousId: string, originalId: string): string {
+  const digest = createHash('sha256').update(`${anonymousId}:${originalId}`).digest('hex').slice(0, 24);
+  return `deleted-assignment-${digest}`;
+}
+
+async function queueSharedBillAssignmentAnonymization(input: {
+  plan: MutationPlan;
+  uid: string;
+  anonymousId: string;
+  now: Timestamp;
+  proofPaths: Set<string>;
+}) {
+  const assignments = await documentsWhere('sharedBillAssignments', 'memberUid', input.uid);
+  for (const assignment of assignments) {
+    const data = assignment.data();
+    addProofPath(input.proofPaths, data);
+    const replacementRef = db.collection('sharedBillAssignments').doc(anonymousSharedBillAssignmentId(input.anonymousId, assignment.id));
+    queueSet(input.plan, replacementRef, {
+      ...data,
+      memberUid: input.anonymousId,
+      memberName: deletedMemberName,
+      memberEmail: '',
+      note: '',
+      proofPath: null,
+      proofName: null,
+      ...anonymizedReferenceUpdates(input.anonymousId, input.now),
+    });
+    queueDelete(input.plan, assignment.ref);
+
+    for (const payment of await documentsWhere('sharedBillPayments', 'assignmentId', assignment.id)) {
+      queueUpdate(input.plan, payment.ref, { assignmentId: replacementRef.id, ...anonymizedReferenceUpdates(input.anonymousId, input.now) });
+    }
+    for (const reversal of await documentsWhere('sharedBillPaymentReversals', 'assignmentId', assignment.id)) {
+      queueUpdate(input.plan, reversal.ref, { assignmentId: replacementRef.id, ...anonymizedReferenceUpdates(input.anonymousId, input.now) });
+    }
+    for (const transaction of await documentsWhere('transactions', 'sharedBillAssignmentId', assignment.id)) {
+      queueUpdate(input.plan, transaction.ref, { sharedBillAssignmentId: replacementRef.id, ...anonymizedReferenceUpdates(input.anonymousId, input.now) });
+    }
+    for (const activity of await documentsWhere('spaceActivities', 'targetId', assignment.id)) {
+      queueUpdate(input.plan, activity.ref, { targetId: replacementRef.id, ...anonymizedReferenceUpdates(input.anonymousId, input.now) });
+    }
+  }
+}
+
+async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proofPaths: Set<string>) {
+  const collections = [
+    'transactions', 'budgets', 'goals', 'commitments', 'sharedBillAssignments', 'sharedBillPayments',
+    'sharedBillPaymentReversals', 'spaceActivities', 'sharedExpenses', 'sharedExpenseShares',
+    'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
+    'userNotifications', 'reminderHistory',
+  ];
+  for (const collectionName of collections) {
+    const rows = await documentsWhere(collectionName, 'spaceId', spaceId);
+    for (const row of rows) {
+      addProofPath(proofPaths, row.data());
+      queueDelete(plan, row.ref);
+    }
+  }
+  queueDelete(plan, db.collection('spaceFunds').doc(spaceId));
+  queueDelete(plan, db.collection('spaces').doc(spaceId));
+}
+
+function authUserMissing(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && String((error as { code?: unknown }).code) === 'auth/user-not-found');
+}
+
+function safeDeletionError(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message.slice(0, 300);
+  return 'Account deletion could not be completed automatically.';
+}
+
+async function deleteStorageForAccount(uid: string, proofPaths: Set<string>) {
+  const bucket = getStorage().bucket();
+  await bucket.deleteFiles({ prefix: `users/${uid}/` });
+  const paths = Array.from(proofPaths).filter((item) => !item.startsWith(`users/${uid}/`));
+  for (let index = 0; index < paths.length; index += 20) {
+    await Promise.all(paths.slice(index, index + 20).map(async (filePath) => {
+      try { await bucket.file(filePath).delete({ ignoreNotFound: true }); }
+      catch (error) { console.error(`Unable to delete privacy file ${filePath}.`, error); }
+    }));
+  }
+}
+
+async function finalizeAccountDeletion(uid: string) {
+  const requestRef = db.collection('accountDeletionRequests').doc(uid);
+  const userRef = db.collection('users').doc(uid);
+  const requestSnapshot = await requestRef.get();
+  if (!requestSnapshot.exists) return { skipped: true };
+  const requestData = requestSnapshot.data() || {};
+  if (requestData.status === 'cancelled') return { skipped: true };
+  const scheduledFor = timestampMilliseconds(requestData.scheduledFor);
+  if (scheduledFor !== null && scheduledFor > Date.now()) return { skipped: true };
+
+  const eligibility = await accountDeletionEligibility(uid);
+  if (!eligibility.eligible) {
+    const now = Timestamp.now();
+    await requestRef.set({ status: 'blocked', blockers: eligibility.blockers, blockedAt: now, updatedAt: now, lastError: 'Shared-Space responsibilities must be resolved first.' }, { merge: true });
+    if ((await userRef.get()).exists) await userRef.update({ accountDeletionStatus: 'blocked', updatedAt: now });
+    return { blocked: true };
+  }
+
+  const now = Timestamp.now();
+  const anonymousId = typeof requestData.anonymousId === 'string' && requestData.anonymousId
+    ? requestData.anonymousId
+    : `deleted-${randomBytes(10).toString('hex')}`;
+  const authDisabledAt = timestampMilliseconds(requestData.authDisabledAt);
+  const cleanupAfter = timestampMilliseconds(requestData.cleanupAfter);
+
+  if (authDisabledAt === null) {
+    try {
+      await getAuth().updateUser(uid, { disabled: true });
+      await getAuth().revokeRefreshTokens(uid);
+    } catch (error) {
+      if (!authUserMissing(error)) throw error;
+    }
+    const disabledAt = Timestamp.now();
+    const nextCleanupAt = Timestamp.fromMillis(disabledAt.toMillis() + accountDeletionTokenDrainMilliseconds);
+    await requestRef.set({
+      status: 'processing',
+      processingAt: requestData.processingAt || disabledAt,
+      authDisabledAt: disabledAt,
+      cleanupAfter: nextCleanupAt,
+      anonymousId,
+      blockers: [],
+      lastError: null,
+      updatedAt: disabledAt,
+    }, { merge: true });
+    if ((await userRef.get()).exists) await userRef.update({ accountDeletionStatus: 'processing', updatedAt: disabledAt });
+    return { processing: true, cleanupAfter: nextCleanupAt };
+  }
+
+  if (cleanupAfter !== null && cleanupAfter > Date.now()) return { processing: true, waitingForTokenExpiry: true };
+
+  await requestRef.set({ status: 'processing', processingAt: requestData.processingAt || now, anonymousId, blockers: [], lastError: null, updatedAt: now }, { merge: true });
+  if ((await userRef.get()).exists) await userRef.update({ accountDeletionStatus: 'processing', updatedAt: now });
+
+  try {
+    const plan = createMutationPlan();
+    const proofPaths = new Set<string>();
+    const [profile, ownedSpaces, memberships, authRecord] = await Promise.all([
+      userRef.get(),
+      db.collection('spaces').where('ownerId', '==', uid).get(),
+      db.collection('spaceMembers').where('uid', '==', uid).get(),
+      getAuth().getUser(uid).catch((error) => {
+        if (authUserMissing(error)) return null;
+        throw error;
+      }),
+    ]);
+    const email = String(profile.data()?.email || authRecord?.email || '').trim().toLowerCase();
+    const ownedSpaceIds = new Set(ownedSpaces.docs.map((item) => item.id));
+
+    for (const space of ownedSpaces.docs) await queueOwnedSpaceDeletion(plan, space.id, proofPaths);
+
+    for (const membership of memberships.docs) {
+      const data = membership.data();
+      const spaceId = String(data.spaceId || '');
+      if (ownedSpaceIds.has(spaceId)) continue;
+      const replacementRef = db.collection('spaceMembers').doc(`${spaceId}_${anonymousId}`);
+      queueSet(plan, replacementRef, {
+        ...data,
+        uid: anonymousId,
+        role: 'member',
+        status: 'removed',
+        displayName: deletedMemberName,
+        email: '',
+        canUseAccounts: false,
+        canViewBalances: false,
+        canViewLedger: false,
+        privacyAnonymizedAt: now,
+        updatedAt: now,
+      });
+      queueDelete(plan, membership.ref);
+    }
+
+    const ownedAccounts = await documentsWhere('accounts', 'ownerId', uid);
+    for (const account of ownedAccounts) {
+      queueDelete(plan, account.ref);
+      for (const access of await documentsWhere('accountAccess', 'accountId', account.id)) queueDelete(plan, access.ref);
+    }
+
+    for (const collectionName of ['accounts', 'ledgerEntries', 'transactions', 'budgets', 'goals', 'goalContributions', 'categories']) {
+      for (const row of await documentsWhere(collectionName, 'ownerId', uid)) {
+        addProofPath(proofPaths, row.data());
+        queueDelete(plan, row.ref);
+      }
+    }
+    for (const row of await documentsWhere('accountAccess', 'uid', uid)) queueDelete(plan, row.ref);
+
+    const preservedCommitmentIds = new Set<string>();
+    for (const commitment of await documentsWhere('commitments', 'ownerId', uid)) {
+      const data = commitment.data();
+      if (ownedSpaceIds.has(String(data.spaceId || ''))) {
+        queueDelete(plan, commitment.ref);
+      } else {
+        preservedCommitmentIds.add(commitment.id);
+        queueUpdate(plan, commitment.ref, {
+          ownerId: anonymousId,
+          payee: '',
+          note: '',
+          accountId: null,
+          status: 'completed',
+          nextDueDate: null,
+          stoppedAt: now,
+          ...anonymizedReferenceUpdates(anonymousId, now),
+        });
+      }
+    }
+
+    for (const payment of await documentsWhere('commitmentPayments', 'ownerId', uid)) {
+      const data = payment.data();
+      if (preservedCommitmentIds.has(String(data.commitmentId || ''))) {
+        queueUpdate(plan, payment.ref, {
+          ownerId: anonymousId,
+          transactionId: null,
+          paidByUid: data.paidByUid === uid ? anonymousId : data.paidByUid || null,
+          ...anonymizedReferenceUpdates(anonymousId, now),
+        });
+      } else queueDelete(plan, payment.ref);
+    }
+
+    for (const collectionName of ['userNotifications', 'reminderHistory', 'financialCommands', 'collaborationCommands', 'lifecycleCommands', 'accountDeletionCommands']) {
+      for (const row of await documentsWhere(collectionName, 'uid', uid)) queueDelete(plan, row.ref);
+    }
+
+    if (email) {
+      for (const invitation of await documentsWhere('spaceInvitations', 'email', email)) {
+        if (ownedSpaceIds.has(String(invitation.data().spaceId || ''))) continue;
+        queueUpdate(plan, invitation.ref, {
+          email: '', token: '', status: invitation.data().status === 'pending' ? 'declined' : invitation.data().status,
+          declinedBy: invitation.data().status === 'pending' ? anonymousId : invitation.data().declinedBy || null,
+          ...anonymizedReferenceUpdates(anonymousId, now),
+        });
+      }
+    }
+
+    await queueFieldAnonymization({ plan, collectionName: 'spaceMembers', field: 'invitedBy', uid, updates: () => ({ invitedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceInvitations', field: 'invitedBy', uid, updates: () => ({ invitedBy: anonymousId, invitedByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceInvitations', field: 'acceptedBy', uid, updates: () => ({ acceptedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceInvitations', field: 'declinedBy', uid, updates: () => ({ declinedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+
+    await queueSharedBillAssignmentAnonymization({ plan, uid, anonymousId, now, proofPaths });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedBillAssignments', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedBillAssignments', field: 'reviewedBy', uid, updates: () => ({ reviewedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+
+    await queueFieldAnonymization({ plan, collectionName: 'sharedBillPayments', field: 'memberUid', uid, proofPaths, updates: () => ({ memberUid: anonymousId, memberName: deletedMemberName, memberEmail: '', accountId: null, transactionId: null, ledgerEntryId: null, proofPath: null, proofName: null, note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedBillPayments', field: 'reviewedBy', uid, updates: () => ({ reviewedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedBillPayments', field: 'reversedBy', uid, updates: () => ({ reversedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedBillPaymentReversals', field: 'memberUid', uid, updates: () => ({ memberUid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedBillPaymentReversals', field: 'reversedBy', uid, updates: () => ({ reversedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+
+    await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'actorUid', uid, updates: () => ({ actorUid: anonymousId, actorName: deletedMemberName, summary: 'Activity retained after a member deleted their account.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'targetId', uid, updates: () => ({ targetId: anonymousId, summary: 'Member-related activity retained after account deletion.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, paidByName: deletedMemberName, paidByEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedExpenseShares', field: 'memberUid', uid, updates: () => ({ memberUid: anonymousId, memberName: deletedMemberName, memberEmail: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedExpensePayments', field: 'fromUid', uid, proofPaths, updates: () => ({ fromUid: anonymousId, fromName: deletedMemberName, fromEmail: '', proofPath: null, proofName: null, note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedExpensePayments', field: 'toUid', uid, proofPaths, updates: () => ({ toUid: anonymousId, toName: deletedMemberName, toEmail: '', proofPath: null, proofName: null, note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedExpensePayments', field: 'reviewedBy', uid, updates: () => ({ reviewedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'sharedExpensePayments', field: 'reversedBy', uid, updates: () => ({ reversedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceFundContributions', field: 'memberUid', uid, updates: () => ({ memberUid: anonymousId, memberName: deletedMemberName, memberEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceFundContributions', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceFundContributions', field: 'reversedBy', uid, updates: () => ({ reversedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'commitmentPayments', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'transactions', field: 'createdBy', uid, updates: (data) => ({ createdBy: anonymousId, note: data.ownerId === uid ? data.note || '' : '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+
+    for (const audit of await documentsWhere('accountDeletionAudit', 'subjectId', uid)) {
+      queueUpdate(plan, audit.ref, { subjectId: anonymousId, anonymizedAt: now });
+    }
+
+    await commitMutationPlan(plan);
+    await deleteStorageForAccount(uid, proofPaths);
+
+    try { await getAuth().deleteUser(uid); }
+    catch (error) { if (!authUserMissing(error)) throw error; }
+
+    const finalWriter = db.bulkWriter();
+    finalWriter.set(db.collection('deletedUsers').doc(anonymousId), {
+      anonymousId,
+      deletionVersion: 1,
+      completedAt: now,
+      retainedSharedHistory: true,
+      source: 'self_service_account_deletion',
+    });
+    finalWriter.set(db.collection('accountDeletionAudit').doc(), {
+      subjectId: anonymousId,
+      action: 'completed',
+      deletionVersion: 1,
+      completedAt: now,
+      privateDataDeleted: true,
+      sharedHistoryAnonymized: true,
+      createdAt: now,
+    });
+    finalWriter.delete(userRef);
+    finalWriter.delete(requestRef);
+    await finalWriter.close();
+    return { completed: true, anonymousId };
+  } catch (error) {
+    const message = safeDeletionError(error);
+    console.error(`Account deletion failed for ${uid}.`, error);
+    await requestRef.set({ status: 'failed', failedAt: Timestamp.now(), updatedAt: Timestamp.now(), lastError: message }, { merge: true });
+    const userSnapshot = await userRef.get();
+    if (userSnapshot.exists) await userRef.update({ accountDeletionStatus: 'failed', updatedAt: Timestamp.now() });
+    throw error;
+  }
+}
+
+export const processAccountDeletionRequests = onSchedule({
+  region,
+  schedule: '15 * * * *',
+  timeZone: 'Asia/Brunei',
+  retryCount: 3,
+}, async () => {
+  const snapshot = await db.collection('accountDeletionRequests').get();
+  const due = snapshot.docs.filter((item) => {
+    const data = item.data();
+    if (!['pending', 'processing', 'blocked', 'failed'].includes(String(data.status || ''))) return false;
+    const scheduledFor = timestampMilliseconds(data.scheduledFor);
+    return scheduledFor === null || scheduledFor <= Date.now();
+  }).slice(0, 10);
+
+  for (const request of due) {
+    try { await finalizeAccountDeletion(request.id); }
+    catch (error) { console.error(`Scheduled deletion retry failed for ${request.id}.`, error); }
+  }
 });

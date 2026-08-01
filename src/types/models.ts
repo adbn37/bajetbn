@@ -83,6 +83,41 @@ export interface LedgerEntry {
   postedAt?: Timestamp;
 }
 
+export type AccountDeletionRequestStatus = 'pending' | 'cancelled' | 'processing' | 'blocked' | 'failed';
+
+export interface AccountDeletionBlocker {
+  code: 'space_ownership' | 'trip_fund_holder';
+  message: string;
+  spaceId?: string;
+  spaceName?: string;
+}
+
+export interface AccountDeletionEligibility {
+  eligible: boolean;
+  blockers: AccountDeletionBlocker[];
+  coolingOffDays: number;
+  ownedSpaces: number;
+  sharedMemberships: number;
+  exportPrepared: boolean;
+  exportPreparedAt?: string | null;
+  exportExpiresAt?: string | null;
+}
+
+export interface AccountDeletionRequest {
+  uid: string;
+  status: AccountDeletionRequestStatus;
+  requestedAt?: Timestamp;
+  scheduledFor?: Timestamp;
+  cancelledAt?: Timestamp | null;
+  processingAt?: Timestamp | null;
+  blockedAt?: Timestamp | null;
+  failedAt?: Timestamp | null;
+  updatedAt?: Timestamp;
+  blockers?: AccountDeletionBlocker[];
+  anonymousId?: string;
+  lastError?: string | null;
+}
+
 export interface UserProfile {
   uid: string;
   fullName: string;
@@ -100,6 +135,9 @@ export interface UserProfile {
   reminderDaysBefore?: number;
   onboardingCompleted: boolean;
   personalSpaceId?: string;
+  lastDataExportAt?: Timestamp | null;
+  accountDeletionStatus?: AccountDeletionRequestStatus | null;
+  accountDeletionScheduledFor?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
