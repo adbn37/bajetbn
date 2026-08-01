@@ -1,4 +1,4 @@
-# BajetBN v0.11.6 — Account and Data Deletion Alpha 1
+# BajetBN v0.11.6 — Account Deletion and Re-registration Alpha 2
 
 BajetBN is a budget tracker and modular life-management platform designed around **Spaces**. Accounts exist independently; future Transactions connect Accounts to Spaces.
 
@@ -19,6 +19,7 @@ BajetBN is a budget tracker and modular life-management platform designed around
 - Minimal posted ledger entry for each opening balance
 - Firestore and Storage rules
 - Self-service account deletion with recent authentication and a seven-day cooling-off period
+- 30-day automatic re-registration cooldown after completed normal deletion, with manual review only for security restrictions
 - Required data export and cancellation before processing
 - Shared-Space ownership transfer and Trip-fund-holder safety blockers
 - Scheduled Auth, Firestore and Storage cleanup with anonymised shared financial history

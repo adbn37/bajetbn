@@ -12,6 +12,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import { firebaseConfigured, requireFirebase } from '../services/firebase';
 import { getUserProfile } from '../repositories/userRepository';
 import type { UserProfile } from '../types/models';
@@ -34,6 +35,29 @@ type CachedProfile = Pick<UserProfile, 'uid' | 'fullName' | 'email' | 'language'
 
 const profileCacheNamespace = import.meta.env.VITE_FIREBASE_PROJECT_ID || import.meta.env.VITE_APP_ENV || 'local';
 function profileCacheKey(uid: string) { return `bajetbn.${profileCacheNamespace}.profile.${uid}`; }
+
+interface RegistrationEligibilityResult {
+  allowed: boolean;
+  existingAccount: boolean;
+  freshStart: boolean;
+  reason: 'cooldown' | 'manual_review' | 'already_re_registered' | null;
+  reRegistrationAllowedAt: string | null;
+  cooldownDays: number;
+  message: string | null;
+}
+
+async function enforceRegistrationEligibilityForCurrentUser(): Promise<RegistrationEligibilityResult> {
+  const { auth, functions } = requireFirebase();
+  if (!auth.currentUser) throw new Error('Please sign in again.');
+  const callable = httpsCallable(functions, 'enforceRegistrationEligibility');
+  try {
+    const result = await callable();
+    return result.data as RegistrationEligibilityResult;
+  } catch (error) {
+    await signOut(auth).catch(() => undefined);
+    throw error;
+  }
+}
 function readCachedProfile(uid: string): UserProfile | null {
   try {
     const raw = localStorage.getItem(profileCacheKey(uid));
@@ -107,14 +131,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle: async () => {
       const { auth } = requireFirebase();
       await signInWithPopup(auth, new GoogleAuthProvider());
+      await enforceRegistrationEligibilityForCurrentUser();
     },
     signInWithEmail: async (email, password) => {
       const { auth } = requireFirebase();
       await signInWithEmailAndPassword(auth, email, password);
+      await enforceRegistrationEligibilityForCurrentUser();
     },
     registerWithEmail: async (email, password) => {
       const { auth } = requireFirebase();
       const result = await createUserWithEmailAndPassword(auth, email, password);
+      await enforceRegistrationEligibilityForCurrentUser();
       await sendEmailVerification(result.user);
     },
     reauthenticateForSensitiveAction: async (password) => {

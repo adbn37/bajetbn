@@ -47,3 +47,7 @@ The following collections are server-controlled:
 - `deletedUsers`
 
 The signed-in user can read only their own request status. Clients cannot create, update or delete these records directly.
+
+## Re-registration restriction record
+
+BajetBN retains a restricted server-only record keyed by a protected deterministic email hash. It stores the deletion completion date, re-registration eligibility date, policy version and whether manual security review is required. It does not contain the raw email address. For normal self-deletion, the record permits a completely fresh registration after 30 days. It does not reconnect anonymised shared history or restore deleted private records.

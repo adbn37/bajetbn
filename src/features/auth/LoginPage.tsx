@@ -24,6 +24,13 @@ export function LoginPage() {
     finally { setBusy(false); }
   };
 
+  const continueWithGoogle = async () => {
+    setBusy(true); setError('');
+    try { await signInWithGoogle(); }
+    catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div className="auth-card">
       <span className="eyebrow">Welcome back</span>
@@ -31,7 +38,7 @@ export function LoginPage() {
       <p>Open your personal and shared money Spaces.</p>
       {location.state?.registered && <div className="notice success">Account created. Check your inbox to verify your email.</div>}
       {error && <div className="notice error">{error}</div>}
-      <button className="button secondary full" onClick={() => void signInWithGoogle()} disabled={busy}>Continue with Google</button>
+      <button className="button secondary full" onClick={() => void continueWithGoogle()} disabled={busy}>{busy ? 'Checking…' : 'Continue with Google'}</button>
       <div className="divider"><span>or use email</span></div>
       <form onSubmit={submit} className="form-stack">
         <label>Email<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>

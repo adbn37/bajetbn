@@ -17,6 +17,8 @@
 
 ## v0.11.6 — Account and Data Controls — Completed in source
 
+Includes the seven-day deletion cooling-off period, safe anonymisation and a 30-day automatic fresh-account re-registration cooldown. Security, fraud, abuse and legal-hold restrictions require manual review.
+
 - [x] Add “Delete my account” request flow.
 - [x] Explain what is deleted, anonymised, retained or blocked.
 - [x] Protect shared bills, member settlements, audit trails and financial history.
