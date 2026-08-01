@@ -21,6 +21,13 @@ import {
   type DataHealthResult,
 } from '../repositories/releaseCandidateRepository';
 import type { AccountDeletionEligibility, AccountDeletionRequest, Appearance, Language, TextSize } from '../types/models';
+import {
+  disableBrowserPush,
+  enableBrowserPush,
+  getBrowserPushSupport,
+  runMyBackgroundReminderCheck,
+  type BrowserPushSupport,
+} from '../repositories/notificationRepository';
 import { getErrorMessage } from '../utils/errors';
 import { formatMoney } from '../utils/money';
 
@@ -60,6 +67,11 @@ export function SettingsPage() {
   const [deletionBusy, setDeletionBusy] = useState(false);
   const [deletionError, setDeletionError] = useState('');
   const [cancelDialog, setCancelDialog] = useState<ActionConfirmState<'cancel'> | null>(null);
+  const [pushSupport, setPushSupport] = useState<BrowserPushSupport | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [reminderCheckBusy, setReminderCheckBusy] = useState(false);
+  const [reminderFeedback, setReminderFeedback] = useState('');
+  const [reminderError, setReminderError] = useState('');
 
   const passwordRequired = useMemo(
     () => Boolean(user?.providerData.some((item) => item.providerId === 'password')),
@@ -77,6 +89,12 @@ export function SettingsPage() {
     setFullName(profile?.fullName || user?.displayName || '');
   }, [profile, user]);
 
+  useEffect(() => {
+    let active = true;
+    void getBrowserPushSupport().then((support) => { if (active) setPushSupport(support); });
+    return () => { active = false; };
+  }, [profile?.browserPushEnabled]);
+
   useEffect(() => () => releaseDownloadUrl(readyDownload?.url || null), [readyDownload]);
 
   useEffect(() => {
@@ -88,6 +106,43 @@ export function SettingsPage() {
       .then(setDeletionRequest)
       .catch((nextError) => setDeletionError(getErrorMessage(nextError)));
   }, [user]);
+
+  async function changeDeviceNotifications(enabled: boolean) {
+    setPushBusy(true);
+    setReminderError('');
+    setReminderFeedback('');
+    try {
+      if (enabled) await enableBrowserPush();
+      else await disableBrowserPush();
+      preferences.setNotificationPreference('browserPushEnabled', enabled);
+      setReminderFeedback(enabled
+        ? 'Device notifications are ready. Save your settings to keep the rest of your reminder choices.'
+        : 'Device notifications are turned off for your saved devices.');
+      setPushSupport(await getBrowserPushSupport());
+    } catch (nextError) {
+      setReminderError(getErrorMessage(nextError));
+      setPushSupport(await getBrowserPushSupport());
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function checkRemindersNow() {
+    setReminderCheckBusy(true);
+    setReminderError('');
+    setReminderFeedback('Checking bills and goals that need attention…');
+    try {
+      const result = await runMyBackgroundReminderCheck();
+      setReminderFeedback(result.created > 0
+        ? `${result.created} new reminder${result.created === 1 ? '' : 's'} prepared. Open Notifications to review them.`
+        : 'No new reminders were needed. Existing reminders were not duplicated.');
+    } catch (nextError) {
+      setReminderError(getErrorMessage(nextError));
+      setReminderFeedback('');
+    } finally {
+      setReminderCheckBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -273,18 +328,43 @@ export function SettingsPage() {
 
         <section className="panel settings-section">
           <div className="settings-section-heading">
-            <div><h2>Reminders</h2><p>Choose what BajetBN should bring to your attention.</p></div>
+            <div><h2>Reminders</h2><p>BajetBN can prepare reminders even when the app is closed.</p></div>
           </div>
           <div className="preference-toggle-list">
-            <label className="preference-toggle"><input type="checkbox" checked={preferences.notificationsEnabled} onChange={(event) => preferences.setNotificationPreference('notificationsEnabled', event.target.checked)} /><span><strong>Show reminders inside BajetBN</strong><small>See helpful messages in the app.</small></span></label>
-            <label className="preference-toggle"><input type="checkbox" checked={preferences.dueSoonReminders} disabled={!preferences.notificationsEnabled} onChange={(event) => preferences.setNotificationPreference('dueSoonReminders', event.target.checked)} /><span><strong>Remind me before a bill is due</strong><small>Show bills that need attention soon.</small></span></label>
-            <label className="preference-toggle"><input type="checkbox" checked={preferences.lateReminders} disabled={!preferences.notificationsEnabled} onChange={(event) => preferences.setNotificationPreference('lateReminders', event.target.checked)} /><span><strong>Tell me when a bill is late</strong><small>Keep late bills easy to find.</small></span></label>
+            <label className="preference-toggle"><input type="checkbox" checked={preferences.notificationsEnabled} onChange={(event) => preferences.setNotificationPreference('notificationsEnabled', event.target.checked)} /><span><strong>Show reminders inside BajetBN</strong><small>See helpful messages in the Notification Centre.</small></span></label>
+            <label className="preference-toggle"><input type="checkbox" checked={preferences.backgroundRemindersEnabled} disabled={!preferences.notificationsEnabled} onChange={(event) => preferences.setNotificationPreference('backgroundRemindersEnabled', event.target.checked)} /><span><strong>Prepare reminders while BajetBN is closed</strong><small>Scheduled checks create reminders without needing the app to stay open.</small></span></label>
+            <label className="preference-toggle"><input type="checkbox" checked={preferences.dueSoonReminders} disabled={!preferences.notificationsEnabled || !preferences.backgroundRemindersEnabled} onChange={(event) => preferences.setNotificationPreference('dueSoonReminders', event.target.checked)} /><span><strong>Remind me before a bill is due</strong><small>Show bills that need attention soon.</small></span></label>
+            <label className="preference-toggle"><input type="checkbox" checked={preferences.lateReminders} disabled={!preferences.notificationsEnabled || !preferences.backgroundRemindersEnabled} onChange={(event) => preferences.setNotificationPreference('lateReminders', event.target.checked)} /><span><strong>Tell me when a bill is late</strong><small>Create one late reminder for each unpaid due date.</small></span></label>
+            <label className="preference-toggle"><input type="checkbox" checked={preferences.goalReminders} disabled={!preferences.notificationsEnabled || !preferences.backgroundRemindersEnabled} onChange={(event) => preferences.setNotificationPreference('goalReminders', event.target.checked)} /><span><strong>Remind me about goal dates</strong><small>Bring active savings goals to your attention near their target date.</small></span></label>
             <label className="preference-toggle"><input type="checkbox" checked={preferences.sharedPaymentNotifications} disabled={!preferences.notificationsEnabled} onChange={(event) => preferences.setNotificationPreference('sharedPaymentNotifications', event.target.checked)} /><span><strong>Tell me about shared payments</strong><small>Show updates when a member submits or confirms a payment.</small></span></label>
             <label className="preference-toggle"><input type="checkbox" checked={preferences.whatsappRemindersEnabled} onChange={(event) => preferences.setNotificationPreference('whatsappRemindersEnabled', event.target.checked)} /><span><strong>Show WhatsApp reminder buttons</strong><small>Open WhatsApp with a ready message. You still press Send yourself.</small></span></label>
           </div>
           <label className="reminder-days-field">Remind me this many days before
             <div><input type="number" min="0" max="30" value={preferences.reminderDaysBefore} onChange={(event) => preferences.setReminderDaysBefore(Number(event.target.value))} /><span>days</span></div>
           </label>
+          <div className="notification-device-card">
+            <div>
+              <strong>Device notifications</strong>
+              <p>{pushSupport?.message || 'Checking whether this browser supports device notifications…'}</p>
+              <small>These are optional. Your in-app reminders still work without them.</small>
+            </div>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={pushBusy || !pushSupport?.supported || !pushSupport?.configured || pushSupport.permission === 'denied'}
+              onClick={() => void changeDeviceNotifications(!preferences.browserPushEnabled)}
+            >
+              {pushBusy ? 'Updating…' : preferences.browserPushEnabled ? 'Turn off on my devices' : 'Turn on for this device'}
+            </button>
+          </div>
+          <div className="reminder-check-row">
+            <button type="button" className="button secondary" disabled={reminderCheckBusy || !preferences.notificationsEnabled || !preferences.backgroundRemindersEnabled} onClick={() => void checkRemindersNow()}>
+              {reminderCheckBusy ? 'Checking…' : 'Check reminders now'}
+            </button>
+            <small>Safe to run more than once. BajetBN will not create the same reminder twice.</small>
+          </div>
+          {reminderError && <div className="notice error">{reminderError}</div>}
+          {reminderFeedback && <div className="notice success">{reminderFeedback}</div>}
         </section>
 
         <div className="settings-save-bar">

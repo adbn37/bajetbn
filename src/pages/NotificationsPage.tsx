@@ -5,9 +5,9 @@ import { PageHeader } from '../components/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
 import { listCommitments } from '../repositories/commitmentRepository';
 import {
-  listUserNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  subscribeUserNotifications,
 } from '../repositories/collaborationRepository';
 import type { Commitment, UserNotification } from '../types/models';
 import { getErrorMessage } from '../utils/errors';
@@ -41,29 +41,34 @@ export function NotificationsPage() {
   const [error, setError] = useState('');
 
   const unread = useMemo(() => items.filter((item) => !item.readAt), [items]);
+  const backgroundItems = useMemo(() => items.filter((item) => item.source === 'background_reminder'), [items]);
+  const notifiedCommitmentKeys = useMemo(() => new Set(items
+    .filter((item) => (item.itemType === 'bill' || item.itemType === 'instalment') && item.itemId && item.dueDate)
+    .map((item) => `${item.itemId}:${item.dueDate}`)), [items]);
   const billAlerts = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     return commitments.filter((item) => item.status === 'active' && item.nextDueDate).map((item) => {
       const due = new Date(`${item.nextDueDate}T00:00:00`);
       const days = Math.round((due.getTime() - today.getTime()) / 86400000);
       return { item, days };
-    }).filter(({ item, days }) => days < 0 || days <= Math.max(0, item.reminderDays || 3));
-  }, [commitments]);
+    }).filter(({ item, days }) => (days < 0 || days <= Math.max(0, item.reminderDays || 3))
+      && !notifiedCommitmentKeys.has(`${item.id}:${item.nextDueDate}`));
+  }, [commitments, notifiedCommitmentKeys]);
 
-  async function load() {
+  useEffect(() => {
     if (!user) return;
     setLoading(true);
     setError('');
-    try {
-      const [nextItems, nextCommitments] = await Promise.all([listUserNotifications(user.uid), listCommitments(user.uid)]);
-      setItems(nextItems);
-      setCommitments(nextCommitments);
-    }
-    catch (nextError) { setError(getErrorMessage(nextError)); }
-    finally { setLoading(false); }
-  }
-
-  useEffect(() => { void load(); }, [user]);
+    const unsubscribe = subscribeUserNotifications(
+      user.uid,
+      (nextItems) => { setItems(nextItems); setLoading(false); },
+      (nextError) => { setError(getErrorMessage(nextError)); setLoading(false); },
+    );
+    void listCommitments(user.uid)
+      .then(setCommitments)
+      .catch((nextError) => setError(getErrorMessage(nextError)));
+    return unsubscribe;
+  }, [user]);
 
   async function openItem(item: UserNotification) {
     try {
@@ -79,7 +84,6 @@ export function NotificationsPage() {
     setError('');
     try {
       await markAllNotificationsRead(unread.map((item) => item.id));
-      await load();
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -97,13 +101,14 @@ export function NotificationsPage() {
     {error && <div className="notice error">{error}</div>}
     <section className="summary-grid notification-summary">
       <article className="summary-card featured"><span>New</span><strong>{unread.length}</strong><small>Updates not opened yet</small></article>
+      <article className="summary-card"><span>Prepared in background</span><strong>{backgroundItems.length}</strong><small>Created while the app could be closed</small></article>
       <article className="summary-card"><span>All updates</span><strong>{items.length}</strong><small>Your recent BajetBN activity</small></article>
     </section>
     {!loading && billAlerts.length > 0 && <section className="panel notification-attention-panel"><div className="panel-heading"><div><span className="eyebrow">Needs attention</span><h2>Bills coming up</h2></div><span className="type-badge">{billAlerts.length}</span></div><div className="notification-list">{billAlerts.map(({ item, days }) => <button className={`notification-row ${days < 0 ? 'overdue' : 'unread'}`} key={`bill-${item.id}`} onClick={() => navigate(`/bills?commitmentId=${item.id}`)}><span className="notification-dot" aria-hidden="true"/><span className="notification-copy"><strong>{days < 0 ? 'Bill is late' : days === 0 ? 'Bill is due today' : 'Bill is coming soon'}</strong><span>{item.name} · {item.nextDueDate}</span><small>{days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} late` : days === 0 ? 'Due today' : `Due in ${days} day${days === 1 ? '' : 's'}`}</small></span><span className="notification-action">Open bill →</span></button>)}</div></section>}
     {loading ? <div className="loading-panel">Loading notifications…</div> : items.length === 0 && billAlerts.length === 0 ? <EmptyState title="No notifications yet" description="Invitations, payments, bills, and Space updates will appear here." /> : items.length > 0 ? <section className="notification-list panel">
       {items.map((item) => <button key={item.id} className={`notification-row ${item.readAt ? 'read' : 'unread'}`} onClick={() => void openItem(item)}>
         <span className="notification-dot" aria-hidden="true" />
-        <span className="notification-copy"><strong>{item.title}</strong><span>{item.message}</span><small>{formatWhen(item)}</small></span>
+        <span className="notification-copy"><strong>{item.title}{item.source === 'background_reminder' && <em className="background-reminder-badge">Background</em>}</strong><span>{item.message}</span><small>{formatWhen(item)}</small></span>
         <span className="notification-action">{item.actionLabel || 'Open'} →</span>
       </button>)}
     </section> : null}

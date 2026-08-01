@@ -201,3 +201,27 @@ Notes: ____________________
 - [ ] Confirm recurring generated transactions keep their selected method.
 - [ ] Confirm bills, shared bills, shared expenses and Trip contributions save the selected method.
 - [ ] Verify English/Malay and mobile layouts without horizontal scrolling.
+
+## v0.11.9 Background notifications
+
+- [ ] Deploy `firestore.rules` and all v0.11.9 Functions to staging.
+- [ ] Add the Firebase Web Push public key as `VITE_FIREBASE_VAPID_KEY` in the staging Cloudflare Pages environment and redeploy.
+- [ ] Confirm Settings shows v0.11.9 and the device-notification status is accurate.
+- [ ] Create a bill within the reminder window and run “Check reminders now”.
+- [ ] Confirm one due-soon reminder and one reminder-history record are created.
+- [ ] Run the check again and confirm no duplicate is created.
+- [ ] Change the test date to due today and confirm one due-today reminder is created.
+- [ ] Move the due date into the past and confirm one late reminder is created.
+- [ ] Disable due-soon reminders and confirm future reminders are not generated.
+- [ ] Disable late reminders and confirm late reminders are not generated.
+- [ ] Disable background reminders and confirm the manual and scheduled checks create nothing.
+- [ ] Create an unfinished goal with a nearby target date and confirm a goal reminder.
+- [ ] Mark the goal complete and confirm no new reminder is created.
+- [ ] Keep the app open and confirm the unread count updates in real time.
+- [ ] Close the app, wait for the scheduled Function, reopen it and confirm the reminder exists.
+- [ ] Allow device notifications and confirm a background notification opens the correct BajetBN page.
+- [ ] Confirm denied browser permission shows a clear message without breaking in-app reminders.
+- [ ] Turn device notifications off and confirm saved device tokens are disabled.
+- [ ] Use an invalid/expired token and confirm the Function disables it safely.
+- [ ] Complete disposable-account deletion and confirm push-device records are removed.
+- [ ] Verify English/Malay and mobile layouts without horizontal scrolling.

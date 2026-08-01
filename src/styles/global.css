@@ -1039,3 +1039,58 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   .institution-preset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .institution-preset { width: 100%; border-radius: 0.75rem; }
 }
+
+/* v0.11.9 background reminders */
+.notification-device-card,
+.reminder-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface-soft);
+}
+
+.notification-device-card > div,
+.reminder-check-row > small {
+  min-width: 0;
+}
+
+.notification-device-card p {
+  margin: .35rem 0;
+  color: var(--text-secondary);
+}
+
+.notification-device-card small,
+.reminder-check-row small {
+  color: var(--text-muted);
+}
+
+.background-reminder-badge {
+  display: inline-flex;
+  margin-left: .5rem;
+  padding: .15rem .45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-size: .7rem;
+  font-style: normal;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+@media (max-width: 680px) {
+  .notification-device-card,
+  .reminder-check-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notification-device-card .button,
+  .reminder-check-row .button {
+    width: 100%;
+  }
+}

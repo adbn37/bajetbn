@@ -1,7 +1,7 @@
 {
   "auditVersion": "2026-08-01.1",
-  "auditedRelease": "BajetBN v0.11.6 Account Deletion and Re-registration Alpha 2",
-  "sourceBasis": "Verified v0.11.6 staging baseline plus the v0.11.7 recurring transaction implementation",
+  "auditedRelease": "BajetBN v0.11.9 Background Notifications Alpha 1",
+  "sourceBasis": "Verified v0.11.8 feature baseline plus the v0.11.9 background notification implementation",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -446,12 +446,16 @@
     {
       "id": "notifications.reminders",
       "area": "Notifications",
-      "requirement": "Upcoming/late bill reminders and reminder history",
-      "status": "complete",
+      "requirement": "Upcoming, due-today and late bill/goal reminders generated in the background with history, preferences and duplicate prevention",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
-        "src/features/calendar/CalendarPage.tsx",
-        "src/repositories/reminderRepository.ts"
+        "BACKGROUND_NOTIFICATIONS_ALPHA.md",
+        "src/pages/SettingsPage.tsx",
+        "src/pages/NotificationsPage.tsx",
+        "src/repositories/notificationRepository.ts",
+        "functions/src/index.ts",
+        "scripts/verify-background-notifications.mjs"
       ]
     },
     {
@@ -611,5 +615,5 @@
       ]
     }
   ],
-  "auditedVersion": "0.11.7"
+  "auditedVersion": "0.11.9"
 }

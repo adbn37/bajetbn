@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
-import { FieldValue, getFirestore, Timestamp, type DocumentData, type DocumentReference, type Query, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
+import { FieldPath, FieldValue, getFirestore, Timestamp, type DocumentData, type DocumentReference, type Query, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { createHash, randomBytes } from 'node:crypto';
@@ -428,8 +429,8 @@ export const completeOnboarding = onCall({ region }, async (request) => {
     transaction.set(userRef, {
       uid, fullName, email: request.auth?.token.email || '', language, currency, timezone,
       appearance: 'dark', textSize: 'normal', notificationsEnabled: true,
-      dueSoonReminders: true, lateReminders: true, sharedPaymentNotifications: true,
-      whatsappRemindersEnabled: true, reminderDaysBefore: 3,
+      backgroundRemindersEnabled: true, dueSoonReminders: true, lateReminders: true, goalReminders: true,
+      sharedPaymentNotifications: true, whatsappRemindersEnabled: true, browserPushEnabled: false, reminderDaysBefore: 3,
       onboardingCompleted: true, personalSpaceId: spaceRef.id,
       createdAt: userSnapshot.exists ? userSnapshot.data()?.createdAt || now : now, updatedAt: now,
     }, { merge: true });
@@ -1068,9 +1069,343 @@ function createNotification(transaction: Transaction, input: { uid: string; spac
   const ref = db.collection('userNotifications').doc();
   transaction.create(ref, {
     uid: input.uid, spaceId: input.spaceId || null, type: input.type, title: input.title, message: input.message,
-    targetPath: input.targetPath || null, actionLabel: input.actionLabel || null, readAt: null, createdAt: input.now,
+    targetPath: input.targetPath || null, actionLabel: input.actionLabel || null, source: 'activity',
+    itemType: null, itemId: null, dueDate: null, reminderKey: null,
+    readAt: null, createdAt: input.now,
   });
 }
+
+
+type BackgroundReminderItemType = 'bill' | 'instalment' | 'goal';
+type BackgroundReminderKind = 'due_soon' | 'due_today' | 'late';
+
+interface PreparedBackgroundReminder {
+  notificationId: string;
+  reminderKey: string;
+  title: string;
+  message: string;
+  targetPath: string;
+}
+
+interface BackgroundReminderResult {
+  checked: number;
+  created: number;
+  pushSent: number;
+  duplicates: number;
+  today: string;
+}
+
+function bruneiLocalDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Brunei', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function localDateDifference(date: string, today: string): number {
+  const target = Date.parse(`${date}T00:00:00Z`);
+  const current = Date.parse(`${today}T00:00:00Z`);
+  if (!Number.isFinite(target) || !Number.isFinite(current)) return Number.POSITIVE_INFINITY;
+  return Math.round((target - current) / 86_400_000);
+}
+
+function backgroundReminderId(reminderKey: string): string {
+  return `bgr_${createHash('sha256').update(reminderKey).digest('hex').slice(0, 40)}`;
+}
+
+function backgroundReminderCopy(input: {
+  itemType: BackgroundReminderItemType;
+  itemName: string;
+  dueDate: string;
+  days: number;
+}): { kind: BackgroundReminderKind; title: string; message: string; targetPath: string } {
+  const label = input.itemType === 'goal' ? 'Goal' : input.itemType === 'bill' ? 'Bill' : 'Instalment';
+  const targetPath = input.itemType === 'goal' ? '/goals' : '/bills';
+  if (input.days < 0) return {
+    kind: 'late',
+    title: input.itemType === 'goal' ? 'Goal date has passed' : `${label} is late`,
+    message: `${input.itemName} was due on ${input.dueDate}. Open it to review what needs attention.`,
+    targetPath,
+  };
+  if (input.days === 0) return {
+    kind: 'due_today',
+    title: input.itemType === 'goal' ? 'Goal date is today' : `${label} is due today`,
+    message: `${input.itemName} needs attention today.`,
+    targetPath,
+  };
+  return {
+    kind: 'due_soon',
+    title: input.itemType === 'goal' ? 'Goal date is coming up' : `${label} is coming up`,
+    message: `${input.itemName} is due on ${input.dueDate}.`,
+    targetPath,
+  };
+}
+
+async function createBackgroundReminder(input: {
+  uid: string;
+  spaceId?: string | null;
+  itemType: BackgroundReminderItemType;
+  itemId: string;
+  itemName: string;
+  dueDate: string;
+  days: number;
+}): Promise<PreparedBackgroundReminder | null> {
+  const copy = backgroundReminderCopy(input);
+  const reminderKey = [input.uid, input.itemType, input.itemId, input.dueDate, copy.kind].join('|');
+  const documentId = backgroundReminderId(reminderKey);
+  const notificationRef = db.collection('userNotifications').doc(documentId);
+  const historyRef = db.collection('reminderHistory').doc(documentId);
+  let created = false;
+
+  await db.runTransaction(async (transaction) => {
+    const [notification, history] = await Promise.all([
+      transaction.get(notificationRef),
+      transaction.get(historyRef),
+    ]);
+    if (notification.exists) return;
+    const now = FieldValue.serverTimestamp();
+    transaction.create(notificationRef, {
+      uid: input.uid,
+      spaceId: input.spaceId || null,
+      type: `background_${copy.kind}`,
+      title: copy.title,
+      message: copy.message,
+      targetPath: copy.targetPath,
+      actionLabel: 'Open',
+      source: 'background_reminder',
+      itemType: input.itemType,
+      itemId: input.itemId,
+      dueDate: input.dueDate,
+      reminderKey,
+      pushAttemptedAt: null,
+      pushSentAt: null,
+      pushFailureCount: 0,
+      readAt: null,
+      createdAt: now,
+    });
+    if (!history.exists) transaction.create(historyRef, {
+      uid: input.uid,
+      itemType: input.itemType,
+      itemId: input.itemId,
+      itemName: input.itemName,
+      spaceId: input.spaceId || null,
+      dueDate: input.dueDate,
+      action: 'background_generated',
+      message: copy.message,
+      phone: null,
+      createdAt: now,
+    });
+    created = true;
+  });
+
+  return created ? {
+    notificationId: documentId,
+    reminderKey,
+    title: copy.title,
+    message: copy.message,
+    targetPath: copy.targetPath,
+  } : null;
+}
+
+function isInvalidPushToken(code: string): boolean {
+  return code === 'messaging/registration-token-not-registered'
+    || code === 'messaging/invalid-registration-token';
+}
+
+async function sendBrowserPush(uid: string, reminders: PreparedBackgroundReminder[]): Promise<number> {
+  if (!reminders.length) return 0;
+  const devices = await db.collection('pushDevices').where('uid', '==', uid).get();
+  const activeDevices = devices.docs.filter((item) => item.data().active === true && typeof item.data().token === 'string');
+  if (!activeDevices.length) return 0;
+  const selected = activeDevices.slice(0, 500);
+  const tokens = selected.map((item) => String(item.data().token));
+  let sent = 0;
+
+  for (const reminder of reminders.slice(0, 25)) {
+    const attemptedAt = Timestamp.now();
+    try {
+      const response = await getMessaging().sendEachForMulticast({
+        tokens,
+        data: {
+          title: reminder.title,
+          body: reminder.message,
+          targetPath: reminder.targetPath,
+          notificationId: reminder.notificationId,
+          reminderKey: reminder.reminderKey,
+        },
+        webpush: { headers: { Urgency: 'normal' } },
+      });
+      sent += response.successCount;
+      const invalidRefs: DocumentReference[] = [];
+      response.responses.forEach((item, index) => {
+        if (!item.success && isInvalidPushToken(String(item.error?.code || ''))) invalidRefs.push(selected[index].ref);
+      });
+      const batch = db.batch();
+      invalidRefs.forEach((ref) => batch.set(ref, { active: false, removedAt: attemptedAt, updatedAt: attemptedAt }, { merge: true }));
+      batch.set(db.collection('userNotifications').doc(reminder.notificationId), {
+        pushAttemptedAt: attemptedAt,
+        pushSentAt: response.successCount > 0 ? attemptedAt : null,
+        pushFailureCount: response.failureCount,
+      }, { merge: true });
+      if (invalidRefs.length || response.successCount >= 0) await batch.commit();
+    } catch (error) {
+      console.error(`Unable to send background reminder ${reminder.notificationId}.`, error);
+      await db.collection('userNotifications').doc(reminder.notificationId).set({
+        pushAttemptedAt: attemptedAt,
+        pushFailureCount: tokens.length,
+      }, { merge: true });
+    }
+  }
+  return sent;
+}
+
+async function processBackgroundRemindersForUser(
+  uid: string,
+  profile: DocumentData,
+  today = bruneiLocalDate(),
+): Promise<BackgroundReminderResult> {
+  const result: BackgroundReminderResult = { checked: 0, created: 0, pushSent: 0, duplicates: 0, today };
+  if (profile.notificationsEnabled === false || profile.backgroundRemindersEnabled === false) return result;
+  const reminderDaysBefore = Math.min(30, Math.max(0, Number.isFinite(profile.reminderDaysBefore) ? Math.round(profile.reminderDaysBefore) : 3));
+  const [commitments, goals] = await Promise.all([
+    db.collection('commitments').where('ownerId', '==', uid).get(),
+    db.collection('goals').where('ownerId', '==', uid).get(),
+  ]);
+  const candidates: Array<{
+    uid: string;
+    spaceId?: string | null;
+    itemType: BackgroundReminderItemType;
+    itemId: string;
+    itemName: string;
+    dueDate: string;
+    days: number;
+  }> = [];
+
+  for (const row of commitments.docs) {
+    const item = row.data();
+    if (item.status !== 'active' || item.archivedAt || item.stoppedAt || typeof item.nextDueDate !== 'string') continue;
+    const days = localDateDifference(item.nextDueDate, today);
+    if (!Number.isFinite(days) || days > reminderDaysBefore) continue;
+    if (days >= 0 && profile.dueSoonReminders === false) continue;
+    if (days < 0 && profile.lateReminders === false) continue;
+    result.checked += 1;
+    candidates.push({
+      uid,
+      spaceId: item.spaceId || null,
+      itemType: item.type === 'instalment' ? 'instalment' : 'bill',
+      itemId: row.id,
+      itemName: String(item.name || (item.type === 'instalment' ? 'Instalment' : 'Bill')),
+      dueDate: item.nextDueDate,
+      days,
+    });
+  }
+
+  if (profile.goalReminders !== false) for (const row of goals.docs) {
+    const item = row.data();
+    if (item.status !== 'active' || item.archivedAt || item.closedAt || typeof item.targetDate !== 'string') continue;
+    if (Number(item.currentMinor || 0) >= Number(item.targetMinor || 0)) continue;
+    const days = localDateDifference(item.targetDate, today);
+    if (!Number.isFinite(days) || days > reminderDaysBefore) continue;
+    if (days >= 0 && profile.dueSoonReminders === false) continue;
+    if (days < 0 && profile.lateReminders === false) continue;
+    result.checked += 1;
+    candidates.push({
+      uid,
+      spaceId: item.spaceId || null,
+      itemType: 'goal',
+      itemId: row.id,
+      itemName: String(item.name || 'Savings goal'),
+      dueDate: item.targetDate,
+      days,
+    });
+  }
+
+  candidates.sort((a, b) => Math.abs(a.days) - Math.abs(b.days) || a.dueDate.localeCompare(b.dueDate));
+  const created: PreparedBackgroundReminder[] = [];
+  for (const candidate of candidates.slice(0, 25)) {
+    const reminder = await createBackgroundReminder(candidate);
+    if (reminder) {
+      created.push(reminder);
+      result.created += 1;
+    } else result.duplicates += 1;
+  }
+  if (profile.browserPushEnabled === true) result.pushSent = await sendBrowserPush(uid, created);
+  return result;
+}
+
+export const registerPushDevice = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const token = stringValue(request.data?.token, 'Notification token', 4096);
+  const userAgent = optionalString(request.data?.userAgent, 240);
+  const platform = optionalString(request.data?.platform, 80);
+  const deviceId = `push_${createHash('sha256').update(token).digest('hex').slice(0, 40)}`;
+  const now = FieldValue.serverTimestamp();
+  await Promise.all([
+    db.collection('pushDevices').doc(deviceId).set({
+      uid, token, userAgent, platform, active: true,
+      createdAt: now, lastSeenAt: now, removedAt: null, updatedAt: now,
+    }, { merge: true }),
+    db.collection('users').doc(uid).set({ browserPushEnabled: true, updatedAt: now }, { merge: true }),
+  ]);
+  return { deviceId, enabled: true };
+});
+
+export const unregisterPushDevice = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const devices = (await db.collection('pushDevices').where('uid', '==', uid).get()).docs;
+  const now = Timestamp.now();
+  const batch = db.batch();
+  devices.filter((item) => item.exists && item.data()?.uid === uid).forEach((item) => {
+    batch.set(item.ref, { active: false, removedAt: now, updatedAt: now }, { merge: true });
+  });
+  batch.set(db.collection('users').doc(uid), { browserPushEnabled: false, updatedAt: now }, { merge: true });
+  await batch.commit();
+  return { enabled: false };
+});
+
+export const runMyBackgroundReminderCheck = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const profile = await db.collection('users').doc(uid).get();
+  if (!profile.exists) throw new HttpsError('not-found', 'Your BajetBN profile was not found.');
+  return processBackgroundRemindersForUser(uid, profile.data() || {});
+});
+
+export const generateBackgroundReminders = onSchedule({
+  region,
+  schedule: '25 */3 * * *',
+  timeZone: 'Asia/Brunei',
+  retryCount: 3,
+}, async () => {
+  const today = bruneiLocalDate();
+  let lastUser: QueryDocumentSnapshot | undefined;
+  let usersChecked = 0;
+  let remindersCreated = 0;
+  let pushesSent = 0;
+  do {
+    let userQuery = db.collection('users').orderBy(FieldPath.documentId()).limit(200);
+    if (lastUser) userQuery = userQuery.startAfter(lastUser);
+    const users = await userQuery.get();
+    for (const user of users.docs) {
+      const profile = user.data();
+      if (profile.notificationsEnabled === false || profile.backgroundRemindersEnabled === false) continue;
+      try {
+        const result = await processBackgroundRemindersForUser(user.id, profile, today);
+        usersChecked += 1;
+        remindersCreated += result.created;
+        pushesSent += result.pushSent;
+      } catch (error) {
+        console.error(`Background reminder check failed for user ${user.id}.`, error);
+      }
+    }
+    lastUser = users.docs.at(-1);
+    if (users.size < 200) break;
+  } while (lastUser);
+  await db.collection('backgroundReminderRuns').add({
+    today, usersChecked, remindersCreated, pushesSent, completedAt: FieldValue.serverTimestamp(),
+  });
+  console.log(`Background reminders: users=${usersChecked}, created=${remindersCreated}, pushes=${pushesSent}, date=${today}.`);
+});
 
 export const updateSpaceCollaborationSettings = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
@@ -4175,7 +4510,7 @@ async function finalizeAccountDeletion(uid: string) {
       } else queueDelete(plan, payment.ref);
     }
 
-    for (const collectionName of ['userNotifications', 'reminderHistory', 'financialCommands', 'collaborationCommands', 'lifecycleCommands', 'accountDeletionCommands']) {
+    for (const collectionName of ['userNotifications', 'reminderHistory', 'pushDevices', 'financialCommands', 'collaborationCommands', 'lifecycleCommands', 'accountDeletionCommands']) {
       for (const row of await documentsWhere(collectionName, 'uid', uid)) queueDelete(plan, row.ref);
     }
 

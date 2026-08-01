@@ -145,6 +145,42 @@ self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
+self.addEventListener('push', (event) => {
+  event.waitUntil((async () => {
+    let payload = {};
+    try { payload = event.data ? event.data.json() : {}; }
+    catch { payload = { data: { body: event.data ? event.data.text() : '' } }; }
+    const data = payload.data || payload.notification || payload || {};
+    const title = data.title || 'BajetBN reminder';
+    const body = data.body || 'Open BajetBN to see what needs attention.';
+    const targetPath = data.targetPath || '/notifications';
+    await self.registration.showNotification(title, {
+      body,
+      icon: '/icons/bajetbn-192.png',
+      badge: '/icons/favicon-32.png',
+      tag: data.notificationId || data.reminderKey || undefined,
+      renotify: false,
+      data: { targetPath, notificationId: data.notificationId || '' },
+    });
+  })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetPath = event.notification.data?.targetPath || '/notifications';
+  event.waitUntil((async () => {
+    const targetUrl = new URL(targetPath, self.location.origin).href;
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      if ('focus' in client) {
+        if ('navigate' in client) await client.navigate(targetUrl);
+        return client.focus();
+      }
+    }
+    return self.clients.openWindow(targetUrl);
+  })());
+});
+
 async function cachedByPath(request) {
   const pathname = new URL(request.url).pathname;
   const cache = await caches.open(CACHE_NAME);

@@ -1,6 +1,6 @@
 {
-  "version": "0.11.8",
-  "label": "Brunei Banks and Payment Methods Alpha 1",
+  "version": "0.11.9",
+  "label": "Background Notifications Alpha 1",
   "channel": "alpha",
   "releasedAt": "2026-08-01"
 }

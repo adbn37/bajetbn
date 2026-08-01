@@ -3,7 +3,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
 import { useAuth } from '../contexts/AuthContext';
-import { listUserNotifications } from '../repositories/collaborationRepository';
+import { subscribeUserNotifications } from '../repositories/collaborationRepository';
+import { listenForForegroundPush } from '../repositories/notificationRepository';
 
 const navigation = [
   ['/', 'Overview', '⌂'],
@@ -33,13 +34,35 @@ export function AppShell() {
   }, [location]);
 
   useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    void listUserNotifications(user.uid)
-      .then((items) => { if (!cancelled) setUnreadNotifications(items.filter((item) => !item.readAt).length); })
-      .catch(() => { if (!cancelled) setUnreadNotifications(0); });
-    return () => { cancelled = true; };
-  }, [location.pathname, user]);
+    if (!user) {
+      setUnreadNotifications(0);
+      return;
+    }
+    return subscribeUserNotifications(
+      user.uid,
+      (items) => setUnreadNotifications(items.filter((item) => !item.readAt).length),
+      () => setUnreadNotifications(0),
+    );
+  }, [user]);
+
+  useEffect(() => {
+    if (!profile?.browserPushEnabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    let active = true;
+    let stop: () => void = () => {};
+    void listenForForegroundPush((payload) => {
+      if (!active) return;
+      const title = payload.data?.title || payload.notification?.title || 'BajetBN reminder';
+      const body = payload.data?.body || payload.notification?.body || 'Open BajetBN to see the update.';
+      const targetPath = payload.data?.targetPath || '/notifications';
+      const notification = new Notification(title, { body, icon: '/icons/bajetbn-192.png', tag: payload.data?.notificationId || undefined });
+      notification.onclick = () => {
+        window.focus();
+        navigate(targetPath);
+        notification.close();
+      };
+    }).then((unsubscribe) => { if (active) stop = unsubscribe; else unsubscribe(); });
+    return () => { active = false; stop(); };
+  }, [navigate, profile?.browserPushEnabled]);
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
