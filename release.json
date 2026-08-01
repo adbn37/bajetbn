@@ -1,6 +1,6 @@
 {
-  "version": "0.11.6",
-  "label": "Account Deletion and Re-registration Alpha 2",
+  "version": "0.11.7",
+  "label": "Recurring Transactions Alpha 1",
   "channel": "alpha",
   "releasedAt": "2026-08-01"
 }

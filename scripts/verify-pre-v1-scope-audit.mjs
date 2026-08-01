@@ -50,6 +50,16 @@ if (['complete', 'manual_test'].includes(deletionStatus)) {
 } else {
   requireText('src/pages/SettingsPage.tsx', 'Delete my account — coming later');
 }
+
+const recurringStatus = itemById.get('recurring.transactions')?.status;
+if (['complete', 'manual_test'].includes(recurringStatus)) {
+  requireText('src/features/recurring/RecurringTransactionsPage.tsx', 'Recurring money');
+  requireText('src/repositories/recurringTransactionRepository.ts', 'createRecurringTransactionTemplate');
+  requireText('functions/src/index.ts', 'export const processRecurringTransactions');
+  requireText('functions/src/index.ts', 'recurringRunId(templateId, scheduledDate)');
+  requireText('firestore.rules', 'match /recurringTransactionTemplates/{templateId}');
+  requireText('RECURRING_TRANSACTIONS_ALPHA.md', 'duplicate-safe');
+}
 requireText('src/features/accounts/AccountsPage.tsx', 'Institution or provider');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', "space.type === 'trip'");
 requireText('README.md', 'Offline mutation queues are deferred');
@@ -80,6 +90,7 @@ const ci = read('.github/workflows/staging-ci.yml');
 requireText('.github/workflows/staging-ci.yml', 'npm run verify:all-structural');
 requireText('package.json', 'verify-release-safety-hardening.mjs');
 requireText('package.json', 'verify-account-data-deletion.mjs');
+requireText('package.json', 'verify-recurring-transactions.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

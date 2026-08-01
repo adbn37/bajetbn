@@ -209,6 +209,7 @@ export function TransactionsPage() {
         title="Money activity"
         description="Record money in, money out, and money moved between accounts."
         action={<div className="header-actions">
+          <Link className="button secondary" to="/recurring">Recurring money</Link>
           <button className="button secondary" onClick={() => setShowCategoryManager(true)}>Edit categories</button>
           <button className="button primary" onClick={() => setShowForm(true)} disabled={!accounts.length || !spaces.length}>+ Add money activity</button>
         </div>}
@@ -481,6 +482,8 @@ function TransactionDetails({ item, source, destination, space, category, onClos
       {item.sharedBillAssignmentId && <Detail label="Person's bill share">{item.sharedBillAssignmentId}</Detail>}
       {item.sharedBillPaymentId && <Detail label="Payment submitted">{item.sharedBillPaymentId}</Detail>}
       {item.paymentProofPath && <Detail label="Payment proof">Attached in its Space</Detail>}
+      {item.recurringTemplateId && <Detail label="Recurring money"><Link to="/recurring">Created automatically from a recurring template</Link></Detail>}
+      {item.recurringScheduledDate && <Detail label="Scheduled date">{item.recurringScheduledDate}</Detail>}
       {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
       {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
     </dl>

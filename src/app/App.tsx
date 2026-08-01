@@ -20,6 +20,8 @@ const SpaceDetailsPage = lazy(() => import('../features/spaces/SpaceDetailsPage'
 const AccountsPage = lazy(() => import('../features/accounts/AccountsPage').then((module) => ({ default: module.AccountsPage })));
 const ClosedAccountsPage = lazy(() => import('../features/accounts/ClosedAccountsPage').then((module) => ({ default: module.ClosedAccountsPage })));
 const TransactionsPage = lazy(() => import('../features/transactions/TransactionsPage').then((module) => ({ default: module.TransactionsPage })));
+const RecurringTransactionsPage = lazy(() => import('../features/recurring/RecurringTransactionsPage').then((module) => ({ default: module.RecurringTransactionsPage })));
+const StoppedRecurringTransactionsPage = lazy(() => import('../features/recurring/StoppedRecurringTransactionsPage').then((module) => ({ default: module.StoppedRecurringTransactionsPage })));
 const BudgetsPage = lazy(() => import('../features/budgets/BudgetsPage').then((module) => ({ default: module.BudgetsPage })));
 const ArchivedBudgetsPage = lazy(() => import('../features/budgets/ArchivedBudgetsPage').then((module) => ({ default: module.ArchivedBudgetsPage })));
 const GoalsPage = lazy(() => import('../features/goals/GoalsPage').then((module) => ({ default: module.GoalsPage })));
@@ -60,6 +62,8 @@ export default function App() {
                   <Route path="accounts" element={<AccountsPage />} />
                   <Route path="accounts/closed" element={<ClosedAccountsPage />} />
                   <Route path="transactions" element={<TransactionsPage />} />
+                  <Route path="recurring" element={<RecurringTransactionsPage />} />
+                  <Route path="recurring/stopped" element={<StoppedRecurringTransactionsPage />} />
                   <Route path="budgets" element={<BudgetsPage />} />
                   <Route path="budgets/archived" element={<ArchivedBudgetsPage />} />
                   <Route path="goals" element={<GoalsPage />} />
