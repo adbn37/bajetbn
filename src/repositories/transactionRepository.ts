@@ -172,6 +172,17 @@ export async function syncQueuedTransactions(uid: string): Promise<OfflineSyncSu
 }
 
 
+export async function listAllTransactionAttachments(uid: string): Promise<TransactionAttachment[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(
+    collection(db, 'transactionAttachments'),
+    where('ownerId', '==', uid),
+  ));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as TransactionAttachment)
+    .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
+}
+
 export async function listTransactionAttachments(transactionId: string): Promise<TransactionAttachment[]> {
   const { auth, db } = requireFirebase();
   const uid = auth.currentUser?.uid;
