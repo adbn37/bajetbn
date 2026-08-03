@@ -23,6 +23,7 @@ import { manageCategory } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import {
   getTransactionAttachmentUrl,
+  listAllTransactionAttachments,
   listTransactionAttachments,
   listTransactions,
   postTransaction,
@@ -100,12 +101,14 @@ export function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [customCategories, setCustomCategories] = useState<TransactionCategory[]>([]);
+  const [transactionAttachmentCounts, setTransactionAttachmentCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
+  const [receiptTransaction, setReceiptTransaction] = useState<FinancialTransaction | null>(null);
   const [reverseDialog, setReverseDialog] = useState<ActionConfirmState<FinancialTransaction> | null>(null);
   const [reverseBusy, setReverseBusy] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -121,16 +124,22 @@ export function TransactionsPage() {
     setLoading(true);
     setError('');
     try {
-      const [nextTransactions, nextAccounts, nextSpaces, nextCustomCategories] = await Promise.all([
+      const [nextTransactions, nextAccounts, nextSpaces, nextCustomCategories, nextAttachments] = await Promise.all([
         listTransactions(user.uid),
         listAllAccounts(user.uid),
         listSpaces(user.uid),
         listAllCustomCategories(user.uid),
+        listAllTransactionAttachments(user.uid),
       ]);
+      const nextAttachmentCounts: Record<string, number> = {};
+      nextAttachments.forEach((attachment) => {
+        nextAttachmentCounts[attachment.transactionId] = (nextAttachmentCounts[attachment.transactionId] || 0) + 1;
+      });
       setTransactions(nextTransactions);
       setAccounts(nextAccounts);
       setSpaces(nextSpaces.filter((space) => !space.archivedAt));
       setCustomCategories(nextCustomCategories);
+      setTransactionAttachmentCounts(nextAttachmentCounts);
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -180,6 +189,10 @@ export function TransactionsPage() {
     return [item.displayId, item.category, item.counterparty, item.note, source, destination, space, method]
       .some((value) => value?.toLowerCase().includes(needle));
   });
+
+  const updateAttachmentCount = (transactionId: string, count: number) => {
+    setTransactionAttachmentCounts((current) => ({ ...current, [transactionId]: count }));
+  };
 
   const askReverse = (item: FinancialTransaction) => {
     setError('');
@@ -297,14 +310,20 @@ export function TransactionsPage() {
               </div>
               <div className="transaction-status">
                 <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
-                <button className="text-button" onClick={() => setSelectedTransaction(item)}>Details</button>
+                {(item.type !== 'reversal' || (transactionAttachmentCounts[item.id] || 0) > 0) && <button
+                  type="button"
+                  className="text-button receipt-shortcut"
+                  aria-label={`${transactionAttachmentCounts[item.id] ? 'View receipts' : 'Add receipt'} for ${item.displayId}`}
+                  onClick={() => setReceiptTransaction(item)}
+                >{transactionAttachmentCounts[item.id] ? `View receipts (${transactionAttachmentCounts[item.id]})` : 'Add receipt'}</button>}
+                <button type="button" className="text-button" onClick={() => setSelectedTransaction(item)}>Details</button>
               </div>
             </article>;
           })}
         </section>
       )}
 
-      {showForm && profile && <TransactionForm
+      {showForm && profile && <MoneyActivityModal
         accounts={activeAccounts}
         spaces={spaces}
         categories={allCategories}
@@ -334,6 +353,20 @@ export function TransactionsPage() {
         online={online}
         onClose={() => setSelectedTransaction(null)}
         onReverse={() => askReverse(selectedTransaction)}
+        onAttachmentsChanged={(count) => updateAttachmentCount(selectedTransaction.id, count)}
+      />}
+
+      {receiptTransaction && <TransactionDetails
+        item={receiptTransaction}
+        source={accountMap.get(receiptTransaction.accountId)}
+        destination={receiptTransaction.destinationAccountId ? accountMap.get(receiptTransaction.destinationAccountId) : undefined}
+        space={spaceMap.get(receiptTransaction.spaceId)}
+        category={receiptTransaction.categoryId ? categoryMap.get(receiptTransaction.categoryId) || transactionCategorySnapshot(receiptTransaction) : transactionCategorySnapshot(receiptTransaction)}
+        online={online}
+        receiptsOnly
+        onClose={() => setReceiptTransaction(null)}
+        onReverse={() => askReverse(receiptTransaction)}
+        onAttachmentsChanged={(count) => updateAttachmentCount(receiptTransaction.id, count)}
       />}
 
       {reverseDialog && <ActionConfirmModal state={reverseDialog} busy={reverseBusy} error={error} onClose={() => { setReverseDialog(null); setError(''); }} onConfirm={() => void handleReverse()} />}
@@ -345,7 +378,7 @@ function CategoryBadge({ category }: { category: TransactionCategory }) {
   return <span className="category-badge"><span className={`category-icon small category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span></span>;
 }
 
-function TransactionForm({ accounts, spaces, categories, timezone, online, onClose, onSubmit, onComplete }: {
+export function MoneyActivityModal({ accounts, spaces, categories, timezone, online, onClose, onSubmit, onComplete }: {
   accounts: Account[];
   spaces: Space[];
   categories: TransactionCategory[];
@@ -654,15 +687,17 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
   </form></Modal>;
 }
 
-function TransactionDetails({ item, source, destination, space, category, online, onClose, onReverse }: {
+function TransactionDetails({ item, source, destination, space, category, online, receiptsOnly = false, onClose, onReverse, onAttachmentsChanged }: {
   item: FinancialTransaction;
   source?: Account;
   destination?: Account;
   space?: Space;
   category: TransactionCategory;
   online: boolean;
+  receiptsOnly?: boolean;
   onClose: () => void;
   onReverse: () => void;
+  onAttachmentsChanged?: (count: number) => void;
 }) {
   const [attachments, setAttachments] = useState<TransactionAttachment[]>([]);
   const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
@@ -675,6 +710,7 @@ function TransactionDetails({ item, source, destination, space, category, online
     try {
       const next = await listTransactionAttachments(item.id);
       setAttachments(next);
+      onAttachmentsChanged?.(next.length);
       const resolved = await Promise.all(next.map(async (attachment) => {
         try { return [attachment.id, await getTransactionAttachmentUrl(attachment.storagePath)] as const; }
         catch { return [attachment.id, ''] as const; }
@@ -717,7 +753,8 @@ function TransactionDetails({ item, source, destination, space, category, online
     }
   }
 
-  return <Modal title="Money activity details" onClose={onClose}>
+  return <Modal title={receiptsOnly ? 'Receipts & documents' : 'Money activity details'} onClose={onClose}>
+    {!receiptsOnly && <>
     <div className="transaction-detail-hero">
       <CategoryBadge category={category} />
       <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? '−' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
@@ -742,6 +779,9 @@ function TransactionDetails({ item, source, destination, space, category, online
       {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
       {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
     </dl>
+    </>}
+
+    {receiptsOnly && <div className="transaction-receipt-shortcut-summary"><strong>{item.category || typeLabels[item.type]}</strong><span>{item.displayId} · {item.transactionDate}</span></div>}
 
     <section className="transaction-attachments" aria-labelledby="transaction-attachments-title">
       <div className="transaction-attachments-heading">
@@ -771,7 +811,7 @@ function TransactionDetails({ item, source, destination, space, category, online
       <small>Images and PDFs only. Maximum 10 MB per file.</small>
     </section>
 
-    <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button>{item.type !== 'reversal' && item.status === 'posted' && <button className="button danger" onClick={onReverse}>Undo this activity</button>}</div>
+    <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button>{!receiptsOnly && item.type !== 'reversal' && item.status === 'posted' && <button className="button danger" onClick={onReverse}>Undo this activity</button>}</div>
   </Modal>;
 }
 
@@ -866,4 +906,3 @@ function CategoryEditor({ category, onClose, onSaved }: {
     <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save category'}</button></div>
   </form></Modal>;
 }
-

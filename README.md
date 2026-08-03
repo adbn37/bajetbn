@@ -214,3 +214,11 @@ See `OFFLINE_SYNC_ALPHA.md`. BajetBN keeps previously opened Firestore data in a
 ## v0.11.12 Premium theme refresh hotfix
 
 See `PREMIUM_THEME_REFRESH_HOTFIX.md`. Dark mode now uses a near-black ADBN-inspired command-centre palette with controlled cyan-teal accents. Light mode uses warm ivory, white cards and neutral borders so it no longer resembles a traditional bank portal. Financial behaviour is unchanged.
+
+## v0.11.12 Money Activity shortcuts hotfix
+
+- The Overview **Add income or expense** action opens the existing Add Money Activity modal without leaving Overview.
+- Every normal money activity row has a direct **Add receipt** or **View receipts (n)** action.
+- The receipt shortcut opens only the existing Receipts & documents area; full Details remains separate.
+- Receipt upload is still optional, and existing upload options remain available in the Add Money Activity form and Money Activity Details.
+- This is a frontend-only hotfix. Firebase Functions, Firestore rules, Storage rules and indexes are unchanged.

@@ -333,3 +333,18 @@ Notes: ____________________
 - [ ] Confirm Dark, Light and Device default persist after refresh and sign-in.
 - [ ] Check desktop, tablet and mobile layouts with no horizontal scrolling.
 - [ ] Check English and Bahasa Melayu with Normal and Large text.
+
+## v0.11.12 Money Activity shortcuts hotfix
+
+- [ ] From Overview, select **Add income or expense** and confirm Add Money Activity opens without changing the URL to `/transactions`.
+- [ ] Close the modal and confirm the user remains on Overview.
+- [ ] Save money in, money out and a money move from Overview and confirm the user remains on Overview.
+- [ ] Confirm the Overview totals and account balances refresh after an online save.
+- [ ] Confirm offline save still queues safely from the Overview modal.
+- [ ] On All Money Activity, confirm a transaction with no attachment shows **Add receipt**.
+- [ ] Attach one file from the shortcut and confirm the row changes to **View receipts (1)**.
+- [ ] Confirm a transaction with several attachments shows the correct count.
+- [ ] Remove an attachment and confirm the row count updates immediately.
+- [ ] Confirm **Details** still opens the full transaction details separately.
+- [ ] Confirm attachment upload remains optional in every flow.
+- [ ] Check the shortcut labels on desktop and mobile with no horizontal scrolling.

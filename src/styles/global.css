@@ -1599,3 +1599,23 @@ code { background: #070c0e; }
   .planning-card,
   .shared-bill-card { transition: none; }
 }
+
+/* v0.11.12 money activity shortcuts hotfix */
+.receipt-shortcut { white-space: nowrap; }
+.transaction-receipt-shortcut-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  align-items: center;
+  padding: .75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: .85rem;
+  background: var(--surface-soft);
+}
+.transaction-receipt-shortcut-summary span { color: var(--text-muted); font-size: .82rem; text-align: right; }
+@media (max-width: 780px) {
+  .transaction-status { flex-wrap: wrap; }
+  .receipt-shortcut { min-height: 40px; }
+  .transaction-receipt-shortcut-summary { align-items: flex-start; flex-direction: column; }
+  .transaction-receipt-shortcut-summary span { text-align: left; }
+}
