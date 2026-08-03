@@ -1,6 +1,6 @@
 {
-  "version": "0.11.10",
-  "label": "Household Funds and Financial Health Alpha 1 Hotfix 1",
+  "version": "0.11.11",
+  "label": "Offline Sync Alpha 1",
   "channel": "alpha",
   "releasedAt": "2026-08-03"
 }

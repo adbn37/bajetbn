@@ -38,4 +38,4 @@ Firestore provides random technical document IDs. Separate display IDs such as `
 
 ## Offline path
 
-Offline financial mutations are not enabled in Phase 1. The future queue will store a client mutation ID and idempotency key, then reconcile temporary projected values against server-posted ledger balances.
+v0.11.11 enables a bounded IndexedDB queue for new Money activity only. Each local command keeps one stable idempotency key and is replayed through the trusted `postTransaction` Cloud Function. Temporary connection failures remain queued; current-state validation or permission conflicts move to Needs attention. Account balances are never changed locally. Other financial actions remain online-only until separately designed and approved.

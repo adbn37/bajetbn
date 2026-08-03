@@ -8,6 +8,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { PaymentMethodField } from '../../components/PaymentMethodField';
 import { paymentMethodLabel, suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
@@ -82,6 +83,7 @@ function accountEffectForPreview(account: Account, type: PrimaryType, amountMino
 
 export function TransactionsPage() {
   const { user, profile } = useAuth();
+  const { online, lastCompletedAt } = useOfflineSync();
   const [searchParams] = useSearchParams();
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -89,6 +91,7 @@ export function TransactionsPage() {
   const [customCategories, setCustomCategories] = useState<TransactionCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
@@ -124,7 +127,7 @@ export function TransactionsPage() {
     }
   };
 
-  useEffect(() => { void load(); }, [user]);
+  useEffect(() => { void load(); }, [user, lastCompletedAt]);
 
   const allCategories = useMemo(
     () => [...DEFAULT_TRANSACTION_CATEGORIES, ...customCategories.filter((item) => !item.archivedAt)],
@@ -219,6 +222,7 @@ export function TransactionsPage() {
         </div>}
       />
       {error && <div className="notice error">{error}</div>}
+      {feedback && <div className="notice success">{feedback} {feedback.includes('device') && <Link to="/offline-sync">View Offline & sync</Link>}</div>}
       <div className="info-banner"><strong>Safe account updates</strong><span>Saving money activity updates your account balance. Use Undo when something was entered wrongly.</span></div>
 
       <section className="transaction-summary">
@@ -294,10 +298,16 @@ export function TransactionsPage() {
         spaces={spaces}
         categories={allCategories}
         timezone={profile.timezone}
+        online={online}
         onClose={() => setShowForm(false)}
         onSubmit={async (values) => {
-          await postTransaction(values);
+          const outcome = await postTransaction(values);
           setShowForm(false);
+          if (outcome.mode === 'queued') {
+            setFeedback('Saved on this device. BajetBN will sync it when internet returns.');
+            return;
+          }
+          setFeedback('Money activity saved.');
           await load();
         }}
       />}
@@ -327,11 +337,12 @@ function CategoryBadge({ category }: { category: TransactionCategory }) {
   return <span className="category-badge"><span className={`category-icon small category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span></span>;
 }
 
-function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSubmit }: {
+function TransactionForm({ accounts, spaces, categories, timezone, online, onClose, onSubmit }: {
   accounts: Account[];
   spaces: Space[];
   categories: TransactionCategory[];
   timezone: string;
+  online: boolean;
   onClose: () => void;
   onSubmit: (values: {
     type: PrimaryType;
@@ -339,6 +350,7 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
     destinationAccountId?: string;
     spaceId: string;
     amountMinor: number;
+    currency?: string;
     transactionDate: string;
     categoryId?: string;
     category?: string;
@@ -411,6 +423,7 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
         destinationAccountId: type === 'transfer' ? destinationAccountId : undefined,
         spaceId,
         amountMinor: nextAmountMinor,
+        currency: sourceAccount?.currency || selectedSpace?.currency,
         transactionDate,
         categoryId: selectedCategory?.id,
         category: selectedCategory?.name,
@@ -431,6 +444,7 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
 
   return <Modal title="Add money activity" onClose={onClose}><form className="transaction-form" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
+    {!online && <div className="notice warning compact-notice"><strong>Saving offline</strong><span>This money activity will stay on this device and sync safely when internet returns.</span></div>}
     <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
       {(['expense', 'income', 'transfer'] as const).map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
     </div>
@@ -462,7 +476,7 @@ function TransactionForm({ accounts, spaces, categories, timezone, onClose, onSu
     </div>}
 
     {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
-    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{busy ? 'Saving…' : 'Save money activity'}</button></div>
+    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{busy ? 'Saving…' : online ? 'Save money activity' : 'Save on this device'}</button></div>
   </form></Modal>;
 }
 

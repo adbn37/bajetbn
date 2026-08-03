@@ -136,7 +136,7 @@ Money is stored in integer minor units. Account opening balances are posted by a
 - Transactions beyond opening balances are placeholders until v0.5.0.
 - Shared invitations and role changes are intentionally deferred.
 - Receipts and document uploads remain denied until v0.8.0 rules are implemented.
-- Offline mutation queues are deferred to v0.9.0.
+- New Money activity can be queued offline in v0.11.11; other server-controlled actions still require internet.
 - Production deployment configuration is intentionally incomplete.
 
 ## Staging approval gate
@@ -195,3 +195,8 @@ See `HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md`. Household and Custom Spaces can
 ## v0.11.10 Household Fund setup guard hotfix
 
 The Add contribution action now stays unavailable until the shared fund has a valid active money holder. The Firebase Function repeats the same check before creating a contribution, activity record, or notification.
+
+
+## v0.11.11 Offline Sync
+
+See `OFFLINE_SYNC_ALPHA.md`. BajetBN keeps previously opened Firestore data in a persistent browser cache and can save new Money activity to a bounded IndexedDB queue while offline. Every retry uses the same duplicate-protection key. Temporary connection failures keep waiting; current-state conflicts move to **Needs attention** for a safe retry or removal. Other money actions remain online-only in this alpha.

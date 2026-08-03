@@ -1,7 +1,7 @@
 {
-  "auditVersion": "2026-08-03.1",
-  "auditedRelease": "BajetBN v0.11.10 Household Funds and Financial Health Alpha 1",
-  "sourceBasis": "Verified v0.11.9 staging baseline plus the v0.11.10 optional group-fund and financial-health implementation",
+  "auditVersion": "2026-08-03.2",
+  "auditedRelease": "BajetBN v0.11.11 Offline Sync Alpha 1",
+  "sourceBasis": "Verified v0.11.10 staging baseline plus the v0.11.11 offline financial entry queue and persistent cache implementation",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -556,12 +556,16 @@
     {
       "id": "pwa.offline_mutations",
       "area": "PWA",
-      "requirement": "Offline financial entry queue with idempotent sync and conflict handling",
-      "status": "missing",
-      "gate": "pre_v1_decision",
+      "requirement": "Offline money activity queue with duplicate-safe sync and conflict handling",
+      "status": "manual_test",
+      "gate": "pre_v1",
       "evidence": [
-        "README.md",
-        "ARCHITECTURE.md"
+        "src/services/offlineQueue.ts",
+        "src/contexts/OfflineSyncContext.tsx",
+        "src/pages/OfflineSyncPage.tsx",
+        "src/repositories/transactionRepository.ts",
+        "OFFLINE_SYNC_ALPHA.md",
+        "scripts/verify-offline-sync.mjs"
       ]
     },
     {
@@ -624,5 +628,5 @@
       ]
     }
   ],
-  "auditedVersion": "0.11.10"
+  "auditedVersion": "0.11.11"
 }

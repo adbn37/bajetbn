@@ -271,3 +271,24 @@ Notes: ____________________
 - [ ] A direct callable attempt before setup returns failed-precondition and creates no contribution, activity, or notification.
 - [ ] After valid setup, contributions work and update the fund exactly once.
 - [ ] Household, Group, and Trip fund flows remain compatible.
+
+
+## v0.11.11 Offline Sync
+
+- [ ] Confirm Settings shows v0.11.11 and the Offline Sync release label.
+- [ ] Open Accounts, Spaces, categories and Money activity online at least once.
+- [ ] Turn internet off, refresh, and confirm the styled application shell opens.
+- [ ] Confirm the offline banner says cached information may be older.
+- [ ] Add one income, one expense and one transfer while offline.
+- [ ] Confirm each entry appears under Offline & sync and no Account balance changes yet.
+- [ ] Close and reopen the browser while still offline; confirm queued entries remain on this device.
+- [ ] Restore internet and confirm automatic sync starts without manual refresh.
+- [ ] Confirm each entry posts exactly once and disappears from the local queue.
+- [ ] Confirm final Account balances, ledger entries and matching Budget totals are correct.
+- [ ] Simulate a response loss or repeated retry and confirm the duplicate-protection key prevents duplicates.
+- [ ] Close/archive a referenced Account or Space before replay and confirm Needs attention.
+- [ ] Fix the underlying conflict and Retry; confirm one successful post.
+- [ ] Remove an unsynced entry and confirm a BajetBN confirmation dialog is used.
+- [ ] Confirm Undo, bills, goals, shared payments and fund contributions still require internet.
+- [ ] Open two tabs, reconnect, and confirm duplicate-safe results.
+- [ ] Verify English/Malay, dark/light mode and mobile layouts without horizontal scrolling.

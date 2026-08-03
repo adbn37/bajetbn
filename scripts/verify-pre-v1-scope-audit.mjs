@@ -71,7 +71,16 @@ if (['complete', 'manual_test'].includes(backgroundReminderStatus)) {
 }
 requireText('src/features/accounts/AccountsPage.tsx', 'Institution or provider');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', "space.type === 'trip'");
-requireText('README.md', 'Offline mutation queues are deferred');
+const offlineStatus = itemById.get('pwa.offline_mutations')?.status;
+if (['complete', 'manual_test'].includes(offlineStatus)) {
+  requireText('src/services/offlineQueue.ts', 'MAX_QUEUE_ITEMS = 100');
+  requireText('src/repositories/transactionRepository.ts', 'syncQueuedTransactions');
+  requireText('src/pages/OfflineSyncPage.tsx', 'Duplicate-safe');
+  requireText('src/services/firebase.ts', 'persistentLocalCache');
+  requireText('OFFLINE_SYNC_ALPHA.md', 'duplicate-protection key');
+} else {
+  requireText('README.md', 'Offline mutation queues are deferred');
+}
 requireText('storage.rules', 'General receipts remain reserved');
 
 const nativeConfirmFiles = [
@@ -103,6 +112,7 @@ requireText('package.json', 'verify-account-data-deletion.mjs');
 requireText('package.json', 'verify-recurring-transactions.mjs');
 requireText('package.json', 'verify-background-notifications.mjs');
 requireText('package.json', 'verify-household-funds-financial-health.mjs');
+requireText('package.json', 'verify-offline-sync.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

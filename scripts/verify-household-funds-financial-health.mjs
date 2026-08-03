@@ -61,8 +61,8 @@ const checks = [
 ];
 for (const [content, token, label] of checks) assert.equal(content.includes(token), true, `${label} is missing`);
 
-assert.equal(release.version, '0.11.10');
-assert.equal(pkg.version, '0.11.10');
+assert.equal(release.version.localeCompare('0.11.10', undefined, { numeric: true }) >= 0, true);
+assert.equal(pkg.version, release.version);
 assert.equal(pkg.scripts['verify:all-structural'].includes('verify-household-funds-financial-health.mjs'), true);
 
 const itemById = new Map(scope.items.map((item) => [item.id, item]));

@@ -4,6 +4,7 @@ import { AppErrorBoundary } from '../components/AppErrorBoundary';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { AuthProvider } from '../contexts/AuthContext';
 import { PreferencesProvider } from '../contexts/PreferencesContext';
+import { OfflineSyncProvider } from '../contexts/OfflineSyncContext';
 import { firebaseConfigured } from '../services/firebase';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { AppShell } from '../layouts/AppShell';
@@ -37,6 +38,7 @@ const DashboardPage = lazy(() => import('../pages/DashboardPage').then((module) 
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })));
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const NotificationsPage = lazy(() => import('../pages/NotificationsPage').then((module) => ({ default: module.NotificationsPage })));
+const OfflineSyncPage = lazy(() => import('../pages/OfflineSyncPage').then((module) => ({ default: module.OfflineSyncPage })));
 
 export default function App() {
   if (!firebaseConfigured) return <SetupRequiredPage />;
@@ -45,6 +47,7 @@ export default function App() {
     <AppErrorBoundary>
       <AuthProvider>
         <PreferencesProvider>
+          <OfflineSyncProvider>
           <BrowserRouter>
             <Suspense fallback={<LoadingScreen />}>
               <Routes>
@@ -77,12 +80,14 @@ export default function App() {
                   <Route path="calendar" element={<CalendarPage />} />
                   <Route path="search" element={<SearchPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
+                  <Route path="offline-sync" element={<OfflineSyncPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </Suspense>
           </BrowserRouter>
+          </OfflineSyncProvider>
         </PreferencesProvider>
       </AuthProvider>
     </AppErrorBoundary>

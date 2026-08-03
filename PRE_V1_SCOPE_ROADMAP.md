@@ -38,7 +38,7 @@ Includes the seven-day deletion cooling-off period, safe anonymisation and a 30-
 - [x] Add dedicated active and stopped pages plus Calendar and Search visibility.
 - [ ] Deploy rules, indexes and Functions to staging and complete the recurring-transaction test matrix.
 
-General receipt/document attachments and offline mutation synchronisation remain explicit pre-v1 decisions; they were not silently added to this financial scheduling phase.
+General receipt/document attachments remain an explicit pre-v1 decision. Offline financial entry synchronisation is implemented separately in v0.11.11.
 
 ## v0.11.8 — Brunei Banks and Payment Methods — Completed in source
 
@@ -68,6 +68,18 @@ The simple SME overview remains a separate pre-v1 item and is not silently bundl
 - [x] Add a simple SME overview for money in, money out, cash position and upcoming payments.
 - [x] Add English/Malay wording and responsive mobile layouts.
 - [ ] Deploy changed Functions and complete the v0.11.10 staging matrix.
+
+
+## v0.11.11 — Offline Sync — Completed in source
+
+- [x] Keep previously opened Firestore information in a persistent multi-tab browser cache.
+- [x] Queue new income, expense and transfer entries in IndexedDB when internet is unavailable.
+- [x] Preserve one duplicate-protection key from the first attempt through every retry.
+- [x] Retry on reconnect, visible-tab return and periodic online checks.
+- [x] Move non-network validation or permission conflicts to Needs attention.
+- [x] Add a dedicated Offline & sync page with retry and safe removal controls.
+- [x] Clearly warn that cached balances may be old and that other money actions still require internet.
+- [ ] Complete the offline/reconnect, duplicate, conflict, mobile and multi-tab staging matrix.
 
 ## v0.12.0 — Scope-complete Beta
 
