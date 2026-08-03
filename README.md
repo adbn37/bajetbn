@@ -210,3 +210,7 @@ See `OFFLINE_SYNC_ALPHA.md`. BajetBN keeps previously opened Firestore data in a
 - Moves the final historic missing item to a staging-test gate.
 - Adds `FINAL_SCOPE_AUDIT.md` and `PRODUCTION_READINESS_GATE.md`.
 - Production remains blocked pending the documented manual gates.
+
+## v0.11.12 Premium theme refresh hotfix
+
+See `PREMIUM_THEME_REFRESH_HOTFIX.md`. Dark mode now uses a near-black ADBN-inspired command-centre palette with controlled cyan-teal accents. Light mode uses warm ivory, white cards and neutral borders so it no longer resembles a traditional bank portal. Financial behaviour is unchanged.

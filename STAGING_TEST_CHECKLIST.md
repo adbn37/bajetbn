@@ -5,7 +5,7 @@ Tester: ____________________
 Staging URL: ____________________
 Commit: ____________________
 
-## Critical â€” must pass
+## Critical — must pass
 
 - [ ] Staging uses the staging Firebase project, not production.
 - [ ] Email/password registration works.
@@ -54,7 +54,7 @@ Notes: ____________________
 - [ ] Old service workers and site data cleared before retest
 - [ ] New `bajetbn-shell-v0.1.1-*` cache created
 - [ ] Hashed JavaScript and CSS files exist in Cache Storage
-- [ ] Manifest has 192Ã—192, 512Ã—512, and maskable PNG icons
+- [ ] Manifest has 192×192, 512×512, and maskable PNG icons
 - [ ] Manifest has wide and mobile screenshots
 - [ ] Installed application opens online
 - [ ] Styled BajetBN application shell opens after an offline refresh
@@ -77,7 +77,7 @@ Notes: ____________________
 - [ ] Goal progress and Trip contribution notifications appear.
 - [ ] Close Trip keeps all previous history in Archived Spaces.
 
-## v0.11.4 Alpha 2 â€” Mobile UX and dedicated archive pages
+## v0.11.4 Alpha 2 — Mobile UX and dedicated archive pages
 
 - [ ] Spaces shows active Spaces only and opens `/spaces/archived` from the header button.
 - [ ] Accounts shows active accounts only and opens `/accounts/closed` from the header or summary count.
@@ -103,7 +103,7 @@ Notes: ____________________
 - [ ] Do not merge to production while a pre-production blocker remains open
 - [ ] Do not tag v1.0.0 while a required pre-v1 item remains open or lacks an explicit scope decision
 
-## v0.11.5 â€” Release Safety Hardening
+## v0.11.5 — Release Safety Hardening
 
 - [ ] Settings displays the same version and release label recorded in `release.json`.
 - [ ] Money Activity Undo uses a BajetBN dialog and creates a correction record.
@@ -116,7 +116,7 @@ Notes: ____________________
 - [ ] `npm run verify:all-structural` passes in GitHub staging CI.
 - [ ] Production smoke-test and rollback documents are reviewed before any live deployment.
 
-## v0.11.6 â€” Account and Data Deletion
+## v0.11.6 — Account and Data Deletion
 
 ### Deployment and access
 
@@ -140,7 +140,7 @@ Notes: ____________________
 - [ ] Confirm deletion is blocked when the user owns a Space with another member record.
 - [ ] Transfer ownership to an active member and confirm the former owner becomes an admin and the new owner receives owner controls.
 - [ ] Confirm Personal Space ownership cannot be transferred.
-- [ ] Confirm deletion is blocked when the user holds Trip money for another ownerâ€™s Space.
+- [ ] Confirm deletion is blocked when the user holds Trip money for another owner’s Space.
 - [ ] Change the Trip money holder and confirm the blocker clears.
 
 ### Cancellation and finalisation
@@ -207,7 +207,7 @@ Notes: ____________________
 - [ ] Deploy `firestore.rules` and all v0.11.9 Functions to staging.
 - [ ] Add the Firebase Web Push public key as `VITE_FIREBASE_VAPID_KEY` in the staging Cloudflare Pages environment and redeploy.
 - [ ] Confirm Settings shows v0.11.9 and the device-notification status is accurate.
-- [ ] Create a bill within the reminder window and run â€œCheck reminders nowâ€.
+- [ ] Create a bill within the reminder window and run “Check reminders now”.
 - [ ] Confirm one due-soon reminder and one reminder-history record are created.
 - [ ] Run the check again and confirm no duplicate is created.
 - [ ] Change the test date to due today and confirm one due-today reminder is created.
@@ -252,7 +252,7 @@ Notes: ____________________
 - [ ] Confirm a negative money-left month is clearly shown as needing attention.
 - [ ] Add budgets below 75%, near 100% and over 100% and confirm the pressure states.
 - [ ] Add weekly, monthly, quarterly and yearly commitments and verify the monthly estimate.
-- [ ] Confirm regular-payment load compares the monthly estimate with the selected monthâ€™s income.
+- [ ] Confirm regular-payment load compares the monthly estimate with the selected month’s income.
 - [ ] Create an Emergency fund or Dana Darurat goal and confirm its progress is detected.
 - [ ] Confirm the no-emergency-goal state suggests creating one without blocking the report.
 - [ ] Confirm category changes compare the selected month with the previous month.
@@ -294,7 +294,7 @@ Notes: ____________________
 - [ ] Verify English/Malay, dark/light mode and mobile layouts without horizontal scrolling.
 
 
-## v0.11.12 â€” Transaction receipts and final scope audit
+## v0.11.12 — Transaction receipts and final scope audit
 
 - [ ] Attach an image to an income or expense record and open it again.
 - [ ] Attach a PDF and confirm the original file name is shown.
@@ -318,3 +318,18 @@ Notes: ____________________
 - [ ] Simulate an attachment upload failure and confirm the transaction remains saved with Retry attachments.
 - [ ] Confirm Finish without remaining attachments closes safely and the existing Details upload remains available.
 - [ ] While offline, confirm the transaction can be queued with no file and attachment controls explain that internet is required.
+
+## v0.11.12 premium dark and warm-light theme refresh
+
+- [ ] Confirm Dark appearance uses a near-black background, charcoal cards, white text and cyan-teal accents.
+- [ ] Confirm Dark appearance does not place teal outlines around every card or panel.
+- [ ] Confirm Light appearance uses warm ivory behind white cards with no full-page mint wash.
+- [ ] Confirm Money activity filters, category cards and transaction details are light in Light appearance.
+- [ ] Confirm Calendar late items use a restrained light warning treatment rather than black cards.
+- [ ] Confirm Offline & sync empty states and detail boxes are white or warm neutral in Light appearance.
+- [ ] Confirm Bills, Budgets, Search, Reports, Settings, Spaces and Accounts use consistent card surfaces.
+- [ ] Confirm income, expense, overdue, warning and finished states remain visually distinct in both appearances.
+- [ ] Confirm top search, sidebar active state, buttons, fields and focus rings are readable in both appearances.
+- [ ] Confirm Dark, Light and Device default persist after refresh and sign-in.
+- [ ] Check desktop, tablet and mobile layouts with no horizontal scrolling.
+- [ ] Check English and Bahasa Melayu with Normal and Large text.
