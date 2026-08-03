@@ -124,7 +124,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.appearance = preferences.appearance;
     document.documentElement.dataset.textSize = preferences.textSize;
     document.documentElement.lang = preferences.language === 'ms' ? 'ms' : 'en';
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#07111f' : '#f8fbfc');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#030708' : '#f5f3ee');
     writeLocalPreferences(preferences);
   }, [preferences, resolvedTheme]);
 

@@ -33,6 +33,9 @@ requireText('package.json', 'verify-inline-transaction-attachments.mjs');
 const packageJson = JSON.parse(read('package.json'));
 if (packageJson.version !== '0.11.12') throw new Error('Inline attachment hotfix must remain on v0.11.12.');
 const release = JSON.parse(read('release.json'));
-if (!release.label.includes('Hotfix 1')) throw new Error('release.json must identify the inline attachment hotfix.');
+const hotfixMatch = release.label.match(/Hotfix\s+(\d+)/i);
+if (!hotfixMatch || Number(hotfixMatch[1]) < 1) {
+  throw new Error('release.json must identify v0.11.12 Hotfix 1 or a later hotfix.');
+}
 
 console.log('Inline transaction attachment checks passed (optional selection, direct upload, retry and offline safety).');
