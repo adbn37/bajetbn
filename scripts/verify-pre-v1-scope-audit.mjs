@@ -81,7 +81,16 @@ if (['complete', 'manual_test'].includes(offlineStatus)) {
 } else {
   requireText('README.md', 'Offline mutation queues are deferred');
 }
-requireText('storage.rules', 'General receipts remain reserved');
+const receiptStatus = itemById.get('data.general_receipts')?.status;
+if (['complete', 'manual_test'].includes(receiptStatus)) {
+  requireText('src/features/transactions/TransactionsPage.tsx', 'Receipts & documents');
+  requireText('src/repositories/transactionRepository.ts', 'uploadTransactionAttachment');
+  requireText('functions/src/index.ts', 'export const registerTransactionAttachment');
+  requireText('firestore.rules', 'match /transactionAttachments/{attachmentId}');
+  requireText('TRANSACTION_RECEIPTS_ALPHA.md', 'images or PDF files');
+} else {
+  requireText('storage.rules', 'General receipts remain reserved');
+}
 
 const nativeConfirmFiles = [
   'src/features/transactions/TransactionsPage.tsx',
@@ -113,6 +122,7 @@ requireText('package.json', 'verify-recurring-transactions.mjs');
 requireText('package.json', 'verify-background-notifications.mjs');
 requireText('package.json', 'verify-household-funds-financial-health.mjs');
 requireText('package.json', 'verify-offline-sync.mjs');
+requireText('package.json', 'verify-transaction-receipts.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

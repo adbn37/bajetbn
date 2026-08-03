@@ -292,3 +292,17 @@ Notes: ____________________
 - [ ] Confirm Undo, bills, goals, shared payments and fund contributions still require internet.
 - [ ] Open two tabs, reconnect, and confirm duplicate-safe results.
 - [ ] Verify English/Malay, dark/light mode and mobile layouts without horizontal scrolling.
+
+
+## v0.11.12 — Transaction receipts and final scope audit
+
+- [ ] Attach an image to an income or expense record and open it again.
+- [ ] Attach a PDF and confirm the original file name is shown.
+- [ ] Reject unsupported files and files of 10 MB or larger.
+- [ ] Enforce the five-file limit without leaving unregistered metadata.
+- [ ] Remove one attachment and confirm the Storage object and metadata are gone.
+- [ ] Confirm a different user cannot read the attachment metadata or Storage file.
+- [ ] Confirm attachment controls require internet and do not enter the offline money queue.
+- [ ] Confirm account deletion removes transaction attachment metadata and private files.
+- [ ] Check mobile layout and long file names.
+- [ ] Review `FINAL_SCOPE_AUDIT.md` and keep `PRODUCTION_READINESS_GATE.md` at NO-GO until all remaining gates pass.

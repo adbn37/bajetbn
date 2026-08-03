@@ -66,9 +66,9 @@ assert.equal(pkg.version, release.version);
 assert.equal(pkg.scripts['verify:all-structural'].includes('verify-household-funds-financial-health.mjs'), true);
 
 const itemById = new Map(scope.items.map((item) => [item.id, item]));
-assert.equal(itemById.get('collab.household_fund')?.status, 'manual_test');
-assert.equal(itemById.get('insights.financial_health')?.status, 'manual_test');
-assert.equal(itemById.get('sme.essentials')?.status, 'manual_test');
+for (const id of ['collab.household_fund', 'insights.financial_health', 'sme.essentials']) {
+  assert.equal(['manual_test', 'complete'].includes(itemById.get(id)?.status), true, `${id} must remain implemented.`);
+}
 
 // Calculation checks mirror the source rules and catch accidental formula changes.
 const monthlyEquivalent = (amount, frequency) => {

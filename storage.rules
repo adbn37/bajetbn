@@ -37,9 +37,10 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
-    // General receipts remain reserved for v0.8.0.
+    // General transaction receipts are stored below users/{uid}/transaction-receipts.
+    // The user-scoped rule above limits access to the signed-in owner and accepts images/PDFs under 10 MB.
     match /spaces/{spaceId}/receipts/{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if false; // Reserved: transaction receipts must use the private user path.
     }
 
     match /{allPaths=**} {

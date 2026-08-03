@@ -1210,3 +1210,42 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   .offline-command-actions { align-items:stretch; flex-direction:column; }
   .offline-command-actions .button,.offline-command-actions .text-button { width:100%; min-height:42px; }
 }
+
+
+.transaction-attachments {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.transaction-attachments-heading,
+.transaction-attachment-row,
+.transaction-attachment-upload,
+.transaction-attachment-actions,
+.transaction-attachment-confirm {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+}
+.transaction-attachments-heading { justify-content: space-between; align-items: flex-start; }
+.transaction-attachments-heading h3 { margin: 0 0 .2rem; }
+.transaction-attachments-heading p { margin: 0; color: var(--text-muted); }
+.transaction-attachment-list { display: grid; gap: .55rem; margin: .8rem 0; }
+.transaction-attachment-row {
+  justify-content: space-between;
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  background: var(--surface-soft);
+}
+.transaction-attachment-row > div:first-child { min-width: 0; display: grid; gap: .15rem; }
+.transaction-attachment-row strong { overflow-wrap: anywhere; }
+.transaction-attachment-row small { color: var(--text-muted); }
+.transaction-attachment-upload { align-items: stretch; margin: .75rem 0; }
+.transaction-attachment-upload input { flex: 1; min-width: 0; }
+.transaction-attachment-confirm { flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .transaction-attachment-row,
+  .transaction-attachment-upload { align-items: stretch; flex-direction: column; }
+  .transaction-attachment-actions { width: 100%; }
+  .transaction-attachment-actions > * { flex: 1; text-align: center; }
+}

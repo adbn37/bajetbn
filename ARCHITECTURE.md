@@ -39,3 +39,8 @@ Firestore provides random technical document IDs. Separate display IDs such as `
 ## Offline path
 
 v0.11.11 enables a bounded IndexedDB queue for new Money activity only. Each local command keeps one stable idempotency key and is replayed through the trusted `postTransaction` Cloud Function. Temporary connection failures remain queued; current-state validation or permission conflicts move to Needs attention. Account balances are never changed locally. Other financial actions remain online-only until separately designed and approved.
+
+
+## Transaction attachments
+
+Receipt/document binaries use `users/{uid}/transaction-receipts/{transactionId}/...` in Storage. Server-controlled `transactionAttachments` metadata links each file to its owner, transaction and Space. Attachment actions never alter financial postings.

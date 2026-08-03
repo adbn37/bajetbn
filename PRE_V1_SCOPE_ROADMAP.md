@@ -95,3 +95,12 @@ The simple SME overview remains a separate pre-v1 item and is not silently bundl
 - Financial reversals and idempotency verified.
 - Mobile, desktop, English and Malay smoke tests passed.
 - Production rollback and backup procedures documented.
+
+
+## v0.11.12 — Final Scope Audit — Completed in source
+
+- [x] Reconcile the scope register with the confirmed v0.11.10 and v0.11.11 staging results.
+- [x] Implement general Money activity receipt/document attachments.
+- [x] Record zero remaining `missing` scope items.
+- [x] Add a final audit and an explicit production NO-GO checklist.
+- [ ] Complete the receipt attachment matrix and all remaining manual gates.

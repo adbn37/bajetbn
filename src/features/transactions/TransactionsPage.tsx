@@ -21,7 +21,15 @@ import { reverseSharedBillPayment } from '../../repositories/collaborationReposi
 import { createCategory, listAllCustomCategories, updateCategory } from '../../repositories/categoryRepository';
 import { manageCategory } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
-import { listTransactions, postTransaction, reverseTransaction } from '../../repositories/transactionRepository';
+import {
+  getTransactionAttachmentUrl,
+  listTransactionAttachments,
+  listTransactions,
+  postTransaction,
+  removeTransactionAttachment,
+  reverseTransaction,
+  uploadTransactionAttachment,
+} from '../../repositories/transactionRepository';
 import type {
   Account,
   CategoryKind,
@@ -29,6 +37,7 @@ import type {
   FinancialTransaction,
   PaymentMethodCode,
   Space,
+  TransactionAttachment,
   TransactionCategory,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
@@ -324,6 +333,7 @@ export function TransactionsPage() {
         destination={selectedTransaction.destinationAccountId ? accountMap.get(selectedTransaction.destinationAccountId) : undefined}
         space={spaceMap.get(selectedTransaction.spaceId)}
         category={selectedTransaction.categoryId ? categoryMap.get(selectedTransaction.categoryId) || transactionCategorySnapshot(selectedTransaction) : transactionCategorySnapshot(selectedTransaction)}
+        online={online}
         onClose={() => setSelectedTransaction(null)}
         onReverse={() => askReverse(selectedTransaction)}
       />}
@@ -480,15 +490,69 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
   </form></Modal>;
 }
 
-function TransactionDetails({ item, source, destination, space, category, onClose, onReverse }: {
+function TransactionDetails({ item, source, destination, space, category, online, onClose, onReverse }: {
   item: FinancialTransaction;
   source?: Account;
   destination?: Account;
   space?: Space;
   category: TransactionCategory;
+  online: boolean;
   onClose: () => void;
   onReverse: () => void;
 }) {
+  const [attachments, setAttachments] = useState<TransactionAttachment[]>([]);
+  const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [removeId, setRemoveId] = useState('');
+
+  const loadAttachments = async () => {
+    try {
+      const next = await listTransactionAttachments(item.id);
+      setAttachments(next);
+      const resolved = await Promise.all(next.map(async (attachment) => {
+        try { return [attachment.id, await getTransactionAttachmentUrl(attachment.storagePath)] as const; }
+        catch { return [attachment.id, ''] as const; }
+      }));
+      setAttachmentUrls(Object.fromEntries(resolved));
+    } catch (error) {
+      setAttachmentError(getErrorMessage(error));
+    }
+  };
+
+  useEffect(() => { void loadAttachments(); }, [item.id]);
+
+  async function addAttachment() {
+    if (!selectedFile || attachmentBusy) return;
+    setAttachmentBusy(true);
+    setAttachmentError('');
+    try {
+      await uploadTransactionAttachment({ transactionId: item.id, spaceId: item.spaceId, file: selectedFile });
+      setSelectedFile(null);
+      await loadAttachments();
+    } catch (error) {
+      setAttachmentError(getErrorMessage(error));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }
+
+  async function confirmRemoveAttachment() {
+    if (!removeId || attachmentBusy) return;
+    setAttachmentBusy(true);
+    setAttachmentError('');
+    try {
+      await removeTransactionAttachment(removeId);
+      setRemoveId('');
+      await loadAttachments();
+    } catch (error) {
+      setAttachmentError(getErrorMessage(error));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }
+
   return <Modal title="Money activity details" onClose={onClose}>
     <div className="transaction-detail-hero">
       <CategoryBadge category={category} />
@@ -514,6 +578,35 @@ function TransactionDetails({ item, source, destination, space, category, onClos
       {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
       {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
     </dl>
+
+    <section className="transaction-attachments" aria-labelledby="transaction-attachments-title">
+      <div className="transaction-attachments-heading">
+        <div><h3 id="transaction-attachments-title">Receipts & documents</h3><p>Keep up to five images or PDF files with this money activity.</p></div>
+        <span>{attachments.length}/5</span>
+      </div>
+      {attachments.length === 0 && <p className="muted">No receipt or document attached.</p>}
+      {attachments.length > 0 && <div className="transaction-attachment-list">
+        {attachments.map((attachment) => <div className="transaction-attachment-row" key={attachment.id}>
+          <div><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.sizeBytes / 1024))} KB</small></div>
+          {removeId === attachment.id ? <div className="transaction-attachment-confirm">
+            <span>Remove this file?</span>
+            <button type="button" className="button danger small" disabled={attachmentBusy} onClick={() => void confirmRemoveAttachment()}>Remove</button>
+            <button type="button" className="button secondary small" disabled={attachmentBusy} onClick={() => setRemoveId('')}>Keep</button>
+          </div> : <div className="transaction-attachment-actions">
+            {attachmentUrls[attachment.id] && <a className="button secondary small" href={attachmentUrls[attachment.id]} target="_blank" rel="noreferrer">Open</a>}
+            <button type="button" className="button ghost small" disabled={!online || attachmentBusy} onClick={() => setRemoveId(attachment.id)}>Remove</button>
+          </div>}
+        </div>)}
+      </div>}
+      {item.type !== 'reversal' && attachments.length < 5 && <div className="transaction-attachment-upload">
+        <input type="file" accept="image/*,application/pdf" disabled={!online || attachmentBusy} onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} />
+        <button type="button" className="button secondary" disabled={!online || !selectedFile || attachmentBusy} onClick={() => void addAttachment()}>{attachmentBusy ? 'Saving…' : 'Attach file'}</button>
+      </div>}
+      {!online && <div className="notice warning">Connect to the internet to add or remove receipts and documents.</div>}
+      {attachmentError && <div className="notice error">{attachmentError}</div>}
+      <small>Images and PDFs only. Maximum 10 MB per file.</small>
+    </section>
+
     <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button>{item.type !== 'reversal' && item.status === 'posted' && <button className="button danger" onClick={onReverse}>Undo this activity</button>}</div>
   </Modal>;
 }

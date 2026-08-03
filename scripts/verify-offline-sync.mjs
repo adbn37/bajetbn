@@ -6,7 +6,7 @@ const release = JSON.parse(read('release.json'));
 const pkg = JSON.parse(read('package.json'));
 const audit = JSON.parse(read('scope/pre-v1-scope.json'));
 
-assert.equal(release.version, '0.11.11', 'Offline Sync must use release v0.11.11.');
+assert.equal(release.version.localeCompare('0.11.11', undefined, { numeric: true }) >= 0, true, 'Offline Sync requires v0.11.11 or later.');
 assert.equal(pkg.version, release.version, 'package.json and release.json must match.');
 
 const checks = [
@@ -45,7 +45,7 @@ for (const [file, token, label] of checks) {
 
 const offlineItem = audit.items.find((item) => item.id === 'pwa.offline_mutations');
 assert.ok(offlineItem, 'Offline sync is missing from the pre-v1 scope register.');
-assert.equal(offlineItem.status, 'manual_test', 'Offline sync must remain manual_test until staging approval.');
+assert.equal(['manual_test', 'complete'].includes(offlineItem.status), true, 'Offline sync must remain implemented after staging approval.');
 assert.equal(offlineItem.gate, 'pre_v1', 'Offline sync must remain a pre-v1 gate.');
 
 const repository = read('src/repositories/transactionRepository.ts');
