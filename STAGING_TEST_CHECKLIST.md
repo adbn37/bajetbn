@@ -225,3 +225,38 @@ Notes: ____________________
 - [ ] Use an invalid/expired token and confirm the Function disables it safely.
 - [ ] Complete disposable-account deletion and confirm push-device records are removed.
 - [ ] Verify English/Malay and mobile layouts without horizontal scrolling.
+
+
+## v0.11.10 Household/group funds and financial health
+
+### Optional collected funds
+
+- [ ] Confirm Settings shows v0.11.10 and the matching release label.
+- [ ] Open a Household Space and confirm the optional Household fund tab appears.
+- [ ] Open a Custom shared Space and confirm the optional Group fund tab appears.
+- [ ] Confirm SME, Goal and Personal Spaces do not show a group-fund tab.
+- [ ] Set up a Household fund with an active holder and target.
+- [ ] Record member contributions using standard and custom payment methods.
+- [ ] Retry the same callable request and confirm idempotency prevents duplicate contributions.
+- [ ] Create a shared expense paid using collected Household fund and confirm available money reduces once.
+- [ ] Confirm the fund holder must be selected as the payer for a fund-paid expense.
+- [ ] Confirm an expense is blocked when the collected fund is too low.
+- [ ] Undo an unspent contribution and confirm collected/available totals reduce correctly.
+- [ ] Confirm undo is blocked after that money has already been spent.
+- [ ] Confirm direct member-to-member payment, proof upload and who-owes-whom still work without using the fund.
+- [ ] Repeat the main setup/contribution/expense flow for Trip money and confirm backward compatibility.
+
+### Financial health and SME reports
+
+- [ ] Record income and expenses for two months and confirm the savings rate.
+- [ ] Confirm a negative money-left month is clearly shown as needing attention.
+- [ ] Add budgets below 75%, near 100% and over 100% and confirm the pressure states.
+- [ ] Add weekly, monthly, quarterly and yearly commitments and verify the monthly estimate.
+- [ ] Confirm regular-payment load compares the monthly estimate with the selected month’s income.
+- [ ] Create an Emergency fund or Dana Darurat goal and confirm its progress is detected.
+- [ ] Confirm the no-emergency-goal state suggests creating one without blocking the report.
+- [ ] Confirm category changes compare the selected month with the previous month.
+- [ ] Confirm no financial-health card claims to be a credit score or investment advice.
+- [ ] Select an SME Space and confirm money in, money out, simple profit check, current cash position and next-30-day payments.
+- [ ] Confirm the SME cash explanation says an Account may also be used elsewhere.
+- [ ] Verify English/Malay wording, dark/light mode and mobile layouts without horizontal scrolling.

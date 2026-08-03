@@ -24,7 +24,7 @@ const checks = [
   ['registered invite notification', read('functions/src/index.ts').includes("type: 'invitation_received'")],
   ['joined Space notification', read('functions/src/index.ts').includes("type: 'space_joined'")],
   ['goal notification', read('functions/src/index.ts').includes("type:'goal_updated'")],
-  ['Trip contribution notification', read('functions/src/index.ts').includes("type: 'trip_contribution_added'")],
+  ['Trip contribution notification', read('functions/src/index.ts').includes("'trip_contribution_added'")],
   ['multi-member bill repository', read('src/repositories/collaborationRepository.ts').includes('createSharedBillAssignments')],
   ['multi-member bill callable', read('functions/src/index.ts').includes('export const createSharedBillAssignments')],
   ['equal bill splitting', read('src/features/collaboration/CollaborationPage.tsx').includes('Split equally')],

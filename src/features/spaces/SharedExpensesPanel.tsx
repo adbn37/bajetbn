@@ -52,7 +52,7 @@ function calculateWhoOwes(
   shares.forEach((share) => {
     if (share.amountLeftMinor <= 0) return;
     const expense = expenseMap.get(share.expenseId);
-    if (!expense || expense.paidFromTripMoney || share.memberUid === expense.paidByUid) return;
+    if (!expense || expense.paidFromGroupFund || expense.paidFromTripMoney || share.memberUid === expense.paidByUid) return;
     const key = `${share.memberUid}::${expense.paidByUid}`;
     const current = direct.get(key) || { fromUid: share.memberUid, toUid: expense.paidByUid, amountMinor: 0, expenseIds: new Set<string>() };
     current.amountMinor += share.amountLeftMinor;
@@ -212,7 +212,7 @@ export function SharedExpensesPanel({
           const mayPay = Boolean(mine && mine.amountLeftMinor > 0 && expense.paidByUid !== currentMember?.uid);
           const payer = memberMap.get(expense.paidByUid);
           return <article className={`shared-expense-card status-${expense.status}`} key={expense.id}>
-            <div className="planning-card-head"><div><span className="eyebrow">{expense.paidFromTripMoney ? 'Paid using Trip money' : expense.status === 'paid' ? 'Everyone paid' : 'Payment still open'}</span><h3>{expense.title}</h3></div><strong>{formatMoney(expense.totalMinor, expense.currency)}</strong></div>
+            <div className="planning-card-head"><div><span className="eyebrow">{expense.paidFromGroupFund || expense.paidFromTripMoney ? (space.type === 'trip' ? 'Paid using Trip money' : space.type === 'household' ? 'Paid using Household fund' : 'Paid using Group fund') : expense.status === 'paid' ? 'Everyone paid' : 'Payment still open'}</span><h3>{expense.title}</h3></div><strong>{formatMoney(expense.totalMinor, expense.currency)}</strong></div>
             <div className="planning-meta"><span>Paid by {memberLabel(payer)}</span><span>{expense.expenseDate}</span><span>{expense.splitMode === 'equal' ? 'Split equally' : expense.splitMode === 'custom' ? 'Different amounts' : 'By percentage'}</span></div>
             <div className="transaction-preview"><div><span>Paid back</span><strong>{formatMoney(expense.totalSettledMinor, expense.currency)}</strong></div><div><span>Still to pay</span><strong>{formatMoney(expense.amountLeftMinor, expense.currency)}</strong></div></div>
             {expense.note && <p>{expense.note}</p>}
@@ -239,7 +239,7 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
   const [selected, setSelected] = useState<Record<string, boolean>>(() => Object.fromEntries(members.map((item) => [item.uid, true])));
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [percentages, setPercentages] = useState<Record<string, string>>({});
-  const [paidFromTripMoney, setPaidFromTripMoney] = useState(false);
+  const [paidFromGroupFund, setPaidFromGroupFund] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -254,7 +254,7 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
         : splitMode === 'percentage'
           ? { memberUid: member.uid, percentageBasisPoints: Math.round(Number(percentages[member.uid] || 0) * 100) }
           : { memberUid: member.uid });
-      await createSharedExpense({ spaceId: space.id, title, totalMinor: toMinorUnits(total), expenseDate, paidByUid, splitMode, splits, note, paidFromTripMoney });
+      await createSharedExpense({ spaceId: space.id, title, totalMinor: toMinorUnits(total), expenseDate, paidByUid, splitMode, splits, note, paidFromGroupFund });
       await onSaved();
     } catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusy(false); }
@@ -266,7 +266,7 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
     <label>Total amount (BND)<input required inputMode="decimal" value={total} onChange={(event) => setTotal(event.target.value)} /></label>
     <label>Date<input type="date" required value={expenseDate} onChange={(event) => setExpenseDate(event.target.value)} /></label>
     <label>Who paid first?<select required value={paidByUid} onChange={(event) => setPaidByUid(event.target.value)}>{members.map((member) => <option key={member.uid} value={member.uid}>{memberLabel(member)}</option>)}</select></label>
-    {space.type === 'trip' && <label className="checkbox-label"><input type="checkbox" checked={paidFromTripMoney} onChange={(event) => setPaidFromTripMoney(event.target.checked)} /> Paid using collected Trip money</label>}
+    {(space.type === 'trip' || space.type === 'household' || space.type === 'custom') && <label className="checkbox-label"><input type="checkbox" checked={paidFromGroupFund} onChange={(event) => setPaidFromGroupFund(event.target.checked)} /> {space.type === 'trip' ? 'Paid using collected Trip money' : space.type === 'household' ? 'Paid using collected Household fund' : 'Paid using collected Group fund'}</label>}
     <label>How should it be split?<select value={splitMode} onChange={(event) => setSplitMode(event.target.value as SharedExpenseSplitMode)}><option value="equal">Split equally</option><option value="custom">Enter different amounts</option><option value="percentage">Split by percentage</option></select></label>
     <fieldset className="member-split-editor"><legend>Who should pay?</legend>{members.map((member) => <div className="member-split-row" key={member.uid}>
       <label className="checkbox-label"><input type="checkbox" checked={Boolean(selected[member.uid])} onChange={(event) => setSelected((current) => ({ ...current, [member.uid]: event.target.checked }))} /> {memberLabel(member)}</label>

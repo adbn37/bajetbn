@@ -567,6 +567,7 @@ export interface SharedExpense {
   splitMode: SharedExpenseSplitMode;
   note?: string;
   paidFromTripMoney?: boolean;
+  paidFromGroupFund?: boolean;
   status: SharedExpenseStatus;
   createdBy: string;
   closedAt?: Timestamp | null;
@@ -630,9 +631,13 @@ export interface SharedExpensePayment {
   updatedAt?: Timestamp;
 }
 
+export type SpaceFundKind = 'trip' | 'household' | 'group';
+
 export interface SpaceFund {
   id: string;
   spaceId: string;
+  kind?: SpaceFundKind;
+  label?: string;
   holderUid: string;
   holderName?: string;
   holderEmail?: string;
@@ -655,6 +660,8 @@ export interface SpaceFundContribution {
   amountMinor: number;
   currency: string;
   contributionDate: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
   note?: string;
   status: 'posted' | 'reversed';
   reversedAt?: Timestamp | null;

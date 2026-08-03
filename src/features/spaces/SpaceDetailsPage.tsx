@@ -32,9 +32,9 @@ import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
-import { TripMoneyPanel } from './TripMoneyPanel';
+import { SpaceFundPanel } from './SpaceFundPanel';
 
-type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money';
+type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund';
 
 const spaceTypeLabel: Record<SpaceType, string> = {
   personal: 'Personal',
@@ -47,7 +47,7 @@ const spaceTypeLabel: Record<SpaceType, string> = {
 
 function tabFromSearch(value: string | null, shared: boolean): SpaceDetailsTab {
   if (value === 'settings') return 'settings';
-  if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'activity')) return value;
+  if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity')) return value;
   return 'overview';
 }
 
@@ -163,11 +163,15 @@ export function SpaceDetailsPage() {
     </main>;
   }
 
+  const supportsGroupFund = space.type === 'trip' || space.type === 'household' || space.type === 'custom';
+  const fundTabId: SpaceDetailsTab = space.type === 'trip' ? 'trip_money' : 'group_fund';
+  const fundTabLabel = space.type === 'trip' ? 'Trip money' : space.type === 'household' ? 'Household fund' : 'Group fund';
+
   const tabs: Array<{ id: SpaceDetailsTab; label: string }> = shared
     ? [
       { id: 'overview', label: 'Overview' },
       { id: 'members', label: 'Members' },
-      ...(space.type === 'trip' ? [{ id: 'trip_money' as const, label: 'Trip money' }] : []),
+      ...(supportsGroupFund ? [{ id: fundTabId, label: fundTabLabel }] : []),
       { id: 'expenses', label: 'Shared expenses' },
       { id: 'balances', label: 'Who owes whom' },
       { id: 'bills', label: 'Shared bills' },
@@ -212,7 +216,7 @@ export function SpaceDetailsPage() {
       openBills={openBills}
       memberCount={activeMembers.length}
       openSharedBillCount={openSharedBills.length + openSharedExpenses.length}
-    /> : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && activeTab === 'trip_money' && space.type === 'trip' ? <TripMoneyPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
+    /> : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
       <CollaborationPage embedded spaceIdOverride={space.id} activeTab={activeTab as CollaborationTab} onSpaceUpdated={load} />
       {activeTab === 'settings' && currentMember?.role === 'owner' && <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />}
     </> : <PersonalSpaceSettings space={space} />}

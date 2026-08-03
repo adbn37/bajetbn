@@ -186,3 +186,8 @@ See `BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md`. Accounts support common Brunei pres
 ## v0.11.9 background notifications
 
 See `BACKGROUND_NOTIFICATIONS_ALPHA.md`. Scheduled Functions prepare due-soon, due-today, late and goal-date reminders even when the app is closed. Reminder document IDs are deterministic, so retries do not create duplicates. Optional browser/device delivery requires `VITE_FIREBASE_VAPID_KEY` in the staging Cloudflare environment.
+
+
+## v0.11.10 Household/group funds and financial health
+
+See `HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md`. Household and Custom Spaces can optionally track collected group money without replacing direct member payments. Money reports add savings rate, budget pressure, regular-payment load, emergency-fund progress, month-to-month category changes, simple next steps and a selected-SME overview.

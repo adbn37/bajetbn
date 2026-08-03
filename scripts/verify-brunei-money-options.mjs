@@ -27,7 +27,7 @@ for (const file of [
   'src/features/recurring/RecurringTransactionsPage.tsx',
   'src/features/collaboration/CollaborationPage.tsx',
   'src/features/spaces/SharedExpensesPanel.tsx',
-  'src/features/spaces/TripMoneyPanel.tsx',
+  'src/features/spaces/SpaceFundPanel.tsx',
   'src/features/commitments/CommitmentsPage.tsx',
 ]) includes(file, ['PaymentMethodField']);
 includes('src/types/models.ts', ['export type InstitutionCode', 'export type PaymentMethodCode', 'institutionCode?: InstitutionCode', 'paymentMethod?: PaymentMethodCode']);

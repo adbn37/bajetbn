@@ -50,7 +50,7 @@ The v0.11.9 source creates reminders from scheduled Functions and can optionally
 
 ### Optional Household/general group fund
 
-Trip money is implemented, but collected-money handling is limited to Trip Spaces. The agreed Household/group model requires an optional fund that can be enabled where useful without forcing every family or group to use a wallet.
+v0.11.10 source extends the proven Trip-money flow to optional Household and Custom Space funds. Direct member-to-member payment, proof upload and who-owes-whom flows remain available. This item is now a staging-test gate for permissions, duplicate retries, contribution reversal and mobile use.
 
 ### Brunei account and payment presets
 
@@ -58,11 +58,11 @@ Common Brunei institutions and clear payment-method choices are implemented in v
 
 ### SME essentials
 
-SME Spaces, business Accounts and business categories exist. The minimum SME experience still needs a simple business overview: money in, money out, current cash position, upcoming commitments and a basic profit/cash summary. Advanced BusinessBajetBN remains deferred.
+v0.11.10 source adds a selected-SME report with money in, money out, a simple profit check, current balances for accounts used by that SME and payments due during the next 30 days. It remains a staging-test gate because Accounts stay independent and the explanation must be clear in real use. Advanced BusinessBajetBN remains deferred.
 
 ### Financial-health insights
 
-Current reports provide useful totals and notes. The agreed financial-health direction needs clearer actionable indicators such as savings rate, budget pressure, emergency-fund progress, recurring commitment load and simple trend warnings.
+v0.11.10 source adds savings rate, budget pressure, emergency-fund progress, regular-payment load, category changes and simple next steps. It remains a staging-test gate until calculations, empty states, English/Malay wording and mobile layouts are approved with realistic data.
 
 ## Historic roadmap items requiring an explicit v1 decision
 

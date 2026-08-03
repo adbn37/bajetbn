@@ -13,6 +13,7 @@ import type { Account, Budget, Commitment, FinancialTransaction, SavingsGoal, Sp
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import { localeForLanguage } from '../../services/i18n';
+import { buildFinancialHealth, sumAccountBalances } from './financialHealth';
 
 interface AmountBarItem {
   id: string;
@@ -222,6 +223,45 @@ export function ReportsPage() {
   const budgetSpent = shownBudgets.reduce((sum, item) => sum + item.reportSpentMinor, 0);
   const budgetsOver = shownBudgets.filter((item) => item.reportSpentMinor > item.limitMinor).length;
 
+  const healthCommitments = useMemo(() => commitments.filter((item) => (
+    item.status === 'active'
+    && !item.archivedAt
+    && !item.stoppedAt
+    && (!selectedSpace || item.spaceId === selectedSpace)
+    && (!selectedAccount || item.accountId === selectedAccount)
+    && (!selectedCategory || item.categoryId === selectedCategory)
+  )), [commitments, selectedSpace, selectedAccount, selectedCategory]);
+
+  const financialHealth = useMemo(() => buildFinancialHealth({
+    moneyIn,
+    moneyOut,
+    budgets: shownBudgets,
+    commitments: healthCommitments,
+    goals: shownGoals,
+    currentTransactions: filteredTransactions,
+    previousTransactions,
+    formatAmount: (amountMinor) => formatMoney(amountMinor, currency),
+  }), [moneyIn, moneyOut, shownBudgets, healthCommitments, shownGoals, filteredTransactions, previousTransactions, currency]);
+
+  const selectedSpaceRecord = spaces.find((item) => item.id === selectedSpace) || null;
+  const selectedSpaceAccountIds = useMemo(() => new Set(transactions.filter((item) => (
+    item.spaceId === selectedSpace && item.status === 'posted'
+  )).flatMap((item) => [item.accountId, item.destinationAccountId || '']).filter(Boolean)), [transactions, selectedSpace]);
+  const selectedSmeAccounts = accounts.filter((item) => selectedSpaceAccountIds.has(item.id) && !item.closedAt);
+  const selectedSmeCashPosition = sumAccountBalances(selectedSmeAccounts);
+  const thirtyDaysFromToday = new Date();
+  thirtyDaysFromToday.setDate(thirtyDaysFromToday.getDate() + 30);
+  const thirtyDayDate = thirtyDaysFromToday.toISOString().slice(0, 10);
+  const selectedSmeUpcoming = commitments.filter((item) => (
+    selectedSpaceRecord?.type === 'sme'
+    && item.spaceId === selectedSpaceRecord.id
+    && item.status === 'active'
+    && !item.archivedAt
+    && !item.stoppedAt
+    && Boolean(item.nextDueDate && item.nextDueDate >= today && item.nextDueDate <= thirtyDayDate)
+  ));
+  const selectedSmeUpcomingMinor = selectedSmeUpcoming.reduce((sum, item) => sum + item.amountMinor, 0);
+
   const helpfulNotes = useMemo(() => {
     const notes: string[] = [];
     if (!filteredTransactions.length) notes.push('There is no money activity for these filters yet. Add income or an expense to see a report.');
@@ -260,6 +300,41 @@ export function ReportsPage() {
       <article className={`summary-card ${moneyLeft < 0 ? 'report-warning-card' : ''}`}><span>Money left</span><strong>{loading ? '—' : formatMoney(moneyLeft, currency)}</strong><small>Money in minus money out</small></article>
       <article className="summary-card"><span>Activity shown</span><strong>{loading ? '—' : filteredTransactions.length}</strong><small>{selectedMonth ? monthName(selectedMonth, locale) : 'All time'}</small></article>
     </section>
+
+    <section className="panel financial-health-panel" aria-labelledby="financial-health-title">
+      <div className="panel-heading"><div><span className="eyebrow">Money health</span><h2 id="financial-health-title">Financial health check</h2><p>Simple indicators based on the month and filters shown above.</p></div></div>
+      <div className="financial-health-grid">
+        {financialHealth.indicators.map((indicator) => <article className={`health-card tone-${indicator.tone}`} key={indicator.id}>
+          <div className="health-card-heading"><span>{indicator.label}</span><strong>{indicator.value}</strong></div>
+          {indicator.progress !== null && indicator.progress !== undefined && <div className="health-progress" aria-label={`${indicator.label}: ${indicator.progress}%`}><span style={{ width: `${indicator.progress}%` }} /></div>}
+          <small>{indicator.detail}</small>
+        </article>)}
+      </div>
+    </section>
+
+    <section className="reports-grid health-detail-grid">
+      <article className="panel report-panel"><div className="panel-heading"><div><span className="eyebrow">Month-to-month</span><h2>Spending changes</h2></div></div>
+        <div className="spending-trend-list">{financialHealth.categoryTrends.length ? financialHealth.categoryTrends.map((item) => <div className={`spending-trend-row direction-${item.direction}`} key={item.id}>
+          <div><strong>{item.label}</strong><small>{formatMoney(item.previousMinor, currency)} → {formatMoney(item.currentMinor, currency)}</small></div>
+          <b>{item.direction === 'same' ? 'No change' : `${item.direction === 'up' ? '+' : '−'}${formatMoney(Math.abs(item.differenceMinor), currency)}`}</b>
+        </div>) : <div className="report-empty">Add spending in two months to see changes.</div>}</div>
+      </article>
+      <article className="panel report-panel"><div className="panel-heading"><div><span className="eyebrow">Next steps</span><h2>What to check next</h2></div></div>
+        <div className="health-action-list">{financialHealth.nextSteps.map((step, index) => <div key={step}><span>{index + 1}</span><p>{step}</p></div>)}</div>
+      </article>
+    </section>
+
+    {selectedSpaceRecord?.type === 'sme' && <section className="panel sme-health-panel">
+      <div className="panel-heading"><div><span className="eyebrow">SME overview</span><h2>{selectedSpaceRecord.name}</h2><p>A simple business view for the selected month.</p></div></div>
+      <div className="summary-grid sme-health-grid">
+        <article className="summary-card featured"><span>Business money in</span><strong>{formatMoney(moneyIn, currency)}</strong><small>Income recorded in this SME Space</small></article>
+        <article className="summary-card"><span>Business money out</span><strong>{formatMoney(moneyOut, currency)}</strong><small>Expenses recorded in this SME Space</small></article>
+        <article className={`summary-card ${moneyLeft < 0 ? 'report-warning-card' : ''}`}><span>Simple profit check</span><strong>{formatMoney(moneyLeft, currency)}</strong><small>Money in minus money out</small></article>
+        <article className="summary-card"><span>Current cash position</span><strong>{formatMoney(selectedSmeCashPosition, currency)}</strong><small>{selectedSmeAccounts.length} account{selectedSmeAccounts.length === 1 ? '' : 's'} used by this SME</small></article>
+      </div>
+      <div className="sme-upcoming-strip"><div><span>Upcoming payments — next 30 days</span><strong>{formatMoney(selectedSmeUpcomingMinor, currency)}</strong></div><small>{selectedSmeUpcoming.length} bill{selectedSmeUpcoming.length === 1 ? '' : 's'} or instalment{selectedSmeUpcoming.length === 1 ? '' : 's'} coming up.</small></div>
+      <div className="report-data-note">The cash position uses the current balances of accounts that have been used by this SME Space. Those accounts may also be used elsewhere.</div>
+    </section>}
 
     <section className="reports-grid">
       <article className="panel report-panel"><div className="panel-heading"><div><span className="eyebrow">Spending</span><h2>Where your money went</h2></div></div><AmountBars items={spendingByCategory} currency={currency} emptyText="No spending found for these filters." /></article>

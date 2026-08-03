@@ -53,7 +53,7 @@ const dialogUsers = [
   'src/features/transactions/TransactionsPage.tsx',
   'src/features/goals/GoalsPage.tsx',
   'src/features/spaces/SharedExpensesPanel.tsx',
-  'src/features/spaces/TripMoneyPanel.tsx',
+  'src/features/spaces/SpaceFundPanel.tsx',
   'src/features/collaboration/CollaborationPage.tsx',
 ];
 for (const file of dialogUsers) {
