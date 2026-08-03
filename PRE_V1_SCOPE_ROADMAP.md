@@ -59,12 +59,15 @@ The simple SME overview remains a separate pre-v1 item and is not silently bundl
 - [x] Update unread counts in real time and add a safe manual reminder check.
 - [ ] Deploy rules and Functions, configure the staging Web Push public key and complete the notification test matrix.
 
-## v0.11.10 — Household/Group Funds and Financial Health
+## v0.11.10 — Household/Group Funds and Financial Health — Completed in source
 
-- Add an optional Household/general Space fund using the proven Trip-money pattern.
-- Keep direct member-to-member payment and proof-only flows available.
-- Add savings rate, commitment load, budget pressure and emergency-fund indicators.
-- Confirm English/Malay wording and mobile layouts.
+- [x] Add an optional Household/general Space fund using the proven Trip-money pattern.
+- [x] Keep direct member-to-member payment and proof-only flows available.
+- [x] Add savings rate, commitment load, budget pressure and emergency-fund indicators.
+- [x] Add month-to-month spending changes and beginner-friendly next steps.
+- [x] Add a simple SME overview for money in, money out, cash position and upcoming payments.
+- [x] Add English/Malay wording and responsive mobile layouts.
+- [ ] Deploy changed Functions and complete the v0.11.10 staging matrix.
 
 ## v0.12.0 — Scope-complete Beta
 

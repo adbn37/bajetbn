@@ -66,6 +66,7 @@ export async function createSharedExpense(input: {
   splits: SharedExpenseSplitInput[];
   note?: string;
   paidFromTripMoney?: boolean;
+  paidFromGroupFund?: boolean;
 }): Promise<{ expenseId: string }> {
   const { functions } = requireFirebase();
   const result = await httpsCallable<typeof input & { idempotencyKey: string }, { expenseId: string }>(
@@ -126,16 +127,16 @@ export async function reverseSharedExpensePayment(input: {
   return httpsCallable(functions, 'reverseSharedExpensePayment')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
-export async function updateTripMoneySettings(input: {
+export async function updateSpaceFundSettings(input: {
   spaceId: string;
   holderUid: string;
   budgetMinor: number;
 }) {
   const { functions } = requireFirebase();
-  return httpsCallable(functions, 'updateTripMoneySettings')({ ...input, idempotencyKey: crypto.randomUUID() });
+  return httpsCallable(functions, 'updateSpaceFundSettings')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
-export async function recordTripMoneyContribution(input: {
+export async function recordSpaceFundContribution(input: {
   spaceId: string;
   memberUid: string;
   amountMinor: number;
@@ -145,10 +146,16 @@ export async function recordTripMoneyContribution(input: {
   note?: string;
 }) {
   const { functions } = requireFirebase();
-  return httpsCallable(functions, 'recordTripMoneyContribution')({ ...input, idempotencyKey: crypto.randomUUID() });
+  return httpsCallable(functions, 'recordSpaceFundContribution')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
-export async function reverseTripMoneyContribution(contributionId: string) {
+export async function reverseSpaceFundContribution(contributionId: string) {
   const { functions } = requireFirebase();
-  return httpsCallable(functions, 'reverseTripMoneyContribution')({ contributionId, idempotencyKey: crypto.randomUUID() });
+  return httpsCallable(functions, 'reverseSpaceFundContribution')({ contributionId, idempotencyKey: crypto.randomUUID() });
 }
+
+
+// Backward-compatible names for older Trip-money clients.
+export const updateTripMoneySettings = updateSpaceFundSettings;
+export const recordTripMoneyContribution = recordSpaceFundContribution;
+export const reverseTripMoneyContribution = reverseSpaceFundContribution;

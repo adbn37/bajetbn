@@ -79,6 +79,7 @@ const nativeConfirmFiles = [
   'src/features/goals/GoalsPage.tsx',
   'src/features/spaces/SharedExpensesPanel.tsx',
   'src/features/spaces/TripMoneyPanel.tsx',
+  'src/features/spaces/SpaceFundPanel.tsx',
   'src/features/collaboration/CollaborationPage.tsx',
 ];
 const nativeConfirmOffenders = nativeConfirmFiles.filter((file) => /\b(?:window\.)?(?:confirm|alert)\s*\(/.test(read(file)));
@@ -101,6 +102,7 @@ requireText('package.json', 'verify-release-safety-hardening.mjs');
 requireText('package.json', 'verify-account-data-deletion.mjs');
 requireText('package.json', 'verify-recurring-transactions.mjs');
 requireText('package.json', 'verify-background-notifications.mjs');
+requireText('package.json', 'verify-household-funds-financial-health.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

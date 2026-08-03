@@ -15,8 +15,8 @@ const includes = (file, tokens) => {
 
 const release = JSON.parse(read('release.json'));
 const packageJson = JSON.parse(read('package.json'));
-if (release.version !== '0.11.9' || packageJson.version !== '0.11.9') fail('Background notifications require BajetBN v0.11.9.');
-if (!release.label.includes('Background Notifications')) fail('release.json is missing the background-notification label.');
+if (release.version.localeCompare('0.11.9', undefined, { numeric: true }) < 0) fail('Background notifications require BajetBN v0.11.9 or later.');
+if (packageJson.version !== release.version) fail('package.json and release.json versions do not match.');
 
 includes('functions/src/index.ts', [
   "export const generateBackgroundReminders = onSchedule",

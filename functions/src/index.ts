@@ -3,7 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { getMessaging } from 'firebase-admin/messaging';
 import { FieldPath, FieldValue, getFirestore, Timestamp, type DocumentData, type DocumentReference, type Query, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { createHash, randomBytes } from 'node:crypto';
 
@@ -142,6 +142,13 @@ function commandId(uid: string, key: string): string {
 function positiveMoney(value: unknown): number {
   if (!Number.isSafeInteger(value) || Number(value) <= 0 || Number(value) > 99_999_999_999) {
     throw new HttpsError('invalid-argument', 'Amount must be a positive safe integer in minor units.');
+  }
+  return Number(value);
+}
+
+function nonNegativeMoney(value: unknown): number {
+  if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) > 99_999_999_999) {
+    throw new HttpsError('invalid-argument', 'Amount must be zero or more in minor units.');
   }
   return Number(value);
 }
@@ -2890,6 +2897,15 @@ const sharedExpenseSplitModes = ['equal', 'custom', 'percentage'] as const;
 const sharedExpensePaymentDecisions = ['confirmed', 'rejected'] as const;
 type SharedExpenseSplitMode = (typeof sharedExpenseSplitModes)[number];
 
+type SpaceFundKind = 'trip' | 'household' | 'group';
+interface SpaceFundMeta { kind: SpaceFundKind; title: string; contributionPrefix: string; tab: string; }
+function spaceFundMeta(spaceType: string): SpaceFundMeta | null {
+  if (spaceType === 'trip') return { kind: 'trip', title: 'Trip money', contributionPrefix: 'TMC', tab: 'trip_money' };
+  if (spaceType === 'household') return { kind: 'household', title: 'Household fund', contributionPrefix: 'HFC', tab: 'group_fund' };
+  if (spaceType === 'custom') return { kind: 'group', title: 'Group fund', contributionPrefix: 'GFC', tab: 'group_fund' };
+  return null;
+}
+
 interface SharedExpenseSplitRequest {
   memberUid: string;
   amountMinor?: number;
@@ -3117,7 +3133,7 @@ export const createSharedExpense = onCall({ region }, async (request) => {
   const splitMode = oneOf(request.data?.splitMode, sharedExpenseSplitModes, 'split method');
   const requests = parseSharedExpenseSplits(request.data?.splits);
   const note = optionalString(request.data?.note, 500);
-  const paidFromTripMoney = request.data?.paidFromTripMoney === true;
+  const paidFromGroupFund = request.data?.paidFromGroupFund === true || request.data?.paidFromTripMoney === true;
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const creator = await requireActiveSpaceMember(spaceId, uid);
   if (!['owner', 'admin', 'contributor'].includes(String(creator.role))) {
@@ -3154,17 +3170,18 @@ export const createSharedExpense = onCall({ region }, async (request) => {
     const space = spaceSnapshot.data() || {};
     const currency = String(space.currency || 'BND');
     const now = FieldValue.serverTimestamp();
-    const groupMoney = paidFromTripMoney;
+    const groupMoney = paidFromGroupFund;
     if (groupMoney) {
-      if (space.type !== 'trip') throw new HttpsError('failed-precondition', 'Group money is available only in Trip Spaces.');
-      if (!fundSnapshot.exists) throw new HttpsError('failed-precondition', 'Set up Trip money before using it.');
+      const fundMeta = spaceFundMeta(String(space.type || ''));
+      if (!fundMeta) throw new HttpsError('failed-precondition', 'A collected group fund is not available for this Space type.');
+      if (!fundSnapshot.exists) throw new HttpsError('failed-precondition', `Set up ${fundMeta.title} before using it.`);
       const fund = fundSnapshot.data() || {};
-      if (fund.holderUid !== paidByUid) throw new HttpsError('failed-precondition', 'Choose the person holding the Trip money as the payer.');
-      if (safeMinor(fund.availableMinor, 'Trip money available') < totalMinor) throw new HttpsError('failed-precondition', 'There is not enough Trip money available for this expense.');
-      const spentMinor = safeMinor(fund.spentMinor, 'Trip money spent') + totalMinor;
+      if (fund.holderUid !== paidByUid) throw new HttpsError('failed-precondition', `Choose the person holding ${fundMeta.title} as the payer.`);
+      if (safeMinor(fund.availableMinor, `${fundMeta.title} available`) < totalMinor) throw new HttpsError('failed-precondition', `There is not enough ${fundMeta.title} available for this expense.`);
+      const spentMinor = safeMinor(fund.spentMinor, `${fundMeta.title} spent`) + totalMinor;
       transaction.update(fundRef, {
         spentMinor,
-        availableMinor: safeMinor(fund.contributedMinor, 'Trip money collected') - spentMinor,
+        availableMinor: safeMinor(fund.contributedMinor, `${fundMeta.title} collected`) - spentMinor,
         updatedAt: now,
       });
     }
@@ -3187,7 +3204,8 @@ export const createSharedExpense = onCall({ region }, async (request) => {
       paidByEmail: payerSnapshot.data()?.email || '',
       splitMode,
       note,
-      paidFromTripMoney: groupMoney,
+      paidFromGroupFund: groupMoney,
+      paidFromTripMoney: groupMoney && space.type === 'trip',
       status: amountLeftMinor === 0 ? 'paid' : 'open',
       createdBy: uid,
       closedAt: amountLeftMinor === 0 ? now : null,
@@ -3235,7 +3253,7 @@ export const createSharedExpense = onCall({ region }, async (request) => {
       action: 'shared_expense_created',
       targetType: 'shared_expense',
       targetId: expenseRef.id,
-      summary: `Added ${title} for ${totalMinor / 100} ${currency}${groupMoney ? ' using Trip money' : ''}.`,
+      summary: `Added ${title} for ${totalMinor / 100} ${currency}${groupMoney ? ` using ${spaceFundMeta(String(space.type || ''))?.title || 'group fund'}` : ''}.`,
       now,
     });
     const result = { expenseId: expenseRef.id };
@@ -3410,11 +3428,11 @@ export const reverseSharedExpensePayment = onCall({ region }, async (request) =>
   });
 });
 
-export const updateTripMoneySettings = onCall({ region }, async (request) => {
+async function updateSpaceFundSettingsHandler(request: CallableRequest<Record<string, unknown>>) {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
-  const holderUid = stringValue(request.data?.holderUid, 'Person holding the money', 128);
-  const budgetMinor = request.data?.budgetMinor === 0 ? 0 : positiveMoney(request.data?.budgetMinor);
+  const holderUid = stringValue(request.data?.holderUid, 'Money holder', 128);
+  const requestedBudgetMinor = request.data?.budgetMinor;
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const manager = await requireSpaceManager(spaceId, uid);
   const spaceRef = db.collection('spaces').doc(spaceId);
@@ -3424,21 +3442,36 @@ export const updateTripMoneySettings = onCall({ region }, async (request) => {
   return db.runTransaction(async (transaction) => {
     const [command, space, holder, fund] = await Promise.all([transaction.get(commandRef), transaction.get(spaceRef), transaction.get(holderRef), transaction.get(fundRef)]);
     if (command.exists) return command.data()?.result;
-    if (!space.exists || space.data()?.type !== 'trip' || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active Trip Space.');
-    if (!holder.exists || ['suspended', 'removed'].includes(String(holder.data()?.status || ''))) throw new HttpsError('failed-precondition', 'Choose an active member to hold the Trip money.');
+    const fundMeta = spaceFundMeta(String(space.data()?.type || ''));
+    if (!space.exists || !fundMeta || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active Trip, Household, or Custom Space.');
+    if (!holder.exists || ['suspended', 'removed'].includes(String(holder.data()?.status || ''))) throw new HttpsError('failed-precondition', `Choose an active member to hold ${fundMeta.title}.`);
+    const budgetMinor = fundMeta.kind === 'trip' ? positiveMoney(requestedBudgetMinor) : nonNegativeMoney(requestedBudgetMinor);
     const now = FieldValue.serverTimestamp();
-    const contributedMinor = fund.exists ? safeMinor(fund.data()?.contributedMinor, 'Trip money collected') : 0;
-    const spentMinor = fund.exists ? safeMinor(fund.data()?.spentMinor, 'Trip money spent') : 0;
-    const values = { spaceId, holderUid, holderName: holder.data()?.displayName || '', holderEmail: holder.data()?.email || '', budgetMinor, contributedMinor, spentMinor, availableMinor: contributedMinor - spentMinor, currency: space.data()?.currency || 'BND', updatedAt: now };
+    const contributedMinor = fund.exists ? safeMinor(fund.data()?.contributedMinor, `${fundMeta.title} collected`) : 0;
+    const spentMinor = fund.exists ? safeMinor(fund.data()?.spentMinor, `${fundMeta.title} spent`) : 0;
+    const values = {
+      spaceId,
+      kind: fundMeta.kind,
+      label: fundMeta.title,
+      holderUid,
+      holderName: holder.data()?.displayName || '',
+      holderEmail: holder.data()?.email || '',
+      budgetMinor,
+      contributedMinor,
+      spentMinor,
+      availableMinor: contributedMinor - spentMinor,
+      currency: space.data()?.currency || 'BND',
+      updatedAt: now,
+    };
     if (fund.exists) transaction.update(fundRef, values); else transaction.create(fundRef, { ...values, createdAt: now });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'trip_money_settings_updated', targetType: 'space_fund', targetId: spaceId, summary: `Updated the Trip budget and person holding the money.`, now });
-    const result = { spaceId };
-    transaction.create(commandRef, { uid, kind: 'update_trip_money_settings', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'space_fund_settings_updated', targetType: 'space_fund', targetId: spaceId, summary: `Updated ${fundMeta.title} and the person holding the money.`, now });
+    const result = { spaceId, kind: fundMeta.kind };
+    transaction.create(commandRef, { uid, kind: 'update_space_fund_settings', idempotencyKey: key, result, createdAt: now });
     return result;
   });
-});
+}
 
-export const recordTripMoneyContribution = onCall({ region }, async (request) => {
+async function recordSpaceFundContributionHandler(request: CallableRequest<Record<string, unknown>>) {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
@@ -3449,61 +3482,93 @@ export const recordTripMoneyContribution = onCall({ region }, async (request) =>
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const actor = await requireActiveSpaceMember(spaceId, uid);
   if (uid !== memberUid && !['owner', 'admin'].includes(String(actor.role))) throw new HttpsError('permission-denied', 'You can record only your own contribution.');
+  const spaceRef = db.collection('spaces').doc(spaceId);
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`);
   const fundRef = db.collection('spaceFunds').doc(spaceId);
   const contributionRef = db.collection('spaceFundContributions').doc();
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
-    const [command, member, fund] = await Promise.all([transaction.get(commandRef), transaction.get(memberRef), transaction.get(fundRef)]);
+    const [command, space, member, fund] = await Promise.all([transaction.get(commandRef), transaction.get(spaceRef), transaction.get(memberRef), transaction.get(fundRef)]);
     if (command.exists) return command.data()?.result;
-    if (!member.exists || ['suspended', 'removed'].includes(String(member.data()?.status || ''))) throw new HttpsError('failed-precondition', 'Choose an active Trip member.');
-    if (!fund.exists) throw new HttpsError('failed-precondition', 'Set up Trip money first.');
+    const fundMeta = spaceFundMeta(String(space.data()?.type || ''));
+    if (!space.exists || !fundMeta || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active Trip, Household, or Custom Space.');
+    if (!member.exists || ['suspended', 'removed'].includes(String(member.data()?.status || ''))) throw new HttpsError('failed-precondition', 'Choose an active member.');
+    if (!fund.exists) throw new HttpsError('failed-precondition', `Set up ${fundMeta.title} first.`);
     const now = FieldValue.serverTimestamp();
-    const contributedMinor = safeMinor(fund.data()?.contributedMinor, 'Trip money collected') + amountMinor;
-    const spentMinor = safeMinor(fund.data()?.spentMinor, 'Trip money spent');
-    transaction.create(contributionRef, { displayId: displayId('TMC'), spaceId, memberUid, memberName: member.data()?.displayName || '', memberEmail: member.data()?.email || '', amountMinor, currency: fund.data()?.currency || 'BND', contributionDate, paymentMethod, paymentMethodLabel, note, status: 'posted', reversedAt: null, reversedBy: null, createdBy: uid, createdAt: now, updatedAt: now });
+    const contributedMinor = safeMinor(fund.data()?.contributedMinor, `${fundMeta.title} collected`) + amountMinor;
+    const spentMinor = safeMinor(fund.data()?.spentMinor, `${fundMeta.title} spent`);
+    transaction.create(contributionRef, {
+      displayId: displayId(fundMeta.contributionPrefix),
+      spaceId,
+      fundKind: fundMeta.kind,
+      memberUid,
+      memberName: member.data()?.displayName || '',
+      memberEmail: member.data()?.email || '',
+      amountMinor,
+      currency: fund.data()?.currency || 'BND',
+      contributionDate,
+      paymentMethod,
+      paymentMethodLabel,
+      note,
+      status: 'posted',
+      reversedAt: null,
+      reversedBy: null,
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    });
     transaction.update(fundRef, { contributedMinor, availableMinor: contributedMinor - spentMinor, updatedAt: now });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: actor.displayName, action: 'trip_money_contribution', targetType: 'space_fund_contribution', targetId: contributionRef.id, summary: `${member.data()?.displayName || 'A member'} added ${amountMinor / 100} ${fund.data()?.currency || 'BND'} to the Trip money.`, now });
-    createNotification(transaction, { uid: memberUid, spaceId, type: 'trip_contribution_added', title: 'Trip contribution added', message: `${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'} was added to the Trip money for ${member.data()?.displayName || 'you'}.`, targetPath: `/spaces/${spaceId}?tab=trip_money`, actionLabel: 'Open Trip money', now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: actor.displayName, action: 'space_fund_contribution', targetType: 'space_fund_contribution', targetId: contributionRef.id, summary: `${member.data()?.displayName || 'A member'} added ${amountMinor / 100} ${fund.data()?.currency || 'BND'} to ${fundMeta.title}.`, now });
+    createNotification(transaction, { uid: memberUid, spaceId, type: fundMeta.kind === 'trip' ? 'trip_contribution_added' : 'space_fund_contribution_added', title: `${fundMeta.title} contribution added`, message: `${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'} was added for ${member.data()?.displayName || 'you'}.`, targetPath: `/spaces/${spaceId}?tab=${fundMeta.tab}`, actionLabel: `Open ${fundMeta.title}`, now });
     const holderUid = String(fund.data()?.holderUid || '');
-    if (holderUid && holderUid !== memberUid) createNotification(transaction, { uid: holderUid, spaceId, type: 'trip_contribution_received', title: 'Trip money received', message: `${member.data()?.displayName || 'A member'} added ${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'}.`, targetPath: `/spaces/${spaceId}?tab=trip_money`, actionLabel: 'Open Trip money', now });
-    const result = { contributionId: contributionRef.id };
-    transaction.create(commandRef, { uid, kind: 'record_trip_money_contribution', idempotencyKey: key, result, createdAt: now });
+    if (holderUid && holderUid !== memberUid) createNotification(transaction, { uid: holderUid, spaceId, type: fundMeta.kind === 'trip' ? 'trip_contribution_received' : 'space_fund_contribution_received', title: `${fundMeta.title} received`, message: `${member.data()?.displayName || 'A member'} added ${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'}.`, targetPath: `/spaces/${spaceId}?tab=${fundMeta.tab}`, actionLabel: `Open ${fundMeta.title}`, now });
+    const result = { contributionId: contributionRef.id, kind: fundMeta.kind };
+    transaction.create(commandRef, { uid, kind: 'record_space_fund_contribution', idempotencyKey: key, result, createdAt: now });
     return result;
   });
-});
+}
 
-export const reverseTripMoneyContribution = onCall({ region }, async (request) => {
+async function reverseSpaceFundContributionHandler(request: CallableRequest<Record<string, unknown>>) {
   const uid = requireAuth(request.auth?.uid);
   const contributionId = stringValue(request.data?.contributionId, 'Contribution ID', 80);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const contributionRef = db.collection('spaceFundContributions').doc(contributionId);
   const pre = await contributionRef.get();
-  if (!pre.exists) throw new HttpsError('not-found', 'Trip contribution not found.');
+  if (!pre.exists) throw new HttpsError('not-found', 'Fund contribution not found.');
   const contribution = pre.data() || {};
   const actor = await requireActiveSpaceMember(String(contribution.spaceId), uid);
   if (uid !== contribution.memberUid && !['owner', 'admin'].includes(String(actor.role))) throw new HttpsError('permission-denied', 'Only the member, Space owner, or admin can undo this contribution.');
+  const spaceRef = db.collection('spaces').doc(String(contribution.spaceId));
   const fundRef = db.collection('spaceFunds').doc(String(contribution.spaceId));
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
-    const [command, current, fund] = await Promise.all([transaction.get(commandRef), transaction.get(contributionRef), transaction.get(fundRef)]);
+    const [command, current, space, fund] = await Promise.all([transaction.get(commandRef), transaction.get(contributionRef), transaction.get(spaceRef), transaction.get(fundRef)]);
     if (command.exists) return command.data()?.result;
+    const fundMeta = spaceFundMeta(String(space.data()?.type || '')) || { kind: 'group' as const, title: 'Group fund', contributionPrefix: 'GFC', tab: 'group_fund' };
     if (!current.exists || current.data()?.status !== 'posted') throw new HttpsError('failed-precondition', 'This contribution has already been undone.');
-    if (!fund.exists) throw new HttpsError('not-found', 'Trip money record not found.');
+    if (!fund.exists) throw new HttpsError('not-found', `${fundMeta.title} record not found.`);
     const amountMinor = positiveMoney(current.data()?.amountMinor);
-    const available = safeMinor(fund.data()?.availableMinor, 'Trip money available');
-    if (available < amountMinor) throw new HttpsError('failed-precondition', 'This Trip money has already been spent and cannot be removed.');
-    const contributedMinor = Math.max(0, safeMinor(fund.data()?.contributedMinor, 'Trip money collected') - amountMinor);
-    const spentMinor = safeMinor(fund.data()?.spentMinor, 'Trip money spent');
+    const available = safeMinor(fund.data()?.availableMinor, `${fundMeta.title} available`);
+    if (available < amountMinor) throw new HttpsError('failed-precondition', `This ${fundMeta.title} has already been spent and cannot be removed.`);
+    const contributedMinor = Math.max(0, safeMinor(fund.data()?.contributedMinor, `${fundMeta.title} collected`) - amountMinor);
+    const spentMinor = safeMinor(fund.data()?.spentMinor, `${fundMeta.title} spent`);
     const now = FieldValue.serverTimestamp();
     transaction.update(contributionRef, { status: 'reversed', reversedAt: now, reversedBy: uid, updatedAt: now });
     transaction.update(fundRef, { contributedMinor, availableMinor: contributedMinor - spentMinor, updatedAt: now });
-    createActivity(transaction, { spaceId: String(contribution.spaceId), actorUid: uid, actorName: actor.displayName, action: 'trip_money_contribution_reversed', targetType: 'space_fund_contribution', targetId: contributionId, summary: `Removed ${amountMinor / 100} ${contribution.currency || 'BND'} from the Trip money record.`, now });
+    createActivity(transaction, { spaceId: String(contribution.spaceId), actorUid: uid, actorName: actor.displayName, action: 'space_fund_contribution_reversed', targetType: 'space_fund_contribution', targetId: contributionId, summary: `Removed ${amountMinor / 100} ${contribution.currency || 'BND'} from ${fundMeta.title}.`, now });
     const result = { contributionId, status: 'reversed' };
-    transaction.create(commandRef, { uid, kind: 'reverse_trip_money_contribution', idempotencyKey: key, result, createdAt: now });
+    transaction.create(commandRef, { uid, kind: 'reverse_space_fund_contribution', idempotencyKey: key, result, createdAt: now });
     return result;
   });
-});
+}
+
+// New generic callables plus the original Trip-money names for older clients.
+export const updateSpaceFundSettings = onCall({ region }, updateSpaceFundSettingsHandler);
+export const recordSpaceFundContribution = onCall({ region }, recordSpaceFundContributionHandler);
+export const reverseSpaceFundContribution = onCall({ region }, reverseSpaceFundContributionHandler);
+export const updateTripMoneySettings = onCall({ region }, updateSpaceFundSettingsHandler);
+export const recordTripMoneyContribution = onCall({ region }, recordSpaceFundContributionHandler);
+export const reverseTripMoneyContribution = onCall({ region }, reverseSpaceFundContributionHandler);
 
 // v0.11.6 account and personal-data deletion
 const accountDeletionCoolingOffDays = 7;
@@ -4076,7 +4141,7 @@ async function accountDeletionEligibility(uid: string): Promise<AccountDeletionE
       code: 'trip_fund_holder',
       spaceId,
       spaceName: String(space.data()?.name || 'Trip Space'),
-      message: `You are holding Trip money for ${String(space.data()?.name || 'a shared Space')}. Ask the Space owner to choose another holder first.`,
+      message: `You are holding collected group money for ${String(space.data()?.name || 'a shared Space')}. Ask the Space owner to choose another holder first.`,
     });
   }
 

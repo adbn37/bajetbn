@@ -23,7 +23,7 @@ const checks = [
   ['trip reversal function', read('functions/src/index.ts').includes('export const reverseTripMoneyContribution')],
   ['space tab expenses', read('src/features/spaces/SpaceDetailsPage.tsx').includes("{ id: 'expenses', label: 'Shared expenses' }")],
   ['space tab balances', read('src/features/spaces/SpaceDetailsPage.tsx').includes("{ id: 'balances', label: 'Who owes whom' }")],
-  ['trip money tab', read('src/features/spaces/SpaceDetailsPage.tsx').includes("label: 'Trip money'")],
+  ['trip money tab', read('src/features/spaces/SpaceDetailsPage.tsx').includes("space.type === 'trip' ? 'Trip money'")],
   ['firestore expense rules', read('firestore.rules').includes('match /sharedExpenses/{expenseId}')],
   ['firestore share rules', read('firestore.rules').includes('match /sharedExpenseShares/{shareId}')],
   ['firestore payment rules', read('firestore.rules').includes('match /sharedExpensePayments/{paymentId}')],

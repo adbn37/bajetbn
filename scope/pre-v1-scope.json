@@ -1,7 +1,7 @@
 {
-  "auditVersion": "2026-08-01.1",
-  "auditedRelease": "BajetBN v0.11.9 Background Notifications Alpha 1",
-  "sourceBasis": "Verified v0.11.8 feature baseline plus the v0.11.9 background notification implementation",
+  "auditVersion": "2026-08-03.1",
+  "auditedRelease": "BajetBN v0.11.10 Household Funds and Financial Health Alpha 1",
+  "sourceBasis": "Verified v0.11.9 staging baseline plus the v0.11.10 optional group-fund and financial-health implementation",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -297,11 +297,15 @@
       "id": "collab.household_fund",
       "area": "Group funds",
       "requirement": "Optional Household or general group fund, without forcing every group to use a wallet",
-      "status": "missing",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
+        "src/features/spaces/SpaceFundPanel.tsx",
         "src/features/spaces/SpaceDetailsPage.tsx",
-        "src/features/spaces/TripMoneyPanel.tsx"
+        "src/features/spaces/SharedExpensesPanel.tsx",
+        "functions/src/index.ts",
+        "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
+        "scripts/verify-household-funds-financial-health.mjs"
       ]
     },
     {
@@ -474,11 +478,13 @@
       "id": "sme.essentials",
       "area": "SME",
       "requirement": "Simple SME overview for income, expenses, cash position and upcoming commitments",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
         "src/features/reports/ReportsPage.tsx",
-        "src/pages/DashboardPage.tsx"
+        "src/features/reports/financialHealth.ts",
+        "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
+        "scripts/verify-household-funds-financial-health.mjs"
       ]
     },
     {
@@ -495,10 +501,13 @@
       "id": "insights.financial_health",
       "area": "Insights",
       "requirement": "Financial health insights beyond static totals",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
-        "src/features/reports/ReportsPage.tsx"
+        "src/features/reports/ReportsPage.tsx",
+        "src/features/reports/financialHealth.ts",
+        "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
+        "scripts/verify-household-funds-financial-health.mjs"
       ]
     },
     {
@@ -615,5 +624,5 @@
       ]
     }
   ],
-  "auditedVersion": "0.11.9"
+  "auditedVersion": "0.11.10"
 }
