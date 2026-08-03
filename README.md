@@ -191,3 +191,7 @@ See `BACKGROUND_NOTIFICATIONS_ALPHA.md`. Scheduled Functions prepare due-soon, d
 ## v0.11.10 Household/group funds and financial health
 
 See `HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md`. Household and Custom Spaces can optionally track collected group money without replacing direct member payments. Money reports add savings rate, budget pressure, regular-payment load, emergency-fund progress, month-to-month category changes, simple next steps and a selected-SME overview.
+
+## v0.11.10 Household Fund setup guard hotfix
+
+The Add contribution action now stays unavailable until the shared fund has a valid active money holder. The Firebase Function repeats the same check before creating a contribution, activity record, or notification.

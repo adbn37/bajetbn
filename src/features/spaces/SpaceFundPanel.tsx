@@ -15,6 +15,13 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function memberLabel(member?: SpaceMember | null) { return member?.displayName || member?.email || 'Member'; }
+function isActiveMember(member?: SpaceMember | null) { return Boolean(member && (member.status || 'active') === 'active'); }
+
+function contributionSetupMessage(space: Pick<Space, 'type'>) {
+  if (space.type === 'trip') return 'Set up Trip money first before adding a contribution.';
+  if (space.type === 'household') return 'Set up the Household fund first before adding a contribution.';
+  return 'Set up the Group fund first before adding a contribution.';
+}
 
 export function spaceFundCopy(space: Pick<Space, 'type'>) {
   if (space.type === 'trip') return {
@@ -84,7 +91,14 @@ export function SpaceFundPanel({
   const [undoBusy, setUndoBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
+  const activeMembers = members.filter((item) => isActiveMember(item));
+  const activeHolder = fund ? activeMembers.find((item) => item.uid === fund.holderUid) || null : null;
+  const contributionReady = Boolean(fund && fund.holderUid && activeHolder);
+  const contributionHelp = !fund
+    ? contributionSetupMessage(space)
+    : !fund.holderUid || !activeHolder
+      ? 'Choose an active money holder before adding a contribution.'
+      : '';
 
   const load = async () => {
     setLoading(true); setError('');
@@ -95,6 +109,7 @@ export function SpaceFundPanel({
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [space.id]);
+  useEffect(() => { if (!contributionReady) setContributionOpen(false); }, [contributionReady]);
 
   const runUndoContribution = async () => {
     if (!undoDialog) return;
@@ -110,8 +125,9 @@ export function SpaceFundPanel({
   if (loading) return <div className="loading-panel">Loading {copy.shortTitle}…</div>;
 
   return <section className="panel trip-money-panel space-fund-panel">
-    <div className="panel-heading"><div><span className="eyebrow">Optional shared money</span><h2>{copy.title}</h2></div><div className="button-row">{canManage && <button className="button secondary" onClick={() => setSettingsOpen(true)}>{fund ? 'Change setup' : copy.setupTitle}</button>}<button className="button primary" onClick={() => setContributionOpen(true)} disabled={!fund}>Add contribution</button></div></div>
+    <div className="panel-heading"><div><span className="eyebrow">Optional shared money</span><h2>{copy.title}</h2></div><div className="button-row">{canManage && <button className="button secondary" onClick={() => setSettingsOpen(true)}>{fund ? 'Change setup' : copy.setupTitle}</button>}<button className="button primary" onClick={() => { if (contributionReady) setContributionOpen(true); }} disabled={!contributionReady} aria-describedby={!contributionReady ? 'space-fund-contribution-help' : undefined} title={!contributionReady ? contributionHelp : undefined}>Add contribution</button></div></div>
     {error && <div className="notice error">{error}</div>}
+    {!contributionReady && <div id="space-fund-contribution-help" className="notice space-fund-setup-guard">{contributionHelp}</div>}
     {!fund ? <div className="info-banner"><strong>{copy.setupTitle} when your group needs it</strong><span>{copy.setupDescription} Direct member-to-member payments and proof-only flows still remain available.</span></div> : <>
       <section className="summary-grid trip-money-summary">
         <article className="summary-card featured"><span>{copy.targetLabel}</span><strong>{formatMoney(fund.budgetMinor, fund.currency)}</strong><small>{copy.targetHelp}</small></article>
@@ -129,7 +145,7 @@ export function SpaceFundPanel({
     </>}
     {undoDialog && <ActionConfirmModal state={undoDialog} busy={undoBusy} error={error} onClose={() => { setUndoDialog(null); setError(''); }} onConfirm={() => void runUndoContribution()} />}
     {settingsOpen && <Modal title={copy.setupTitle} onClose={() => setSettingsOpen(false)}><SpaceFundSettingsForm space={space} members={activeMembers} fund={fund} onSaved={async () => { setSettingsOpen(false); await load(); }} /></Modal>}
-    {contributionOpen && fund && <Modal title={copy.contributionTitle} onClose={() => setContributionOpen(false)}><SpaceFundContributionForm space={space} members={activeMembers} currentMember={currentMember} canManage={canManage} onSaved={async () => { setContributionOpen(false); await load(); }} /></Modal>}
+    {contributionOpen && contributionReady && fund && <Modal title={copy.contributionTitle} onClose={() => setContributionOpen(false)}><SpaceFundContributionForm space={space} members={activeMembers} currentMember={currentMember} canManage={canManage} onSaved={async () => { setContributionOpen(false); await load(); }} /></Modal>}
   </section>;
 }
 
@@ -139,13 +155,16 @@ function SpaceFundSettingsForm({ space, members, fund, onSaved }: { space: Space
   const [holderUid, setHolderUid] = useState(fund?.holderUid || members[0]?.uid || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const hasSelectedHolder = members.some((member) => member.uid === holderUid && isActiveMember(member));
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); setError('');
+    if (!hasSelectedHolder) { setError('Choose an active money holder before saving.'); return; }
+    setBusy(true);
     try { await updateSpaceFundSettings({ spaceId: space.id, holderUid, budgetMinor: toMinorUnits(budget || '0') }); await onSaved(); }
     catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusy(false); }
   };
-  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>{copy.targetLabel} ({space.currency})<input inputMode="decimal" required value={budget} onChange={(event) => setBudget(event.target.value)} /></label><label>Who is holding the money?<select required value={holderUid} onChange={(event) => setHolderUid(event.target.value)}>{members.map((member) => <option key={member.uid} value={member.uid}>{memberLabel(member)}</option>)}</select></label><div className="notice">This is a shared-money record. It does not move money between bank accounts.</div><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : copy.saveLabel}</button></form>;
+  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}{members.length === 0 && <div className="notice error">No active members are available to hold this money.</div>}<label>{copy.targetLabel} ({space.currency})<input inputMode="decimal" required value={budget} onChange={(event) => setBudget(event.target.value)} /></label><label>Who is holding the money?<select required value={holderUid} onChange={(event) => setHolderUid(event.target.value)}><option value="" disabled>Choose a member</option>{members.map((member) => <option key={member.uid} value={member.uid}>{memberLabel(member)}</option>)}</select></label><div className="notice">This is a shared-money record. It does not move money between bank accounts.</div><button className="button primary full" disabled={busy || !hasSelectedHolder}>{busy ? 'Saving…' : copy.saveLabel}</button></form>;
 }
 
 function SpaceFundContributionForm({ space, members, currentMember, canManage, onSaved }: { space: Space; members: SpaceMember[]; currentMember: SpaceMember | null; canManage: boolean; onSaved: () => Promise<void> }) {

@@ -260,3 +260,14 @@ Notes: ____________________
 - [ ] Select an SME Space and confirm money in, money out, simple profit check, current cash position and next-30-day payments.
 - [ ] Confirm the SME cash explanation says an Account may also be used elsewhere.
 - [ ] Verify English/Malay wording, dark/light mode and mobile layouts without horizontal scrolling.
+
+## v0.11.10 Household Fund setup guard hotfix
+
+- [ ] Before setup, Add contribution is visibly disabled.
+- [ ] A simple setup-first message appears below the actions.
+- [ ] The contribution modal cannot open before setup.
+- [ ] Setup cannot be saved without an active money holder.
+- [ ] Removing or suspending the selected holder blocks new contributions.
+- [ ] A direct callable attempt before setup returns failed-precondition and creates no contribution, activity, or notification.
+- [ ] After valid setup, contributions work and update the fund exactly once.
+- [ ] Household, Group, and Trip fund flows remain compatible.
