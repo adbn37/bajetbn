@@ -306,3 +306,16 @@ Notes: ____________________
 - [ ] Confirm account deletion removes transaction attachment metadata and private files.
 - [ ] Check mobile layout and long file names.
 - [ ] Review `FINAL_SCOPE_AUDIT.md` and keep `PRODUCTION_READINESS_GATE.md` at NO-GO until all remaining gates pass.
+
+## v0.11.12 inline transaction attachment hotfix
+
+- [ ] Save income, expense and transfer without selecting any attachment.
+- [ ] Select one image before saving and confirm the transaction and attachment both appear.
+- [ ] Select one PDF before saving and confirm it opens from Details.
+- [ ] Select several files, remove one before saving, and confirm only the remaining files upload.
+- [ ] Confirm Take photo opens the mobile camera/file capture flow on a supported device.
+- [ ] Confirm more than five files, unsupported files and files at/over 10 MB are rejected clearly.
+- [ ] Simulate an attachment upload failure and confirm the transaction remains saved with Retry attachments.
+- [ ] Confirm Finish without remaining attachments closes safely and the existing Details upload remains available.
+- [ ] While offline, confirm the transaction can be queued with no file and attachment controls explain that internet is required.
+

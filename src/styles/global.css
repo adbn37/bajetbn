@@ -1249,3 +1249,44 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
   .transaction-attachment-actions { width: 100%; }
   .transaction-attachment-actions > * { flex: 1; text-align: center; }
 }
+
+.transaction-inline-attachments {
+  display: grid;
+  gap: .75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface-soft);
+}
+.transaction-inline-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+}
+.transaction-inline-file-list {
+  display: grid;
+  gap: .55rem;
+}
+.transaction-inline-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  background: var(--surface);
+}
+.transaction-inline-file-row > div {
+  min-width: 0;
+  display: grid;
+  gap: .15rem;
+}
+.transaction-inline-file-row strong { overflow-wrap: anywhere; }
+.transaction-inline-file-row small { color: var(--text-muted); }
+@media (max-width: 640px) {
+  .transaction-inline-picker-actions,
+  .transaction-inline-file-row { align-items: stretch; flex-direction: column; }
+  .transaction-inline-picker-actions .button,
+  .transaction-inline-file-row .text-button { width: 100%; min-height: 42px; text-align: center; }
+}

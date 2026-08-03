@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { EmptyState } from '../../components/EmptyState';
@@ -29,6 +29,8 @@ import {
   removeTransactionAttachment,
   reverseTransaction,
   uploadTransactionAttachment,
+  type PostTransactionOutcome,
+  type TransactionInput,
 } from '../../repositories/transactionRepository';
 import type {
   Account,
@@ -309,15 +311,11 @@ export function TransactionsPage() {
         timezone={profile.timezone}
         online={online}
         onClose={() => setShowForm(false)}
-        onSubmit={async (values) => {
-          const outcome = await postTransaction(values);
+        onSubmit={postTransaction}
+        onComplete={async (message, refresh) => {
           setShowForm(false);
-          if (outcome.mode === 'queued') {
-            setFeedback('Saved on this device. BajetBN will sync it when internet returns.');
-            return;
-          }
-          setFeedback('Money activity saved.');
-          await load();
+          setFeedback(message);
+          if (refresh) await load();
         }}
       />}
 
@@ -347,32 +345,20 @@ function CategoryBadge({ category }: { category: TransactionCategory }) {
   return <span className="category-badge"><span className={`category-icon small category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span></span>;
 }
 
-function TransactionForm({ accounts, spaces, categories, timezone, online, onClose, onSubmit }: {
+function TransactionForm({ accounts, spaces, categories, timezone, online, onClose, onSubmit, onComplete }: {
   accounts: Account[];
   spaces: Space[];
   categories: TransactionCategory[];
   timezone: string;
   online: boolean;
   onClose: () => void;
-  onSubmit: (values: {
-    type: PrimaryType;
-    accountId: string;
-    destinationAccountId?: string;
-    spaceId: string;
-    amountMinor: number;
-    currency?: string;
-    transactionDate: string;
-    categoryId?: string;
-    category?: string;
-    categoryIcon?: string;
-    categoryColor?: string;
-    categoryScope?: CategoryScope;
-    counterparty?: string;
-    note?: string;
-    paymentMethod?: PaymentMethodCode;
-    paymentMethodLabel?: string;
-  }) => Promise<void>;
+  onSubmit: (values: TransactionInput) => Promise<PostTransactionOutcome>;
+  onComplete: (message: string, refresh: boolean) => Promise<void>;
 }) {
+  const maxAttachmentFiles = 5;
+  const maxAttachmentSizeBytes = 10 * 1024 * 1024;
+  const chooseFilesRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [type, setType] = useState<PrimaryType>('expense');
   const [spaceId, setSpaceId] = useState(spaces[0]?.id || '');
   const selectedSpace = spaces.find((space) => space.id === spaceId);
@@ -386,8 +372,16 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
   const [note, setNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(suggestedPaymentMethod(accounts[0]));
   const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [savedState, setSavedState] = useState<{
+    mode: 'posted_with_failures' | 'queued_with_files';
+    transactionId?: string;
+    spaceId: string;
+    uploadedCount: number;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [attachmentError, setAttachmentError] = useState('');
 
   const scope = spaceScope(selectedSpace);
   const categoryOptions = categories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
@@ -416,18 +410,107 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
   const projectedSource = sourceAccount ? sourceAccount.ledgerBalanceMinor + accountEffectForPreview(sourceAccount, type, amountMinor) : 0;
   const projectedDestination = destinationAccount ? destinationAccount.ledgerBalanceMinor + accountEffectForPreview(destinationAccount, type, amountMinor, true) : 0;
 
+  function pendingFileKey(file: File): string {
+    return `${file.name}:${file.size}:${file.lastModified}`;
+  }
+
+  function addPendingFiles(files: FileList | File[]) {
+    setAttachmentError('');
+    if (!online) {
+      setAttachmentError('Connect to the internet to select a receipt or document. You can still save the money activity without one.');
+      return;
+    }
+
+    const currentKeys = new Set(pendingFiles.map(pendingFileKey));
+    const next = [...pendingFiles];
+    for (const file of Array.from(files)) {
+      if (next.length >= maxAttachmentFiles) {
+        setAttachmentError('You can attach up to five files.');
+        break;
+      }
+      if (file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
+        setAttachmentError(`${file.name} is not an image or PDF.`);
+        continue;
+      }
+      if (file.size <= 0 || file.size >= maxAttachmentSizeBytes) {
+        setAttachmentError(`${file.name} must be smaller than 10 MB.`);
+        continue;
+      }
+      const key = pendingFileKey(file);
+      if (currentKeys.has(key)) continue;
+      currentKeys.add(key);
+      next.push(file);
+    }
+    setPendingFiles(next);
+  }
+
+  function removePendingFile(file: File) {
+    const key = pendingFileKey(file);
+    setPendingFiles((current) => current.filter((item) => pendingFileKey(item) !== key));
+    setAttachmentError('');
+  }
+
+  async function uploadFiles(transactionId: string, targetSpaceId: string, files: File[]) {
+    const failed: File[] = [];
+    let uploaded = 0;
+    let lastError = '';
+    for (const file of files) {
+      try {
+        await uploadTransactionAttachment({ transactionId, spaceId: targetSpaceId, file });
+        uploaded += 1;
+      } catch (nextError) {
+        failed.push(file);
+        lastError = getErrorMessage(nextError);
+      }
+    }
+    return { failed, uploaded, lastError };
+  }
+
+  async function finishSaved(message: string, refresh = true) {
+    if (busy) return;
+    await onComplete(message, refresh);
+  }
+
+  async function retryAttachments() {
+    if (!savedState?.transactionId || busy || pendingFiles.length === 0) return;
+    if (!online) {
+      setAttachmentError('Reconnect to the internet before retrying these attachments.');
+      return;
+    }
+    setBusy(true);
+    setAttachmentError('');
+    try {
+      const result = await uploadFiles(savedState.transactionId, savedState.spaceId, pendingFiles);
+      const uploadedCount = savedState.uploadedCount + result.uploaded;
+      if (result.failed.length === 0) {
+        await onComplete(`Money activity saved with ${uploadedCount} attachment${uploadedCount === 1 ? '' : 's'}.`, true);
+        return;
+      }
+      setPendingFiles(result.failed);
+      setSavedState({ ...savedState, uploadedCount });
+      setAttachmentError(`${result.failed.length} attachment${result.failed.length === 1 ? '' : 's'} still could not be uploaded. ${result.lastError}`.trim());
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy) return;
+    if (busy || savedState) return;
     setBusy(true);
     setError('');
+    setAttachmentError('');
     try {
       const nextAmountMinor = toMinorUnits(amount);
       if (nextAmountMinor <= 0) throw new Error('Enter an amount greater than BND 0.00.');
       if (!spaceId || !accountId) throw new Error('Choose a Space and Account.');
       if (type === 'transfer' && !destinationAccountId) throw new Error('Choose a destination Account.');
       if (type !== 'transfer' && !selectedCategory) throw new Error('Choose a category.');
-      await onSubmit({
+      if (pendingFiles.length > 0 && !online) {
+        throw new Error('Reconnect to upload the selected attachments, or remove them and save this money activity offline.');
+      }
+
+      const outcome = await onSubmit({
         type,
         accountId,
         destinationAccountId: type === 'transfer' ? destinationAccountId : undefined,
@@ -445,6 +528,37 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
         paymentMethod,
         paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined,
       });
+
+      if (outcome.mode === 'queued') {
+        if (pendingFiles.length > 0) {
+          setSavedState({ mode: 'queued_with_files', spaceId, uploadedCount: 0 });
+          setAttachmentError('Money activity was saved on this device, but attachments cannot be queued. After it syncs, open Details to attach these files.');
+          return;
+        }
+        await onComplete('Saved on this device. BajetBN will sync it when internet returns.', false);
+        return;
+      }
+
+      if (pendingFiles.length === 0) {
+        await onComplete('Money activity saved.', true);
+        return;
+      }
+
+      if (!outcome.transactionId) {
+        setSavedState({ mode: 'posted_with_failures', spaceId, uploadedCount: 0 });
+        setAttachmentError('Money activity was saved, but BajetBN could not link the selected attachments. Add them later from Details.');
+        return;
+      }
+
+      const result = await uploadFiles(outcome.transactionId, spaceId, pendingFiles);
+      if (result.failed.length === 0) {
+        await onComplete(`Money activity saved with ${result.uploaded} attachment${result.uploaded === 1 ? '' : 's'}.`, true);
+        return;
+      }
+
+      setPendingFiles(result.failed);
+      setSavedState({ mode: 'posted_with_failures', transactionId: outcome.transactionId, spaceId, uploadedCount: result.uploaded });
+      setAttachmentError(`Money activity was saved. ${result.failed.length} attachment${result.failed.length === 1 ? '' : 's'} could not be uploaded. ${result.lastError}`.trim());
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -452,7 +566,35 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
     }
   };
 
-  return <Modal title="Add money activity" onClose={onClose}><form className="transaction-form" onSubmit={submit}>
+  if (savedState) {
+    const queued = savedState.mode === 'queued_with_files';
+    return <Modal title="Money activity saved" onClose={() => { if (!busy) void finishSaved(queued ? 'Saved on this device. Attachments can be added after it syncs.' : 'Money activity saved. You can add the remaining attachments later from Details.', !queued); }}>
+      <div className={`notice ${queued ? 'warning' : 'success'}`}>
+        <strong>{queued ? 'Saved for offline sync' : 'Transaction saved safely'}</strong>
+        <span>{queued ? 'The selected files were not stored on this device.' : `${savedState.uploadedCount} attachment${savedState.uploadedCount === 1 ? '' : 's'} uploaded successfully.`}</span>
+      </div>
+      {attachmentError && <div className="notice warning">{attachmentError}</div>}
+      {pendingFiles.length > 0 && <div className="transaction-inline-file-list">
+        {pendingFiles.map((file) => <div className="transaction-inline-file-row" key={pendingFileKey(file)}>
+          <div><strong>{file.name}</strong><small>{Math.max(1, Math.round(file.size / 1024))} KB</small></div>
+          {!queued && <button type="button" className="text-button" disabled={busy} onClick={() => removePendingFile(file)}>Remove</button>}
+        </div>)}
+      </div>}
+      <div className="modal-actions">
+        <button type="button" className="button secondary" disabled={busy} onClick={() => void finishSaved(queued ? 'Saved on this device. Attachments can be added after it syncs.' : 'Money activity saved. You can add the remaining attachments later from Details.', !queued)}>{queued ? 'Close' : 'Finish without remaining attachments'}</button>
+        {!queued && savedState.transactionId && pendingFiles.length > 0 && <button type="button" className="button primary" disabled={busy || !online} onClick={() => void retryAttachments()}>{busy ? 'Retrying…' : 'Retry attachments'}</button>}
+      </div>
+    </Modal>;
+  }
+
+  const closeForm = () => { if (!busy) onClose(); };
+  const saveLabel = busy
+    ? pendingFiles.length > 0 ? 'Saving and uploading…' : 'Saving…'
+    : !online ? 'Save on this device'
+      : pendingFiles.length > 0 ? `Save and attach ${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'}`
+        : 'Save money activity';
+
+  return <Modal title="Add money activity" onClose={closeForm}><form className="transaction-form" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
     {!online && <div className="notice warning compact-notice"><strong>Saving offline</strong><span>This money activity will stay on this device and sync safely when internet returns.</span></div>}
     <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
@@ -479,6 +621,28 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
       <label className="span-2">Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional details" maxLength={500} /></label>
     </div>
 
+    <section className="transaction-inline-attachments" aria-labelledby="inline-attachment-title">
+      <div className="transaction-attachments-heading">
+        <div><h3 id="inline-attachment-title">Receipt or document (optional)</h3><p>Skip this section when you do not have a receipt. You can also attach files later from Money activity details.</p></div>
+        <span>{pendingFiles.length}/{maxAttachmentFiles}</span>
+      </div>
+      <input ref={chooseFilesRef} hidden type="file" multiple accept="image/*,application/pdf" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onChange={(event) => { if (event.target.files) addPendingFiles(event.target.files); event.currentTarget.value = ''; }} />
+      <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onChange={(event) => { if (event.target.files) addPendingFiles(event.target.files); event.currentTarget.value = ''; }} />
+      <div className="transaction-inline-picker-actions">
+        <button type="button" className="button secondary" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onClick={() => chooseFilesRef.current?.click()}>Choose files</button>
+        <button type="button" className="button ghost" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onClick={() => cameraRef.current?.click()}>Take photo</button>
+      </div>
+      {pendingFiles.length > 0 && <div className="transaction-inline-file-list">
+        {pendingFiles.map((file) => <div className="transaction-inline-file-row" key={pendingFileKey(file)}>
+          <div><strong>{file.name}</strong><small>{Math.max(1, Math.round(file.size / 1024))} KB</small></div>
+          <button type="button" className="text-button" disabled={busy} onClick={() => removePendingFile(file)}>Remove</button>
+        </div>)}
+      </div>}
+      {!online && <div className="notice warning compact-notice"><strong>Internet required for attachments</strong><span>You can still save this money activity without a file and attach one later.</span></div>}
+      {attachmentError && <div className="notice error">{attachmentError}</div>}
+      <small>Images and PDFs only. Up to five files, each smaller than 10 MB.</small>
+    </section>
+
     {sourceAccount && amountMinor > 0 && <div className="transaction-preview">
       <div><span>{sourceAccount.name} after saving</span><strong>{formatMoney(projectedSource, sourceAccount.currency)}</strong></div>
       {type === 'transfer' && destinationAccount && <div><span>{destinationAccount.name} after saving</span><strong>{formatMoney(projectedDestination, destinationAccount.currency)}</strong></div>}
@@ -486,7 +650,7 @@ function TransactionForm({ accounts, spaces, categories, timezone, online, onClo
     </div>}
 
     {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
-    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{busy ? 'Saving…' : online ? 'Save money activity' : 'Save on this device'}</button></div>
+    <div className="modal-actions"><button type="button" className="button secondary" disabled={busy} onClick={closeForm}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{saveLabel}</button></div>
   </form></Modal>;
 }
 

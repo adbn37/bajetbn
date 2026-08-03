@@ -24,6 +24,7 @@ BajetBN is a budget tracker and modular life-management platform designed around
 - Shared-Space ownership transfer and Trip-fund-holder safety blockers
 - Scheduled Auth, Firestore and Storage cleanup with anonymised shared financial history
 - Firebase emulator configuration
+- Optional receipt/document selection directly in Add Money Activity, with the existing add-later controls retained
 - PWA manifest and service worker
 - Cloudflare Pages staging configuration and SPA redirects
 - GitHub staging validation workflow
