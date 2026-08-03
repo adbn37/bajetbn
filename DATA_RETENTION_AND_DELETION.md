@@ -51,3 +51,9 @@ The signed-in user can read only their own request status. Clients cannot create
 ## Re-registration restriction record
 
 BajetBN retains a restricted server-only record keyed by a protected deterministic email hash. It stores the deletion completion date, re-registration eligibility date, policy version and whether manual security review is required. It does not contain the raw email address. For normal self-deletion, the record permits a completely fresh registration after 30 days. It does not reconnect anonymised shared history or restore deleted private records.
+
+## Browser-local offline data
+
+v0.11.11 can store cached Firestore data and unsynced Money activity inside the browser profile on the current device. This browser-local data is not stored in a server collection, so a scheduled server deletion job cannot remotely erase it from a device that is offline or no longer signed in.
+
+Before requesting account deletion on a shared device, the user should sync or remove every item under **Offline & sync**, then clear BajetBN site data from the browser. Offline storage should be used only on a private or trusted device.

@@ -491,6 +491,22 @@ const malayPhrases: Record<string, string> = {
   'This is a shared-money record. It does not move money between bank accounts.': 'Ini ialah rekod wang kongsi. Ia tidak memindahkan wang antara akaun bank.',
   'Paid using collected Household fund': 'Dibayar menggunakan dana keluarga yang dikumpul',
   'Paid using collected Group fund': 'Dibayar menggunakan dana kumpulan yang dikumpul',
+  'Offline & sync': 'Luar talian & segerak',
+  'Saved on this device': 'Disimpan pada peranti ini',
+  'Sync now': 'Segerak sekarang',
+  'Syncing…': 'Sedang menyegerak…',
+  'You are offline.': 'Anda sedang luar talian.',
+  'Saving offline': 'Menyimpan luar talian',
+  'Save on this device': 'Simpan pada peranti ini',
+  'Nothing waiting to sync': 'Tiada yang menunggu untuk disegerakkan',
+  'Needs attention': 'Perlu perhatian',
+  'Waiting': 'Menunggu',
+  'Stored only on this device': 'Disimpan pada peranti ini sahaja',
+  'Duplicate-safe': 'Dilindungi daripada pendua',
+  'Remove saved entry': 'Buang rekod tersimpan',
+  'Retry': 'Cuba lagi',
+  'Use offline storage only on a private or trusted device.': 'Gunakan simpanan luar talian hanya pada peranti peribadi atau yang dipercayai.',
+  'Online still required for other actions.': 'Internet masih diperlukan untuk tindakan lain.',
 
 };
 

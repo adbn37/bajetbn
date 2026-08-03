@@ -1,8 +1,8 @@
 # BajetBN Pre-v1.0 Scope-Completion Audit
 
-**Audit date:** 1 August 2026
-**Audited baseline:** BajetBN v0.11.9 Background Notifications Alpha 1
-**Source basis:** the verified v0.11.8 feature baseline plus the v0.11.9 background-reminder implementation.
+**Audit date:** 3 August 2026
+**Audited baseline:** BajetBN v0.11.11 Offline Sync Alpha 1
+**Source basis:** the verified v0.11.10 staging baseline plus the v0.11.11 offline queue and persistent-cache implementation.
 
 ## Decision
 
@@ -29,6 +29,7 @@ This audit does not change runtime behaviour. It records the approved scope, cur
 - Self-service account deletion with export, recent authentication, a seven-day cooling-off period, cancellation, ownership blockers, shared-history anonymisation and the approved 30-day fresh-account re-registration policy implemented in v0.11.6 source.
 - Recurring salary, allowance, rental income, subscriptions and ordinary repeating expenses with pause, resume, skip, stop, month-end scheduling and duplicate-safe automatic posting implemented in v0.11.7 source.
 - Scheduled due-soon, due-today, late and goal-date reminders with duplicate prevention, real-time unread counts and optional browser/device delivery implemented in v0.11.9 source.
+- New Money activity can be saved on-device offline and replayed with one stable duplicate-protection key; conflicts move to Needs attention in v0.11.11 source.
 
 ## Pre-production blockers
 
@@ -64,14 +65,17 @@ v0.11.10 source adds a selected-SME report with money in, money out, a simple pr
 
 v0.11.10 source adds savings rate, budget pressure, emergency-fund progress, regular-payment load, category changes and simple next steps. It remains a staging-test gate until calculations, empty states, English/Malay wording and mobile layouts are approved with realistic data.
 
-## Historic roadmap items requiring an explicit v1 decision
+### Offline financial entry synchronisation
 
-The original architecture recorded two deferred items that are still not implemented:
+v0.11.11 source adds persistent cached reads and a device-local queue for new Money activity. The queue preserves the original duplicate-protection key through retries and moves current-state conflicts to Needs attention. It remains a staging-test gate until offline refresh, reconnect, duplicate prevention, conflict handling, mobile and multi-tab tests pass. Other server-controlled money actions remain online-only and are documented as an intentional alpha boundary.
+
+## Historic roadmap item requiring an explicit v1 decision
+
+The original architecture still records one item that is not implemented:
 
 - General transaction receipt/document attachments.
-- Offline financial mutation queue with idempotent synchronisation.
 
-These must either be implemented before v1.0.0 or explicitly approved as post-v1 items. They must not disappear silently from the roadmap.
+It must either be implemented before v1.0.0 or explicitly approved as a post-v1 item. It must not disappear silently from the roadmap.
 
 ## Deferred after v1.0.0
 

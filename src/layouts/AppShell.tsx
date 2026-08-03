@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
 import { useAuth } from '../contexts/AuthContext';
+import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { subscribeUserNotifications } from '../repositories/collaborationRepository';
 import { listenForForegroundPush } from '../repositories/notificationRepository';
 
@@ -17,6 +18,7 @@ const navigation = [
   ['/bills', 'Bills & instalments', '◷'],
   ['/calendar', 'Calendar', '▦'],
   ['/search', 'Search', '⌕'],
+  ['/offline-sync', 'Offline & sync', '⇅'],
   ['/reports', 'Money reports', '⌁'],
 ];
 
@@ -26,6 +28,7 @@ export function AppShell() {
   const [searchText, setSearchText] = useState('');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const { profile, user, logOut } = useAuth();
+  const { pendingCount, needsAttentionCount, syncing } = useOfflineSync();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -83,6 +86,7 @@ export function AppShell() {
             <NavLink key={path} to={path} end={path === '/'} onClick={() => setMobileOpen(false)}>
               <span className="nav-icon">{icon}</span>
               <span className="nav-label">{label}</span>
+              {path === '/offline-sync' && (pendingCount + needsAttentionCount > 0 || syncing) && <span className={`nav-count ${needsAttentionCount > 0 ? 'attention' : ''}`}>{syncing ? '…' : pendingCount + needsAttentionCount}</span>}
             </NavLink>
           ))}
         </nav>
