@@ -3494,9 +3494,16 @@ async function recordSpaceFundContributionHandler(request: CallableRequest<Recor
     if (!space.exists || !fundMeta || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active Trip, Household, or Custom Space.');
     if (!member.exists || ['suspended', 'removed'].includes(String(member.data()?.status || ''))) throw new HttpsError('failed-precondition', 'Choose an active member.');
     if (!fund.exists) throw new HttpsError('failed-precondition', `Set up ${fundMeta.title} first.`);
+    const fundData = fund.data() || {};
+    const holderUid = String(fundData.holderUid || '').trim();
+    if (!holderUid) throw new HttpsError('failed-precondition', `Set up ${fundMeta.title} first and choose the person holding the money.`);
+    const holder = await transaction.get(db.collection('spaceMembers').doc(`${spaceId}_${holderUid}`));
+    if (!holder.exists || ['suspended', 'removed'].includes(String(holder.data()?.status || ''))) {
+      throw new HttpsError('failed-precondition', `Choose an active member to hold ${fundMeta.title} before adding a contribution.`);
+    }
     const now = FieldValue.serverTimestamp();
-    const contributedMinor = safeMinor(fund.data()?.contributedMinor, `${fundMeta.title} collected`) + amountMinor;
-    const spentMinor = safeMinor(fund.data()?.spentMinor, `${fundMeta.title} spent`);
+    const contributedMinor = safeMinor(fundData.contributedMinor, `${fundMeta.title} collected`) + amountMinor;
+    const spentMinor = safeMinor(fundData.spentMinor, `${fundMeta.title} spent`);
     transaction.create(contributionRef, {
       displayId: displayId(fundMeta.contributionPrefix),
       spaceId,
@@ -3505,7 +3512,7 @@ async function recordSpaceFundContributionHandler(request: CallableRequest<Recor
       memberName: member.data()?.displayName || '',
       memberEmail: member.data()?.email || '',
       amountMinor,
-      currency: fund.data()?.currency || 'BND',
+      currency: fundData.currency || 'BND',
       contributionDate,
       paymentMethod,
       paymentMethodLabel,
@@ -3518,10 +3525,9 @@ async function recordSpaceFundContributionHandler(request: CallableRequest<Recor
       updatedAt: now,
     });
     transaction.update(fundRef, { contributedMinor, availableMinor: contributedMinor - spentMinor, updatedAt: now });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: actor.displayName, action: 'space_fund_contribution', targetType: 'space_fund_contribution', targetId: contributionRef.id, summary: `${member.data()?.displayName || 'A member'} added ${amountMinor / 100} ${fund.data()?.currency || 'BND'} to ${fundMeta.title}.`, now });
-    createNotification(transaction, { uid: memberUid, spaceId, type: fundMeta.kind === 'trip' ? 'trip_contribution_added' : 'space_fund_contribution_added', title: `${fundMeta.title} contribution added`, message: `${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'} was added for ${member.data()?.displayName || 'you'}.`, targetPath: `/spaces/${spaceId}?tab=${fundMeta.tab}`, actionLabel: `Open ${fundMeta.title}`, now });
-    const holderUid = String(fund.data()?.holderUid || '');
-    if (holderUid && holderUid !== memberUid) createNotification(transaction, { uid: holderUid, spaceId, type: fundMeta.kind === 'trip' ? 'trip_contribution_received' : 'space_fund_contribution_received', title: `${fundMeta.title} received`, message: `${member.data()?.displayName || 'A member'} added ${(amountMinor / 100).toFixed(2)} ${fund.data()?.currency || 'BND'}.`, targetPath: `/spaces/${spaceId}?tab=${fundMeta.tab}`, actionLabel: `Open ${fundMeta.title}`, now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: actor.displayName, action: 'space_fund_contribution', targetType: 'space_fund_contribution', targetId: contributionRef.id, summary: `${member.data()?.displayName || 'A member'} added ${amountMinor / 100} ${fundData.currency || 'BND'} to ${fundMeta.title}.`, now });
+    createNotification(transaction, { uid: memberUid, spaceId, type: fundMeta.kind === 'trip' ? 'trip_contribution_added' : 'space_fund_contribution_added', title: `${fundMeta.title} contribution added`, message: `${(amountMinor / 100).toFixed(2)} ${fundData.currency || 'BND'} was added for ${member.data()?.displayName || 'you'}.`, targetPath: `/spaces/${spaceId}?tab=${fundMeta.tab}`, actionLabel: `Open ${fundMeta.title}`, now });
+    if (holderUid !== memberUid) createNotification(transaction, { uid: holderUid, spaceId, type: fundMeta.kind === 'trip' ? 'trip_contribution_received' : 'space_fund_contribution_received', title: `${fundMeta.title} received`, message: `${member.data()?.displayName || 'A member'} added ${(amountMinor / 100).toFixed(2)} ${fundData.currency || 'BND'}.`, targetPath: `/spaces/${spaceId}?tab=${fundMeta.tab}`, actionLabel: `Open ${fundMeta.title}`, now });
     const result = { contributionId: contributionRef.id, kind: fundMeta.kind };
     transaction.create(commandRef, { uid, kind: 'record_space_fund_contribution', idempotencyKey: key, result, createdAt: now });
     return result;
