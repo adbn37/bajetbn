@@ -57,3 +57,8 @@ BajetBN retains a restricted server-only record keyed by a protected determinist
 v0.11.11 can store cached Firestore data and unsynced Money activity inside the browser profile on the current device. This browser-local data is not stored in a server collection, so a scheduled server deletion job cannot remotely erase it from a device that is offline or no longer signed in.
 
 Before requesting account deletion on a shared device, the user should sync or remove every item under **Offline & sync**, then clear BajetBN site data from the browser. Offline storage should be used only on a private or trusted device.
+
+
+## Transaction receipt/document attachments
+
+Transaction attachment metadata is deleted with the user's owned financial data. Files are stored below `users/{uid}/transaction-receipts/` and are removed by the existing user-prefix Storage cleanup during final account deletion.

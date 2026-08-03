@@ -1,5 +1,6 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import {
   addOfflineTransactionCommand,
@@ -10,7 +11,7 @@ import {
   type OfflineFinancialCommand,
   type OfflineTransactionPayload,
 } from '../services/offlineQueue';
-import type { CategoryScope, FinancialTransaction, PaymentMethodCode } from '../types/models';
+import type { CategoryScope, FinancialTransaction, PaymentMethodCode, TransactionAttachment } from '../types/models';
 import { getErrorMessage } from '../utils/errors';
 
 export type TransactionInput = OfflineTransactionPayload;
@@ -168,6 +169,83 @@ export async function syncQueuedTransactions(uid: string): Promise<OfflineSyncSu
 
   if (summary.posted > 0) notifyOfflineSyncCompleted();
   return summary;
+}
+
+
+export async function listTransactionAttachments(transactionId: string): Promise<TransactionAttachment[]> {
+  const { auth, db } = requireFirebase();
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Your session has ended. Sign in again.');
+  const snapshot = await getDocs(query(
+    collection(db, 'transactionAttachments'),
+    where('ownerId', '==', uid),
+    where('transactionId', '==', transactionId),
+  ));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as TransactionAttachment)
+    .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
+}
+
+export async function uploadTransactionAttachment(input: {
+  transactionId: string;
+  spaceId: string;
+  file: File;
+}): Promise<TransactionAttachment> {
+  if (!navigator.onLine) throw new Error('Connect to the internet before attaching a receipt or document.');
+  if (input.file.type !== 'application/pdf' && !input.file.type.startsWith('image/')) {
+    throw new Error('Upload an image or PDF receipt.');
+  }
+  if (input.file.size <= 0 || input.file.size >= 10 * 1024 * 1024) {
+    throw new Error('The receipt or document must be smaller than 10 MB.');
+  }
+
+  const { auth, functions, storage } = requireFirebase();
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Your session has ended. Sign in again.');
+  const attachmentId = crypto.randomUUID();
+  const safeName = input.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'receipt';
+  const storagePath = `users/${uid}/transaction-receipts/${input.transactionId}/${attachmentId}-${safeName}`;
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, input.file, { contentType: input.file.type });
+
+  try {
+    const call = httpsCallable(functions, 'registerTransactionAttachment');
+    const result = await call({
+      attachmentId,
+      transactionId: input.transactionId,
+      spaceId: input.spaceId,
+      storagePath,
+      fileName: input.file.name,
+      contentType: input.file.type,
+      sizeBytes: input.file.size,
+    });
+    const data = (result.data || {}) as { attachmentId?: string };
+    return {
+      id: data.attachmentId || `${input.transactionId}_${attachmentId}`,
+      ownerId: uid,
+      transactionId: input.transactionId,
+      spaceId: input.spaceId,
+      storagePath,
+      fileName: input.file.name,
+      contentType: input.file.type,
+      sizeBytes: input.file.size,
+    };
+  } catch (error) {
+    try { await deleteObject(storageRef); } catch { /* The privacy cleanup also removes orphaned user files. */ }
+    throw error;
+  }
+}
+
+export async function getTransactionAttachmentUrl(storagePath: string): Promise<string> {
+  const { storage } = requireFirebase();
+  return getDownloadURL(ref(storage, storagePath));
+}
+
+export async function removeTransactionAttachment(attachmentId: string): Promise<void> {
+  if (!navigator.onLine) throw new Error('Connect to the internet before removing an attachment.');
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'removeTransactionAttachment');
+  await call({ attachmentId });
 }
 
 export async function reverseTransaction(transactionId: string, transactionDate: string, reason?: string) {

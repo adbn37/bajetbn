@@ -200,3 +200,12 @@ The Add contribution action now stays unavailable until the shared fund has a va
 ## v0.11.11 Offline Sync
 
 See `OFFLINE_SYNC_ALPHA.md`. BajetBN keeps previously opened Firestore data in a persistent browser cache and can save new Money activity to a bounded IndexedDB queue while offline. Every retry uses the same duplicate-protection key. Temporary connection failures keep waiting; current-state conflicts move to **Needs attention** for a safe retry or removal. Other money actions remain online-only in this alpha.
+
+
+## v0.11.12 Final Scope Audit Alpha 1
+
+- Adds private receipt/document attachments to ordinary Money activity.
+- Records the confirmed v0.11.10 and v0.11.11 staging passes.
+- Moves the final historic missing item to a staging-test gate.
+- Adds `FINAL_SCOPE_AUDIT.md` and `PRODUCTION_READINESS_GATE.md`.
+- Production remains blocked pending the documented manual gates.

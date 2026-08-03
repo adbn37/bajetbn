@@ -79,6 +79,18 @@ export interface FinancialTransaction {
   updatedAt?: Timestamp;
 }
 
+export interface TransactionAttachment {
+  id: string;
+  ownerId: string;
+  transactionId: string;
+  spaceId: string;
+  storagePath: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt?: Timestamp;
+}
+
 export interface RecurringTransactionTemplate {
   id: string;
   displayId: string;

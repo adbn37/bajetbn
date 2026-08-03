@@ -1,14 +1,14 @@
 # BajetBN Pre-v1.0 Scope-Completion Audit
 
 **Audit date:** 3 August 2026
-**Audited baseline:** BajetBN v0.11.11 Offline Sync Alpha 1
-**Source basis:** the verified v0.11.10 staging baseline plus the v0.11.11 offline queue and persistent-cache implementation.
+**Audited baseline:** BajetBN v0.11.12 Final Scope Audit Alpha 1
+**Source basis:** the verified v0.11.11 staging baseline plus final scope reconciliation and general transaction receipt/document attachments.
 
 ## Decision
 
 BajetBN now matches the majority of the agreed product direction, especially the Space-centred model, core money tracking, shared expenses, invitations, member balances, Trip money, safe record controls, notifications, and dedicated archive pages.
 
-It is **not yet scope-complete for v1.0.0** and should not be promoted as the finished live product until the pre-production blockers and required pre-v1 gaps below are closed or explicitly reclassified by the product owner.
+The agreed source scope now has **zero items marked missing**, but BajetBN is not release-approved for v1.0.0. It must not be promoted until the remaining manual staging and pre-production gates are completed.
 
 This audit does not change runtime behaviour. It records the approved scope, current evidence, release blockers, and the order of remaining work.
 
@@ -85,3 +85,12 @@ It must either be implemented before v1.0.0 or explicitly approved as a post-v1 
 ## Release rule
 
 Do not tag or announce v1.0.0 until every item in `scope/pre-v1-scope.json` with a `pre_production` or `pre_v1` gate is marked complete, or the user explicitly approves a documented scope change.
+
+
+## v0.11.12 reconciliation
+
+- The product owner confirmed v0.11.10 Household/Group Funds and Financial Health passed staging.
+- The product owner confirmed v0.11.11 Offline Sync passed staging.
+- General Money activity receipt/document attachments are implemented and now require staging approval.
+- No scope item remains classified as `missing`.
+- Production remains NO-GO under `PRODUCTION_READINESS_GATE.md`.

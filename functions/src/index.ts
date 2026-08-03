@@ -931,6 +931,80 @@ async function calculateBudgetSpent(input: { uid: string; spaceId: string; categ
   }, 0);
 }
 
+
+export const registerTransactionAttachment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const attachmentId = stringValue(request.data?.attachmentId, 'Attachment ID', 80);
+  if (!/^[a-zA-Z0-9_-]{8,80}$/.test(attachmentId)) throw new HttpsError('invalid-argument', 'Attachment ID is invalid.');
+  const transactionId = stringValue(request.data?.transactionId, 'Transaction ID', 100);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 100);
+  const storagePath = stringValue(request.data?.storagePath, 'Storage path', 500);
+  const fileName = stringValue(request.data?.fileName, 'File name', 160);
+  const contentType = stringValue(request.data?.contentType, 'File type', 120);
+  const sizeBytes = Number(request.data?.sizeBytes);
+  if (contentType !== 'application/pdf' && !contentType.startsWith('image/')) {
+    throw new HttpsError('invalid-argument', 'Upload an image or PDF receipt.');
+  }
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes >= 10 * 1024 * 1024) {
+    throw new HttpsError('invalid-argument', 'The receipt or document must be smaller than 10 MB.');
+  }
+  const expectedPrefix = `users/${uid}/transaction-receipts/${transactionId}/${attachmentId}-`;
+  if (!storagePath.startsWith(expectedPrefix)) throw new HttpsError('permission-denied', 'Attachment storage path is invalid.');
+
+  const transactionRef = db.collection('transactions').doc(transactionId);
+  const transactionSnapshot = await transactionRef.get();
+  if (!transactionSnapshot.exists) throw new HttpsError('not-found', 'Money activity not found.');
+  const transactionData = transactionSnapshot.data() || {};
+  if (transactionData.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this money activity.');
+  if (transactionData.spaceId !== spaceId) throw new HttpsError('failed-precondition', 'The selected Space does not match this money activity.');
+
+  const bucket = getStorage().bucket();
+  const file = bucket.file(storagePath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError('failed-precondition', 'Upload the file before saving its attachment record.');
+  const [metadata] = await file.getMetadata();
+  const actualSize = Number(metadata.size || 0);
+  const actualContentType = String(metadata.contentType || '');
+  if (actualSize !== sizeBytes || actualContentType !== contentType) {
+    throw new HttpsError('failed-precondition', 'The uploaded file details do not match. Please try again.');
+  }
+
+  const attachmentRef = db.collection('transactionAttachments').doc(`${transactionId}_${attachmentId}`);
+  const existing = await attachmentRef.get();
+  if (existing.exists) return { attachmentId: attachmentRef.id };
+  const current = await db.collection('transactionAttachments').where('transactionId', '==', transactionId).get();
+  if (current.size >= 5) throw new HttpsError('resource-exhausted', 'A money activity can have up to five attachments.');
+
+  await attachmentRef.create({
+    ownerId: uid,
+    transactionId,
+    spaceId,
+    storagePath,
+    fileName,
+    contentType,
+    sizeBytes,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { attachmentId: attachmentRef.id };
+});
+
+export const removeTransactionAttachment = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const attachmentId = stringValue(request.data?.attachmentId, 'Attachment ID', 220);
+  const attachmentRef = db.collection('transactionAttachments').doc(attachmentId);
+  const snapshot = await attachmentRef.get();
+  if (!snapshot.exists) return { removed: true };
+  const data = snapshot.data() || {};
+  if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this attachment.');
+  const storagePath = String(data.storagePath || '');
+  if (!storagePath.startsWith(`users/${uid}/transaction-receipts/`)) {
+    throw new HttpsError('failed-precondition', 'Attachment storage path is invalid.');
+  }
+  await getStorage().bucket().file(storagePath).delete({ ignoreNotFound: true });
+  await attachmentRef.delete();
+  return { removed: true };
+});
+
 export const createBudget = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const name = stringValue(request.data?.name, 'Budget name', 80);
@@ -4331,7 +4405,7 @@ async function documentsWhere(collectionName: string, field: string, value: stri
 }
 
 function addProofPath(paths: Set<string>, data: DocumentData) {
-  for (const field of ['proofPath', 'paymentProofPath']) {
+  for (const field of ['proofPath', 'paymentProofPath', 'storagePath']) {
     const value = data[field];
     if (typeof value === 'string' && value.trim()) paths.add(value.trim());
   }
@@ -4407,6 +4481,7 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
     'sharedBillPaymentReversals', 'spaceActivities', 'sharedExpenses', 'sharedExpenseShares',
     'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
     'userNotifications', 'reminderHistory', 'recurringTransactionTemplates', 'recurringTransactionRuns',
+    'transactionAttachments',
   ];
   for (const collectionName of collections) {
     const rows = await documentsWhere(collectionName, 'spaceId', spaceId);
@@ -4541,7 +4616,7 @@ async function finalizeAccountDeletion(uid: string) {
       for (const access of await documentsWhere('accountAccess', 'accountId', account.id)) queueDelete(plan, access.ref);
     }
 
-    for (const collectionName of ['accounts', 'ledgerEntries', 'transactions', 'budgets', 'goals', 'goalContributions', 'categories', 'recurringTransactionTemplates', 'recurringTransactionRuns']) {
+    for (const collectionName of ['accounts', 'ledgerEntries', 'transactions', 'transactionAttachments', 'budgets', 'goals', 'goalContributions', 'categories', 'recurringTransactionTemplates', 'recurringTransactionRuns']) {
       for (const row of await documentsWhere(collectionName, 'ownerId', uid)) {
         addProofPath(proofPaths, row.data());
         queueDelete(plan, row.ref);
