@@ -91,6 +91,22 @@ export async function listSmePosSales(spaceId: string): Promise<SmePosSale[]> {
   return byUpdatedAt(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosSale));
 }
 
+export async function getSmePosStaffWorkspace(spaceId: string): Promise<{
+  products: SmePosProduct[];
+  customers: SmePosCustomer[];
+  sales: SmePosSale[];
+}> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'getSmePosStaffWorkspace');
+  const result = await call({ spaceId });
+  const data = result.data as { products?: SmePosProduct[]; customers?: SmePosCustomer[]; sales?: SmePosSale[] };
+  return {
+    products: data.products || [],
+    customers: data.customers || [],
+    sales: data.sales || [],
+  };
+}
+
 export async function saveSmePosSetup(input: {
   spaceId: string;
   mode: SmePosMode;
@@ -143,6 +159,17 @@ export async function setSmePosProductArchived(spaceId: string, productId: strin
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'setSmePosProductArchived');
   return call({ spaceId, productId, archived, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function updateSmePosProductStock(input: {
+  spaceId: string;
+  productId: string;
+  quantityOnHand: number;
+  lowStockLevel: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'updateSmePosProductStock');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
 export async function saveSmePosCustomer(input: {

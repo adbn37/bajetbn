@@ -20,6 +20,7 @@ if (major !== 0 || minor !== 11 || patch < 13) fail('SME POS foundation requires
 
 requireFile('SME_POS_FOUNDATION_ALPHA.md');
 requireFile('src/features/sme-pos/SmePosPage.tsx');
+requireFile('src/features/sme-pos/SmePosSettingsPage.tsx');
 requireFile('src/repositories/smePosRepository.ts');
 
 requireText('src/types/models.ts', "export type SmePosMode = 'standard' | 'marketplace_consignment'");
@@ -28,7 +29,7 @@ requireText('src/app/App.tsx', 'spaces/:spaceId/pos');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', 'Point of sale');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', 'Marketplace Consignment POS');
 
-const page = read('src/features/sme-pos/SmePosPage.tsx');
+const page = read('src/features/sme-pos/SmePosPage.tsx') + '\n' + read('src/features/sme-pos/SmePosSettingsPage.tsx');
 for (const token of [
   'Standard POS',
   'Marketplace Consignment POS',
@@ -38,7 +39,7 @@ for (const token of [
   'Resume POS',
   'POS access',
   'Seller access appears after upgrading',
-  'Connect to the internet to change POS setup or access.',
+  'Connect to the internet to change POS settings or staff access.',
 ]) {
   if (!page.includes(token)) fail(`SME POS page is missing: ${token}`);
 }
