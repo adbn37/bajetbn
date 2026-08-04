@@ -1852,11 +1852,11 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
   ]);
 
   const allSellers = sellerSnapshot.docs
-    .map((item) => ({ id: item.id, ...item.data() }))
+    .map((item): DocumentData => ({ id: item.id, ...item.data() }))
     .filter((item) => !item.archivedAt)
     .sort((a, b) => marketplaceSortValue(b) - marketplaceSortValue(a));
   const allListings = listingSnapshot.docs
-    .map((item) => ({ id: item.id, ...item.data() }))
+    .map((item): DocumentData => ({ id: item.id, ...item.data() }))
     .filter((item) => !item.archivedAt)
     .sort((a, b) => marketplaceSortValue(b) - marketplaceSortValue(a));
 
@@ -1873,8 +1873,8 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
       db.collection('smePosCustomers').where('spaceId', '==', spaceId).get(),
       saleSnapshot ? Promise.resolve(saleSnapshot) : db.collection('smePosSales').where('spaceId', '==', spaceId).get(),
     ]);
-    customers = customersResult.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt);
-    sales = salesResult.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.sourceMode === 'marketplace_consignment');
+    customers = customersResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt);
+    sales = salesResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => item.sourceMode === 'marketplace_consignment');
   } else if (context.role === 'cashier') {
     listings = allListings.map((item) => ({
       ...item,
@@ -1882,9 +1882,9 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
       commissionEarnedMinor: 0, sellerEarningsMinor: 0, note: '',
     }));
     const customersResult = await db.collection('smePosCustomers').where('spaceId', '==', spaceId).get();
-    customers = customersResult.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt);
+    customers = customersResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt);
     sales = (saleSnapshot?.docs || [])
-      .map((item) => ({ id: item.id, ...item.data() }))
+      .map((item): DocumentData => ({ id: item.id, ...item.data() }))
       .filter((item) => item.sourceMode === 'marketplace_consignment' && item.createdBy === uid)
       .map((item) => ({ ...item, costMinor: 0, profitMinor: 0, marketplaceCommissionMinor: 0, sellerEarningsMinor: 0 }));
   } else if (context.role === 'stock_staff') {
@@ -1900,7 +1900,7 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
       grossSalesMinor: 0, commissionEarnedMinor: 0, sellerEarningsMinor: 0, note: '',
     }));
     const customersResult = await db.collection('smePosCustomers').where('spaceId', '==', spaceId).get();
-    customers = customersResult.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt)
+    customers = customersResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt)
       .map((item) => ({ id: item.id, displayId: item.displayId, spaceId: item.spaceId, ownerId: item.ownerId, name: item.name, totalSpentMinor: 0, visitCount: item.visitCount || 0 }));
   } else {
     const ownSeller = allSellers.find((item) => item.linkedUid === uid) || null;
@@ -1908,7 +1908,7 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
       sellers = [ownSeller];
       listings = allListings.filter((item) => item.sellerId === ownSeller.id);
       const ownSaleRows = (saleSnapshot?.docs || [])
-        .map((item) => ({ id: item.id, ...item.data() }))
+        .map((item): DocumentData => ({ id: item.id, ...item.data() }))
         .filter((item) => item.sourceMode === 'marketplace_consignment' && Array.isArray(item.items) && item.items.some((line: DocumentData) => line.sellerId === ownSeller.id));
       sales = ownSaleRows.map((sale) => {
         const items = (sale.items as DocumentData[]).filter((line) => line.sellerId === ownSeller.id);
@@ -1926,7 +1926,7 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
           receiptName: sale.receiptName, receiptFooter: '', createdAt: sale.createdAt, updatedAt: sale.updatedAt,
         };
       });
-      sellerLedger = (ledgerSnapshot?.docs || []).map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.spaceId === spaceId);
+      sellerLedger = (ledgerSnapshot?.docs || []).map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => item.spaceId === spaceId);
     }
   }
 
