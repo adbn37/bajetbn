@@ -46,6 +46,11 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/smePosAccess/$(posAccessId(spaceId, request.auth.uid))).data.role in ['owner', 'manager']);
     }
 
+    function hasPosRole(spaceId, roles) {
+      return hasActivePosAccess(spaceId)
+        && get(/databases/$(database)/documents/smePosAccess/$(posAccessId(spaceId, request.auth.uid))).data.role in roles;
+    }
+
     function accountAccessId(accountId, uid) {
       return accountId + '_' + uid;
     }
@@ -160,12 +165,14 @@ service cloud.firestore {
     }
 
     match /smePosProducts/{productId} {
-      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow read: if isSpaceOwner(resource.data.spaceId)
+        || hasPosRole(resource.data.spaceId, ['manager']);
       allow create, update, delete: if false;
     }
 
     match /smePosCustomers/{customerId} {
-      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow read: if isSpaceOwner(resource.data.spaceId)
+        || hasPosRole(resource.data.spaceId, ['manager']);
       allow create, update, delete: if false;
     }
 
@@ -180,7 +187,8 @@ service cloud.firestore {
     }
 
     match /smePosSales/{saleId} {
-      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow read: if isSpaceOwner(resource.data.spaceId)
+        || hasPosRole(resource.data.spaceId, ['manager']);
       allow create, update, delete: if false;
     }
 

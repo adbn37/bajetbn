@@ -1418,6 +1418,125 @@ export const getSmePosPaymentAccounts = onCall({ region }, async (request) => {
   return { accounts };
 });
 
+export const getSmePosStaffWorkspace = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier', 'stock_staff', 'viewer']);
+  const [productSnapshot, customerSnapshot, saleSnapshot] = await Promise.all([
+    db.collection('smePosProducts').where('spaceId', '==', spaceId).get(),
+    context.role === 'stock_staff' ? Promise.resolve(null) : db.collection('smePosCustomers').where('spaceId', '==', spaceId).get(),
+    ['owner', 'manager', 'cashier'].includes(context.role) ? db.collection('smePosSales').where('spaceId', '==', spaceId).get() : Promise.resolve(null),
+  ]);
+
+  const products = productSnapshot.docs
+    .filter((item) => !item.data().archivedAt && item.data().ownerId === context.settings.ownerId)
+    .map((item) => {
+      const row = item.data();
+      return {
+        id: item.id,
+        displayId: String(row.displayId || item.id),
+        spaceId,
+        ownerId: String(row.ownerId || ''),
+        name: String(row.name || 'Product'),
+        category: String(row.category || ''),
+        sku: String(row.sku || ''),
+        note: '',
+        sellingPriceMinor: nonNegativeMoney(row.sellingPriceMinor),
+        costPriceMinor: null,
+        currency: String(row.currency || context.settings.currency || 'BND'),
+        trackStock: row.trackStock !== false,
+        quantityOnHand: row.trackStock === false ? 0 : smePosQuantity(row.quantityOnHand, 'Product stock'),
+        lowStockLevel: row.trackStock === false ? 0 : smePosQuantity(row.lowStockLevel, 'Low stock alert'),
+        soldQuantity: 0,
+        salesRevenueMinor: 0,
+        archivedAt: null,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const customers = (customerSnapshot?.docs || [])
+    .filter((item) => !item.data().archivedAt && item.data().ownerId === context.settings.ownerId)
+    .map((item) => {
+      const row = item.data();
+      return {
+        id: item.id,
+        displayId: String(row.displayId || item.id),
+        spaceId,
+        ownerId: String(row.ownerId || ''),
+        name: String(row.name || 'Customer'),
+        phone: String(row.phone || ''),
+        email: String(row.email || ''),
+        note: String(row.note || ''),
+        totalSpentMinor: 0,
+        visitCount: integerBetween(row.visitCount || 0, 'Visit count', 0, 9_999_999),
+        lastSaleAt: null,
+        archivedAt: null,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const sales = (saleSnapshot?.docs || [])
+    .filter((item) => {
+      const row = item.data();
+      if (row.ownerId !== context.settings.ownerId) return false;
+      if (context.role === 'cashier') return row.createdBy === uid;
+      return context.role === 'owner' || context.role === 'manager';
+    })
+    .sort((a, b) => (b.data().createdAt?.toMillis?.() || 0) - (a.data().createdAt?.toMillis?.() || 0))
+    .slice(0, 50)
+    .map((item) => {
+      const row = item.data();
+      const items = Array.isArray(row.items) ? row.items.map((raw: unknown) => {
+        const line = (raw || {}) as Record<string, unknown>;
+        return {
+          productId: String(line.productId || ''),
+          productName: String(line.productName || 'Product'),
+          sku: String(line.sku || ''),
+          quantity: integerBetween(line.quantity || 1, 'Sale item quantity', 1, 9_999),
+          unitPriceMinor: nonNegativeMoney(line.unitPriceMinor || 0),
+          unitCostMinor: 0,
+          lineTotalMinor: nonNegativeMoney(line.lineTotalMinor || 0),
+          lineCostMinor: 0,
+          returnedQuantity: integerBetween(line.returnedQuantity || 0, 'Returned quantity', 0, 9_999),
+        };
+      }) : [];
+      return {
+        id: item.id,
+        displayId: String(row.displayId || item.id),
+        receiptNumber: String(row.receiptNumber || item.id),
+        spaceId,
+        ownerId: String(row.ownerId || ''),
+        createdBy: String(row.createdBy || ''),
+        status: String(row.status || 'completed'),
+        returnStatus: String(row.returnStatus || 'not_returned'),
+        sourceMode: String(row.sourceMode || context.settings.mode || 'standard'),
+        customerId: row.customerId || null,
+        customerName: row.customerName || null,
+        paymentAccountId: '',
+        paymentAccountName: String(row.paymentAccountName || 'Business account'),
+        paymentMethod: row.paymentMethod || null,
+        paymentMethodLabel: row.paymentMethodLabel || null,
+        items,
+        itemCount: integerBetween(row.itemCount || 0, 'Item count', 0, 999_999),
+        subtotalMinor: nonNegativeMoney(row.subtotalMinor || 0),
+        discountMinor: nonNegativeMoney(row.discountMinor || 0),
+        totalMinor: nonNegativeMoney(row.totalMinor || 0),
+        costMinor: 0,
+        profitMinor: 0,
+        returnedMinor: nonNegativeMoney(row.returnedMinor || 0),
+        currency: String(row.currency || context.settings.currency || 'BND'),
+        saleDate: String(row.saleDate || ''),
+        note: String(row.note || ''),
+        transactionId: '',
+        ledgerEntryId: '',
+        receiptName: String(row.receiptName || context.settings.receiptName || context.settings.shopName || 'Receipt'),
+        receiptFooter: String(row.receiptFooter || ''),
+      };
+    });
+
+  return { products, customers, sales };
+});
+
 export const saveSmePosProduct = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
@@ -1432,7 +1551,7 @@ export const saveSmePosProduct = onCall({ region }, async (request) => {
   const quantityOnHand = smePosQuantity(request.data?.quantityOnHand, 'Quantity');
   const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
-  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
   const productRef = productId ? db.collection('smePosProducts').doc(productId) : db.collection('smePosProducts').doc();
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
@@ -1472,13 +1591,48 @@ export const saveSmePosProduct = onCall({ region }, async (request) => {
   });
 });
 
+export const updateSmePosProductStock = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const productId = stringValue(request.data?.productId, 'Product ID', 80);
+  const quantityOnHand = smePosQuantity(request.data?.quantityOnHand, 'Quantity');
+  const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  const productRef = db.collection('smePosProducts').doc(productId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, product] = await Promise.all([transaction.get(commandRef), transaction.get(productRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!product.exists || product.data()?.spaceId !== spaceId || product.data()?.ownerId !== context.settings.ownerId || product.data()?.archivedAt) {
+      throw new HttpsError('not-found', 'Active product not found.');
+    }
+    if (product.data()?.trackStock === false) throw new HttpsError('failed-precondition', 'This service or unlimited item does not use stock quantity.');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(productRef, { quantityOnHand, lowStockLevel, updatedAt: now });
+    const result = { productId, quantityOnHand, lowStockLevel };
+    transaction.create(commandRef, { uid, kind: 'update_sme_pos_product_stock', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: context.member.displayName || context.member.email,
+      action: 'pos_stock_updated',
+      targetType: 'sme_pos_product',
+      targetId: productId,
+      summary: `Updated stock for ${product.data()?.name || 'a POS product'} to ${quantityOnHand}.`,
+      now,
+    });
+    return result;
+  });
+});
+
 export const setSmePosProductArchived = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const productId = stringValue(request.data?.productId, 'Product ID', 80);
   const archived = request.data?.archived === true;
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
-  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
   const productRef = db.collection('smePosProducts').doc(productId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
@@ -1530,7 +1684,7 @@ export const setSmePosCustomerArchived = onCall({ region }, async (request) => {
   const customerId = stringValue(request.data?.customerId, 'Customer ID', 80);
   const archived = request.data?.archived === true;
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
-  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
   const customerRef = db.collection('smePosCustomers').doc(customerId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
@@ -1586,7 +1740,11 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
       const unitPriceMinor = positiveMoney(product.sellingPriceMinor);
       const unitCostMinor = product.costPriceMinor == null ? 0 : nonNegativeMoney(product.costPriceMinor);
       const quantity = requestItem.quantity;
-      if (product.trackStock !== false && smePosQuantity(product.quantityOnHand, 'Product stock') < quantity) throw new HttpsError('failed-precondition', `${product.name || 'A product'} does not have enough stock.`);
+      if (product.trackStock !== false) {
+        const available = smePosQuantity(product.quantityOnHand, 'Product stock');
+        if (available < 1) throw new HttpsError('failed-precondition', `${product.name || 'A product'} is out of stock.`);
+        if (available < quantity) throw new HttpsError('failed-precondition', `${product.name || 'A product'} only has ${available} available.`);
+      }
       const lineTotalMinor = unitPriceMinor * quantity;
       const lineCostMinor = unitCostMinor * quantity;
       if (!Number.isSafeInteger(lineTotalMinor) || !Number.isSafeInteger(lineCostMinor)) throw new HttpsError('out-of-range', 'Sale amount is too large.');

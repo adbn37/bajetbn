@@ -26,7 +26,7 @@ BajetBN is a budget tracker and modular life-management platform designed around
 - Firebase emulator configuration
 - Optional receipt/document selection directly in Add Money Activity, with the existing add-later controls retained
 - SME Space POS foundation with Standard POS or Marketplace Consignment POS setup, shop details, safe mode changes, and role-based access
-- Standard POS for shop-owned products, stock, customers, checkout, receipts, business-account posting, archived records and basic sales/profit reports
+- Standard POS Alpha 2 with a dedicated staff register, owner-only POS Settings, explicit physical versus unlimited items, hard out-of-stock protection, role-filtered staff data, receipts, business-account posting, archived records and owner/manager reports
 - PWA manifest and service worker
 - Cloudflare Pages staging configuration and SPA redirects
 - GitHub staging validation workflow
@@ -228,4 +228,4 @@ See `PREMIUM_THEME_REFRESH_HOTFIX.md`. Dark mode now uses a near-black ADBN-insp
 
 ## v0.11.13 SME POS foundation
 
-See `SME_POS_FOUNDATION_ALPHA.md` and `STANDARD_POS_ALPHA.md`. Standard POS is implemented for staging testing; Marketplace Consignment POS, returns, payouts and the shop pilot remain required before production.
+See `SME_POS_FOUNDATION_ALPHA.md` and `STANDARD_POS_ALPHA.md`. Standard POS Alpha 2 is implemented for staging testing; Marketplace Consignment POS, returns, payouts and the shop pilot remain required before production.

@@ -398,26 +398,36 @@ Notes: ____________________
 - [ ] Check desktop, tablet and mobile with no horizontal scrolling.
 - [ ] Confirm archived SME Spaces do not allow POS changes.
 
-## v0.11.14 — Standard POS Alpha 1
+## v0.11.14 — Standard POS Alpha 2
 
-### Products and stock
+### Owner setup and staff entry
 
-- [ ] Add a tracked product with SKU, cost, selling price, quantity and low-stock alert.
-- [ ] Add a product without stock tracking.
-- [ ] Edit a product and confirm it remains after refresh.
-- [ ] Archive a product and confirm it leaves the active list.
-- [ ] Open **Archived POS records**, restore the product and confirm it returns.
-- [ ] Confirm Stock staff can manage products but cannot complete checkout.
+- [ ] Confirm the daily POS page no longer shows Shop and POS settings underneath the register.
+- [ ] Confirm the owner sees **POS Settings** and `/spaces/:spaceId/pos/settings` opens.
+- [ ] Confirm Manager, Cashier, Stock staff, Seller and View only cannot open owner settings.
+- [ ] Confirm each staff member signs in with their own account and sees only the tools for their assigned role.
+- [ ] Confirm Cashier opens on **Open Register** by default.
+
+### Products and hard stock protection
+
+- [ ] Add a **Physical product** with quantity 1 and confirm physical tracking is the default.
+- [ ] Sell the product once and confirm it immediately shows **Out of stock**.
+- [ ] Confirm the out-of-stock product is disabled in the register.
+- [ ] Attempt a second sale from another tab/device and confirm the server rejects it without negative stock.
+- [ ] Add a **Service or unlimited item** and confirm repeated sales are allowed intentionally.
+- [ ] Edit a physical product and confirm quantity and low-stock alert remain after refresh.
+- [ ] Archive a product and restore it from **Archived POS records** as Owner or Manager.
+- [ ] Confirm Stock staff sees no cost or profit, cannot add/archive products, and can update only quantity and low-stock alert.
 
 ### Customers
 
-- [ ] Add, edit and archive a customer.
-- [ ] Restore the customer from Archived POS records.
+- [ ] Add and edit a customer as Owner, Manager and Cashier.
+- [ ] Confirm only Owner or Manager can archive and restore customers.
 - [ ] Confirm checkout works with Walk-in customer and with a saved customer.
 
 ### Checkout and financial posting
 
-- [ ] Activate the POS and add several products to one cart.
+- [ ] Activate the POS and add several available products to one cart.
 - [ ] Change quantities and confirm tracked stock cannot exceed available quantity.
 - [ ] Select Cash, Bank transfer, card, QR and Other payment method.
 - [ ] Apply a valid discount and confirm a discount equal to or above subtotal is rejected.
@@ -427,15 +437,16 @@ Notes: ____________________
 - [ ] Confirm the selected account balance increases exactly once.
 - [ ] Retry or double-click protection must not create a duplicate sale.
 - [ ] Confirm stock decreases exactly once and customer visit/spending totals update.
-- [ ] Pause the POS and confirm checkout is blocked while product/customer preparation remains available.
+- [ ] Pause the POS and confirm checkout is blocked while allowed preparation tools remain available.
 
-### Reports, access and layout
+### Reports, privacy and layout
 
-- [ ] Confirm Sales today, Sales this month, Estimated profit and Low stock update.
-- [ ] Open a recent sale and confirm receipt lines, discount, total and payment account.
-- [ ] Confirm Manager can manage all Standard POS records.
-- [ ] Confirm Cashier can add customers and checkout but cannot manage products.
-- [ ] Confirm View only cannot change products, customers or checkout.
-- [ ] Confirm Seller sees the Marketplace seller-tools message rather than shop-owned controls.
+- [ ] Confirm Owner and Manager see Sales today, Sales this month, Estimated profit and Low stock.
+- [ ] Confirm Cashier sees **My recent sales** only for sales created using that cashier account.
+- [ ] Confirm Cashier does not receive product cost, sale cost, profit, transaction ID, ledger ID or account balance data.
+- [ ] Confirm View only cannot change products, customers or checkout and receives no sales/profit data.
+- [ ] Confirm Seller sees the Marketplace seller-workspace message rather than shop-owned controls.
+- [ ] Confirm direct Firestore reads of POS products/customers/sales are denied for Cashier, Stock staff and View only.
 - [ ] Test dark and light themes on desktop and mobile with no horizontal scrolling.
 - [ ] Confirm checkout clearly requires internet and does not queue an offline sale.
+
