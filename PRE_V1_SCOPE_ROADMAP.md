@@ -104,3 +104,17 @@ The simple SME overview remains a separate pre-v1 item and is not silently bundl
 - [x] Record zero remaining `missing` scope items.
 - [x] Add a final audit and an explicit production NO-GO checklist.
 - [ ] Complete the receipt attachment matrix and all remaining manual gates.
+
+## Scope expansion — SME POS before first production launch
+
+BajetBN will be used in the owner's shop. Production is therefore blocked until both POS modes are complete and tested:
+
+1. v0.11.13 — SME POS Foundation
+2. v0.11.14 — Standard POS
+3. v0.11.15 — Marketplace Consignment POS
+4. v0.11.16 — Returns, refunds, seller payouts and POS reports
+5. v0.11.17 — Shop pilot and POS hardening
+6. v0.12.0 — Scope-Complete Beta Readiness
+7. v1.0.0 — Production only after explicit approval
+
+The pre-v1 scope now includes SME products, inventory, customers, checkout, receipts, seller-linked listings, commission calculation, seller balances, payouts, returns, refunds and shop reports.

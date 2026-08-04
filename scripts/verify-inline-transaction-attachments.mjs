@@ -31,11 +31,12 @@ requireText('STAGING_TEST_CHECKLIST.md', 'Save income, expense and transfer with
 requireText('package.json', 'verify-inline-transaction-attachments.mjs');
 
 const packageJson = JSON.parse(read('package.json'));
-if (packageJson.version !== '0.11.12') throw new Error('Inline attachment hotfix must remain on v0.11.12.');
+const [major, minor, patch] = packageJson.version.split('.').map(Number);
+if (major === 0 && (minor < 11 || (minor === 11 && patch < 12))) throw new Error('Inline attachments require BajetBN v0.11.12 or later.');
 const release = JSON.parse(read('release.json'));
-const hotfixMatch = release.label.match(/Hotfix\s+(\d+)/i);
-if (!hotfixMatch || Number(hotfixMatch[1]) < 1) {
-  throw new Error('release.json must identify v0.11.12 Hotfix 1 or a later hotfix.');
+if (packageJson.version === '0.11.12') {
+  const hotfixMatch = release.label.match(/Hotfix\s+(\d+)/i);
+  if (!hotfixMatch || Number(hotfixMatch[1]) < 1) throw new Error('v0.11.12 must identify Hotfix 1 or later for inline attachments.');
 }
 
 console.log('Inline transaction attachment checks passed (optional selection, direct upload, retry and offline safety).');

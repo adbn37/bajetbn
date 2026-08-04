@@ -92,8 +92,20 @@ if (['complete', 'manual_test'].includes(receiptStatus)) {
   requireText('storage.rules', 'General receipts remain reserved');
 }
 
+const posFoundationStatus = itemById.get('sme.pos_foundation')?.status;
+if (['complete', 'manual_test'].includes(posFoundationStatus)) {
+  requireText('src/features/sme-pos/SmePosPage.tsx', 'Marketplace Consignment POS');
+  requireText('src/repositories/smePosRepository.ts', 'saveSmePosSetup');
+  requireText('functions/src/index.ts', 'export const saveSmePosSetup');
+  requireText('firestore.rules', 'match /smePosSettings/{spaceId}');
+  requireText('SME_POS_FOUNDATION_ALPHA.md', 'Standard POS');
+}
+if (itemById.get('sme.standard_pos')?.status === 'complete') fail('Standard POS cannot be marked complete until checkout, stock and sales reports are implemented.');
+if (itemById.get('sme.marketplace_pos')?.status === 'complete') fail('Marketplace POS cannot be marked complete until seller listings, commission and payouts are implemented.');
+
 const nativeConfirmFiles = [
   'src/features/transactions/TransactionsPage.tsx',
+  'src/features/sme-pos/SmePosPage.tsx',
   'src/features/goals/GoalsPage.tsx',
   'src/features/spaces/SharedExpensesPanel.tsx',
   'src/features/spaces/TripMoneyPanel.tsx',
@@ -123,6 +135,7 @@ requireText('package.json', 'verify-background-notifications.mjs');
 requireText('package.json', 'verify-household-funds-financial-health.mjs');
 requireText('package.json', 'verify-offline-sync.mjs');
 requireText('package.json', 'verify-transaction-receipts.mjs');
+requireText('package.json', 'verify-sme-pos-foundation.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

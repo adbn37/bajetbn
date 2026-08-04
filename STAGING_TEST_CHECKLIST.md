@@ -348,3 +348,52 @@ Notes: ____________________
 - [ ] Confirm **Details** still opens the full transaction details separately.
 - [ ] Confirm attachment upload remains optional in every flow.
 - [ ] Check the shortcut labels on desktop and mobile with no horizontal scrolling.
+
+## v0.11.13 — SME POS Foundation Alpha 1
+
+### SME-only access
+
+- [ ] Open a Personal, Household, Trip, Goal or Custom Space and confirm no POS quick link appears.
+- [ ] Open an SME Space and confirm **Point of sale** appears in Manage this Space.
+- [ ] Open `/spaces/{smeSpaceId}/pos` and confirm the correct SME name and currency appear.
+- [ ] Confirm a Space member without POS access sees a simple no-access message.
+
+### POS setup choice
+
+- [ ] As the SME Space owner, choose **Standard POS** and save the setup.
+- [ ] Confirm shop name, receipt name, receipt message and optional default business payment account are saved after reload.
+- [ ] Confirm only active business accounts using the SME Space currency appear in the default account list.
+- [ ] Save without a default payment account and confirm the setup still works.
+- [ ] Confirm POS setup changes require an internet connection and show a clear message while offline.
+
+### POS mode safety
+
+- [ ] Change a draft setup between Standard POS and Marketplace Consignment POS.
+- [ ] Activate Standard POS, then upgrade it to Marketplace Consignment POS through the BajetBN confirmation dialog.
+- [ ] Confirm Marketplace mode shows the Seller role.
+- [ ] Confirm Standard mode does not show the Seller role.
+- [ ] Confirm Marketplace-to-Standard change is blocked once Marketplace seller, listing or sale records exist.
+
+### POS status
+
+- [ ] Activate a saved POS setup.
+- [ ] Pause an active POS and confirm setup/history remain visible.
+- [ ] Resume a paused POS.
+- [ ] Confirm no live checkout is available yet in this foundation release.
+
+### POS access
+
+- [ ] Add an active SME Space member as Manager.
+- [ ] Change the member to Cashier, Stock staff and View only.
+- [ ] In Marketplace mode, assign Seller access.
+- [ ] Remove POS access and confirm the member can no longer open the POS.
+- [ ] Confirm the SME Space owner remains POS owner and cannot remove their own owner role.
+- [ ] Transfer SME Space ownership and confirm the new owner becomes POS owner while the previous owner becomes POS manager.
+
+### Security and layout
+
+- [ ] Confirm direct client writes to POS settings, access, products, customers, sellers, listings, sales and payouts are denied.
+- [ ] Confirm an unrelated user cannot read another SME Space POS data.
+- [ ] Check dark theme and warm-light theme.
+- [ ] Check desktop, tablet and mobile with no horizontal scrolling.
+- [ ] Confirm archived SME Spaces do not allow POS changes.

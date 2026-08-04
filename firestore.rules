@@ -30,6 +30,22 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role in ['owner', 'admin'];
     }
 
+    function posAccessId(spaceId, uid) {
+      return spaceId + '_' + uid;
+    }
+
+    function hasActivePosAccess(spaceId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/smePosAccess/$(posAccessId(spaceId, request.auth.uid)))
+        && get(/databases/$(database)/documents/smePosAccess/$(posAccessId(spaceId, request.auth.uid))).data.status == 'active';
+    }
+
+    function isPosManager(spaceId) {
+      return isSpaceOwner(spaceId)
+        || (hasActivePosAccess(spaceId)
+          && get(/databases/$(database)/documents/smePosAccess/$(posAccessId(spaceId, request.auth.uid))).data.role in ['owner', 'manager']);
+    }
+
     function accountAccessId(accountId, uid) {
       return accountId + '_' + uid;
     }
@@ -127,6 +143,57 @@ service cloud.firestore {
         && request.resource.data.role == 'owner'
         && getAfter(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId == request.auth.uid;
       allow update, delete: if false; // Membership changes move to Cloud Functions in collaboration phase.
+    }
+
+    match /smePosSettings/{spaceId} {
+      allow read: if isSpaceOwner(spaceId) || hasActivePosAccess(spaceId);
+      allow create, update, delete: if false; // Validated by trusted SME POS Cloud Functions.
+    }
+
+    match /smePosAccess/{accessId} {
+      allow read: if signedIn() && (
+        resource.data.uid == request.auth.uid
+        || isSpaceOwner(resource.data.spaceId)
+        || isPosManager(resource.data.spaceId)
+      );
+      allow create, update, delete: if false; // POS roles are assigned by trusted Cloud Functions.
+    }
+
+    match /smePosProducts/{productId} {
+      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /smePosCustomers/{customerId} {
+      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /smePosSellers/{sellerId} {
+      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /smePosListings/{listingId} {
+      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /smePosSales/{saleId} {
+      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /smePosPayouts/{payoutId} {
+      allow read: if isSpaceOwner(resource.data.spaceId) || isPosManager(resource.data.spaceId)
+        || (hasActivePosAccess(resource.data.spaceId)
+          && get(/databases/$(database)/documents/smePosAccess/$(posAccessId(resource.data.spaceId, request.auth.uid))).data.role == 'seller'
+          && resource.data.sellerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /smePosCommands/{commandId} {
+      allow read, write: if false;
     }
 
     match /accounts/{accountId} {

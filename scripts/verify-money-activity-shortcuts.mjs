@@ -24,9 +24,12 @@ requireText('STAGING_TEST_CHECKLIST.md', 'Add receipt');
 requireText('package.json', 'verify-money-activity-shortcuts.mjs');
 
 const pkg = JSON.parse(read('package.json'));
-if (pkg.version !== '0.11.12') throw new Error('Money Activity shortcuts hotfix must remain on v0.11.12.');
+const [major, minor, patch] = pkg.version.split('.').map(Number);
+if (major === 0 && (minor < 11 || (minor === 11 && patch < 12))) throw new Error('Money Activity shortcuts require BajetBN v0.11.12 or later.');
 const release = JSON.parse(read('release.json'));
-const match = release.label.match(/Hotfix\s+(\d+)/i);
-if (!match || Number(match[1]) < 3) throw new Error('release.json must identify v0.11.12 Hotfix 3 or later.');
+if (pkg.version === '0.11.12') {
+  const match = release.label.match(/Hotfix\s+(\d+)/i);
+  if (!match || Number(match[1]) < 3) throw new Error('v0.11.12 must identify Hotfix 3 or later for Money Activity shortcuts.');
+}
 
 console.log('Money Activity shortcut checks passed (Overview modal and direct receipt actions).');

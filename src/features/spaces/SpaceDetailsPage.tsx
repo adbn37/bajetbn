@@ -204,6 +204,7 @@ export function SpaceDetailsPage() {
 
     <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
+      {space.type === 'sme' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/pos`}>Point of sale</Link>}
     </nav>
 
     {activeTab === 'overview' ? <SpaceOverview
@@ -252,6 +253,9 @@ function SpaceOverview({
     { to: `/reports?spaceId=${space.id}`, icon: '⌁', title: 'Money reports', detail: 'Understand where the money went.' },
     { to: `/calendar?spaceId=${space.id}`, icon: '▦', title: 'Calendar', detail: 'See what is late or coming soon.' },
   ];
+  if (space.type === 'sme') {
+    quickLinks.splice(1, 0, { to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Set up Standard POS or Marketplace Consignment POS for this shop.' });
+  }
   if (space.type === 'personal' || space.type === 'goal' || space.type === 'custom') {
     quickLinks.splice(2, 0, { to: `/goals?spaceId=${space.id}`, icon: '◇', title: 'Goals', detail: 'Track money you are saving.' });
   }

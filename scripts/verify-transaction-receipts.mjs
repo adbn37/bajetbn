@@ -23,14 +23,17 @@ requireText('functions/src/index.ts', "'transactionAttachments'");
 requireText('firestore.rules', 'match /transactionAttachments/{attachmentId}');
 requireText('storage.rules', 'users/{uid}/transaction-receipts');
 requireText('TRANSACTION_RECEIPTS_ALPHA.md', 'Financial values, Account balances, Budget totals and reversals are not changed');
-requireText('FINAL_SCOPE_AUDIT.md', 'No agreed pre-v1 requirement remains classified as `missing`');
+requireText('FINAL_SCOPE_AUDIT.md', '2026-08-03 scope expansion');
 requireText('PRODUCTION_READINESS_GATE.md', 'Current decision: NO-GO');
 
 const scope = JSON.parse(read('scope/pre-v1-scope.json'));
 const receipt = scope.items.find((item) => item.id === 'data.general_receipts');
 if (receipt?.status !== 'manual_test' || receipt?.gate !== 'pre_v1') throw new Error('Receipt scope item is not registered as a pre-v1 staging-test gate.');
 const missing = scope.items.filter((item) => item.status === 'missing');
-if (missing.length) throw new Error(`Missing scope items remain: ${missing.map((item) => item.id).join(', ')}`);
+const allowedMissing = new Set(['sme.pos_returns_payouts', 'sme.shop_pilot']);
+const unexpectedMissing = missing.filter((item) => !allowedMissing.has(item.id));
+if (unexpectedMissing.length) throw new Error(`Unexpected missing scope items remain: ${unexpectedMissing.map((item) => item.id).join(', ')}`);
+for (const id of allowedMissing) if (!missing.some((item) => item.id === id)) throw new Error(`${id} must remain explicit until the SME POS release sequence is complete.`);
 for (const id of ['collab.household_fund', 'sme.essentials', 'insights.financial_health', 'pwa.offline_mutations']) {
   if (scope.items.find((item) => item.id === id)?.status !== 'complete') throw new Error(`${id} must reflect the confirmed staging pass.`);
 }

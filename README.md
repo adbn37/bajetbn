@@ -1,4 +1,4 @@
-# BajetBN v0.11.6 — Account Deletion and Re-registration Alpha 2
+# BajetBN v0.11.13 — SME POS Foundation Alpha 1
 
 BajetBN is a budget tracker and modular life-management platform designed around **Spaces**. Accounts exist independently; future Transactions connect Accounts to Spaces.
 
@@ -25,6 +25,7 @@ BajetBN is a budget tracker and modular life-management platform designed around
 - Scheduled Auth, Firestore and Storage cleanup with anonymised shared financial history
 - Firebase emulator configuration
 - Optional receipt/document selection directly in Add Money Activity, with the existing add-later controls retained
+- SME Space POS foundation with Standard POS or Marketplace Consignment POS setup, shop details, safe mode changes, and role-based access
 - PWA manifest and service worker
 - Cloudflare Pages staging configuration and SPA redirects
 - GitHub staging validation workflow
@@ -222,3 +223,8 @@ See `PREMIUM_THEME_REFRESH_HOTFIX.md`. Dark mode now uses a near-black ADBN-insp
 - The receipt shortcut opens only the existing Receipts & documents area; full Details remains separate.
 - Receipt upload is still optional, and existing upload options remain available in the Add Money Activity form and Money Activity Details.
 - This is a frontend-only hotfix. Firebase Functions, Firestore rules, Storage rules and indexes are unchanged.
+
+
+## v0.11.13 SME POS foundation
+
+See `SME_POS_FOUNDATION_ALPHA.md`. Standard POS and Marketplace Consignment POS are now required before the first production launch.

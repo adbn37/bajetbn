@@ -44,3 +44,26 @@ v0.11.11 enables a bounded IndexedDB queue for new Money activity only. Each loc
 ## Transaction attachments
 
 Receipt/document binaries use `users/{uid}/transaction-receipts/{transactionId}/...` in Storage. Server-controlled `transactionAttachments` metadata links each file to its owner, transaction and Space. Attachment actions never alter financial postings.
+
+## SME POS foundation (v0.11.13)
+
+POS data belongs to one SME Space and does not replace normal BajetBN Accounts or Money Activity. A POS may use a selected business account for future checkout postings.
+
+```text
+SME Space
+  └─ smePosSettings/{spaceId}
+       ├─ mode: standard | marketplace_consignment
+       ├─ status: draft | active | paused
+       ├─ defaultPaymentAccountId (optional)
+       └─ smePosAccess/{spaceId_uid}
+
+Reserved shop records:
+  smePosProducts
+  smePosCustomers
+  smePosSellers
+  smePosListings
+  smePosSales
+  smePosPayouts
+```
+
+Trusted callable Functions manage setup and POS roles. Direct client writes are denied.
