@@ -110,8 +110,8 @@ The simple SME overview remains a separate pre-v1 item and is not silently bundl
 BajetBN will be used in the owner's shop. Production is therefore blocked until both POS modes are complete and tested:
 
 1. v0.11.13 — SME POS Foundation
-2. v0.11.14 — Standard POS — implemented, staging verification required
-3. v0.11.15 — Marketplace Consignment POS
+2. v0.11.14 — Standard POS — staging passed
+3. v0.11.15 — Marketplace Consignment POS — implemented, staging verification required
 4. v0.11.16 — Returns, refunds, seller payouts and POS reports
 5. v0.11.17 — Shop pilot and POS hardening
 6. v0.12.0 — Scope-Complete Beta Readiness

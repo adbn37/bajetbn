@@ -12,11 +12,16 @@ import { requireFirebase } from '../services/firebase';
 import type {
   PaymentMethodCode,
   SmePosAccess,
+  SmePosCommissionType,
   SmePosCustomer,
+  SmePosListing,
+  SmePosListingCondition,
   SmePosMode,
   SmePosPaymentAccount,
   SmePosProduct,
   SmePosRole,
+  SmePosSeller,
+  SmePosSellerLedgerEntry,
   SmePosSale,
   SmePosSettings,
   SmePosStatus,
@@ -206,3 +211,122 @@ export async function checkoutStandardPos(input: {
   const call = httpsCallable(functions, 'checkoutStandardPos');
   return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }>;
 }
+
+export async function listMarketplaceSellers(spaceId: string, includeArchived = false): Promise<SmePosSeller[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'smePosSellers'), where('spaceId', '==', spaceId)));
+  const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosSeller);
+  return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
+}
+
+export async function listMarketplaceListings(spaceId: string, includeArchived = false): Promise<SmePosListing[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'smePosListings'), where('spaceId', '==', spaceId)));
+  const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosListing);
+  return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
+}
+
+export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
+  sellers: SmePosSeller[];
+  listings: SmePosListing[];
+  customers: SmePosCustomer[];
+  sales: SmePosSale[];
+  sellerLedger: SmePosSellerLedgerEntry[];
+}> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'getMarketplacePosWorkspace');
+  const result = await call({ spaceId });
+  const data = result.data as {
+    sellers?: SmePosSeller[];
+    listings?: SmePosListing[];
+    customers?: SmePosCustomer[];
+    sales?: SmePosSale[];
+    sellerLedger?: SmePosSellerLedgerEntry[];
+  };
+  return {
+    sellers: data.sellers || [],
+    listings: data.listings || [],
+    customers: data.customers || [],
+    sales: data.sales || [],
+    sellerLedger: data.sellerLedger || [],
+  };
+}
+
+export async function saveMarketplaceSeller(input: {
+  spaceId: string;
+  sellerId?: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  note?: string;
+  linkedUid?: string | null;
+  defaultCommissionType: SmePosCommissionType;
+  defaultCommissionRateBps: number;
+  defaultCommissionMinor: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'saveMarketplaceSeller');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function setMarketplaceSellerArchived(spaceId: string, sellerId: string, archived: boolean) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'setMarketplaceSellerArchived');
+  return call({ spaceId, sellerId, archived, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function saveMarketplaceListing(input: {
+  spaceId: string;
+  listingId?: string;
+  sellerId: string;
+  name: string;
+  category?: string;
+  sku?: string;
+  note?: string;
+  condition: SmePosListingCondition;
+  conditionNote?: string;
+  sellingPriceMinor: number;
+  commissionType: SmePosCommissionType;
+  commissionRateBps: number;
+  commissionMinor: number;
+  quantityOnHand: number;
+  lowStockLevel: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'saveMarketplaceListing');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function updateMarketplaceListingStock(input: {
+  spaceId: string;
+  listingId: string;
+  quantityOnHand: number;
+  lowStockLevel: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'updateMarketplaceListingStock');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function setMarketplaceListingArchived(spaceId: string, listingId: string, archived: boolean) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'setMarketplaceListingArchived');
+  return call({ spaceId, listingId, archived, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function checkoutMarketplacePos(input: {
+  spaceId: string;
+  items: Array<{ listingId: string; quantity: number }>;
+  customerId?: string | null;
+  paymentAccountId: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  discountMinor: number;
+  saleDate: string;
+  note?: string;
+}): Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'checkoutMarketplacePos');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }>;
+}
+

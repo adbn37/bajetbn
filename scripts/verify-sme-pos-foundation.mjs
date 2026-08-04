@@ -82,8 +82,8 @@ const scope = JSON.parse(read('scope/pre-v1-scope.json'));
 const byId = new Map(scope.items.map((item) => [item.id, item]));
 if (byId.get('sme.pos_foundation')?.status !== 'complete') fail('sme.pos_foundation must be complete.');
 if (!['partial', 'manual_test', 'complete'].includes(byId.get('sme.standard_pos')?.status)) fail('sme.standard_pos must remain tracked.');
-if (byId.get('sme.marketplace_pos')?.status !== 'partial') fail('sme.marketplace_pos must remain partial until seller sales are implemented.');
-if (byId.get('sme.pos_returns_payouts')?.status !== 'missing') fail('Returns and payouts must remain an explicit open item.');
+if (!['manual_test', 'complete'].includes(byId.get('sme.marketplace_pos')?.status)) fail('sme.marketplace_pos must be manual_test or complete after seller sales are implemented.');
+if (!['missing', 'partial'].includes(byId.get('sme.pos_returns_payouts')?.status)) fail('Returns and payouts must remain an explicit open item until v0.11.16.');
 if (byId.get('sme.shop_pilot')?.gate !== 'pre_production') fail('The shop pilot must block production.');
 
 requireText('PRODUCTION_READINESS_GATE.md', 'Added production blocker — SME POS');

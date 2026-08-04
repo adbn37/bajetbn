@@ -29,6 +29,8 @@ const recurringTransactionActions = ['pause', 'resume', 'skip', 'stop', 'restart
 const smePosModes = ['standard', 'marketplace_consignment'] as const;
 const smePosStatuses = ['active', 'paused'] as const;
 const smePosRoles = ['manager', 'cashier', 'stock_staff', 'seller', 'viewer'] as const;
+const smePosCommissionTypes = ['percentage', 'fixed_per_item'] as const;
+const smePosListingConditions = ['new', 'sealed', 'open_box', 'used', 'other'] as const;
 type SmePosActorRole = 'owner' | (typeof smePosRoles)[number];
 type AccountType = (typeof accountTypes)[number];
 type InstitutionCode = (typeof institutionCodes)[number];
@@ -1790,6 +1792,487 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
     const result = { saleId: saleRef.id, receiptNumber, transactionId: financialRef.id };
     transaction.create(commandRef, { uid, kind: 'checkout_standard_pos', idempotencyKey: key, result, createdAt: now });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed POS sale ${receiptNumber} for ${totalMinor / 100} ${account.currency}.`, now });
+    return result;
+  });
+});
+
+function parseMarketplaceCheckoutItems(value: unknown): Array<{ listingId: string; quantity: number }> {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 50) {
+    throw new HttpsError('invalid-argument', 'Checkout must contain between 1 and 50 listing lines.');
+  }
+  const seen = new Set<string>();
+  return value.map((row) => {
+    if (!row || typeof row !== 'object') throw new HttpsError('invalid-argument', 'Invalid Marketplace listing.');
+    const item = row as Record<string, unknown>;
+    const listingId = stringValue(item.listingId, 'Listing ID', 80);
+    if (seen.has(listingId)) throw new HttpsError('invalid-argument', 'The same listing appears more than once.');
+    seen.add(listingId);
+    return { listingId, quantity: integerBetween(item.quantity, 'Quantity', 1, 9_999) };
+  });
+}
+
+function marketplaceCommissionValues(data: Record<string, unknown>, sellingPriceMinor?: number) {
+  const commissionType = oneOf(data.commissionType, smePosCommissionTypes, 'commission type');
+  const commissionRateBps = commissionType === 'percentage'
+    ? integerBetween(data.commissionRateBps ?? 0, 'Commission percentage', 0, 10_000)
+    : 0;
+  const commissionMinor = commissionType === 'fixed_per_item'
+    ? nonNegativeMoney(data.commissionMinor ?? 0)
+    : 0;
+  if (commissionType === 'fixed_per_item' && sellingPriceMinor != null && commissionMinor >= sellingPriceMinor) {
+    throw new HttpsError('invalid-argument', 'Fixed commission must be lower than the listing selling price.');
+  }
+  return { commissionType, commissionRateBps, commissionMinor };
+}
+
+function requireMarketplaceSettings(context: SmePosActorContext) {
+  if (context.settings.mode !== 'marketplace_consignment') {
+    throw new HttpsError('failed-precondition', 'Change this SME Space to Marketplace Consignment POS first.');
+  }
+}
+
+function marketplaceSortValue(data: DocumentData): number {
+  const value = data.updatedAt || data.createdAt;
+  return value instanceof Timestamp ? value.toMillis() : 0;
+}
+
+export const getMarketplacePosWorkspace = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier', 'stock_staff', 'seller', 'viewer']);
+  requireMarketplaceSettings(context);
+
+  const sellerQuery = db.collection('smePosSellers').where('spaceId', '==', spaceId);
+  const listingQuery = db.collection('smePosListings').where('spaceId', '==', spaceId);
+  const [sellerSnapshot, listingSnapshot, saleSnapshot, ledgerSnapshot] = await Promise.all([
+    sellerQuery.get(),
+    listingQuery.get(),
+    ['owner', 'manager', 'cashier', 'seller'].includes(context.role) ? db.collection('smePosSales').where('spaceId', '==', spaceId).get() : Promise.resolve(null),
+    context.role === 'seller' ? db.collection('smePosSellerLedger').where('sellerUid', '==', uid).get() : Promise.resolve(null),
+  ]);
+
+  const allSellers = sellerSnapshot.docs
+    .map((item): DocumentData => ({ id: item.id, ...item.data() }))
+    .filter((item) => !item.archivedAt)
+    .sort((a, b) => marketplaceSortValue(b) - marketplaceSortValue(a));
+  const allListings = listingSnapshot.docs
+    .map((item): DocumentData => ({ id: item.id, ...item.data() }))
+    .filter((item) => !item.archivedAt)
+    .sort((a, b) => marketplaceSortValue(b) - marketplaceSortValue(a));
+
+  let sellers: DocumentData[] = [];
+  let listings: DocumentData[] = [];
+  let customers: DocumentData[] = [];
+  let sales: DocumentData[] = [];
+  let sellerLedger: DocumentData[] = [];
+
+  if (context.role === 'owner' || context.role === 'manager') {
+    sellers = allSellers;
+    listings = allListings;
+    const [customersResult, salesResult] = await Promise.all([
+      db.collection('smePosCustomers').where('spaceId', '==', spaceId).get(),
+      saleSnapshot ? Promise.resolve(saleSnapshot) : db.collection('smePosSales').where('spaceId', '==', spaceId).get(),
+    ]);
+    customers = customersResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt);
+    sales = salesResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => item.sourceMode === 'marketplace_consignment');
+  } else if (context.role === 'cashier') {
+    listings = allListings.map((item) => ({
+      ...item,
+      commissionType: 'percentage', commissionRateBps: 0, commissionMinor: 0,
+      commissionEarnedMinor: 0, sellerEarningsMinor: 0, note: '',
+    }));
+    const customersResult = await db.collection('smePosCustomers').where('spaceId', '==', spaceId).get();
+    customers = customersResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt);
+    sales = (saleSnapshot?.docs || [])
+      .map((item): DocumentData => ({ id: item.id, ...item.data() }))
+      .filter((item) => item.sourceMode === 'marketplace_consignment' && item.createdBy === uid)
+      .map((item) => ({ ...item, costMinor: 0, profitMinor: 0, marketplaceCommissionMinor: 0, sellerEarningsMinor: 0 }));
+  } else if (context.role === 'stock_staff') {
+    listings = allListings.map((item) => ({
+      ...item,
+      sellingPriceMinor: 0, commissionType: 'percentage', commissionRateBps: 0, commissionMinor: 0,
+      grossSalesMinor: 0, commissionEarnedMinor: 0, sellerEarningsMinor: 0, note: '',
+    }));
+  } else if (context.role === 'viewer') {
+    listings = allListings.map((item) => ({
+      ...item,
+      commissionType: 'percentage', commissionRateBps: 0, commissionMinor: 0,
+      grossSalesMinor: 0, commissionEarnedMinor: 0, sellerEarningsMinor: 0, note: '',
+    }));
+    const customersResult = await db.collection('smePosCustomers').where('spaceId', '==', spaceId).get();
+    customers = customersResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt)
+      .map((item) => ({ id: item.id, displayId: item.displayId, spaceId: item.spaceId, ownerId: item.ownerId, name: item.name, totalSpentMinor: 0, visitCount: item.visitCount || 0 }));
+  } else {
+    const ownSeller = allSellers.find((item) => item.linkedUid === uid) || null;
+    if (ownSeller) {
+      sellers = [ownSeller];
+      listings = allListings.filter((item) => item.sellerId === ownSeller.id);
+      const ownSaleRows = (saleSnapshot?.docs || [])
+        .map((item): DocumentData => ({ id: item.id, ...item.data() }))
+        .filter((item) => item.sourceMode === 'marketplace_consignment' && Array.isArray(item.items) && item.items.some((line: DocumentData) => line.sellerId === ownSeller.id));
+      sales = ownSaleRows.map((sale) => {
+        const items = (sale.items as DocumentData[]).filter((line) => line.sellerId === ownSeller.id);
+        const sellerEarningsMinor = items.reduce((sum, line) => sum + Number(line.sellerEarningMinor || 0), 0);
+        const commissionMinor = items.reduce((sum, line) => sum + Number(line.commissionMinor || 0), 0);
+        const totalMinor = items.reduce((sum, line) => sum + Number(line.netLineMinor || line.lineTotalMinor || 0), 0);
+        return {
+          id: sale.id, displayId: sale.displayId, receiptNumber: sale.receiptNumber, spaceId, ownerId: sale.ownerId,
+          createdBy: sale.createdBy, status: sale.status, returnStatus: sale.returnStatus, sourceMode: sale.sourceMode,
+          customerId: null, customerName: null, paymentAccountId: '', paymentAccountName: '', paymentMethod: null, paymentMethodLabel: null,
+          items, itemCount: items.reduce((sum, line) => sum + Number(line.quantity || 0), 0), subtotalMinor: totalMinor,
+          discountMinor: 0, totalMinor, costMinor: sellerEarningsMinor, profitMinor: commissionMinor,
+          marketplaceCommissionMinor: commissionMinor, sellerEarningsMinor, sellerCount: 1, returnedMinor: 0,
+          currency: sale.currency, saleDate: sale.saleDate, note: '', transactionId: '', ledgerEntryId: '',
+          receiptName: sale.receiptName, receiptFooter: '', createdAt: sale.createdAt, updatedAt: sale.updatedAt,
+        };
+      });
+      sellerLedger = (ledgerSnapshot?.docs || []).map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => item.spaceId === spaceId);
+    }
+  }
+
+  const sorter = (a: DocumentData, b: DocumentData) => marketplaceSortValue(b) - marketplaceSortValue(a);
+  return {
+    sellers: sellers.sort(sorter), listings: listings.sort(sorter), customers: customers.sort(sorter),
+    sales: sales.sort(sorter), sellerLedger: sellerLedger.sort(sorter),
+  };
+});
+
+export const saveMarketplaceSeller = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const sellerId = optionalString(request.data?.sellerId, 80) || null;
+  const name = stringValue(request.data?.name, 'Seller name', 100);
+  const phone = optionalPhone(request.data?.phone);
+  const email = optionalString(request.data?.email, 120);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid email address.');
+  const note = optionalString(request.data?.note, 300);
+  const linkedUid = optionalString(request.data?.linkedUid, 128) || null;
+  const commission = marketplaceCommissionValues(request.data || {});
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  requireMarketplaceSettings(context);
+
+  if (linkedUid) {
+    const [member, access, duplicate] = await Promise.all([
+      db.collection('spaceMembers').doc(`${spaceId}_${linkedUid}`).get(),
+      db.collection('smePosAccess').doc(`${spaceId}_${linkedUid}`).get(),
+      db.collection('smePosSellers').where('spaceId', '==', spaceId).get(),
+    ]);
+    if (!member.exists || ['suspended', 'removed'].includes(String(member.data()?.status || ''))) throw new HttpsError('failed-precondition', 'Choose an active SME Space member.');
+    if (!access.exists || access.data()?.status !== 'active' || access.data()?.role !== 'seller') throw new HttpsError('failed-precondition', 'Assign the Seller POS role before linking this login.');
+    if (duplicate.docs.some((item) => item.id !== sellerId && item.data().linkedUid === linkedUid && !item.data().archivedAt)) throw new HttpsError('already-exists', 'This login is already linked to another active seller.');
+  }
+
+  const sellerRef = sellerId ? db.collection('smePosSellers').doc(sellerId) : db.collection('smePosSellers').doc();
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, current] = await Promise.all([transaction.get(commandRef), transaction.get(sellerRef)]);
+    if (command.exists) return command.data()?.result;
+    if (sellerId && (!current.exists || current.data()?.spaceId !== spaceId)) throw new HttpsError('not-found', 'Seller not found.');
+    const existing = current.data() || {};
+    const now = FieldValue.serverTimestamp();
+    transaction.set(sellerRef, {
+      displayId: existing.displayId || displayId('SEL'), spaceId, ownerId: context.settings.ownerId,
+      name, phone, email, note, linkedUid,
+      defaultCommissionType: commission.commissionType,
+      defaultCommissionRateBps: commission.commissionRateBps,
+      defaultCommissionMinor: commission.commissionMinor,
+      grossSalesMinor: Number(existing.grossSalesMinor || 0), commissionEarnedMinor: Number(existing.commissionEarnedMinor || 0),
+      balanceMinor: Number(existing.balanceMinor || 0), paidOutMinor: Number(existing.paidOutMinor || 0), soldQuantity: Number(existing.soldQuantity || 0),
+      currency: context.settings.currency || 'BND', archivedAt: existing.archivedAt || null,
+      createdAt: existing.createdAt || now, updatedAt: now,
+    }, { merge: true });
+    const result = { sellerId: sellerRef.id };
+    transaction.create(commandRef, { uid, kind: 'save_marketplace_seller', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: sellerId ? 'marketplace_seller_updated' : 'marketplace_seller_created', targetType: 'sme_pos_seller', targetId: sellerRef.id, summary: `${sellerId ? 'Updated' : 'Added'} seller ${name}.`, now });
+    return result;
+  });
+});
+
+export const setMarketplaceSellerArchived = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const sellerId = stringValue(request.data?.sellerId, 'Seller ID', 80);
+  const archived = request.data?.archived === true;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  requireMarketplaceSettings(context);
+  if (archived) {
+    const activeListings = await db.collection('smePosListings').where('spaceId', '==', spaceId).get();
+    if (activeListings.docs.some((item) => item.data().sellerId === sellerId && !item.data().archivedAt)) throw new HttpsError('failed-precondition', 'Archive this seller’s active listings first.');
+  }
+  const sellerRef = db.collection('smePosSellers').doc(sellerId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, seller, spaceSellers] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(sellerRef),
+      transaction.get(db.collection('smePosSellers').where('spaceId', '==', spaceId)),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!seller.exists || seller.data()?.spaceId !== spaceId) throw new HttpsError('not-found', 'Seller not found.');
+    if (!archived) {
+      const linkedUid = seller.data()?.linkedUid;
+      if (linkedUid && spaceSellers.docs.some((item) => item.id !== sellerId && item.data().linkedUid === linkedUid && !item.data().archivedAt)) {
+        throw new HttpsError('already-exists', 'This login is already linked to another active seller.');
+      }
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.update(sellerRef, { archivedAt: archived ? now : null, updatedAt: now });
+    const result = { sellerId, archived };
+    transaction.create(commandRef, { uid, kind: 'archive_marketplace_seller', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const saveMarketplaceListing = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const listingId = optionalString(request.data?.listingId, 80) || null;
+  const sellerId = stringValue(request.data?.sellerId, 'Seller', 80);
+  const name = stringValue(request.data?.name, 'Item name', 100);
+  const category = optionalString(request.data?.category, 60);
+  const sku = optionalString(request.data?.sku, 50);
+  const note = optionalString(request.data?.note, 300);
+  const condition = oneOf(request.data?.condition, smePosListingConditions, 'item condition');
+  const conditionNote = optionalString(request.data?.conditionNote, 120);
+  const sellingPriceMinor = positiveMoney(request.data?.sellingPriceMinor);
+  const commission = marketplaceCommissionValues(request.data || {}, sellingPriceMinor);
+  const quantityOnHand = smePosQuantity(request.data?.quantityOnHand, 'Available quantity');
+  const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  requireMarketplaceSettings(context);
+
+  const listingRef = listingId ? db.collection('smePosListings').doc(listingId) : db.collection('smePosListings').doc();
+  const sellerRef = db.collection('smePosSellers').doc(sellerId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, current, seller] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef), transaction.get(sellerRef)]);
+    if (command.exists) return command.data()?.result;
+    if (listingId && (!current.exists || current.data()?.spaceId !== spaceId)) throw new HttpsError('not-found', 'Listing not found.');
+    if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active seller.');
+    const existing = current.data() || {};
+    const now = FieldValue.serverTimestamp();
+    transaction.set(listingRef, {
+      displayId: existing.displayId || displayId('LST'), spaceId, ownerId: context.settings.ownerId,
+      sellerId, sellerName: seller.data()?.name || 'Seller', sellerUid: seller.data()?.linkedUid || null,
+      name, category, sku, note, condition, conditionNote, sellingPriceMinor, currency: context.settings.currency || 'BND',
+      commissionType: commission.commissionType, commissionRateBps: commission.commissionRateBps, commissionMinor: commission.commissionMinor,
+      quantityOnHand, lowStockLevel,
+      soldQuantity: Number(existing.soldQuantity || 0), grossSalesMinor: Number(existing.grossSalesMinor || 0),
+      commissionEarnedMinor: Number(existing.commissionEarnedMinor || 0), sellerEarningsMinor: Number(existing.sellerEarningsMinor || 0),
+      archivedAt: existing.archivedAt || null, createdAt: existing.createdAt || now, updatedAt: now,
+    }, { merge: true });
+    const result = { listingId: listingRef.id };
+    transaction.create(commandRef, { uid, kind: 'save_marketplace_listing', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: listingId ? 'marketplace_listing_updated' : 'marketplace_listing_created', targetType: 'sme_pos_listing', targetId: listingRef.id, summary: `${listingId ? 'Updated' : 'Added'} ${name} for ${seller.data()?.name || 'a seller'}.`, now });
+    return result;
+  });
+});
+
+export const updateMarketplaceListingStock = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const listingId = stringValue(request.data?.listingId, 'Listing ID', 80);
+  const quantityOnHand = smePosQuantity(request.data?.quantityOnHand, 'Available quantity');
+  const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  requireMarketplaceSettings(context);
+  const listingRef = db.collection('smePosListings').doc(listingId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!listing.exists || listing.data()?.spaceId !== spaceId || listing.data()?.archivedAt) throw new HttpsError('not-found', 'Active listing not found.');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(listingRef, { quantityOnHand, lowStockLevel, updatedAt: now });
+    const result = { listingId, quantityOnHand, lowStockLevel };
+    transaction.create(commandRef, { uid, kind: 'update_marketplace_listing_stock', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const setMarketplaceListingArchived = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const listingId = stringValue(request.data?.listingId, 'Listing ID', 80);
+  const archived = request.data?.archived === true;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  requireMarketplaceSettings(context);
+  const listingRef = db.collection('smePosListings').doc(listingId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!listing.exists || listing.data()?.spaceId !== spaceId) throw new HttpsError('not-found', 'Listing not found.');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(listingRef, { archivedAt: archived ? now : null, updatedAt: now });
+    const result = { listingId, archived };
+    transaction.create(commandRef, { uid, kind: 'archive_marketplace_listing', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const checkoutMarketplacePos = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const requestedItems = parseMarketplaceCheckoutItems(request.data?.items);
+  const customerId = optionalString(request.data?.customerId, 80) || null;
+  const paymentAccountId = stringValue(request.data?.paymentAccountId, 'Payment account', 80);
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
+  const discountMinor = nonNegativeMoney(request.data?.discountMinor ?? 0);
+  const saleDate = localDate(request.data?.saleDate, 'Sale date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  requireMarketplaceSettings(context);
+  if (context.settings.status !== 'active') throw new HttpsError('failed-precondition', 'Activate the POS before completing checkout.');
+
+  const listingRefs = requestedItems.map((item) => db.collection('smePosListings').doc(item.listingId));
+  const accountRef = db.collection('accounts').doc(paymentAccountId);
+  const customerRef = customerId ? db.collection('smePosCustomers').doc(customerId) : null;
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const saleRef = db.collection('smePosSales').doc();
+  const financialRef = db.collection('transactions').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const [command, accountSnapshot, customerSnapshot, listingSnapshots] = await Promise.all([
+      transaction.get(commandRef), transaction.get(accountRef), customerRef ? transaction.get(customerRef) : Promise.resolve(null), Promise.all(listingRefs.map((ref) => transaction.get(ref))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payment account');
+    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for POS payments.');
+    if (account.currency !== context.settings.currency) throw new HttpsError('failed-precondition', 'Payment account and POS currency must match.');
+    if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
+
+    const prepared = listingSnapshots.map((snapshot, index) => {
+      if (!snapshot.exists) throw new HttpsError('not-found', 'One of the seller listings was not found.');
+      const listing = snapshot.data() || {};
+      const requested = requestedItems[index];
+      if (listing.spaceId !== spaceId || listing.ownerId !== context.settings.ownerId || listing.archivedAt) throw new HttpsError('failed-precondition', 'One of the seller listings is unavailable.');
+      const available = smePosQuantity(listing.quantityOnHand, 'Listing stock');
+      if (available < 1) throw new HttpsError('failed-precondition', `${listing.name || 'A listing'} is out of stock.`);
+      if (available < requested.quantity) throw new HttpsError('failed-precondition', `${listing.name || 'A listing'} only has ${available} available.`);
+      const unitPriceMinor = positiveMoney(listing.sellingPriceMinor);
+      const lineSubtotalMinor = unitPriceMinor * requested.quantity;
+      if (!Number.isSafeInteger(lineSubtotalMinor)) throw new HttpsError('out-of-range', 'Sale amount is too large.');
+      return { snapshot, listing, requested, unitPriceMinor, lineSubtotalMinor };
+    });
+    const subtotalMinor = prepared.reduce((sum, item) => sum + item.lineSubtotalMinor, 0);
+    if (discountMinor >= subtotalMinor) throw new HttpsError('invalid-argument', 'Discount must be less than the subtotal.');
+
+    const sellerIds = [...new Set(prepared.map((item) => String(item.listing.sellerId || '')))];
+    if (sellerIds.some((id) => !id)) throw new HttpsError('failed-precondition', 'A listing is missing its seller.');
+    const sellerRefs = sellerIds.map((sellerId) => db.collection('smePosSellers').doc(sellerId));
+    const sellerSnapshots = await Promise.all(sellerRefs.map((ref) => transaction.get(ref)));
+    const sellerById = new Map(sellerSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+    sellerSnapshots.forEach((snapshot) => {
+      if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'One of the sellers is unavailable.');
+    });
+
+    let remainingDiscount = discountMinor;
+    let marketplaceCommissionMinor = 0;
+    let sellerEarningsMinor = 0;
+    let itemCount = 0;
+    const sellerTotals = new Map<string, { gross: number; commission: number; earnings: number; quantity: number }>();
+    const saleItems = prepared.map((item, index) => {
+      const discountShareMinor = index === prepared.length - 1
+        ? remainingDiscount
+        : Math.floor(discountMinor * item.lineSubtotalMinor / subtotalMinor);
+      remainingDiscount -= discountShareMinor;
+      const netLineMinor = item.lineSubtotalMinor - discountShareMinor;
+      const commissionType = oneOf(item.listing.commissionType, smePosCommissionTypes, 'listing commission type');
+      const commissionRateBps = commissionType === 'percentage' ? integerBetween(item.listing.commissionRateBps ?? 0, 'Commission percentage', 0, 10_000) : 0;
+      const fixedCommissionMinor = commissionType === 'fixed_per_item' ? nonNegativeMoney(item.listing.commissionMinor ?? 0) : 0;
+      const commissionMinor = commissionType === 'percentage'
+        ? Math.floor(netLineMinor * commissionRateBps / 10_000)
+        : Math.min(netLineMinor, fixedCommissionMinor * item.requested.quantity);
+      const sellerEarningMinor = netLineMinor - commissionMinor;
+      marketplaceCommissionMinor += commissionMinor;
+      sellerEarningsMinor += sellerEarningMinor;
+      itemCount += item.requested.quantity;
+      const sellerId = String(item.listing.sellerId);
+      const aggregate = sellerTotals.get(sellerId) || { gross: 0, commission: 0, earnings: 0, quantity: 0 };
+      aggregate.gross += netLineMinor;
+      aggregate.commission += commissionMinor;
+      aggregate.earnings += sellerEarningMinor;
+      aggregate.quantity += item.requested.quantity;
+      sellerTotals.set(sellerId, aggregate);
+      return {
+        productId: item.snapshot.id, listingId: item.snapshot.id, productName: String(item.listing.name || 'Item'), sku: String(item.listing.sku || ''),
+        sellerId, sellerName: String(item.listing.sellerName || sellerById.get(sellerId)?.data()?.name || 'Seller'), sellerUid: item.listing.sellerUid || sellerById.get(sellerId)?.data()?.linkedUid || null,
+        condition: oneOf(item.listing.condition, smePosListingConditions, 'item condition'), quantity: item.requested.quantity,
+        unitPriceMinor: item.unitPriceMinor, unitCostMinor: Math.floor(sellerEarningMinor / item.requested.quantity),
+        lineTotalMinor: item.lineSubtotalMinor, lineCostMinor: sellerEarningMinor, discountShareMinor, netLineMinor, commissionMinor, sellerEarningMinor, returnedQuantity: 0,
+      };
+    });
+    const totalMinor = subtotalMinor - discountMinor;
+    if (marketplaceCommissionMinor + sellerEarningsMinor !== totalMinor) throw new HttpsError('internal', 'Marketplace sale split did not balance.');
+
+    const now = FieldValue.serverTimestamp();
+    const delta = accountEffect(account.type, 'in', totalMinor);
+    updateAccountBalance(transaction, accountRef, account, delta);
+    const ledgerEntryId = createLedgerEntry(transaction, { accountId: paymentAccountId, ownerId: String(context.settings.ownerId), spaceId, transactionId: financialRef.id, entryType: 'marketplace_pos_sale', amountMinor: delta, currency: account.currency, idempotencyKey: key, now });
+    const salesCategory = systemCategories.get('income-sales');
+    if (!salesCategory) throw new HttpsError('internal', 'Sales category is unavailable.');
+    transaction.create(financialRef, {
+      displayId: displayId('TXN'), ownerId: context.settings.ownerId, createdBy: uid, type: 'income', status: 'posted', spaceId, accountId: paymentAccountId, destinationAccountId: null,
+      amountMinor: totalMinor, currency: account.currency, category: salesCategory.name, categoryId: salesCategory.id, categoryIcon: salesCategory.icon, categoryColor: salesCategory.color,
+      categoryScope: 'business', categoryIsSystem: true, counterparty: customerSnapshot?.data()?.name || 'Marketplace POS customer', note: note || `Marketplace POS sale ${saleRef.id}`,
+      paymentMethod, paymentMethodLabel, transactionDate: saleDate, reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
+      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null, recurringTemplateId: null, recurringRunId: null, recurringScheduledDate: null,
+      createdAt: now, postedAt: now, updatedAt: now,
+    });
+
+    prepared.forEach((item, index) => {
+      transaction.update(item.snapshot.ref, {
+        quantityOnHand: Number(item.listing.quantityOnHand || 0) - item.requested.quantity,
+        soldQuantity: Number(item.listing.soldQuantity || 0) + item.requested.quantity,
+        grossSalesMinor: Number(item.listing.grossSalesMinor || 0) + saleItems[index].netLineMinor,
+        commissionEarnedMinor: Number(item.listing.commissionEarnedMinor || 0) + saleItems[index].commissionMinor,
+        sellerEarningsMinor: Number(item.listing.sellerEarningsMinor || 0) + saleItems[index].sellerEarningMinor,
+        updatedAt: now,
+      });
+    });
+
+    const receiptNumber = displayId('RCP');
+    sellerTotals.forEach((totals, sellerId) => {
+      const snapshot = sellerById.get(sellerId);
+      if (!snapshot) throw new HttpsError('internal', 'Seller balance record is unavailable.');
+      const currentBalance = nonNegativeMoney(snapshot.data()?.balanceMinor ?? 0);
+      const nextBalance = currentBalance + totals.earnings;
+      if (!Number.isSafeInteger(nextBalance)) throw new HttpsError('out-of-range', 'Seller balance is too large.');
+      transaction.update(snapshot.ref, {
+        grossSalesMinor: Number(snapshot.data()?.grossSalesMinor || 0) + totals.gross,
+        commissionEarnedMinor: Number(snapshot.data()?.commissionEarnedMinor || 0) + totals.commission,
+        balanceMinor: nextBalance,
+        soldQuantity: Number(snapshot.data()?.soldQuantity || 0) + totals.quantity,
+        updatedAt: now,
+      });
+      const sellerLedgerRef = db.collection('smePosSellerLedger').doc();
+      transaction.create(sellerLedgerRef, {
+        displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId,
+        sellerName: snapshot.data()?.name || 'Seller', sellerUid: snapshot.data()?.linkedUid || null,
+        kind: 'sale_earning', amountMinor: totals.earnings, balanceAfterMinor: nextBalance, currency: account.currency,
+        saleId: saleRef.id, receiptNumber, payoutId: null, note: `${totals.quantity} item(s) sold`, createdAt: now,
+      });
+    });
+
+    if (customerRef && customerSnapshot) transaction.update(customerRef, { totalSpentMinor: Number(customerSnapshot.data()?.totalSpentMinor || 0) + totalMinor, visitCount: Number(customerSnapshot.data()?.visitCount || 0) + 1, lastSaleAt: now, updatedAt: now });
+    transaction.create(saleRef, {
+      displayId: displayId('SAL'), receiptNumber, spaceId, ownerId: context.settings.ownerId, createdBy: uid, status: 'completed', returnStatus: 'not_returned', sourceMode: 'marketplace_consignment',
+      customerId, customerName: customerSnapshot?.data()?.name || null, paymentAccountId, paymentAccountName: accountSnapshot.data()?.name || 'Business account', paymentMethod, paymentMethodLabel,
+      items: saleItems, itemCount, subtotalMinor, discountMinor, totalMinor, costMinor: sellerEarningsMinor, profitMinor: marketplaceCommissionMinor,
+      marketplaceCommissionMinor, sellerEarningsMinor, sellerCount: sellerTotals.size, returnedMinor: 0, currency: account.currency, saleDate, note,
+      transactionId: financialRef.id, ledgerEntryId, receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '',
+      createdAt: now, updatedAt: now,
+    });
+    const result = { saleId: saleRef.id, receiptNumber, transactionId: financialRef.id };
+    transaction.create(commandRef, { uid, kind: 'checkout_marketplace_pos', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'marketplace_pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed Marketplace sale ${receiptNumber} for ${totalMinor / 100} ${account.currency} across ${sellerTotals.size} seller(s).`, now });
     return result;
   });
 });

@@ -177,12 +177,23 @@ service cloud.firestore {
     }
 
     match /smePosSellers/{sellerId} {
-      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow read: if isSpaceOwner(resource.data.spaceId)
+        || hasPosRole(resource.data.spaceId, ['manager'])
+        || (hasPosRole(resource.data.spaceId, ['seller']) && resource.data.linkedUid == request.auth.uid);
       allow create, update, delete: if false;
     }
 
     match /smePosListings/{listingId} {
-      allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);
+      allow read: if isSpaceOwner(resource.data.spaceId)
+        || hasPosRole(resource.data.spaceId, ['manager'])
+        || (hasPosRole(resource.data.spaceId, ['seller']) && resource.data.sellerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /smePosSellerLedger/{entryId} {
+      allow read: if isSpaceOwner(resource.data.spaceId)
+        || hasPosRole(resource.data.spaceId, ['manager'])
+        || (hasPosRole(resource.data.spaceId, ['seller']) && resource.data.sellerUid == request.auth.uid);
       allow create, update, delete: if false;
     }
 
