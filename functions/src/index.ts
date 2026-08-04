@@ -26,6 +26,9 @@ const recurringTransactionTypes = ['income', 'expense'] as const;
 const recurringTransactionFrequencies = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
 const recurringTransactionStatuses = ['active', 'paused', 'needs_attention', 'stopped', 'completed'] as const;
 const recurringTransactionActions = ['pause', 'resume', 'skip', 'stop', 'restart', 'delete'] as const;
+const smePosModes = ['standard', 'marketplace_consignment'] as const;
+const smePosStatuses = ['active', 'paused'] as const;
+const smePosRoles = ['manager', 'cashier', 'stock_staff', 'seller', 'viewer'] as const;
 type AccountType = (typeof accountTypes)[number];
 type InstitutionCode = (typeof institutionCodes)[number];
 type PaymentMethodCode = (typeof paymentMethodCodes)[number];
@@ -1157,6 +1160,198 @@ function createNotification(transaction: Transaction, input: { uid: string; spac
 }
 
 
+async function requireSmeSpaceOwner(spaceId: string, uid: string): Promise<{ space: DocumentData; member: DocumentData }> {
+  const [spaceSnapshot, member] = await Promise.all([
+    db.collection('spaces').doc(spaceId).get(),
+    requireActiveSpaceMember(spaceId, uid),
+  ]);
+  if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) throw new HttpsError('not-found', 'SME Space not found.');
+  const space = spaceSnapshot.data() || {};
+  if (space.type !== 'sme') throw new HttpsError('failed-precondition', 'Point of sale is only available inside an SME Space.');
+  if (space.ownerId !== uid || member.role !== 'owner') throw new HttpsError('permission-denied', 'Only the SME Space owner can change POS setup.');
+  return { space, member };
+}
+
+async function hasMarketplacePosRecords(spaceId: string): Promise<boolean> {
+  const collections = ['smePosSellers', 'smePosListings', 'smePosSales'];
+  const [access, ...snapshots] = await Promise.all([
+    db.collection('smePosAccess').where('spaceId', '==', spaceId).get(),
+    ...collections.map((name) => db.collection(name).where('spaceId', '==', spaceId).limit(1).get()),
+  ]);
+  const activeSellerAccess = access.docs.some((item) => item.data().role === 'seller' && item.data().status === 'active');
+  return activeSellerAccess || snapshots.some((snapshot) => !snapshot.empty);
+}
+
+export const saveSmePosSetup = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const mode = oneOf(request.data?.mode, smePosModes, 'POS mode');
+  const shopName = stringValue(request.data?.shopName, 'Shop name', 100);
+  const receiptName = stringValue(request.data?.receiptName, 'Receipt name', 100);
+  const receiptFooter = optionalString(request.data?.receiptFooter, 240);
+  const defaultPaymentAccountId = optionalString(request.data?.defaultPaymentAccountId, 80) || null;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const { space, member } = await requireSmeSpaceOwner(spaceId, uid);
+  const settingsRef = db.collection('smePosSettings').doc(spaceId);
+  const settingsSnapshot = await settingsRef.get();
+  const existing = settingsSnapshot.data() || null;
+
+  if (existing?.mode === 'marketplace_consignment' && mode === 'standard' && existing.status !== 'draft' && await hasMarketplacePosRecords(spaceId)) {
+    throw new HttpsError('failed-precondition', 'This shop has Marketplace seller or sales records. Keep Marketplace POS so the history stays correct.');
+  }
+
+  if (defaultPaymentAccountId) {
+    const accountSnapshot = await db.collection('accounts').doc(defaultPaymentAccountId).get();
+    const account = assertAccount(accountSnapshot.data(), uid, 'Default payment account');
+    if (account.currency !== space.currency) throw new HttpsError('failed-precondition', 'The payment account and SME Space must use the same currency.');
+    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for the POS.');
+  }
+
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const accessRef = db.collection('smePosAccess').doc(`${spaceId}_${uid}`);
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+    const current = await transaction.get(settingsRef);
+    const currentData = current.data() || {};
+    const now = FieldValue.serverTimestamp();
+    const result = { spaceId, mode, status: currentData.status || 'draft' };
+    const payload = {
+      displayId: currentData.displayId || displayId('POS'),
+      spaceId,
+      ownerId: uid,
+      mode,
+      status: currentData.status || 'draft',
+      shopName,
+      receiptName,
+      receiptFooter,
+      defaultPaymentAccountId,
+      currency: space.currency || 'BND',
+      timezone: space.timezone || 'Asia/Brunei',
+      setupVersion: 1,
+      activatedAt: currentData.activatedAt || null,
+      pausedAt: currentData.pausedAt || null,
+      createdAt: currentData.createdAt || now,
+      updatedAt: now,
+    };
+    transaction.set(settingsRef, payload, { merge: true });
+    transaction.set(accessRef, {
+      spaceId,
+      uid,
+      role: 'owner',
+      status: 'active',
+      displayName: member.displayName || request.auth?.token.name || '',
+      email: member.email || request.auth?.token.email || '',
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: member.displayName || member.email,
+      action: current.exists ? 'pos_settings_updated' : 'pos_setup_created',
+      targetType: 'sme_pos',
+      targetId: spaceId,
+      summary: `${current.exists ? 'Updated' : 'Created'} ${mode === 'standard' ? 'Standard POS' : 'Marketplace Consignment POS'} setup for ${shopName}.`,
+      now,
+    });
+    transaction.create(commandRef, { uid, kind: 'save_sme_pos_setup', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const setSmePosStatus = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const status = oneOf(request.data?.status, smePosStatuses, 'POS status');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const { member } = await requireSmeSpaceOwner(spaceId, uid);
+  const settingsRef = db.collection('smePosSettings').doc(spaceId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, settings] = await Promise.all([transaction.get(commandRef), transaction.get(settingsRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!settings.exists) throw new HttpsError('failed-precondition', 'Save the POS setup before changing its status.');
+    const now = FieldValue.serverTimestamp();
+    const result = { spaceId, status };
+    transaction.update(settingsRef, {
+      status,
+      activatedAt: status === 'active' ? (settings.data()?.activatedAt || now) : settings.data()?.activatedAt || null,
+      pausedAt: status === 'paused' ? now : null,
+      updatedAt: now,
+    });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: member.displayName || member.email,
+      action: status === 'active' ? 'pos_activated' : 'pos_paused',
+      targetType: 'sme_pos',
+      targetId: spaceId,
+      summary: `${status === 'active' ? 'Activated' : 'Paused'} the SME POS.`,
+      now,
+    });
+    transaction.create(commandRef, { uid, kind: 'set_sme_pos_status', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const setSmePosAccessRole = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
+  const role = oneOf(request.data?.role, smePosRoles, 'POS role');
+  const active = request.data?.active === true;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const { space, member } = await requireSmeSpaceOwner(spaceId, uid);
+  if (memberUid === uid || memberUid === space.ownerId) throw new HttpsError('failed-precondition', 'The POS owner role follows SME Space ownership.');
+
+  const [settings, targetMember] = await Promise.all([
+    db.collection('smePosSettings').doc(spaceId).get(),
+    db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`).get(),
+  ]);
+  if (!settings.exists) throw new HttpsError('failed-precondition', 'Save the POS setup before adding team access.');
+  if (!targetMember.exists || ['suspended', 'removed'].includes(String(targetMember.data()?.status || ''))) {
+    throw new HttpsError('failed-precondition', 'Choose an active member of this SME Space.');
+  }
+  if (role === 'seller' && settings.data()?.mode !== 'marketplace_consignment') {
+    throw new HttpsError('failed-precondition', 'Seller access is only available in Marketplace Consignment POS.');
+  }
+
+  const accessRef = db.collection('smePosAccess').doc(`${spaceId}_${memberUid}`);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+    const now = FieldValue.serverTimestamp();
+    const result = { spaceId, memberUid, role, active };
+    transaction.set(accessRef, {
+      spaceId,
+      uid: memberUid,
+      role,
+      status: active ? 'active' : 'removed',
+      displayName: targetMember.data()?.displayName || '',
+      email: targetMember.data()?.email || '',
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: member.displayName || member.email,
+      action: active ? 'pos_access_added' : 'pos_access_removed',
+      targetType: 'member',
+      targetId: memberUid,
+      summary: active ? `Added ${targetMember.data()?.displayName || targetMember.data()?.email || 'a member'} as POS ${role}.` : 'Removed POS access for a member.',
+      now,
+    });
+    transaction.create(commandRef, { uid, kind: 'set_sme_pos_access', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+
 type BackgroundReminderItemType = 'bill' | 'instalment' | 'goal';
 type BackgroundReminderKind = 'due_soon' | 'due_today' | 'late';
 
@@ -1700,14 +1895,18 @@ export const transferSpaceOwnership = onCall({ region }, async (request) => {
   const spaceRef = db.collection('spaces').doc(spaceId);
   const currentOwnerRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
   const newOwnerRef = db.collection('spaceMembers').doc(`${spaceId}_${newOwnerUid}`);
+  const posSettingsRef = db.collection('smePosSettings').doc(spaceId);
+  const currentOwnerPosAccessRef = db.collection('smePosAccess').doc(`${spaceId}_${uid}`);
+  const newOwnerPosAccessRef = db.collection('smePosAccess').doc(`${spaceId}_${newOwnerUid}`);
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
 
   return db.runTransaction(async (transaction) => {
-    const [command, space, currentOwner, newOwner] = await Promise.all([
+    const [command, space, currentOwner, newOwner, posSettings] = await Promise.all([
       transaction.get(commandRef),
       transaction.get(spaceRef),
       transaction.get(currentOwnerRef),
       transaction.get(newOwnerRef),
+      transaction.get(posSettingsRef),
     ]);
     if (command.exists) return command.data()?.result;
     if (!space.exists) throw new HttpsError('not-found', 'Space not found.');
@@ -1739,6 +1938,30 @@ export const transferSpaceOwnership = onCall({ region }, async (request) => {
       canViewLedger: true,
       updatedAt: now,
     });
+    if (posSettings.exists) {
+      transaction.update(posSettingsRef, { ownerId: newOwnerUid, updatedAt: now });
+      transaction.set(currentOwnerPosAccessRef, {
+        spaceId,
+        uid,
+        role: 'manager',
+        status: 'active',
+        displayName: currentOwner.data()?.displayName || '',
+        email: currentOwner.data()?.email || '',
+        createdBy: uid,
+        updatedAt: now,
+      }, { merge: true });
+      transaction.set(newOwnerPosAccessRef, {
+        spaceId,
+        uid: newOwnerUid,
+        role: 'owner',
+        status: 'active',
+        displayName: newOwner.data()?.displayName || '',
+        email: newOwner.data()?.email || '',
+        createdBy: uid,
+        createdAt: now,
+        updatedAt: now,
+      }, { merge: true });
+    }
     createActivity(transaction, {
       spaceId,
       actorUid: uid,
@@ -1857,7 +2080,7 @@ function sharedPaymentNote(input: {
   assignmentDisplayId: string;
   userNote?: string;
 }): string {
-  const base = `Shared bill payment — ${input.commitmentName} — paid by ${input.memberLabel} — claim ${input.paymentDisplayId} — assignment ${input.assignmentDisplayId}`;
+  const base = `Shared bill payment â€” ${input.commitmentName} â€” paid by ${input.memberLabel} â€” claim ${input.paymentDisplayId} â€” assignment ${input.assignmentDisplayId}`;
   return input.userNote ? `${base}. ${input.userNote}` : base;
 }
 
@@ -2750,7 +2973,8 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
   if (action === 'delete') {
     const memberSnapshot = await db.collection('spaceMembers').where('spaceId', '==', spaceId).get();
     const hasOtherMembers = memberSnapshot.docs.some((item) => item.data().uid !== uid);
-    const checks = await Promise.all([
+    const [posSettings, ...checks] = await Promise.all([
+      db.collection('smePosSettings').doc(spaceId).get(),
       queryHasDocuments(db.collection('transactions').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('budgets').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('goals').where('spaceId', '==', spaceId)),
@@ -2761,8 +2985,14 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('spaceFundContributions').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceInvitations').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('smePosProducts').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('smePosCustomers').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('smePosSellers').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('smePosListings').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('smePosSales').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('smePosPayouts').where('spaceId', '==', spaceId)),
     ]);
-    if (hasOtherMembers || checks.some(Boolean) || !recurringInSpace.empty) {
+    if (hasOtherMembers || posSettings.exists || checks.some(Boolean) || !recurringInSpace.empty) {
       throw new HttpsError('failed-precondition', 'This Space has members or saved history. Archive it instead.');
     }
   }
@@ -2804,15 +3034,16 @@ export const manageAccountLifecycle = onCall({ region }, async (request) => {
 
   let openingLedgerRefs: DocumentReference[] = [];
   if (action === 'delete') {
-    const [sourceUsed, destinationUsed, commitmentUsed, sharedUsed, ledgerSnapshot] = await Promise.all([
+    const [sourceUsed, destinationUsed, commitmentUsed, sharedUsed, posDefaultUsed, ledgerSnapshot] = await Promise.all([
       queryHasDocuments(db.collection('transactions').where('accountId', '==', accountId)),
       queryHasDocuments(db.collection('transactions').where('destinationAccountId', '==', accountId)),
       queryHasDocuments(db.collection('commitments').where('accountId', '==', accountId)),
       queryHasDocuments(db.collection('sharedBillPayments').where('accountId', '==', accountId)),
+      queryHasDocuments(db.collection('smePosSettings').where('defaultPaymentAccountId', '==', accountId)),
       db.collection('ledgerEntries').where('accountId', '==', accountId).get(),
     ]);
     const nonOpeningLedger = ledgerSnapshot.docs.some((item) => item.data().entryType !== 'opening_balance');
-    if (sourceUsed || destinationUsed || commitmentUsed || sharedUsed || nonOpeningLedger || !recurringForAccount.empty) {
+    if (sourceUsed || destinationUsed || commitmentUsed || sharedUsed || posDefaultUsed || nonOpeningLedger || !recurringForAccount.empty) {
       throw new HttpsError('failed-precondition', 'This account has saved money activity. Close it instead.');
     }
     openingLedgerRefs = ledgerSnapshot.docs.map((item) => item.ref);
@@ -4481,7 +4712,8 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
     'sharedBillPaymentReversals', 'spaceActivities', 'sharedExpenses', 'sharedExpenseShares',
     'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
     'userNotifications', 'reminderHistory', 'recurringTransactionTemplates', 'recurringTransactionRuns',
-    'transactionAttachments',
+    'transactionAttachments', 'smePosAccess', 'smePosProducts', 'smePosCustomers',
+    'smePosSellers', 'smePosListings', 'smePosSales', 'smePosPayouts',
   ];
   for (const collectionName of collections) {
     const rows = await documentsWhere(collectionName, 'spaceId', spaceId);
@@ -4490,6 +4722,7 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
       queueDelete(plan, row.ref);
     }
   }
+  queueDelete(plan, db.collection('smePosSettings').doc(spaceId));
   queueDelete(plan, db.collection('spaceFunds').doc(spaceId));
   queueDelete(plan, db.collection('spaces').doc(spaceId));
 }
@@ -4623,6 +4856,7 @@ async function finalizeAccountDeletion(uid: string) {
       }
     }
     for (const row of await documentsWhere('accountAccess', 'uid', uid)) queueDelete(plan, row.ref);
+    for (const row of await documentsWhere('smePosAccess', 'uid', uid)) queueDelete(plan, row.ref);
 
     const preservedCommitmentIds = new Set<string>();
     for (const commitment of await documentsWhere('commitments', 'ownerId', uid)) {
@@ -4656,7 +4890,7 @@ async function finalizeAccountDeletion(uid: string) {
       } else queueDelete(plan, payment.ref);
     }
 
-    for (const collectionName of ['userNotifications', 'reminderHistory', 'pushDevices', 'financialCommands', 'collaborationCommands', 'lifecycleCommands', 'accountDeletionCommands']) {
+    for (const collectionName of ['userNotifications', 'reminderHistory', 'pushDevices', 'financialCommands', 'collaborationCommands', 'lifecycleCommands', 'smePosCommands', 'accountDeletionCommands']) {
       for (const row of await documentsWhere(collectionName, 'uid', uid)) queueDelete(plan, row.ref);
     }
 

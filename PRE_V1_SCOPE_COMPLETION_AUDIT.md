@@ -94,3 +94,7 @@ Do not tag or announce v1.0.0 until every item in `scope/pre-v1-scope.json` with
 - General Money activity receipt/document attachments are implemented and now require staging approval.
 - No scope item remains classified as `missing`.
 - Production remains NO-GO under `PRODUCTION_READINESS_GATE.md`.
+
+## 2026-08-03 SME POS scope expansion
+
+The canonical register now contains 58 requirements. The SME POS foundation is complete, while Standard POS, Marketplace Consignment POS, POS money posting, returns/payouts and the real shop pilot remain open before production. Use `scope/pre-v1-scope.json` for current counts.

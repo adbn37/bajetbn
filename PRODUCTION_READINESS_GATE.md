@@ -16,3 +16,7 @@ The source scope is complete, but manual staging evidence is still required.
 8. Explicit product-owner approval.
 
 Production remains blocked until this document is updated to GO with evidence references.
+
+## Added production blocker — SME POS
+
+Production remains **NO-GO** until Standard POS and Marketplace Consignment POS are complete, linked safely to SME money accounts, and pass a real staging pilot for the owner's shop. The v0.11.13 foundation alone does not clear this gate.

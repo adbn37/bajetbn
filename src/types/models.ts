@@ -17,6 +17,82 @@ export type AccountClassification = 'personal' | 'business';
 export type InstitutionCode = 'bibd' | 'baiduri' | 'taib' | 'standard_chartered_brunei' | 'cash' | 'other_e_wallet' | 'other';
 export type PaymentMethodCode = 'bank_transfer' | 'cash' | 'debit_card' | 'credit_card' | 'e_wallet' | 'qr_payment' | 'bank_deposit' | 'cheque' | 'other';
 
+export type SmePosMode = 'standard' | 'marketplace_consignment';
+export type SmePosStatus = 'draft' | 'active' | 'paused';
+export type SmePosRole = 'owner' | 'manager' | 'cashier' | 'stock_staff' | 'seller' | 'viewer';
+
+export interface SmePosSettings {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  mode: SmePosMode;
+  status: SmePosStatus;
+  shopName: string;
+  receiptName: string;
+  receiptFooter?: string;
+  defaultPaymentAccountId?: string | null;
+  currency: string;
+  timezone: string;
+  setupVersion: number;
+  activatedAt?: Timestamp | null;
+  pausedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SmePosAccess {
+  id: string;
+  spaceId: string;
+  uid: string;
+  role: SmePosRole;
+  status: 'active' | 'removed';
+  displayName?: string;
+  email?: string;
+  createdBy: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SmePosProduct {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  name: string;
+  category?: string;
+  sku?: string;
+  sellingPriceMinor: number;
+  costPriceMinor?: number | null;
+  currency: string;
+  quantityOnHand: number;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SmePosCustomer {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  note?: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SmePosUsageCounts {
+  products: number;
+  customers: number;
+  sellers: number;
+  listings: number;
+  sales: number;
+}
+
 export type FinancialTransactionType = 'income' | 'expense' | 'transfer' | 'reversal';
 export type FinancialTransactionStatus = 'posted' | 'reversed';
 export type RecurringTransactionType = 'income' | 'expense';

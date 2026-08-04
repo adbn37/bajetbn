@@ -1,7 +1,7 @@
 {
-  "auditVersion": "2026-08-03.3",
-  "auditedRelease": "BajetBN v0.11.12 Final Scope Audit Alpha 1",
-  "sourceBasis": "Verified v0.11.11 staging baseline plus final scope reconciliation and general transaction receipt/document attachments",
+  "auditVersion": "2026-08-03.4",
+  "auditedRelease": "BajetBN v0.11.13 SME POS Foundation Alpha 1",
+  "sourceBasis": "Verified v0.11.12 staging baseline plus SME POS setup, mode safety, role access and pre-live Standard/Marketplace POS scope expansion",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -29,6 +29,75 @@
       "gate": "pre_v1",
       "evidence": [
         "src/features/spaces/SpacesPage.tsx"
+      ]
+    },
+    {
+      "id": "sme.pos_foundation",
+      "area": "SME POS",
+      "requirement": "Each SME Space can enable a POS and choose Standard POS or Marketplace Consignment POS",
+      "status": "complete",
+      "gate": "pre_v1",
+      "evidence": [
+        "SME_POS_FOUNDATION_ALPHA.md",
+        "src/features/sme-pos/SmePosPage.tsx",
+        "src/repositories/smePosRepository.ts",
+        "functions/src/index.ts",
+        "firestore.rules"
+      ]
+    },
+    {
+      "id": "sme.standard_pos",
+      "area": "SME POS",
+      "requirement": "Standard POS for shop-owned products, stock, checkout, receipts, customers and sales reports",
+      "status": "partial",
+      "gate": "pre_v1",
+      "evidence": [
+        "SME_POS_FOUNDATION_ALPHA.md",
+        "src/features/sme-pos/SmePosPage.tsx"
+      ]
+    },
+    {
+      "id": "sme.marketplace_pos",
+      "area": "SME POS",
+      "requirement": "Marketplace Consignment POS with seller-linked listings or stock batches, commission rules, mixed-seller checkout and seller reports",
+      "status": "partial",
+      "gate": "pre_v1",
+      "evidence": [
+        "SME_POS_FOUNDATION_ALPHA.md",
+        "src/types/models.ts",
+        "src/features/sme-pos/SmePosPage.tsx"
+      ]
+    },
+    {
+      "id": "sme.pos_money_link",
+      "area": "SME POS",
+      "requirement": "POS sales, refunds, commissions and payouts post safely to the selected SME payment account and reports",
+      "status": "partial",
+      "gate": "pre_v1",
+      "evidence": [
+        "SME_POS_FOUNDATION_ALPHA.md",
+        "src/features/sme-pos/SmePosPage.tsx"
+      ]
+    },
+    {
+      "id": "sme.pos_returns_payouts",
+      "area": "SME POS",
+      "requirement": "Returns, refunds, audited corrections, seller balances and payout history",
+      "status": "missing",
+      "gate": "pre_v1",
+      "evidence": [
+        "SME_POS_FOUNDATION_ALPHA.md"
+      ]
+    },
+    {
+      "id": "sme.shop_pilot",
+      "area": "SME POS",
+      "requirement": "Standard and Marketplace POS complete a real staging pilot for the owner\u2019s shop before production",
+      "status": "missing",
+      "gate": "pre_production",
+      "evidence": [
+        "SME_POS_FOUNDATION_ALPHA.md",
+        "STAGING_TEST_CHECKLIST.md"
       ]
     },
     {
@@ -634,5 +703,5 @@
       ]
     }
   ],
-  "auditedVersion": "0.11.11"
+  "auditedVersion": "0.11.13"
 }
