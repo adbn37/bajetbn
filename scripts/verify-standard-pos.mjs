@@ -12,8 +12,9 @@ const need = (file, text) => {
 
 const release = JSON.parse(read('release.json'));
 const pkg = JSON.parse(read('package.json'));
-if (release.version !== '0.11.14' || pkg.version !== '0.11.14') fail('Standard POS Alpha 2 must use version 0.11.14.');
-if (!release.label.includes('Standard POS Alpha 2')) fail('release.json must identify Standard POS Alpha 2.');
+if (release.version !== pkg.version) fail('package.json and release.json must match.');
+const [major, minor, patch] = release.version.split('.').map(Number);
+if (major !== 0 || minor !== 11 || patch < 14) fail('Standard POS requires v0.11.14 or later.');
 
 for (const file of [
   'STANDARD_POS_ALPHA.md',

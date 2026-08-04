@@ -8,6 +8,7 @@ import { getMySmePosAccess, getSmePosSettings } from '../../repositories/smePosR
 import { listSpaces } from '../../repositories/spaceRepository';
 import type { SmePosAccess, SmePosRole, SmePosSettings, Space, SpaceMember } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import { MarketplaceConsignmentPosWorkspace } from './MarketplaceConsignmentPosWorkspace';
 import { StandardPosWorkspace } from './StandardPosWorkspace';
 
 const roleLabels: Record<SmePosRole, string> = {
@@ -142,11 +143,16 @@ export function SmePosPage() {
       {settings.status !== 'active' && isOwner && <Link to={`/spaces/${space.id}/pos/settings`}>Open settings</Link>}
     </div>
 
-    <StandardPosWorkspace
+    {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
       space={space}
       settings={settings}
       role={role}
       onChanged={load}
-    />
+    /> : <StandardPosWorkspace
+      space={space}
+      settings={settings}
+      role={role}
+      onChanged={load}
+    />}
   </main>;
 }

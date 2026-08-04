@@ -26,4 +26,4 @@ This is still an alpha candidate. Do not tag v1.0.0 or deploy production until e
 
 ## 2026-08-03 scope expansion
 
-The owner confirmed that BajetBN will be used for the shop and that both **Standard POS** and **Marketplace Consignment POS** must be included before the first live release. The canonical requirement register in `scope/pre-v1-scope.json` now records the POS foundation as complete and Standard POS as implemented but awaiting staging approval, and the remaining Marketplace, returns, payout and shop-pilot capabilities as open pre-v1 work.
+The owner confirmed that BajetBN will be used for the shop and that both **Standard POS** and **Marketplace Consignment POS** must be included before the first live release. The canonical requirement register records the POS foundation and Standard POS as complete after staging approval. Marketplace Consignment POS Alpha 1 is implemented and awaiting staging approval; returns, refunds, seller payouts and the shop pilot remain open pre-v1 work.

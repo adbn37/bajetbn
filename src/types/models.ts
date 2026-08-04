@@ -20,6 +20,8 @@ export type PaymentMethodCode = 'bank_transfer' | 'cash' | 'debit_card' | 'credi
 export type SmePosMode = 'standard' | 'marketplace_consignment';
 export type SmePosStatus = 'draft' | 'active' | 'paused';
 export type SmePosRole = 'owner' | 'manager' | 'cashier' | 'stock_staff' | 'seller' | 'viewer';
+export type SmePosCommissionType = 'percentage' | 'fixed_per_item';
+export type SmePosListingCondition = 'new' | 'sealed' | 'open_box' | 'used' | 'other';
 
 export interface SmePosSettings {
   id: string;
@@ -76,6 +78,79 @@ export interface SmePosProduct {
   updatedAt?: Timestamp;
 }
 
+export interface SmePosSeller {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  note?: string;
+  linkedUid?: string | null;
+  defaultCommissionType: SmePosCommissionType;
+  defaultCommissionRateBps: number;
+  defaultCommissionMinor: number;
+  grossSalesMinor: number;
+  commissionEarnedMinor: number;
+  balanceMinor: number;
+  paidOutMinor: number;
+  soldQuantity: number;
+  currency: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SmePosListing {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  sellerId: string;
+  sellerName: string;
+  sellerUid?: string | null;
+  name: string;
+  category?: string;
+  sku?: string;
+  note?: string;
+  condition: SmePosListingCondition;
+  conditionNote?: string;
+  sellingPriceMinor: number;
+  currency: string;
+  commissionType: SmePosCommissionType;
+  commissionRateBps: number;
+  commissionMinor: number;
+  quantityOnHand: number;
+  lowStockLevel: number;
+  soldQuantity: number;
+  grossSalesMinor: number;
+  commissionEarnedMinor: number;
+  sellerEarningsMinor: number;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SmePosSellerLedgerEntry {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  sellerId: string;
+  sellerName: string;
+  sellerUid?: string | null;
+  kind: 'sale_earning' | 'payout' | 'return_adjustment';
+  amountMinor: number;
+  balanceAfterMinor: number;
+  currency: string;
+  saleId?: string | null;
+  receiptNumber?: string | null;
+  payoutId?: string | null;
+  note?: string;
+  createdAt?: Timestamp;
+}
+
 export interface SmePosCustomer {
   id: string;
   displayId: string;
@@ -110,6 +185,15 @@ export interface SmePosSaleItem {
   lineTotalMinor: number;
   lineCostMinor: number;
   returnedQuantity: number;
+  listingId?: string;
+  sellerId?: string;
+  sellerName?: string;
+  sellerUid?: string | null;
+  condition?: SmePosListingCondition;
+  discountShareMinor?: number;
+  netLineMinor?: number;
+  commissionMinor?: number;
+  sellerEarningMinor?: number;
 }
 
 export type SmePosSaleStatus = 'completed' | 'partially_returned' | 'refunded';
@@ -138,6 +222,9 @@ export interface SmePosSale {
   totalMinor: number;
   costMinor: number;
   profitMinor: number;
+  marketplaceCommissionMinor?: number;
+  sellerEarningsMinor?: number;
+  sellerCount?: number;
   returnedMinor: number;
   currency: string;
   saleDate: string;

@@ -106,7 +106,15 @@ if (['manual_test', 'complete'].includes(standardPosStatus)) {
   requireText('functions/src/index.ts', 'export const checkoutStandardPos');
   requireText('STANDARD_POS_ALPHA.md', 'shop-owned products');
 }
-if (itemById.get('sme.marketplace_pos')?.status === 'complete') fail('Marketplace POS cannot be marked complete until seller listings, commission and payouts are implemented.');
+const marketplacePosStatus = itemById.get('sme.marketplace_pos')?.status;
+if (['manual_test', 'complete'].includes(marketplacePosStatus)) {
+  requireText('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', 'Seller listings and stock');
+  requireText('src/repositories/smePosRepository.ts', 'checkoutMarketplacePos');
+  requireText('functions/src/index.ts', 'export const checkoutMarketplacePos');
+  requireText('firestore.rules', 'match /smePosSellerLedger/{entryId}');
+  requireText('MARKETPLACE_CONSIGNMENT_POS_ALPHA.md', 'mixed-seller checkout');
+}
+if (marketplacePosStatus === 'complete' && itemById.get('sme.pos_returns_payouts')?.status !== 'complete') fail('Marketplace POS cannot be fully complete before returns and seller payouts are complete.');
 
 const nativeConfirmFiles = [
   'src/features/transactions/TransactionsPage.tsx',
@@ -142,6 +150,7 @@ requireText('package.json', 'verify-offline-sync.mjs');
 requireText('package.json', 'verify-transaction-receipts.mjs');
 requireText('package.json', 'verify-sme-pos-foundation.mjs');
 requireText('package.json', 'verify-standard-pos.mjs');
+requireText('package.json', 'verify-marketplace-consignment-pos.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;

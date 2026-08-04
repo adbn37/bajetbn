@@ -1,7 +1,7 @@
 {
-  "auditVersion": "2026-08-04.1",
-  "auditedRelease": "BajetBN v0.11.14 Standard POS Alpha 1",
-  "sourceBasis": "Verified v0.11.13 SME POS foundation plus shop-owned products, stock, customers, checkout, receipts, account posting, archive views and basic sales reports",
+  "auditVersion": "2026-08-04.2",
+  "auditedRelease": "BajetBN v0.11.15 Marketplace Consignment POS Alpha 1",
+  "sourceBasis": "Verified Standard POS staging pass plus seller profiles, seller-owned listings, mixed-seller checkout, commission splits, seller balances, role isolation and Marketplace archive views",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -49,7 +49,7 @@
       "id": "sme.standard_pos",
       "area": "SME POS",
       "requirement": "Standard POS for shop-owned products, stock, checkout, receipts, customers and sales reports",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "STANDARD_POS_ALPHA.md",
@@ -64,12 +64,14 @@
       "id": "sme.marketplace_pos",
       "area": "SME POS",
       "requirement": "Marketplace Consignment POS with seller-linked listings or stock batches, commission rules, mixed-seller checkout and seller reports",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
-        "SME_POS_FOUNDATION_ALPHA.md",
-        "src/types/models.ts",
-        "src/features/sme-pos/SmePosPage.tsx"
+        "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
+        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+        "src/repositories/smePosRepository.ts",
+        "functions/src/index.ts",
+        "firestore.rules"
       ]
     },
     {
@@ -79,18 +81,21 @@
       "status": "partial",
       "gate": "pre_v1",
       "evidence": [
-        "SME_POS_FOUNDATION_ALPHA.md",
-        "src/features/sme-pos/SmePosPage.tsx"
+        "STANDARD_POS_ALPHA.md",
+        "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
+        "functions/src/index.ts"
       ]
     },
     {
       "id": "sme.pos_returns_payouts",
       "area": "SME POS",
       "requirement": "POS return-safe sale records, returns/refunds, seller balances and seller payouts",
-      "status": "missing",
+      "status": "partial",
       "gate": "pre_v1",
       "evidence": [
-        "SME_POS_FOUNDATION_ALPHA.md"
+        "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
+        "functions/src/index.ts",
+        "src/types/models.ts"
       ]
     },
     {

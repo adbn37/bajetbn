@@ -450,3 +450,27 @@ Notes: ____________________
 - [ ] Test dark and light themes on desktop and mobile with no horizontal scrolling.
 - [ ] Confirm checkout clearly requires internet and does not queue an offline sale.
 
+
+## v0.11.15 — Marketplace Consignment POS Alpha 1
+
+- [ ] Marketplace mode opens the Marketplace workspace instead of Standard POS.
+- [ ] Owner or manager can add two sellers with different default commission rules.
+- [ ] Seller login can be linked only after the person has active Seller POS access.
+- [ ] The same item name can be listed by two sellers without merging price, stock, condition or balance.
+- [ ] Owner or manager can add, edit, archive and restore seller listings.
+- [ ] Stock staff can change quantity and low-stock alert but not seller, price or commission.
+- [ ] A mixed cart can contain listings from two or more sellers.
+- [ ] Checkout blocks zero stock, blocks quantity above available stock and never creates negative stock.
+- [ ] Percentage commission is calculated after proportional discount allocation.
+- [ ] Fixed-per-item commission remains below the listing price and never creates negative seller earnings.
+- [ ] Customer payment posts once to the selected business account, ledger and Money Activity.
+- [ ] Each seller balance increases only by that seller’s portion of the sale.
+- [ ] One seller balance entry is created per seller involved in the sale.
+- [ ] Cashier cannot see commission, seller balances, POS Settings or sensitive reports.
+- [ ] Seller sees only their own listings, sale share, balance and balance activity.
+- [ ] Viewer cannot edit listings, stock, sellers, customers or checkout.
+- [ ] Owner/manager reports show gross sales, shop commission, seller money waiting and low stock.
+- [ ] Archived sellers cannot be archived while active listings remain.
+- [ ] Archived Marketplace records use the dedicated archive page and can be restored safely.
+- [ ] Mobile and desktop register layouts have no horizontal page overflow.
+- [ ] Returns, refunds and seller payout actions remain unavailable and clearly scheduled for v0.11.16.

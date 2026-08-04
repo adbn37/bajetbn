@@ -228,4 +228,8 @@ See `PREMIUM_THEME_REFRESH_HOTFIX.md`. Dark mode now uses a near-black ADBN-insp
 
 ## v0.11.13 SME POS foundation
 
-See `SME_POS_FOUNDATION_ALPHA.md` and `STANDARD_POS_ALPHA.md`. Standard POS Alpha 2 is implemented for staging testing; Marketplace Consignment POS, returns, payouts and the shop pilot remain required before production.
+See `SME_POS_FOUNDATION_ALPHA.md`, `STANDARD_POS_ALPHA.md` and `MARKETPLACE_CONSIGNMENT_POS_ALPHA.md`. Standard POS passed staging. Marketplace Consignment POS Alpha 1 is ready for staging testing; returns, refunds, seller payouts and the shop pilot remain required before production.
+
+## v0.11.15 Marketplace Consignment POS Alpha 1
+
+Marketplace Consignment POS now supports independent sellers, seller-owned listings or stock batches, percentage or fixed commission rules, mixed-seller checkout, hard stock protection, seller balances, seller-only reporting and shared business-account posting. Returns, refunds and seller payouts follow in v0.11.16. Production remains blocked.

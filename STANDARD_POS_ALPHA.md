@@ -41,4 +41,4 @@ Alpha 2 separates daily shop work from owner setup and strengthens stock and sta
 - Owner/Manager daily and monthly sales, estimated profit and low-stock report.
 - Dedicated archived POS records for owner/manager restore.
 
-Production remains blocked until Standard POS Alpha 2 staging tests, Marketplace Consignment POS, returns, seller payouts, reporting and shop pilot testing pass.
+Standard POS Alpha 2 passed staging. Production remains blocked until Marketplace Consignment POS, returns, refunds, seller payouts, reporting adjustments and shop pilot testing pass.
