@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
+const root=process.cwd(); const read=(f)=>fs.readFileSync(path.join(root,f),'utf8'); const fail=(m)=>{throw new Error(m)}; const need=(f,t)=>{if(!fs.existsSync(path.join(root,f)))fail(`Missing ${f}`);if(!read(f).includes(t))fail(`Expected ${f} to contain: ${t}`)};
+const release=JSON.parse(read('release.json')); const pkg=JSON.parse(read('package.json'));
+if(release.version!=='0.11.14'||pkg.version!=='0.11.14')fail('Standard POS must use version 0.11.14.');
+if(!release.label.includes('Standard POS'))fail('release.json must identify Standard POS.');
+for(const f of ['STANDARD_POS_ALPHA.md','src/features/sme-pos/StandardPosWorkspace.tsx','src/features/sme-pos/SmePosArchivedRecordsPage.tsx']) if(!fs.existsSync(path.join(root,f)))fail(`Missing ${f}`);
+for(const t of ['Add product','Add customer','Complete sale','Sales & reports','Archived POS records','Walk-in customer']) need('src/features/sme-pos/StandardPosWorkspace.tsx',t);
+for(const t of ['listSmePosPaymentAccounts','saveSmePosProduct','setSmePosProductArchived','saveSmePosCustomer','setSmePosCustomerArchived','checkoutStandardPos','listSmePosSales']) need('src/repositories/smePosRepository.ts',t);
+for(const t of ['export const getSmePosPaymentAccounts','export const saveSmePosProduct','export const setSmePosProductArchived','export const saveSmePosCustomer','export const setSmePosCustomerArchived','export const checkoutStandardPos',"entryType: 'sme_pos_sale'","categoryId: salesCategory.id","returnStatus: 'not_returned'"]) need('functions/src/index.ts',t);
+need('src/app/App.tsx','spaces/:spaceId/pos/archived'); need('firestore.rules','match /smePosSales/{saleId}');
+const scope=JSON.parse(read('scope/pre-v1-scope.json')); const item=scope.items.find((x)=>x.id==='sme.standard_pos'); if(!['manual_test','complete'].includes(item?.status))fail('sme.standard_pos must be manual_test or complete.');
+for(const f of ['src/features/sme-pos/StandardPosWorkspace.tsx','src/features/sme-pos/SmePosArchivedRecordsPage.tsx']) if(/\b(?:window\.)?(?:confirm|alert)\s*\(/.test(read(f)))fail(`${f} must not use native confirm or alert.`);
+console.log('Standard POS checks passed (products, stock, customers, checkout, receipts, account posting, archive view and reports).');

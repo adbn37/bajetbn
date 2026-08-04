@@ -10,13 +10,22 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
 import type {
+  PaymentMethodCode,
   SmePosAccess,
+  SmePosCustomer,
   SmePosMode,
+  SmePosPaymentAccount,
+  SmePosProduct,
   SmePosRole,
+  SmePosSale,
   SmePosSettings,
   SmePosStatus,
   SmePosUsageCounts,
 } from '../types/models';
+
+function byUpdatedAt<T extends { updatedAt?: { toMillis?: () => number }; createdAt?: { toMillis?: () => number } }>(items: T[]) {
+  return items.sort((a, b) => (b.updatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0));
+}
 
 export async function getSmePosSettings(spaceId: string): Promise<SmePosSettings | null> {
   const { db } = requireFirebase();
@@ -48,13 +57,38 @@ export async function getSmePosUsageCounts(spaceId: string): Promise<SmePosUsage
     ['listings', 'smePosListings'],
     ['sales', 'smePosSales'],
   ] as const;
-
   const values = await Promise.all(collectionNames.map(async ([key, collectionName]) => {
     const result = await getCountFromServer(query(collection(db, collectionName), where('spaceId', '==', spaceId)));
     return [key, result.data().count] as const;
   }));
-
   return Object.fromEntries(values) as unknown as SmePosUsageCounts;
+}
+
+export async function listSmePosProducts(spaceId: string, includeArchived = false): Promise<SmePosProduct[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'smePosProducts'), where('spaceId', '==', spaceId)));
+  const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosProduct);
+  return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
+}
+
+export async function listSmePosCustomers(spaceId: string, includeArchived = false): Promise<SmePosCustomer[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'smePosCustomers'), where('spaceId', '==', spaceId)));
+  const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosCustomer);
+  return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
+}
+
+export async function listSmePosPaymentAccounts(spaceId: string): Promise<SmePosPaymentAccount[]> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'getSmePosPaymentAccounts');
+  const result = await call({ spaceId });
+  return ((result.data as { accounts?: SmePosPaymentAccount[] })?.accounts || []);
+}
+
+export async function listSmePosSales(spaceId: string): Promise<SmePosSale[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'smePosSales'), where('spaceId', '==', spaceId)));
+  return byUpdatedAt(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosSale));
 }
 
 export async function saveSmePosSetup(input: {
@@ -85,4 +119,63 @@ export async function setSmePosAccessRole(input: {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'setSmePosAccessRole');
   return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function saveSmePosProduct(input: {
+  spaceId: string;
+  productId?: string;
+  name: string;
+  category?: string;
+  sku?: string;
+  note?: string;
+  sellingPriceMinor: number;
+  costPriceMinor?: number | null;
+  trackStock: boolean;
+  quantityOnHand: number;
+  lowStockLevel: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'saveSmePosProduct');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function setSmePosProductArchived(spaceId: string, productId: string, archived: boolean) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'setSmePosProductArchived');
+  return call({ spaceId, productId, archived, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function saveSmePosCustomer(input: {
+  spaceId: string;
+  customerId?: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  note?: string;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'saveSmePosCustomer');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function setSmePosCustomerArchived(spaceId: string, customerId: string, archived: boolean) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'setSmePosCustomerArchived');
+  return call({ spaceId, customerId, archived, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function checkoutStandardPos(input: {
+  spaceId: string;
+  items: Array<{ productId: string; quantity: number }>;
+  customerId?: string | null;
+  paymentAccountId: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  discountMinor: number;
+  saleDate: string;
+  note?: string;
+}): Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'checkoutStandardPos');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }>;
 }

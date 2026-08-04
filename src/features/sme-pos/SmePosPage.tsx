@@ -27,6 +27,7 @@ import type {
   SpaceMember,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import { StandardPosWorkspace } from './StandardPosWorkspace';
 
 const emptyCounts: SmePosUsageCounts = { products: 0, customers: 0, sellers: 0, listings: 0, sales: 0 };
 
@@ -310,10 +311,17 @@ export function SmePosPage() {
 
     {settings && canUsePos && <section className="summary-grid sme-pos-summary">
       <article className="summary-card featured"><span>POS mode</span><strong>{modeCopy[settings.mode].title}</strong><small>{settings.status === 'active' ? 'Ready for shop use' : settings.status === 'paused' ? 'Paused' : 'Setup in progress'}</small></article>
-      <article className="summary-card"><span>Products</span><strong>{counts.products}</strong><small>Product setup comes in the Standard POS step</small></article>
-      <article className="summary-card"><span>Customers</span><strong>{counts.customers}</strong><small>Customer records prepared for the next POS step</small></article>
+      <article className="summary-card"><span>Products</span><strong>{counts.products}</strong><small>Active and archived shop-owned products</small></article>
+      <article className="summary-card"><span>Customers</span><strong>{counts.customers}</strong><small>Customer records linked to receipts</small></article>
       <article className="summary-card"><span>{settings.mode === 'marketplace_consignment' ? 'Sellers' : 'POS users'}</span><strong>{settings.mode === 'marketplace_consignment' ? counts.sellers : access.length}</strong><small>{settings.mode === 'marketplace_consignment' ? 'Independent seller setup comes next' : 'People with active POS access'}</small></article>
     </section>}
+
+    {settings && canUsePos && <StandardPosWorkspace
+      space={space}
+      settings={settings}
+      role={isOwner ? 'owner' : myAccess?.role || 'viewer'}
+      onChanged={load}
+    />}
 
     {isOwner ? <div className="sme-pos-layout">
       <form className="panel form-stack sme-pos-setup" onSubmit={askToSave}>
@@ -356,9 +364,9 @@ export function SmePosPage() {
       <section className="panel sme-pos-roadmap-panel">
         <div className="panel-heading"><div><span className="eyebrow">What this foundation prepares</span><h2>Shop modules</h2></div></div>
         <div className="sme-pos-module-list">
-          <div><span>▣</span><div><strong>Products and stock</strong><small>Own-stock products for Standard POS, with seller-linked batches for Marketplace POS.</small></div><em>Next</em></div>
-          <div><span>◎</span><div><strong>Customers</strong><small>Simple customer records linked to future sales and receipts.</small></div><em>Next</em></div>
-          <div><span>↔</span><div><strong>Checkout</strong><small>One simple staff checkout with payment account selection.</small></div><em>Next</em></div>
+          <div><span>▣</span><div><strong>Products and stock</strong><small>Own-stock products for Standard POS, with seller-linked batches for Marketplace POS.</small></div><em>Ready</em></div>
+          <div><span>◎</span><div><strong>Customers</strong><small>Simple customer records linked to future sales and receipts.</small></div><em>Ready</em></div>
+          <div><span>↔</span><div><strong>Checkout</strong><small>One simple staff checkout with payment account selection.</small></div><em>Ready</em></div>
           <div><span>⌁</span><div><strong>Reports</strong><small>Daily sales, stock, profit, seller balance, commission and payout reports.</small></div><em>Planned</em></div>
         </div>
       </section>

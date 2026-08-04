@@ -100,7 +100,12 @@ if (['complete', 'manual_test'].includes(posFoundationStatus)) {
   requireText('firestore.rules', 'match /smePosSettings/{spaceId}');
   requireText('SME_POS_FOUNDATION_ALPHA.md', 'Standard POS');
 }
-if (itemById.get('sme.standard_pos')?.status === 'complete') fail('Standard POS cannot be marked complete until checkout, stock and sales reports are implemented.');
+const standardPosStatus = itemById.get('sme.standard_pos')?.status;
+if (['manual_test', 'complete'].includes(standardPosStatus)) {
+  requireText('src/features/sme-pos/StandardPosWorkspace.tsx', 'Complete sale');
+  requireText('functions/src/index.ts', 'export const checkoutStandardPos');
+  requireText('STANDARD_POS_ALPHA.md', 'shop-owned products');
+}
 if (itemById.get('sme.marketplace_pos')?.status === 'complete') fail('Marketplace POS cannot be marked complete until seller listings, commission and payouts are implemented.');
 
 const nativeConfirmFiles = [
@@ -136,6 +141,7 @@ requireText('package.json', 'verify-household-funds-financial-health.mjs');
 requireText('package.json', 'verify-offline-sync.mjs');
 requireText('package.json', 'verify-transaction-receipts.mjs');
 requireText('package.json', 'verify-sme-pos-foundation.mjs');
+requireText('package.json', 'verify-standard-pos.mjs');
 
 const counts = audit.items.reduce((result, item) => {
   result[item.status] = (result[item.status] || 0) + 1;
