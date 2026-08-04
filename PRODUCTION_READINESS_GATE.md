@@ -19,4 +19,4 @@ Production remains blocked until this document is updated to GO with evidence re
 
 ## Added production blocker — SME POS
 
-Production remains **NO-GO** until Standard POS and Marketplace Consignment POS are complete, linked safely to SME money accounts, and pass a real staging pilot for the owner's shop. The v0.11.13 foundation alone does not clear this gate.
+Production remains **NO-GO** until Standard POS and Marketplace Consignment POS are complete, linked safely to SME money accounts, and pass a real staging pilot for the owner's shop. The v0.11.14 Standard POS implementation still requires staging approval and does not clear this gate without Marketplace Consignment POS, returns, payouts and the shop pilot.

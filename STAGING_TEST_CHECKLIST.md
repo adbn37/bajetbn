@@ -397,3 +397,45 @@ Notes: ____________________
 - [ ] Check dark theme and warm-light theme.
 - [ ] Check desktop, tablet and mobile with no horizontal scrolling.
 - [ ] Confirm archived SME Spaces do not allow POS changes.
+
+## v0.11.14 — Standard POS Alpha 1
+
+### Products and stock
+
+- [ ] Add a tracked product with SKU, cost, selling price, quantity and low-stock alert.
+- [ ] Add a product without stock tracking.
+- [ ] Edit a product and confirm it remains after refresh.
+- [ ] Archive a product and confirm it leaves the active list.
+- [ ] Open **Archived POS records**, restore the product and confirm it returns.
+- [ ] Confirm Stock staff can manage products but cannot complete checkout.
+
+### Customers
+
+- [ ] Add, edit and archive a customer.
+- [ ] Restore the customer from Archived POS records.
+- [ ] Confirm checkout works with Walk-in customer and with a saved customer.
+
+### Checkout and financial posting
+
+- [ ] Activate the POS and add several products to one cart.
+- [ ] Change quantities and confirm tracked stock cannot exceed available quantity.
+- [ ] Select Cash, Bank transfer, card, QR and Other payment method.
+- [ ] Apply a valid discount and confirm a discount equal to or above subtotal is rejected.
+- [ ] Complete checkout into an active business account using the SME currency.
+- [ ] Confirm the receipt opens and can be printed.
+- [ ] Confirm exactly one POS sale, one Money In activity and one ledger entry are created.
+- [ ] Confirm the selected account balance increases exactly once.
+- [ ] Retry or double-click protection must not create a duplicate sale.
+- [ ] Confirm stock decreases exactly once and customer visit/spending totals update.
+- [ ] Pause the POS and confirm checkout is blocked while product/customer preparation remains available.
+
+### Reports, access and layout
+
+- [ ] Confirm Sales today, Sales this month, Estimated profit and Low stock update.
+- [ ] Open a recent sale and confirm receipt lines, discount, total and payment account.
+- [ ] Confirm Manager can manage all Standard POS records.
+- [ ] Confirm Cashier can add customers and checkout but cannot manage products.
+- [ ] Confirm View only cannot change products, customers or checkout.
+- [ ] Confirm Seller sees the Marketplace seller-tools message rather than shop-owned controls.
+- [ ] Test dark and light themes on desktop and mobile with no horizontal scrolling.
+- [ ] Confirm checkout clearly requires internet and does not queue an offline sale.

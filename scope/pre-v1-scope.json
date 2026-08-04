@@ -1,7 +1,7 @@
 {
-  "auditVersion": "2026-08-03.4",
-  "auditedRelease": "BajetBN v0.11.13 SME POS Foundation Alpha 1",
-  "sourceBasis": "Verified v0.11.12 staging baseline plus SME POS setup, mode safety, role access and pre-live Standard/Marketplace POS scope expansion",
+  "auditVersion": "2026-08-04.1",
+  "auditedRelease": "BajetBN v0.11.14 Standard POS Alpha 1",
+  "sourceBasis": "Verified v0.11.13 SME POS foundation plus shop-owned products, stock, customers, checkout, receipts, account posting, archive views and basic sales reports",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -49,11 +49,15 @@
       "id": "sme.standard_pos",
       "area": "SME POS",
       "requirement": "Standard POS for shop-owned products, stock, checkout, receipts, customers and sales reports",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
-        "SME_POS_FOUNDATION_ALPHA.md",
-        "src/features/sme-pos/SmePosPage.tsx"
+        "STANDARD_POS_ALPHA.md",
+        "src/features/sme-pos/StandardPosWorkspace.tsx",
+        "src/features/sme-pos/SmePosArchivedRecordsPage.tsx",
+        "src/repositories/smePosRepository.ts",
+        "functions/src/index.ts",
+        "firestore.rules"
       ]
     },
     {
@@ -82,7 +86,7 @@
     {
       "id": "sme.pos_returns_payouts",
       "area": "SME POS",
-      "requirement": "Returns, refunds, audited corrections, seller balances and payout history",
+      "requirement": "POS return-safe sale records, returns/refunds, seller balances and seller payouts",
       "status": "missing",
       "gate": "pre_v1",
       "evidence": [

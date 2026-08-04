@@ -1,6 +1,6 @@
 {
-  "version": "0.11.13",
-  "label": "SME POS Foundation Alpha 1",
+  "version": "0.11.14",
+  "label": "Standard POS Alpha 1",
   "channel": "alpha",
-  "releasedAt": "2026-08-03"
+  "releasedAt": "2026-08-04"
 }

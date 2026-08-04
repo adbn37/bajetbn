@@ -62,10 +62,15 @@ export interface SmePosProduct {
   name: string;
   category?: string;
   sku?: string;
+  note?: string;
   sellingPriceMinor: number;
   costPriceMinor?: number | null;
   currency: string;
+  trackStock: boolean;
   quantityOnHand: number;
+  lowStockLevel: number;
+  soldQuantity?: number;
+  salesRevenueMinor?: number;
   archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -80,7 +85,67 @@ export interface SmePosCustomer {
   phone?: string;
   email?: string;
   note?: string;
+  totalSpentMinor?: number;
+  visitCount?: number;
+  lastSaleAt?: Timestamp | null;
   archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SmePosPaymentAccount {
+  id: string;
+  name: string;
+  currency: string;
+  type: AccountType;
+}
+
+export interface SmePosSaleItem {
+  productId: string;
+  productName: string;
+  sku?: string;
+  quantity: number;
+  unitPriceMinor: number;
+  unitCostMinor: number;
+  lineTotalMinor: number;
+  lineCostMinor: number;
+  returnedQuantity: number;
+}
+
+export type SmePosSaleStatus = 'completed' | 'partially_returned' | 'refunded';
+export type SmePosReturnStatus = 'not_returned' | 'partial' | 'full';
+
+export interface SmePosSale {
+  id: string;
+  displayId: string;
+  receiptNumber: string;
+  spaceId: string;
+  ownerId: string;
+  createdBy: string;
+  status: SmePosSaleStatus;
+  returnStatus: SmePosReturnStatus;
+  sourceMode: SmePosMode;
+  customerId?: string | null;
+  customerName?: string | null;
+  paymentAccountId: string;
+  paymentAccountName: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  items: SmePosSaleItem[];
+  itemCount: number;
+  subtotalMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  costMinor: number;
+  profitMinor: number;
+  returnedMinor: number;
+  currency: string;
+  saleDate: string;
+  note?: string;
+  transactionId: string;
+  ledgerEntryId: string;
+  receiptName: string;
+  receiptFooter?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

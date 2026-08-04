@@ -29,6 +29,7 @@ const recurringTransactionActions = ['pause', 'resume', 'skip', 'stop', 'restart
 const smePosModes = ['standard', 'marketplace_consignment'] as const;
 const smePosStatuses = ['active', 'paused'] as const;
 const smePosRoles = ['manager', 'cashier', 'stock_staff', 'seller', 'viewer'] as const;
+type SmePosActorRole = 'owner' | (typeof smePosRoles)[number];
 type AccountType = (typeof accountTypes)[number];
 type InstitutionCode = (typeof institutionCodes)[number];
 type PaymentMethodCode = (typeof paymentMethodCodes)[number];
@@ -1351,6 +1352,289 @@ export const setSmePosAccessRole = onCall({ region }, async (request) => {
   });
 });
 
+
+
+interface SmePosActorContext {
+  role: SmePosActorRole;
+  settings: DocumentData;
+  space: DocumentData;
+  member: DocumentData;
+}
+
+async function requireSmePosActor(spaceId: string, uid: string, allowed: readonly SmePosActorRole[]): Promise<SmePosActorContext> {
+  const [spaceSnapshot, memberSnapshot, settingsSnapshot, accessSnapshot] = await Promise.all([
+    db.collection('spaces').doc(spaceId).get(),
+    db.collection('spaceMembers').doc(`${spaceId}_${uid}`).get(),
+    db.collection('smePosSettings').doc(spaceId).get(),
+    db.collection('smePosAccess').doc(`${spaceId}_${uid}`).get(),
+  ]);
+  if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt || spaceSnapshot.data()?.type !== 'sme') {
+    throw new HttpsError('failed-precondition', 'Choose an active SME Space.');
+  }
+  if (!memberSnapshot.exists || ['suspended', 'removed'].includes(String(memberSnapshot.data()?.status || ''))) {
+    throw new HttpsError('permission-denied', 'You are not an active member of this SME Space.');
+  }
+  if (!settingsSnapshot.exists) throw new HttpsError('failed-precondition', 'Set up the SME POS first.');
+  const space = spaceSnapshot.data() || {};
+  const member = memberSnapshot.data() || {};
+  let role: SmePosActorRole | null = null;
+  if (space.ownerId === uid && member.role === 'owner') role = 'owner';
+  else if (accessSnapshot.exists && accessSnapshot.data()?.status === 'active') role = oneOf(accessSnapshot.data()?.role, smePosRoles, 'POS role');
+  if (!role || !allowed.includes(role)) throw new HttpsError('permission-denied', 'Your POS role does not allow this action.');
+  return { role, settings: settingsSnapshot.data() || {}, space, member };
+}
+
+function smePosQuantity(value: unknown, field: string, maximum = 999_999): number {
+  return integerBetween(value, field, 0, maximum);
+}
+
+function parseSmePosCheckoutItems(value: unknown): Array<{ productId: string; quantity: number }> {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 50) {
+    throw new HttpsError('invalid-argument', 'Checkout must contain between 1 and 50 product lines.');
+  }
+  const seen = new Set<string>();
+  return value.map((row) => {
+    if (!row || typeof row !== 'object') throw new HttpsError('invalid-argument', 'Invalid checkout product.');
+    const item = row as Record<string, unknown>;
+    const productId = stringValue(item.productId, 'Product ID', 80);
+    if (seen.has(productId)) throw new HttpsError('invalid-argument', 'The same product appears more than once.');
+    seen.add(productId);
+    return { productId, quantity: integerBetween(item.quantity, 'Quantity', 1, 9_999) };
+  });
+}
+
+export const getSmePosPaymentAccounts = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier', 'viewer']);
+  const snapshot = await db.collection('accounts').where('ownerId', '==', context.settings.ownerId).get();
+  const accounts = snapshot.docs
+    .filter((item) => {
+      const data = item.data();
+      return !data.archivedAt && !data.closedAt && data.classification === 'business' && data.currency === context.settings.currency;
+    })
+    .map((item) => ({ id: item.id, name: String(item.data().name || 'Business account'), currency: String(item.data().currency || 'BND'), type: String(item.data().type || 'bank') }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { accounts };
+});
+
+export const saveSmePosProduct = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const productId = optionalString(request.data?.productId, 80) || null;
+  const name = stringValue(request.data?.name, 'Product name', 100);
+  const category = optionalString(request.data?.category, 60);
+  const sku = optionalString(request.data?.sku, 50);
+  const note = optionalString(request.data?.note, 300);
+  const sellingPriceMinor = positiveMoney(request.data?.sellingPriceMinor);
+  const costPriceMinor = request.data?.costPriceMinor == null ? null : nonNegativeMoney(request.data?.costPriceMinor);
+  const trackStock = request.data?.trackStock !== false;
+  const quantityOnHand = smePosQuantity(request.data?.quantityOnHand, 'Quantity');
+  const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  const productRef = productId ? db.collection('smePosProducts').doc(productId) : db.collection('smePosProducts').doc();
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, existing] = await Promise.all([transaction.get(commandRef), transaction.get(productRef)]);
+    if (command.exists) return command.data()?.result;
+    if (productId && !existing.exists) throw new HttpsError('not-found', 'Product not found.');
+    if (existing.exists && (existing.data()?.spaceId !== spaceId || existing.data()?.ownerId !== context.settings.ownerId)) {
+      throw new HttpsError('permission-denied', 'This product belongs to another shop.');
+    }
+    if (existing.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Restore this product before editing it.');
+    const now = FieldValue.serverTimestamp();
+    const payload = {
+      displayId: existing.data()?.displayId || displayId('PRD'),
+      spaceId,
+      ownerId: context.settings.ownerId,
+      name,
+      category,
+      sku,
+      note,
+      sellingPriceMinor,
+      costPriceMinor,
+      currency: context.settings.currency || context.space.currency || 'BND',
+      trackStock,
+      quantityOnHand: trackStock ? quantityOnHand : 0,
+      lowStockLevel: trackStock ? lowStockLevel : 0,
+      soldQuantity: Number(existing.data()?.soldQuantity || 0),
+      salesRevenueMinor: Number(existing.data()?.salesRevenueMinor || 0),
+      archivedAt: null,
+      createdAt: existing.data()?.createdAt || now,
+      updatedAt: now,
+    };
+    transaction.set(productRef, payload, { merge: true });
+    const result = { productId: productRef.id };
+    transaction.create(commandRef, { uid, kind: 'save_sme_pos_product', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: existing.exists ? 'pos_product_updated' : 'pos_product_created', targetType: 'sme_pos_product', targetId: productRef.id, summary: `${existing.exists ? 'Updated' : 'Added'} POS product ${name}.`, now });
+    return result;
+  });
+});
+
+export const setSmePosProductArchived = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const productId = stringValue(request.data?.productId, 'Product ID', 80);
+  const archived = request.data?.archived === true;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  const productRef = db.collection('smePosProducts').doc(productId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, product] = await Promise.all([transaction.get(commandRef), transaction.get(productRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!product.exists || product.data()?.spaceId !== spaceId || product.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('not-found', 'Product not found.');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(productRef, { archivedAt: archived ? now : null, updatedAt: now });
+    const result = { productId, archived };
+    transaction.create(commandRef, { uid, kind: archived ? 'archive_sme_pos_product' : 'restore_sme_pos_product', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const saveSmePosCustomer = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const customerId = optionalString(request.data?.customerId, 80) || null;
+  const name = stringValue(request.data?.name, 'Customer name', 100);
+  const phone = optionalString(request.data?.phone, 30);
+  const email = optionalString(request.data?.email, 120);
+  const note = optionalString(request.data?.note, 300);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid customer email.');
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  const customerRef = customerId ? db.collection('smePosCustomers').doc(customerId) : db.collection('smePosCustomers').doc();
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, existing] = await Promise.all([transaction.get(commandRef), transaction.get(customerRef)]);
+    if (command.exists) return command.data()?.result;
+    if (customerId && !existing.exists) throw new HttpsError('not-found', 'Customer not found.');
+    if (existing.exists && (existing.data()?.spaceId !== spaceId || existing.data()?.ownerId !== context.settings.ownerId)) throw new HttpsError('permission-denied', 'This customer belongs to another shop.');
+    if (existing.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Restore this customer before editing it.');
+    const now = FieldValue.serverTimestamp();
+    transaction.set(customerRef, {
+      displayId: existing.data()?.displayId || displayId('CUS'), spaceId, ownerId: context.settings.ownerId, name, phone, email, note,
+      totalSpentMinor: Number(existing.data()?.totalSpentMinor || 0), visitCount: Number(existing.data()?.visitCount || 0), lastSaleAt: existing.data()?.lastSaleAt || null,
+      archivedAt: null, createdAt: existing.data()?.createdAt || now, updatedAt: now,
+    }, { merge: true });
+    const result = { customerId: customerRef.id };
+    transaction.create(commandRef, { uid, kind: 'save_sme_pos_customer', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const setSmePosCustomerArchived = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const customerId = stringValue(request.data?.customerId, 'Customer ID', 80);
+  const archived = request.data?.archived === true;
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  const customerRef = db.collection('smePosCustomers').doc(customerId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, customer] = await Promise.all([transaction.get(commandRef), transaction.get(customerRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!customer.exists || customer.data()?.spaceId !== spaceId || customer.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('not-found', 'Customer not found.');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(customerRef, { archivedAt: archived ? now : null, updatedAt: now });
+    const result = { customerId, archived };
+    transaction.create(commandRef, { uid, kind: archived ? 'archive_sme_pos_customer' : 'restore_sme_pos_customer', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const checkoutStandardPos = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const requestedItems = parseSmePosCheckoutItems(request.data?.items);
+  const customerId = optionalString(request.data?.customerId, 80) || null;
+  const paymentAccountId = stringValue(request.data?.paymentAccountId, 'Payment account', 80);
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
+  const discountMinor = nonNegativeMoney(request.data?.discountMinor ?? 0);
+  const saleDate = localDate(request.data?.saleDate, 'Sale date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  if (context.settings.status !== 'active') throw new HttpsError('failed-precondition', 'Activate the POS before completing checkout.');
+  const productRefs = requestedItems.map((item) => db.collection('smePosProducts').doc(item.productId));
+  const accountRef = db.collection('accounts').doc(paymentAccountId);
+  const customerRef = customerId ? db.collection('smePosCustomers').doc(customerId) : null;
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const saleRef = db.collection('smePosSales').doc();
+  const financialRef = db.collection('transactions').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const [command, accountSnapshot, customerSnapshot, productSnapshots] = await Promise.all([
+      transaction.get(commandRef), transaction.get(accountRef), customerRef ? transaction.get(customerRef) : Promise.resolve(null), Promise.all(productRefs.map((ref) => transaction.get(ref))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payment account');
+    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for POS payments.');
+    if (account.currency !== context.settings.currency) throw new HttpsError('failed-precondition', 'Payment account and POS currency must match.');
+    if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
+
+    let subtotalMinor = 0;
+    let costMinor = 0;
+    let itemCount = 0;
+    const saleItems = productSnapshots.map((snapshot, index) => {
+      if (!snapshot.exists) throw new HttpsError('not-found', 'One of the products was not found.');
+      const product = snapshot.data() || {};
+      const requestItem = requestedItems[index];
+      if (product.spaceId !== spaceId || product.ownerId !== context.settings.ownerId || product.archivedAt) throw new HttpsError('failed-precondition', 'One of the products is unavailable.');
+      const unitPriceMinor = positiveMoney(product.sellingPriceMinor);
+      const unitCostMinor = product.costPriceMinor == null ? 0 : nonNegativeMoney(product.costPriceMinor);
+      const quantity = requestItem.quantity;
+      if (product.trackStock !== false && smePosQuantity(product.quantityOnHand, 'Product stock') < quantity) throw new HttpsError('failed-precondition', `${product.name || 'A product'} does not have enough stock.`);
+      const lineTotalMinor = unitPriceMinor * quantity;
+      const lineCostMinor = unitCostMinor * quantity;
+      if (!Number.isSafeInteger(lineTotalMinor) || !Number.isSafeInteger(lineCostMinor)) throw new HttpsError('out-of-range', 'Sale amount is too large.');
+      subtotalMinor += lineTotalMinor; costMinor += lineCostMinor; itemCount += quantity;
+      return { productId: snapshot.id, productName: String(product.name || 'Product'), sku: String(product.sku || ''), quantity, unitPriceMinor, unitCostMinor, lineTotalMinor, lineCostMinor, returnedQuantity: 0 };
+    });
+    if (discountMinor >= subtotalMinor) throw new HttpsError('invalid-argument', 'Discount must be less than the subtotal.');
+    const totalMinor = subtotalMinor - discountMinor;
+    const profitMinor = totalMinor - costMinor;
+    const now = FieldValue.serverTimestamp();
+    const delta = accountEffect(account.type, 'in', totalMinor);
+    updateAccountBalance(transaction, accountRef, account, delta);
+    const ledgerEntryId = createLedgerEntry(transaction, { accountId: paymentAccountId, ownerId: String(context.settings.ownerId), spaceId, transactionId: financialRef.id, entryType: 'sme_pos_sale', amountMinor: delta, currency: account.currency, idempotencyKey: key, now });
+    const salesCategory = systemCategories.get('income-sales');
+    if (!salesCategory) throw new HttpsError('internal', 'Sales category is unavailable.');
+    transaction.create(financialRef, {
+      displayId: displayId('TXN'), ownerId: context.settings.ownerId, createdBy: uid, type: 'income', status: 'posted', spaceId, accountId: paymentAccountId, destinationAccountId: null,
+      amountMinor: totalMinor, currency: account.currency, category: salesCategory.name, categoryId: salesCategory.id, categoryIcon: salesCategory.icon, categoryColor: salesCategory.color,
+      categoryScope: 'business', categoryIsSystem: true, counterparty: customerSnapshot?.data()?.name || 'POS customer', note: note || `POS sale ${saleRef.id}`,
+      paymentMethod, paymentMethodLabel, transactionDate: saleDate, reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
+      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null, recurringTemplateId: null, recurringRunId: null, recurringScheduledDate: null,
+      createdAt: now, postedAt: now, updatedAt: now,
+    });
+    productSnapshots.forEach((snapshot, index) => {
+      const product = snapshot.data() || {};
+      const quantity = requestedItems[index].quantity;
+      transaction.update(snapshot.ref, {
+        quantityOnHand: product.trackStock === false ? 0 : Number(product.quantityOnHand || 0) - quantity,
+        soldQuantity: Number(product.soldQuantity || 0) + quantity,
+        salesRevenueMinor: Number(product.salesRevenueMinor || 0) + saleItems[index].lineTotalMinor,
+        updatedAt: now,
+      });
+    });
+    if (customerRef && customerSnapshot) transaction.update(customerRef, { totalSpentMinor: Number(customerSnapshot.data()?.totalSpentMinor || 0) + totalMinor, visitCount: Number(customerSnapshot.data()?.visitCount || 0) + 1, lastSaleAt: now, updatedAt: now });
+    const receiptNumber = displayId('RCP');
+    transaction.create(saleRef, {
+      displayId: displayId('SAL'), receiptNumber, spaceId, ownerId: context.settings.ownerId, createdBy: uid, status: 'completed', returnStatus: 'not_returned', sourceMode: context.settings.mode,
+      customerId, customerName: customerSnapshot?.data()?.name || null, paymentAccountId, paymentAccountName: accountSnapshot.data()?.name || 'Business account', paymentMethod, paymentMethodLabel,
+      items: saleItems, itemCount, subtotalMinor, discountMinor, totalMinor, costMinor, profitMinor, returnedMinor: 0, currency: account.currency, saleDate, note,
+      transactionId: financialRef.id, ledgerEntryId, receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '',
+      createdAt: now, updatedAt: now,
+    });
+    const result = { saleId: saleRef.id, receiptNumber, transactionId: financialRef.id };
+    transaction.create(commandRef, { uid, kind: 'checkout_standard_pos', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed POS sale ${receiptNumber} for ${totalMinor / 100} ${account.currency}.`, now });
+    return result;
+  });
+});
 
 type BackgroundReminderItemType = 'bill' | 'instalment' | 'goal';
 type BackgroundReminderKind = 'due_soon' | 'due_today' | 'late';

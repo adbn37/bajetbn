@@ -14,8 +14,9 @@ const requireText = (file, token) => {
 
 const release = JSON.parse(read('release.json'));
 const packageJson = JSON.parse(read('package.json'));
-if (release.version !== '0.11.13' || packageJson.version !== '0.11.13') fail('SME POS foundation must use version 0.11.13.');
-if (!release.label.includes('SME POS Foundation')) fail('release.json must identify the SME POS Foundation release.');
+if (packageJson.version !== release.version) fail('package.json and release.json must match.');
+const [major, minor, patch] = release.version.split('.').map(Number);
+if (major !== 0 || minor !== 11 || patch < 13) fail('SME POS foundation requires v0.11.13 or later.');
 
 requireFile('SME_POS_FOUNDATION_ALPHA.md');
 requireFile('src/features/sme-pos/SmePosPage.tsx');
@@ -79,7 +80,7 @@ for (const token of [
 const scope = JSON.parse(read('scope/pre-v1-scope.json'));
 const byId = new Map(scope.items.map((item) => [item.id, item]));
 if (byId.get('sme.pos_foundation')?.status !== 'complete') fail('sme.pos_foundation must be complete.');
-if (byId.get('sme.standard_pos')?.status !== 'partial') fail('sme.standard_pos must remain partial until checkout is implemented.');
+if (!['partial', 'manual_test', 'complete'].includes(byId.get('sme.standard_pos')?.status)) fail('sme.standard_pos must remain tracked.');
 if (byId.get('sme.marketplace_pos')?.status !== 'partial') fail('sme.marketplace_pos must remain partial until seller sales are implemented.');
 if (byId.get('sme.pos_returns_payouts')?.status !== 'missing') fail('Returns and payouts must remain an explicit open item.');
 if (byId.get('sme.shop_pilot')?.gate !== 'pre_production') fail('The shop pilot must block production.');

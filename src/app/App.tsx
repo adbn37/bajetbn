@@ -19,6 +19,7 @@ const SpacesPage = lazy(() => import('../features/spaces/SpacesPage').then((modu
 const ArchivedSpacesPage = lazy(() => import('../features/spaces/ArchivedSpacesPage').then((module) => ({ default: module.ArchivedSpacesPage })));
 const SpaceDetailsPage = lazy(() => import('../features/spaces/SpaceDetailsPage').then((module) => ({ default: module.SpaceDetailsPage })));
 const SmePosPage = lazy(() => import('../features/sme-pos/SmePosPage').then((module) => ({ default: module.SmePosPage })));
+const SmePosArchivedRecordsPage = lazy(() => import('../features/sme-pos/SmePosArchivedRecordsPage').then((module) => ({ default: module.SmePosArchivedRecordsPage })));
 const AccountsPage = lazy(() => import('../features/accounts/AccountsPage').then((module) => ({ default: module.AccountsPage })));
 const ClosedAccountsPage = lazy(() => import('../features/accounts/ClosedAccountsPage').then((module) => ({ default: module.ClosedAccountsPage })));
 const TransactionsPage = lazy(() => import('../features/transactions/TransactionsPage').then((module) => ({ default: module.TransactionsPage })));
@@ -64,6 +65,7 @@ export default function App() {
                   <Route path="spaces/archived" element={<ArchivedSpacesPage />} />
                   <Route path="spaces/:spaceId" element={<SpaceDetailsPage />} />
                   <Route path="spaces/:spaceId/pos" element={<SmePosPage />} />
+                  <Route path="spaces/:spaceId/pos/archived" element={<SmePosArchivedRecordsPage />} />
                   <Route path="accounts" element={<AccountsPage />} />
                   <Route path="accounts/closed" element={<ClosedAccountsPage />} />
                   <Route path="transactions" element={<TransactionsPage />} />
