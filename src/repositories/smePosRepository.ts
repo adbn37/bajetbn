@@ -266,7 +266,13 @@ export async function saveMarketplaceSeller(input: {
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'saveMarketplaceSeller');
-  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+  return call({
+    ...input,
+    commissionType: input.defaultCommissionType,
+    commissionRateBps: input.defaultCommissionRateBps,
+    commissionMinor: input.defaultCommissionMinor,
+    idempotencyKey: crypto.randomUUID(),
+  });
 }
 
 export async function setMarketplaceSellerArchived(spaceId: string, sellerId: string, archived: boolean) {
