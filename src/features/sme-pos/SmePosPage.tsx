@@ -109,15 +109,15 @@ export function SmePosPage() {
   if (!settings && isOwner) {
     return <main className="page sme-pos-page">
       <PageHeader
-        eyebrow="SME Space · Point of sale"
+        eyebrow="SME SPACE"
         title={space.name}
-        description="Set up the shop before staff can open the register."
-        action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back to Space</Link>}
+        description="Finish setup to open the register."
+        action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>}
       />
       {error && <div className="notice error">{error}</div>}
       <EmptyState
-        title="POS setup is not finished"
-        description="Choose Standard POS or Marketplace Consignment POS, add the shop details, and activate the register."
+        title="Finish POS setup"
+        description="Choose a POS type, add the shop details, and activate it."
         action={<Link className="button primary" to={`/spaces/${space.id}/pos/settings`}>Set up POS</Link>}
       />
     </main>;
@@ -125,46 +125,52 @@ export function SmePosPage() {
 
   if (accessDenied || !settings || !role) {
     return <main className="page">
-      <PageHeader eyebrow="SME POS" title={space.name} description="Your Space owner has not added POS access for your account." action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back to Space</Link>} />
+      <PageHeader eyebrow="SME POS" title={space.name} description="You do not have POS access." action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>} />
       {error && <div className="notice error">{error}</div>}
-      <EmptyState title="No POS access yet" description="Ask the Space owner to add you as a manager, cashier, stock staff, seller, or view-only user." />
+      <EmptyState title="No POS access yet" description="Ask the Space owner to assign you a POS role." />
     </main>;
   }
 
   const headerActions = <div className="button-row pos-page-actions">
-    {isOwner && <Link className="button secondary" to={`/spaces/${space.id}/pos/settings`}>POS Settings</Link>}
-    <Link className="button secondary" to={`/spaces/${space.id}`}>Back to Space</Link>
+    {isOwner && <Link className="button secondary" to={`/spaces/${space.id}/pos/settings`}>Settings</Link>}
+    <Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>
   </div>;
 
   const roleAction = role === 'cashier'
     ? {
-        title: 'Register ready',
-        detail: 'Search items, build the cart, and take payment.',
+        title: 'Register',
+        detail: 'Add items and take payment.',
         button: 'Open register',
       }
     : role === 'stock_staff'
       ? {
-          title: 'Stock tools ready',
-          detail: 'Update products, quantities, and low-stock alerts.',
+          title: 'Stock',
+          detail: 'Update products and quantities.',
           button: 'Manage stock',
         }
       : role === 'seller'
         ? {
-            title: 'Seller workspace ready',
-            detail: 'View your listings, sales, stock, and earnings.',
-            button: 'View my seller area',
+            title: 'Seller area',
+            detail: 'View listings, sales, and balance.',
+            button: 'View seller area',
           }
-        : {
-            title: 'POS workspace ready',
-            detail: 'Open the shop tools available for your role.',
-            button: 'Open POS tools',
-          };
+        : null;
 
   return <main className={`page sme-pos-page sme-pos-role-${role}`}>
     <PageHeader
-      eyebrow={`SME Space · ${roleLabels[role]}`}
+      eyebrow="SME SPACE"
       title={settings.shopName || space.name}
-      description={role === 'cashier' ? 'Open the register, add products to the cart, take payment, and issue the receipt.' : role === 'stock_staff' ? 'Manage shop products, available quantities, and low-stock alerts.' : 'Use the shop tools allowed for your POS role.'}
+      description={
+        role === 'cashier'
+          ? 'Take payments and issue receipts.'
+          : role === 'stock_staff'
+            ? 'Manage products and stock.'
+            : role === 'seller'
+              ? 'View listings, sales, and balance.'
+              : role === 'viewer'
+                ? 'View shop records.'
+                : 'Manage the shop.'
+      }
       action={headerActions}
     />
 
@@ -176,7 +182,7 @@ export function SmePosPage() {
       {settings.status !== 'active' && isOwner && <Link to={`/spaces/${space.id}/pos/settings`}>Open settings</Link>}
     </div>
 
-    <section className="sme-pos-mobile-command">
+    {roleAction && <section className="sme-pos-mobile-command">
       <div>
         <span className="eyebrow">{roleLabels[role]}</span>
         <strong>{roleAction.title}</strong>
@@ -186,7 +192,7 @@ export function SmePosPage() {
       <a className="button primary" href="#sme-pos-workspace">
         {roleAction.button}
       </a>
-    </section>
+    </section>}
 
     <div id="sme-pos-workspace">
       {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
