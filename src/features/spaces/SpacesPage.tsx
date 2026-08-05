@@ -121,15 +121,106 @@ export function SpacesPage() {
 }
 
 function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { spaces: Space[]; busyId: string; navigate: ReturnType<typeof useNavigate>; onEdit: (space: Space) => void; onArchive: (space: Space) => void; onDelete: (space: Space) => void }) {
-  return <section className="card-grid">{spaces.map((space) => {
+  return <section className="card-grid spaces-card-grid">{spaces.map((space) => {
     const open = () => navigate(`/spaces/${space.id}`);
+    const openPos = () => navigate(`/spaces/${space.id}/pos`);
     const stop = (event: MouseEvent<HTMLButtonElement>) => event.stopPropagation();
-    const handleKey = (event: KeyboardEvent<HTMLElement>) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } };
-    return <article key={space.id} className="space-card space-card-clickable" role="link" tabIndex={0} onClick={open} onKeyDown={handleKey} aria-label={`Open ${space.name}`}>
-      <div className="card-top"><span className={`space-icon large ${space.type}`}>{space.name.charAt(0)}</span><span className="type-badge">{labels[space.type]}</span></div>
-      <h2>{space.name}</h2><p>{space.description || (space.type === 'personal' ? 'Your private money area.' : `A ${labels[space.type].toLowerCase()} area for its money activity.`)}</p>
-      <div className="meta-row"><span>{space.currency}</span><span>{space.collaborationMode === 'private' ? 'Private' : 'Shared'}</span><span>{space.timezone}</span></div>
-      <footer><small>{space.displayId}</small><div className="button-row"><span className="space-open-label">Open Space →</span><button className="text-button" onClick={(event) => { stop(event); onEdit(space); }}>Edit</button>{space.type !== 'personal' && <><button className="text-button" disabled={busyId === space.id} onClick={(event) => { stop(event); onArchive(space); }}>Archive</button><button className="text-button danger" disabled={busyId === space.id} onClick={(event) => { stop(event); onDelete(space); }}>Delete</button></>}</div></footer>
+    const handleKey = (event: KeyboardEvent<HTMLElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    };
+
+    return <article
+      key={space.id}
+      className={`space-card space-card-clickable space-card-compact ${space.type === 'sme' ? 'space-card-sme' : ''}`}
+      role="link"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={handleKey}
+      aria-label={`Open ${space.name}`}
+    >
+      <div className="card-top">
+        <span className={`space-icon large ${space.type}`}>{space.name.charAt(0).toUpperCase()}</span>
+        <span className="type-badge">{labels[space.type]}</span>
+      </div>
+
+      <div className="space-card-copy">
+        <h2>{space.name}</h2>
+        <p>{space.description || (space.type === 'personal'
+          ? 'Your private money area.'
+          : `A ${labels[space.type].toLowerCase()} area for its money activity.`)}</p>
+      </div>
+
+      <div className="meta-row">
+        <span>{space.currency}</span>
+        <span>{space.collaborationMode === 'private' ? 'Private' : 'Shared'}</span>
+        <span>{space.timezone}</span>
+      </div>
+
+      <footer>
+        <small>{space.displayId}</small>
+
+        <div className="space-card-primary-actions">
+          {space.type === 'sme' && <button
+            type="button"
+            className="space-pos-shortcut"
+            onClick={(event) => {
+              stop(event);
+              openPos();
+            }}
+          >
+            POS
+          </button>}
+
+          <span className="space-open-label">Open →</span>
+
+          <details
+            className="space-card-menu"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <summary aria-label={`Manage ${space.name}`}>•••</summary>
+
+            <div className="space-card-menu-popover">
+              <button
+                type="button"
+                onClick={(event) => {
+                  stop(event);
+                  onEdit(space);
+                }}
+              >
+                Edit Space
+              </button>
+
+              {space.type !== 'personal' && <>
+                <button
+                  type="button"
+                  disabled={busyId === space.id}
+                  onClick={(event) => {
+                    stop(event);
+                    onArchive(space);
+                  }}
+                >
+                  Archive
+                </button>
+
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={busyId === space.id}
+                  onClick={(event) => {
+                    stop(event);
+                    onDelete(space);
+                  }}
+                >
+                  Delete
+                </button>
+              </>}
+            </div>
+          </details>
+        </div>
+      </footer>
     </article>;
   })}</section>;
 }

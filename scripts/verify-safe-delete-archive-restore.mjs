@@ -42,7 +42,7 @@ const checks = [
   ['Lifecycle repository', files.lifecycle.includes("run('manageAccountLifecycle'")],
   ['Archived Spaces section', files.spaces.includes('Archived Spaces')],
   ['Space restore button', files.archivedSpaces.includes('Restore')],
-  ['Space delete button', files.spaces.includes('Delete</button>')],
+  ['Space delete button', files.details.includes("ask('delete')") && files.details.includes('Delete Space')],
   ['Space settings controls', files.details.includes('Archive or delete this Space')],
   ['Closed accounts section', files.accounts.includes('Closed accounts')],
   ['Account close button', files.accounts.includes('Close account')],

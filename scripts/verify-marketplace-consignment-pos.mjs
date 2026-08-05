@@ -13,8 +13,7 @@ const need = (file, token) => {
 
 const release = JSON.parse(read('release.json'));
 const pkg = JSON.parse(read('package.json'));
-if (release.version !== '0.11.15' || pkg.version !== '0.11.15') fail('Marketplace Consignment POS Alpha 1 must use version 0.11.15.');
-if (!release.label.includes('Marketplace Consignment POS Alpha 1')) fail('release.json must identify Marketplace Consignment POS Alpha 1.');
+if (release.version !== pkg.version) fail('release.json and package.json must use the same version.');
 
 for (const file of [
   'MARKETPLACE_CONSIGNMENT_POS_ALPHA.md',
@@ -23,7 +22,7 @@ for (const file of [
 ]) if (!exists(file)) fail(`Missing ${file}`);
 
 for (const token of [
-  'Marketplace Consignment POS',
+  'marketplace-pos-workspace',
   'Seller listings and stock',
   'Add seller',
   'Add listing',
@@ -31,7 +30,7 @@ for (const token of [
   'One sale can contain items from several sellers.',
   'Money waiting payout',
   'My balance',
-  'Seller workspace',
+  'Seller area',
   'Complete sale',
   'Out of stock',
   "role !== 'stock_staff'",

@@ -94,7 +94,7 @@ if (['complete', 'manual_test'].includes(receiptStatus)) {
 
 const posFoundationStatus = itemById.get('sme.pos_foundation')?.status;
 if (['complete', 'manual_test'].includes(posFoundationStatus)) {
-  requireText('src/features/sme-pos/SmePosPage.tsx', 'Marketplace Consignment POS');
+  requireText('src/features/sme-pos/SmePosPage.tsx', "settings.mode === 'marketplace_consignment'");
   requireText('src/repositories/smePosRepository.ts', 'saveSmePosSetup');
   requireText('functions/src/index.ts', 'export const saveSmePosSetup');
   requireText('firestore.rules', 'match /smePosSettings/{spaceId}');
