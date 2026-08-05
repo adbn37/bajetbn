@@ -87,6 +87,15 @@ export function SmePosPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    if (!user || !spaceId || !settings || !role) return;
+
+    window.localStorage.setItem(
+      `bajetbn:lastPosPath:${user.uid}`,
+      `/spaces/${spaceId}/pos`,
+    );
+  }, [role, settings, spaceId, user]);
+
   if (loading) return <main className="page"><div className="loading-panel">Loading SME POS…</div></main>;
 
   if (!space || space.type !== 'sme') {
@@ -127,7 +136,31 @@ export function SmePosPage() {
     <Link className="button secondary" to={`/spaces/${space.id}`}>Back to Space</Link>
   </div>;
 
-  return <main className="page sme-pos-page">
+  const roleAction = role === 'cashier'
+    ? {
+        title: 'Register ready',
+        detail: 'Search items, build the cart, and take payment.',
+        button: 'Open register',
+      }
+    : role === 'stock_staff'
+      ? {
+          title: 'Stock tools ready',
+          detail: 'Update products, quantities, and low-stock alerts.',
+          button: 'Manage stock',
+        }
+      : role === 'seller'
+        ? {
+            title: 'Seller workspace ready',
+            detail: 'View your listings, sales, stock, and earnings.',
+            button: 'View my seller area',
+          }
+        : {
+            title: 'POS workspace ready',
+            detail: 'Open the shop tools available for your role.',
+            button: 'Open POS tools',
+          };
+
+  return <main className={`page sme-pos-page sme-pos-role-${role}`}>
     <PageHeader
       eyebrow={`SME Space · ${roleLabels[role]}`}
       title={settings.shopName || space.name}
@@ -143,16 +176,30 @@ export function SmePosPage() {
       {settings.status !== 'active' && isOwner && <Link to={`/spaces/${space.id}/pos/settings`}>Open settings</Link>}
     </div>
 
-    {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
-      space={space}
-      settings={settings}
-      role={role}
-      onChanged={load}
-    /> : <StandardPosWorkspace
-      space={space}
-      settings={settings}
-      role={role}
-      onChanged={load}
-    />}
+    <section className="sme-pos-mobile-command">
+      <div>
+        <span className="eyebrow">{roleLabels[role]}</span>
+        <strong>{roleAction.title}</strong>
+        <small>{roleAction.detail}</small>
+      </div>
+
+      <a className="button primary" href="#sme-pos-workspace">
+        {roleAction.button}
+      </a>
+    </section>
+
+    <div id="sme-pos-workspace">
+      {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
+        space={space}
+        settings={settings}
+        role={role}
+        onChanged={load}
+      /> : <StandardPosWorkspace
+        space={space}
+        settings={settings}
+        role={role}
+        onChanged={load}
+      />}
+    </div>
   </main>;
 }

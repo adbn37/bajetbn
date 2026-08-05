@@ -32,6 +32,19 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const currentPosMatch = location.pathname.match(/^\/spaces\/([^/]+)\/pos(?:\/|$)/);
+  const currentPosPath = currentPosMatch ? `/spaces/${currentPosMatch[1]}/pos` : '';
+  const storedPosPath = typeof window !== 'undefined' && user?.uid
+    ? window.localStorage.getItem(`bajetbn:lastPosPath:${user.uid}`) || ''
+    : '';
+
+  const rememberedPosPath = /^\/spaces\/[^/]+\/pos$/.test(storedPosPath)
+    ? storedPosPath
+    : '';
+
+  const mobileCenterPath = currentPosPath || rememberedPosPath || '/transactions';
+  const mobileCenterLabel = mobileCenterPath === '/transactions' ? 'Money' : 'POS';
+
   useEffect(() => {
     if (location.pathname === '/search') setSearchText(new URLSearchParams(location.search).get('q') || '');
   }, [location]);
@@ -118,6 +131,49 @@ export function AppShell() {
         </div>
         <ConnectivityBanner />
         <Outlet />
+
+        <nav className="mobile-bottom-nav" aria-label="Quick navigation">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span aria-hidden="true">⌂</span>
+            <small>Home</small>
+          </NavLink>
+
+          <NavLink
+            to="/spaces"
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span aria-hidden="true">▦</span>
+            <small>Spaces</small>
+          </NavLink>
+
+          <NavLink
+            to={mobileCenterPath}
+            className={({ isActive }) => `mobile-bottom-primary ${isActive ? 'active' : ''}`}
+          >
+            <span aria-hidden="true">{mobileCenterLabel === 'POS' ? '▣' : '↔'}</span>
+            <small>{mobileCenterLabel}</small>
+          </NavLink>
+
+          <NavLink
+            to="/notifications"
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span className="mobile-bottom-alert-icon" aria-hidden="true">
+              ◇
+              {unreadNotifications > 0 && <b>{unreadNotifications > 9 ? '9+' : unreadNotifications}</b>}
+            </span>
+            <small>Alerts</small>
+          </NavLink>
+
+          <button type="button" onClick={() => setMobileOpen(true)}>
+            <span aria-hidden="true">☰</span>
+            <small>More</small>
+          </button>
+        </nav>
       </div>
     </div>
   );

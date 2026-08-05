@@ -202,6 +202,34 @@ export function SpaceDetailsPage() {
       <div className="space-details-meta"><span>{space.currency}</span><span>Brunei time</span><span>{space.displayId}</span></div>
     </section>
 
+    {space.type === 'sme' && !space.archivedAt && <section className="sme-pos-hero">
+      <div className="sme-pos-hero-copy">
+        <span className="eyebrow">Daily shop tools</span>
+        <h2>Point of sale, ready first</h2>
+        <p>Open the register, manage seller stock, serve customers, and review sales from one place.</p>
+
+        <div className="sme-pos-hero-chips" aria-label="POS tools">
+          <span>Register</span>
+          <span>Stock</span>
+          <span>Customers</span>
+          <span>Sales</span>
+        </div>
+      </div>
+
+      <div className="sme-pos-hero-actions">
+        <Link className="button primary sme-pos-open-button" to={`/spaces/${space.id}/pos`}>
+          Open POS
+        </Link>
+
+        {currentMember?.role === 'owner' && <Link
+          className="button secondary"
+          to={`/spaces/${space.id}/pos/settings`}
+        >
+          POS Settings
+        </Link>}
+      </div>
+    </section>}
+
     <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
       {space.type === 'sme' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/pos`}>Point of sale</Link>}
@@ -246,7 +274,7 @@ function SpaceOverview({
   openSharedBillCount: number;
 }) {
   const shared = space.type !== 'personal';
-  const quickLinks = [
+  const quickLinks: Array<{ to: string; icon: string; title: string; detail: string; featured?: boolean }> = [
     { to: `/transactions?spaceId=${space.id}`, icon: '↔', title: 'Money activity', detail: 'See money in, money out, and account transfers.' },
     { to: `/budgets?spaceId=${space.id}`, icon: '▤', title: space.type === 'trip' ? 'Trip budget' : 'Budgets', detail: 'Plan how much can be spent.' },
     { to: `/bills?spaceId=${space.id}`, icon: '◷', title: 'Bills & instalments', detail: 'See payments and dates for this Space.' },
@@ -254,7 +282,7 @@ function SpaceOverview({
     { to: `/calendar?spaceId=${space.id}`, icon: '▦', title: 'Calendar', detail: 'See what is late or coming soon.' },
   ];
   if (space.type === 'sme') {
-    quickLinks.splice(1, 0, { to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Set up Standard POS or Marketplace Consignment POS for this shop.' });
+    quickLinks.unshift({ to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Open the register and daily shop tools.', featured: true });
   }
   if (space.type === 'personal' || space.type === 'goal' || space.type === 'custom') {
     quickLinks.splice(2, 0, { to: `/goals?spaceId=${space.id}`, icon: '◇', title: 'Goals', detail: 'Track money you are saving.' });
@@ -273,7 +301,7 @@ function SpaceOverview({
     <section className="panel space-overview-panel">
       <div className="panel-heading"><div><span className="eyebrow">Open a section</span><h2>Manage this Space</h2></div></div>
       <div className="space-quick-grid">
-        {quickLinks.map((item) => <Link key={item.to} className="space-quick-card" to={item.to}>
+        {quickLinks.map((item) => <Link key={item.to} className={`space-quick-card ${item.featured ? 'featured' : ''}`} to={item.to}>
           <span className="space-quick-icon">{item.icon}</span>
           <div><strong>{item.title}</strong><small>{item.detail}</small></div>
           <span aria-hidden="true">→</span>
