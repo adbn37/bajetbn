@@ -27,7 +27,7 @@ requireText('src/types/models.ts', "export type SmePosMode = 'standard' | 'marke
 requireText('src/types/models.ts', "export type SmePosRole = 'owner' | 'manager' | 'cashier' | 'stock_staff' | 'seller' | 'viewer'");
 requireText('src/app/App.tsx', 'spaces/:spaceId/pos');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', 'Point of sale');
-requireText('src/features/spaces/SpaceDetailsPage.tsx', 'Marketplace Consignment POS');
+requireText('src/features/spaces/SpaceDetailsPage.tsx', 'sme-pos-open-button');
 
 const page = read('src/features/sme-pos/SmePosPage.tsx') + '\n' + read('src/features/sme-pos/SmePosSettingsPage.tsx');
 for (const token of [
