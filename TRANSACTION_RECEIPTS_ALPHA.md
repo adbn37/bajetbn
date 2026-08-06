@@ -24,3 +24,17 @@ BajetBN now supports optional receipt/document attachments on ordinary Money act
 ## Staging test gate
 
 Test image/PDF upload, invalid file rejection, 10 MB limit, five-file limit, open, remove, mobile layout, ownership isolation and account-deletion cleanup before production.
+
+## Staging acceptance ? 2026-08-06
+
+The owner completed and approved the full transaction receipt and document-attachment matrix on:
+
+- Staging: https://0586bd9b.bajetbn-staging.pages.dev
+- mobile and desktop;
+- dark and warm-light themes.
+
+The approved matrix covered optional create-time attachments, add-later uploads, image and PDF support, mobile capture, five-file and file-size limits, invalid-file rejection, open and remove actions, private Storage access, retry handling, offline protection, transaction cleanup, account-deletion cleanup and immediate receipt-count updates.
+
+Attachment actions did not change transaction values, Account balances, Budget totals, ledger effects or reversals. Repeated upload and removal attempts did not create duplicate or inconsistent metadata.
+
+The `data.general_receipts` pre-v1 gate is complete. Production remains governed by the Alpha 2 staging and final production gates.

@@ -11,7 +11,7 @@ The source scope is complete, but manual staging evidence is still required.
 3. Recurring-money scheduler, month-end and duplicate-safe posting matrix ? **passed on staging 2026-08-06**.
 4. Brunei institution and payment-method end-to-end matrix ? **passed on staging 2026-08-06**.
 5. Background reminder scheduler, permission, token and click-handling matrix.
-6. Transaction receipt/document attachment matrix.
+6. Transaction receipt/document attachment matrix ? **passed on staging 2026-08-06**.
 7. Clean CI, security review, production smoke test and rollback drill.
 8. Explicit product-owner approval.
 

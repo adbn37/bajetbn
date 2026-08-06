@@ -363,28 +363,57 @@ The `notifications.reminders` pre-v1 gate is complete.
 
 ## v0.11.12 — Transaction receipts and final scope audit
 
-- [ ] Attach an image to an income or expense record and open it again.
-- [ ] Attach a PDF and confirm the original file name is shown.
-- [ ] Reject unsupported files and files of 10 MB or larger.
-- [ ] Enforce the five-file limit without leaving unregistered metadata.
-- [ ] Remove one attachment and confirm the Storage object and metadata are gone.
-- [ ] Confirm a different user cannot read the attachment metadata or Storage file.
-- [ ] Confirm attachment controls require internet and do not enter the offline money queue.
+- [x] Attach an image to an income or expense record and open it again.
+- [x] Attach a PDF and confirm the original file name is shown.
+- [x] Reject unsupported files and files of 10 MB or larger.
+- [x] Enforce the five-file limit without leaving unregistered metadata.
+- [x] Remove one attachment and confirm the Storage object and metadata are gone.
+- [x] Confirm a different user cannot read the attachment metadata or Storage file.
+- [x] Confirm attachment controls require internet and do not enter the offline money queue.
 - [x] Confirmed account deletion removes transaction attachment metadata and private files.
-- [ ] Check mobile layout and long file names.
+- [x] Check mobile layout and long file names.
 - [ ] Review `FINAL_SCOPE_AUDIT.md` and keep `PRODUCTION_READINESS_GATE.md` at NO-GO until all remaining gates pass.
 
 ## v0.11.12 inline transaction attachment hotfix
 
-- [ ] Save income, expense and transfer without selecting any attachment.
-- [ ] Select one image before saving and confirm the transaction and attachment both appear.
-- [ ] Select one PDF before saving and confirm it opens from Details.
-- [ ] Select several files, remove one before saving, and confirm only the remaining files upload.
-- [ ] Confirm Take photo opens the mobile camera/file capture flow on a supported device.
-- [ ] Confirm more than five files, unsupported files and files at/over 10 MB are rejected clearly.
-- [ ] Simulate an attachment upload failure and confirm the transaction remains saved with Retry attachments.
-- [ ] Confirm Finish without remaining attachments closes safely and the existing Details upload remains available.
-- [ ] While offline, confirm the transaction can be queued with no file and attachment controls explain that internet is required.
+- [x] Save income, expense and transfer without selecting any attachment.
+- [x] Select one image before saving and confirm the transaction and attachment both appear.
+- [x] Select one PDF before saving and confirm it opens from Details.
+- [x] Select several files, remove one before saving, and confirm only the remaining files upload.
+- [x] Confirm Take photo opens the mobile camera/file capture flow on a supported device.
+- [x] Confirm more than five files, unsupported files and files at/over 10 MB are rejected clearly.
+- [x] Simulate an attachment upload failure and confirm the transaction remains saved with Retry attachments.
+- [x] Confirm Finish without remaining attachments closes safely and the existing Details upload remains available.
+- [x] While offline, confirm the transaction can be queued with no file and attachment controls explain that internet is required.
+
+### Transaction-receipt staging acceptance ? 2026-08-06
+
+The owner approved the complete general transaction receipt and document-attachment matrix on staging.
+
+Confirmed coverage:
+
+- optional image and PDF selection before saving Money Activity;
+- adding attachments to existing transactions;
+- mobile camera/file capture;
+- five-file and 10 MB limits;
+- unsupported-file rejection;
+- immediate attachment counts and open controls;
+- safe removal of metadata and private Storage objects;
+- upload failure, retry and finish-without-attachment behaviour;
+- offline blocking for attachment operations;
+- offline Money Activity without files;
+- owner-only metadata and Storage access;
+- signed-out and unrelated-user access protection;
+- server-controlled Firestore metadata writes;
+- transaction-deletion and account-deletion cleanup;
+- retained shared history without private receipt links;
+- Account, Budget and financial totals remaining unchanged;
+- filtered and account-specific Money Activity shortcuts;
+- mobile and desktop layouts;
+- keyboard and focus controls; and
+- dark and warm-light themes.
+
+The `data.general_receipts` pre-v1 gate is complete. Production remains NO-GO until the remaining release gates pass.
 
 ## v0.11.12 premium dark and warm-light theme refresh
 
@@ -408,13 +437,13 @@ The `notifications.reminders` pre-v1 gate is complete.
 - [ ] Save money in, money out and a money move from Overview and confirm the user remains on Overview.
 - [ ] Confirm the Overview totals and account balances refresh after an online save.
 - [ ] Confirm offline save still queues safely from the Overview modal.
-- [ ] On All Money Activity, confirm a transaction with no attachment shows **Add receipt**.
-- [ ] Attach one file from the shortcut and confirm the row changes to **View receipts (1)**.
-- [ ] Confirm a transaction with several attachments shows the correct count.
-- [ ] Remove an attachment and confirm the row count updates immediately.
-- [ ] Confirm **Details** still opens the full transaction details separately.
-- [ ] Confirm attachment upload remains optional in every flow.
-- [ ] Check the shortcut labels on desktop and mobile with no horizontal scrolling.
+- [x] On All Money Activity, confirm a transaction with no attachment shows **Add receipt**.
+- [x] Attach one file from the shortcut and confirm the row changes to **View receipts (1)**.
+- [x] Confirm a transaction with several attachments shows the correct count.
+- [x] Remove an attachment and confirm the row count updates immediately.
+- [x] Confirm **Details** still opens the full transaction details separately.
+- [x] Confirm attachment upload remains optional in every flow.
+- [x] Check the shortcut labels on desktop and mobile with no horizontal scrolling.
 
 ## v0.11.13 — SME POS Foundation Alpha 1
 
