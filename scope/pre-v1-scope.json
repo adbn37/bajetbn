@@ -515,7 +515,7 @@
       "id": "recurring.transactions",
       "area": "Recurring workflows",
       "requirement": "Recurring ordinary income/expense templates such as salary, rent and subscriptions",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "src/types/models.ts",
