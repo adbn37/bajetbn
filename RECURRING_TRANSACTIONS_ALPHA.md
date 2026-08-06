@@ -55,3 +55,17 @@ This phase changes:
 - Firebase Functions, including a scheduled function.
 
 After merge to `staging`, deploy Firestore rules, Firestore indexes, and Functions to the staging project. Use disposable staging records to verify duplicate prevention, pause/resume/skip/stop, month-end schedules, budget updates, and account balances.
+
+## Staging acceptance ? 2026-08-06
+
+The owner completed the recurring-transactions browser and scheduler matrix on:
+
+- Staging: https://0586bd9b.bajetbn-staging.pages.dev
+- mobile and desktop;
+- dark and warm-light themes.
+
+The approved matrix covered income and expense templates, scheduler execution, deterministic duplicate prevention, ledger and Account posting, Budget effects, preferred-day and month-end schedules, pause, resume, skip, stop, restart, future-only edits, Calendar and Search visibility, Needs Attention handling, closed Account protection and archived Space protection.
+
+Repeated scheduler, callable and retry execution did not create duplicate transactions, ledger entries, run records or Budget effects.
+
+The `recurring.transactions` pre-v1 gate is complete. Production remains blocked by the remaining staging and release gates.

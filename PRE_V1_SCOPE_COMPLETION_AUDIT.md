@@ -36,10 +36,8 @@ This audit does not change runtime behaviour. It records the approved scope, cur
 These must be completed before the current build is promoted to the public live website as the approved release:
 
 1. **Finish Alpha 2 and v0.11.5 manual staging tests** on mobile and desktop, including every dedicated archive/closed page and every new confirmation dialog.
-2. **Deploy and manually verify v0.11.6 account deletion on staging** with disposable password and Google users, ownership-transfer blockers, cancellation, scheduled finalisation, Storage cleanup, retained anonymous shared history and the 30-day re-registration policy.
-3. **Deploy and manually verify v0.11.7 recurring transactions on staging**, including scheduler execution, month-end dates, duplicate prevention, Budget effects, pause/resume/skip/stop and closed Account/archived Space safeguards.
-4. **Deploy and manually verify v0.11.9 background reminders on staging**, including scheduled generation while the app is closed, duplicate prevention, preference handling, goal reminders, optional device delivery and blocked-permission behaviour.
-5. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
+2. **Deploy and manually verify v0.11.9 background reminders on staging**, including scheduled generation while the app is closed, duplicate prevention, preference handling, goal reminders, optional device delivery and blocked-permission behaviour.
+3. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
 
 The browser-native confirmation, version-source, CI-coverage and Firebase Functions dependency-review findings were closed in v0.11.5. The account-deletion source implementation is documented in `ACCOUNT_DATA_DELETION_ALPHA.md`; it remains a staging-test gate until the scheduled backend flow is proven end to end.
 
@@ -98,3 +96,7 @@ Do not tag or announce v1.0.0 until every item in `scope/pre-v1-scope.json` with
 ## 2026-08-03 SME POS scope expansion
 
 The canonical register contains 58 requirements. The SME POS foundation and Standard POS are complete after staging approval. Marketplace Consignment POS Alpha 1 is implemented and awaiting staging approval, while returns, refunds, seller payouts and the real shop pilot remain open before production. Use `scope/pre-v1-scope.json` for current counts.
+
+## Recurring transactions staging acceptance
+
+The complete v0.11.7 recurring-money matrix passed on 2026-08-06, including scheduler execution, month-end handling, deterministic duplicate prevention, Budget effects, lifecycle actions and Account/Space safeguards.

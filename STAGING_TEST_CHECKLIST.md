@@ -174,23 +174,46 @@ Notes: ____________________
 
 ## v0.11.7 recurring transactions
 
-- [ ] Create monthly salary, allowance, rental income and subscription templates.
-- [ ] Confirm the due occurrence posts one transaction, one ledger entry and one run record.
-- [ ] Run the scheduler/callable twice for the same due date and confirm no duplicate transaction.
-- [ ] Confirm recurring expenses update matching Budgets exactly once.
-- [ ] Pause a template and confirm no transaction is generated.
-- [ ] Resume with a chosen date and confirm missed dates are not silently backfilled.
-- [ ] Skip next and confirm the Account balance does not change.
-- [ ] Edit future amount/account/category and confirm old transactions remain unchanged.
-- [ ] Stop a template and confirm it moves to the separate Stopped page.
-- [ ] Restart a stopped template from a new date.
-- [ ] Confirm delete is allowed only when generated and skipped counts are zero.
-- [ ] Verify 31 January monthly -> 28 February -> 31 March month-end behaviour.
-- [ ] Close/archive protection blocks Accounts and Spaces with active recurring money.
-- [ ] Break Account/Space access and confirm Needs attention plus one notification.
-- [ ] Confirm Calendar and Search show the recurring template.
-- [ ] Verify mobile cards, forms and action buttons without horizontal scrolling.
+- [x] Create monthly salary, allowance, rental income and subscription templates.
+- [x] Confirm the due occurrence posts one transaction, one ledger entry and one run record.
+- [x] Run the scheduler/callable twice for the same due date and confirm no duplicate transaction.
+- [x] Confirm recurring expenses update matching Budgets exactly once.
+- [x] Pause a template and confirm no transaction is generated.
+- [x] Resume with a chosen date and confirm missed dates are not silently backfilled.
+- [x] Skip next and confirm the Account balance does not change.
+- [x] Edit future amount/account/category and confirm old transactions remain unchanged.
+- [x] Stop a template and confirm it moves to the separate Stopped page.
+- [x] Restart a stopped template from a new date.
+- [x] Confirm delete is allowed only when generated and skipped counts are zero.
+- [x] Verify 31 January monthly -> 28 February -> 31 March month-end behaviour.
+- [x] Close/archive protection blocks Accounts and Spaces with active recurring money.
+- [x] Break Account/Space access and confirm Needs attention plus one notification.
+- [x] Confirm Calendar and Search show the recurring template.
+- [x] Verify mobile cards, forms and action buttons without horizontal scrolling.
 
+
+### v0.11.7 staging acceptance ? 2026-08-06
+
+The owner approved the complete recurring-transactions matrix on staging.
+
+Additional confirmed coverage:
+
+- monthly salary, rental income, subscriptions and ordinary expenses;
+- selected Space, Account, category and payment method persistence;
+- one transaction, ledger entry and run record per occurrence;
+- deterministic duplicate prevention across scheduler, callable and repeated requests;
+- Account and Budget effects posted exactly once;
+- January, February, April and leap-year month-end handling;
+- pause, resume, skip, stop and restart behaviour;
+- future edits did not change previously generated transactions;
+- closed Account, archived Space and lost-access safeguards;
+- Needs Attention and single-notification behaviour;
+- safe retry after correcting Account or Space access;
+- Reports, Search and Calendar reconciliation;
+- mobile and desktop layouts; and
+- dark and warm-light themes.
+
+The `recurring.transactions` pre-v1 gate is complete.
 
 ## v0.11.8 Brunei banks and payment methods
 

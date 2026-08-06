@@ -36,7 +36,7 @@ Includes the seven-day deletion cooling-off period, safe anonymisation and a 30-
 - [x] Preserve month-end and preferred-day schedules across short months.
 - [x] Update Accounts, ledgers and matching Budgets through trusted Functions.
 - [x] Add dedicated active and stopped pages plus Calendar and Search visibility.
-- [ ] Deploy rules, indexes and Functions to staging and complete the recurring-transaction test matrix.
+- [x] Rules, indexes and Functions were deployed to staging and the recurring-transaction matrix passed on 2026-08-06.
 
 General receipt/document attachments remain an explicit pre-v1 decision. Offline financial entry synchronisation is implemented separately in v0.11.11.
 

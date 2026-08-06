@@ -14,7 +14,6 @@ The product owner explicitly confirmed the v0.11.10 Household/Group Funds and Fi
 
 - Dedicated archive/closed pages and Alpha 2 browser matrix.
 - Account deletion and 30-day fresh-registration matrix.
-- Recurring money scheduler and duplicate-prevention matrix.
 - Background reminder/device-notification matrix.
 - Transaction receipt/document attachment matrix.
 - Final production smoke, security, rollback and explicit approval.
@@ -30,3 +29,7 @@ The owner confirmed that BajetBN will be used for the shop and that both **Stand
 ## Brunei localisation staging acceptance
 
 The Brunei institution and payment-method end-to-end matrix passed on 2026-08-06. Both related pre-v1 scope records are complete.
+
+## Recurring-money staging acceptance
+
+The recurring-money scheduler, month-end and duplicate-prevention matrix passed on 2026-08-06. The `recurring.transactions` pre-v1 scope record is complete.
