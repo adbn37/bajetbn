@@ -172,8 +172,8 @@ export function SpaceDetailsPage() {
       { id: 'overview', label: 'Overview' },
       { id: 'members', label: 'Members' },
       ...(supportsGroupFund ? [{ id: fundTabId, label: fundTabLabel }] : []),
-      { id: 'expenses', label: 'Shared expenses' },
-      { id: 'balances', label: 'Who owes whom' },
+      { id: 'expenses', label: space.type === 'sme' ? 'Expenses' : 'Shared expenses' },
+      { id: 'balances', label: space.type === 'sme' ? 'Balances' : 'Who owes whom' },
       { id: 'bills', label: 'Shared bills' },
       { id: 'activity', label: 'Activity' },
       { id: 'settings', label: 'Space settings' },
@@ -187,48 +187,63 @@ export function SpaceDetailsPage() {
     <PageHeader
       eyebrow={`${spaceTypeLabel[space.type]} Space`}
       title={space.name}
-      description={spaceDescription(space)}
-      action={<Link className="button secondary" to="/spaces">All Spaces</Link>}
+      description={
+        space.type === 'sme'
+          ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} ? SME`
+          : spaceDescription(space)
+      }
+      action={<Link className="button secondary" to="/spaces">Back</Link>}
     />
     {error && <div className="notice error">{error}</div>}
     {space.archivedAt && <div className="notice">This Space is hidden. Its previous money records are still kept.</div>}
 
-    <section className="space-details-identity">
-      <span className={`space-icon large ${space.type}`}>{space.name.charAt(0).toUpperCase()}</span>
-      <div>
-        <strong>{spaceTypeLabel[space.type]}</strong>
-        <span>{shared ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Shared Space` : 'Private Space'}</span>
-      </div>
-      <div className="space-details-meta"><span>{space.currency}</span><span>Brunei time</span><span>{space.displayId}</span></div>
-    </section>
+    {space.type !== 'sme' && (
+      <section className="space-details-identity">
+        <span className={`space-icon large ${space.type}`}>{space.name.charAt(0).toUpperCase()}</span>
 
-    {space.type === 'sme' && !space.archivedAt && <section className="sme-pos-hero">
-      <div className="sme-pos-hero-copy">
-        <span className="eyebrow">Daily shop tools</span>
-        <h2>Point of sale, ready first</h2>
-        <p>Open the register, manage seller stock, serve customers, and review sales from one place.</p>
-
-        <div className="sme-pos-hero-chips" aria-label="POS tools">
-          <span>Register</span>
-          <span>Stock</span>
-          <span>Customers</span>
-          <span>Sales</span>
+        <div>
+          <strong>{spaceTypeLabel[space.type]}</strong>
+          <span>
+            {shared
+              ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} ? Shared Space`
+              : 'Private Space'}
+          </span>
         </div>
-      </div>
 
-      <div className="sme-pos-hero-actions">
-        <Link className="button primary sme-pos-open-button" to={`/spaces/${space.id}/pos`}>
-          Open POS
-        </Link>
+        <div className="space-details-meta">
+          <span>{space.currency}</span>
+          <span>Brunei time</span>
+          <span>{space.displayId}</span>
+        </div>
+      </section>
+    )}
 
-        {currentMember?.role === 'owner' && <Link
-          className="button secondary"
-          to={`/spaces/${space.id}/pos/settings`}
-        >
-          POS Settings
-        </Link>}
-      </div>
-    </section>}
+    {space.type === 'sme' && !space.archivedAt && (
+      <section className="sme-pos-hero">
+        <div className="sme-pos-hero-copy">
+          <h2>Point of sale</h2>
+          <p>Register, manage stock and review sales.</p>
+        </div>
+
+        <div className="sme-pos-hero-actions">
+          <Link
+            className="button primary sme-pos-open-button"
+            to={`/spaces/${space.id}/pos`}
+          >
+            Open POS
+          </Link>
+
+          {currentMember?.role === 'owner' && (
+            <Link
+              className="button secondary"
+              to={`/spaces/${space.id}/pos/settings`}
+            >
+              Settings
+            </Link>
+          )}
+        </div>
+      </section>
+    )}
 
     <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
