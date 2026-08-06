@@ -56,6 +56,6 @@ v0.11.16 adds partial and full item returns, customer refund posting from the or
 
 ## Staging gate
 
-This phase remains `manual_test` until staging confirms seller setup, repeated item names across sellers, mixed-seller checkout, stock blocking, commission calculations, seller balance isolation, role restrictions, account posting and mobile layout.
+Marketplace Consignment POS staging passed on 2026-08-06, including seller setup, mixed-seller checkout, stock safety, commission calculations, seller isolation, account posting, returns, refunds, seller-balance and commission reversals, seller payouts, role restrictions, report adjustments and mobile and desktop layouts.
 
-Production remains blocked until staging confirms returns, refunds, seller-balance reversals, seller payouts, report adjustments and the real shop pilot.
+`sme.marketplace_pos` is complete. Production remains blocked until the separate real-shop pilot and the remaining production-readiness gates pass.

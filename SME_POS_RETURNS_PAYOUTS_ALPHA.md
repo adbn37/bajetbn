@@ -36,4 +36,4 @@ This phase completes the agreed money flow after a Standard or Marketplace POS s
 
 ## Staging gate
 
-Keep `sme.pos_money_link` and `sme.pos_returns_payouts` as `manual_test` until the v0.11.16 staging matrix passes across Standard POS, Marketplace POS, seller access, mobile layouts, account balances, Money Activity and concurrent duplicate attempts.
+The v0.11.16 staging matrix passed on 2026-08-06 across Standard POS, Marketplace POS, seller access, mobile and desktop layouts, account balances, Money Activity, returns, refunds, seller-balance reversals, commission reversals, seller payouts and duplicate protection. `sme.pos_money_link` and `sme.pos_returns_payouts` are complete.
