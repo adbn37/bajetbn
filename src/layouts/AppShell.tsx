@@ -2,10 +2,13 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
+import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { subscribeUserNotifications } from '../repositories/collaborationRepository';
 import { listenForForegroundPush } from '../repositories/notificationRepository';
+import { listSpaces } from '../repositories/spaceRepository';
+import type { Space } from '../types/models';
 
 const navigation = [
   ['/', 'Overview', '⌂'],
@@ -27,6 +30,10 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [posSpaces, setPosSpaces] = useState<Space[]>([]);
+  const [posPickerOpen, setPosPickerOpen] = useState(false);
+  const [posPickerLoading, setPosPickerLoading] = useState(false);
+  const [posPickerError, setPosPickerError] = useState('');
   const { profile, user, logOut } = useAuth();
   const { pendingCount, needsAttentionCount, syncing } = useOfflineSync();
   const navigate = useNavigate();
@@ -34,16 +41,6 @@ export function AppShell() {
 
   const currentPosMatch = location.pathname.match(/^\/spaces\/([^/]+)\/pos(?:\/|$)/);
   const currentPosPath = currentPosMatch ? `/spaces/${currentPosMatch[1]}/pos` : '';
-  const storedPosPath = typeof window !== 'undefined' && user?.uid
-    ? window.localStorage.getItem(`bajetbn:lastPosPath:${user.uid}`) || ''
-    : '';
-
-  const rememberedPosPath = /^\/spaces\/[^/]+\/pos$/.test(storedPosPath)
-    ? storedPosPath
-    : '';
-
-  const mobileCenterPath = currentPosPath || rememberedPosPath || '/transactions';
-  const mobileCenterLabel = mobileCenterPath === '/transactions' ? 'Money' : 'POS';
 
   useEffect(() => {
     if (location.pathname === '/search') setSearchText(new URLSearchParams(location.search).get('q') || '');
@@ -79,6 +76,47 @@ export function AppShell() {
     }).then((unsubscribe) => { if (active) stop = unsubscribe; else unsubscribe(); });
     return () => { active = false; stop(); };
   }, [navigate, profile?.browserPushEnabled]);
+
+  async function openPosShortcut() {
+    if (!user || posPickerLoading) return;
+
+    setPosPickerLoading(true);
+    setPosPickerError('');
+
+    try {
+      const accessibleSpaces = await listSpaces(user.uid);
+      const smeSpaces = accessibleSpaces.filter(
+        (space) => space.type === 'sme' && !space.archivedAt,
+      );
+
+      if (smeSpaces.length === 0) {
+        navigate('/spaces');
+        return;
+      }
+
+      if (smeSpaces.length === 1) {
+        navigate(`/spaces/${smeSpaces[0].id}/pos`);
+        return;
+      }
+
+      setPosSpaces(smeSpaces);
+      setPosPickerOpen(true);
+    } catch {
+      setPosSpaces([]);
+      setPosPickerError(
+        'Your SME Spaces could not be loaded. Open Spaces and try again.',
+      );
+      setPosPickerOpen(true);
+    } finally {
+      setPosPickerLoading(false);
+    }
+  }
+
+  function choosePosSpace(space: Space) {
+    setPosPickerOpen(false);
+    setPosPickerError('');
+    navigate(`/spaces/${space.id}/pos`);
+  }
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
@@ -134,28 +172,38 @@ export function AppShell() {
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
           <NavLink
-            to="/"
-            end
-            className={({ isActive }) => isActive ? 'active' : ''}
-          >
-            <span aria-hidden="true">⌂</span>
-            <small>Home</small>
-          </NavLink>
-
-          <NavLink
             to="/spaces"
-            className={({ isActive }) => isActive ? 'active' : ''}
+            className={() =>
+              location.pathname.startsWith('/spaces') && !currentPosPath
+                ? 'active'
+                : ''
+            }
           >
             <span aria-hidden="true">▦</span>
             <small>Spaces</small>
           </NavLink>
 
-          <NavLink
-            to={mobileCenterPath}
-            className={({ isActive }) => `mobile-bottom-primary ${isActive ? 'active' : ''}`}
+          <button
+            type="button"
+            className={currentPosPath ? 'active' : ''}
+            onClick={() => void openPosShortcut()}
+            aria-label="Open point of sale"
+            aria-busy={posPickerLoading}
+            disabled={posPickerLoading}
           >
-            <span aria-hidden="true">{mobileCenterLabel === 'POS' ? '▣' : '↔'}</span>
-            <small>{mobileCenterLabel}</small>
+            <span aria-hidden="true">▣</span>
+            <small>POS</small>
+          </button>
+
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `mobile-bottom-primary ${isActive ? 'active' : ''}`
+            }
+          >
+            <span aria-hidden="true">⌂</span>
+            <small>Home</small>
           </NavLink>
 
           <NavLink
@@ -164,7 +212,9 @@ export function AppShell() {
           >
             <span className="mobile-bottom-alert-icon" aria-hidden="true">
               ◇
-              {unreadNotifications > 0 && <b>{unreadNotifications > 9 ? '9+' : unreadNotifications}</b>}
+              {unreadNotifications > 0 && (
+                <b>{unreadNotifications > 9 ? '9+' : unreadNotifications}</b>
+              )}
             </span>
             <small>Alerts</small>
           </NavLink>
@@ -174,6 +224,69 @@ export function AppShell() {
             <small>More</small>
           </button>
         </nav>
+
+        {posPickerOpen && (
+          <Modal
+            title="Choose an SME POS"
+            onClose={() => {
+              setPosPickerOpen(false);
+              setPosPickerError('');
+            }}
+          >
+            <div className="pos-space-picker">
+              <p>Which SME would you like to open?</p>
+
+              {posPickerError && (
+                <div className="notice error">{posPickerError}</div>
+              )}
+
+              {!posPickerError && (
+                <div className="pos-space-picker-list">
+                  {posSpaces.map((space) => (
+                    <button
+                      className="pos-space-picker-option"
+                      type="button"
+                      key={space.id}
+                      onClick={() => choosePosSpace(space)}
+                    >
+                      <span>
+                        <strong>{space.name}</strong>
+                        <small>SME Space · {space.currency}</small>
+                      </span>
+                      <b>Open POS</b>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="modal-actions">
+                {posPickerError && (
+                  <button
+                    className="button primary"
+                    type="button"
+                    onClick={() => {
+                      setPosPickerOpen(false);
+                      navigate('/spaces');
+                    }}
+                  >
+                    Open Spaces
+                  </button>
+                )}
+
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => {
+                    setPosPickerOpen(false);
+                    setPosPickerError('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
       </div>
     </div>
   );
