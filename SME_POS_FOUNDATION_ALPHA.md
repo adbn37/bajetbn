@@ -69,3 +69,24 @@ This release changes:
 - Firebase Functions
 
 Deploy rules and Functions to `bajetbn-staging`, then deploy the frontend to the staging Cloudflare Pages project. Production remains blocked.
+
+## Real-shop pilot acceptance ? 2026-08-06
+
+The owner confirmed that the staging real-shop pilot passed for both Standard POS and Marketplace Consignment POS.
+
+The approved pilot covered:
+
+- normal and mixed-seller checkout;
+- proportional discount allocation;
+- stock reduction and stock protection;
+- partial returns and full refunds;
+- physical-stock restoration;
+- refund posting to the original SME payment account;
+- seller-balance and commission reversals;
+- partial and final seller payouts;
+- account, Money Activity, commission and seller-report reconciliation;
+- duplicate protection;
+- Owner, Manager, Cashier, Stock staff, Seller and Viewer permissions; and
+- phone and desktop operation.
+
+The `sme.shop_pilot` pre-production gate is complete. This approval does not authorize production deployment. The remaining pre-production and final release gates must still pass.
