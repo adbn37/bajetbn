@@ -38,3 +38,17 @@ The key is public configuration, not a private server secret. Users must still a
 ## Staging-only release gate
 
 Before production, verify scheduled generation, manual checking, duplicate prevention, preferences, goal reminders, late reminders, real-time unread counts, optional push delivery, notification clicks, blocked browser permissions and account-deletion cleanup.
+
+## Staging acceptance ? 2026-08-06
+
+The owner completed and approved the background-reminder and device-notification matrix on:
+
+- Staging: https://0586bd9b.bajetbn-staging.pages.dev
+- mobile and desktop;
+- dark and warm-light themes.
+
+The approved matrix covered due-soon, due-today, late, instalment and goal reminders; preference handling; generation while the application was closed; deterministic duplicate prevention; unread-count reconciliation; Notification Centre routing; browser permission states; device registration; push delivery; service-worker click handling; token cleanup; cross-user isolation; and paid, completed or archived-record safeguards.
+
+Repeated scheduler, manual and concurrent processing did not create duplicate reminder or history records. Invalid and expired device tokens were disabled safely without breaking in-app reminders.
+
+The `notifications.reminders` pre-v1 gate is complete. Production remains blocked by the remaining staging and release gates.
