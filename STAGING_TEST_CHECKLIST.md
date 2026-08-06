@@ -246,29 +246,54 @@ Both `brunei.institutions` and `brunei.payment_methods` are complete.
 
 ## v0.11.9 Background notifications
 
-- [ ] Deploy `firestore.rules` and all v0.11.9 Functions to staging.
-- [ ] Add the Firebase Web Push public key as `VITE_FIREBASE_VAPID_KEY` in the staging Cloudflare Pages environment and redeploy.
-- [ ] Confirm Settings shows v0.11.9 and the device-notification status is accurate.
-- [ ] Create a bill within the reminder window and run “Check reminders now”.
-- [ ] Confirm one due-soon reminder and one reminder-history record are created.
-- [ ] Run the check again and confirm no duplicate is created.
-- [ ] Change the test date to due today and confirm one due-today reminder is created.
-- [ ] Move the due date into the past and confirm one late reminder is created.
-- [ ] Disable due-soon reminders and confirm future reminders are not generated.
-- [ ] Disable late reminders and confirm late reminders are not generated.
-- [ ] Disable background reminders and confirm the manual and scheduled checks create nothing.
-- [ ] Create an unfinished goal with a nearby target date and confirm a goal reminder.
-- [ ] Mark the goal complete and confirm no new reminder is created.
-- [ ] Keep the app open and confirm the unread count updates in real time.
-- [ ] Close the app, wait for the scheduled Function, reopen it and confirm the reminder exists.
-- [ ] Allow device notifications and confirm a background notification opens the correct BajetBN page.
-- [ ] Confirm denied browser permission shows a clear message without breaking in-app reminders.
-- [ ] Turn device notifications off and confirm saved device tokens are disabled.
-- [ ] Use an invalid/expired token and confirm the Function disables it safely.
+- [x] Deploy `firestore.rules` and all v0.11.9 Functions to staging.
+- [x] Add the Firebase Web Push public key as `VITE_FIREBASE_VAPID_KEY` in the staging Cloudflare Pages environment and redeploy.
+- [x] Confirm Settings shows v0.11.9 and the device-notification status is accurate.
+- [x] Create a bill within the reminder window and run “Check reminders now”.
+- [x] Confirm one due-soon reminder and one reminder-history record are created.
+- [x] Run the check again and confirm no duplicate is created.
+- [x] Change the test date to due today and confirm one due-today reminder is created.
+- [x] Move the due date into the past and confirm one late reminder is created.
+- [x] Disable due-soon reminders and confirm future reminders are not generated.
+- [x] Disable late reminders and confirm late reminders are not generated.
+- [x] Disable background reminders and confirm the manual and scheduled checks create nothing.
+- [x] Create an unfinished goal with a nearby target date and confirm a goal reminder.
+- [x] Mark the goal complete and confirm no new reminder is created.
+- [x] Keep the app open and confirm the unread count updates in real time.
+- [x] Close the app, wait for the scheduled Function, reopen it and confirm the reminder exists.
+- [x] Allow device notifications and confirm a background notification opens the correct BajetBN page.
+- [x] Confirm denied browser permission shows a clear message without breaking in-app reminders.
+- [x] Turn device notifications off and confirm saved device tokens are disabled.
+- [x] Use an invalid/expired token and confirm the Function disables it safely.
 - [x] Completed disposable-account deletion and confirmed push-device records are removed.
-- [ ] Verify English/Malay and mobile layouts without horizontal scrolling.
+- [x] Verify English/Malay and mobile layouts without horizontal scrolling.
 
 
+
+### v0.11.9 staging acceptance ? 2026-08-06
+
+The owner approved the complete background-reminder and notification matrix on staging.
+
+Confirmed coverage:
+
+- due-soon, due-today, late, instalment and goal reminders;
+- scheduled generation while the application was closed;
+- Brunei-time date handling;
+- reminder preferences and disabled-reminder handling;
+- deterministic duplicate prevention across scheduler and manual retries;
+- real-time unread counts and Notification Centre behaviour;
+- correct bill, instalment and goal routing;
+- browser/device permission handling;
+- device delivery while the application was closed;
+- invalid, expired and signed-out token cleanup;
+- duplicate-token and cross-user access protection;
+- notification-click routing to the staging application;
+- paid, completed and archived-record safeguards;
+- English and Malay presentation;
+- mobile and desktop layouts; and
+- dark and warm-light themes.
+
+The `notifications.reminders` pre-v1 gate is complete.
 ## v0.11.10 Household/group funds and financial health
 
 ### Optional collected funds

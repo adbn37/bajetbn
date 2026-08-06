@@ -71,7 +71,9 @@ includes('package.json', ['verify-background-notifications.mjs']);
 
 const audit = JSON.parse(read('scope/pre-v1-scope.json'));
 const reminderItem = audit.items.find((item) => item.id === 'notifications.reminders');
-if (!reminderItem || reminderItem.status !== 'manual_test') fail('Background reminders must remain manual_test until staging approval.');
+if (!reminderItem || !['manual_test', 'complete'].includes(reminderItem.status)) {
+  fail('Background reminders must be manual_test or complete after implementation.');
+}
 if (!reminderItem.requirement.includes('generated in the background')) fail('The scope register does not describe background generation.');
 
 const key = ['user-1', 'bill', 'bill-1', '2026-08-03', 'due_soon'].join('|');

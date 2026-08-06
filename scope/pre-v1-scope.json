@@ -541,7 +541,7 @@
       "id": "notifications.reminders",
       "area": "Notifications",
       "requirement": "Upcoming, due-today and late bill/goal reminders generated in the background with history, preferences and duplicate prevention",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "BACKGROUND_NOTIFICATIONS_ALPHA.md",
