@@ -30,7 +30,7 @@ const scope = JSON.parse(read('scope/pre-v1-scope.json'));
 const receipt = scope.items.find((item) => item.id === 'data.general_receipts');
 if (receipt?.status !== 'manual_test' || receipt?.gate !== 'pre_v1') throw new Error('Receipt scope item is not registered as a pre-v1 staging-test gate.');
 const missing = scope.items.filter((item) => item.status === 'missing');
-const allowedMissing = new Set(['sme.shop_pilot']);
+const allowedMissing = new Set();
 const unexpectedMissing = missing.filter((item) => !allowedMissing.has(item.id));
 if (unexpectedMissing.length) throw new Error(`Unexpected missing scope items remain: ${unexpectedMissing.map((item) => item.id).join(', ')}`);
 for (const id of allowedMissing) if (!missing.some((item) => item.id === id)) throw new Error(`${id} must remain explicit until the SME POS release sequence is complete.`);

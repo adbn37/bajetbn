@@ -518,3 +518,23 @@ Notes: ____________________
 - [ ] Confirm no browser-native `confirm()` or `alert()` appears.
 - [ ] Run `node scripts/verify-sme-pos-returns-payouts.mjs`.
 - [ ] Run Functions build, app typecheck, app build, full structural suite and `git diff --check`.
+
+## v0.11.16 ? Real-shop POS pilot acceptance
+
+Accepted on 2026-08-06 using the staging deployment.
+
+- [x] Standard POS normal checkout passed.
+- [x] Marketplace mixed-seller checkout passed.
+- [x] Discount allocation passed.
+- [x] Stock protection and stock restoration passed.
+- [x] Partial returns and full refunds passed.
+- [x] Refund account posting and Money Activity reconciliation passed.
+- [x] Seller-balance and commission reversals passed.
+- [x] Partial and final seller payouts passed.
+- [x] Account, commission and seller reports reconciled.
+- [x] Duplicate protections passed.
+- [x] POS role permissions passed.
+- [x] Phone and desktop operation passed.
+- [x] Owner approved the real-shop pilot.
+- [x] `sme.shop_pilot` is complete.
+- [ ] Production remains blocked until all other pre-production gates are complete.

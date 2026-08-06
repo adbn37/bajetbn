@@ -114,7 +114,7 @@
       "id": "sme.shop_pilot",
       "area": "SME POS",
       "requirement": "Standard and Marketplace POS complete a real staging pilot for the owner’s shop before production",
-      "status": "missing",
+      "status": "complete",
       "gate": "pre_production",
       "evidence": [
         "SME_POS_FOUNDATION_ALPHA.md",
