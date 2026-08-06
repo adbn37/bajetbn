@@ -26,7 +26,7 @@ Includes the seven-day deletion cooling-off period, safe anonymisation and a 30-
 - [x] Require a current data export before deletion.
 - [x] Add ownership transfer for shared Spaces and Trip-fund-holder blockers.
 - [x] Add scheduled finalisation, Firebase Auth removal, Firestore cleanup, Storage cleanup and anonymous shared-history retention.
-- [ ] Deploy Firestore rules and Functions to staging and complete the disposable-user test matrix.
+- [x] Firestore rules and Functions were deployed to staging and the disposable-user account-deletion matrix passed on 2026-08-06.
 
 ## v0.11.7 — Recurring Transactions — Completed in source
 

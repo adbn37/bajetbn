@@ -108,4 +108,8 @@ requireText('ACCOUNT_DATA_DELETION_ALPHA.md', 'seven-day cooling-off period');
 requireText('DATA_RETENTION_AND_DELETION.md', 'Shared bills, payments and settlements');
 
 console.log(`Account and data deletion checks passed (${checks} structural checks plus retention safeguards).`);
-console.log(`Scope status: ${deletionItem.status}. Complete the disposable-user staging matrix before production.`);
+if (deletionItem.status === 'complete') {
+  console.log('Scope status: complete. Disposable-user staging matrix approved; production remains governed by the remaining release gates.');
+} else {
+  console.log(`Scope status: ${deletionItem.status}. Complete the disposable-user staging matrix before production.`);
+}

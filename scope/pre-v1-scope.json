@@ -615,7 +615,7 @@
       "id": "data.delete_account",
       "area": "Privacy and data",
       "requirement": "User can request account and personal-data deletion with protected financial-history handling",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_production",
       "evidence": [
         "src/pages/SettingsPage.tsx",
