@@ -101,7 +101,7 @@
     {
       "id": "sme.shop_pilot",
       "area": "SME POS",
-      "requirement": "Standard and Marketplace POS complete a real staging pilot for the owner\u2019s shop before production",
+      "requirement": "Standard and Marketplace POS complete a real staging pilot for the owner’s shop before production",
       "status": "missing",
       "gate": "pre_production",
       "evidence": [
@@ -402,7 +402,7 @@
       "id": "safety.archive_pages",
       "area": "Safety",
       "requirement": "Inactive records use dedicated archive/closed pages",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_production",
       "evidence": [
         "src/app/App.tsx",
