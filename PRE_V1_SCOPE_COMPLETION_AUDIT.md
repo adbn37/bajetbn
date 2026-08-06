@@ -35,9 +35,7 @@ This audit does not change runtime behaviour. It records the approved scope, cur
 
 These must be completed before the current build is promoted to the public live website as the approved release:
 
-1. **Finish Alpha 2 and v0.11.5 manual staging tests** on mobile and desktop, including every dedicated archive/closed page and every new confirmation dialog.
-2. **Deploy and manually verify v0.11.9 background reminders on staging**, including scheduled generation while the app is closed, duplicate prevention, preference handling, goal reminders, optional device delivery and blocked-permission behaviour.
-3. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
+1. **Complete the final production approval gate**, including a clean CI run, security review, production smoke test and rollback readiness.
 
 The browser-native confirmation, version-source, CI-coverage and Firebase Functions dependency-review findings were closed in v0.11.5. The account-deletion source implementation is documented in `ACCOUNT_DATA_DELETION_ALPHA.md`; it remains a staging-test gate until the scheduled backend flow is proven end to end.
 
@@ -104,3 +102,9 @@ The complete v0.11.7 recurring-money matrix passed on 2026-08-06, including sche
 ## Transaction-receipt staging acceptance
 
 The complete image, PDF, five-file limit, privacy, offline, retry, removal and cleanup matrix passed on 2026-08-06. The `data.general_receipts` pre-v1 scope record is complete.
+
+## Alpha 2 staging acceptance
+
+The complete Alpha 2 mobile and desktop staging acceptance passed on 2026-08-06. Detailed feature-specific matrices and the final reduced release smoke test provide the acceptance evidence.
+
+Only the final production approval gate remains open.

@@ -668,7 +668,7 @@
       "id": "release.alpha2_staging",
       "area": "Release readiness",
       "requirement": "Alpha 2 browser testing on staging across mobile and desktop",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_production",
       "evidence": [
         "STAGING_TEST_CHECKLIST.md"
