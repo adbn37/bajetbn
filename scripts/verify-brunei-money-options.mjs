@@ -37,6 +37,8 @@ includes('BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md', ['Existing Accounts', 'Older r
 const audit = JSON.parse(read('scope/pre-v1-scope.json'));
 for (const id of ['brunei.institutions', 'brunei.payment_methods']) {
   const item = audit.items.find((entry) => entry.id === id);
-  if (!item || item.status !== 'manual_test') fail(`${id} must remain manual_test until staging verification.`);
+  if (!item || !['manual_test', 'complete'].includes(item.status)) {
+    fail(`${id} must be manual_test or complete after implementation.`);
+  }
 }
 console.log('Brunei institution and payment-method checks passed (presets, custom options, compatibility and workflow coverage).');

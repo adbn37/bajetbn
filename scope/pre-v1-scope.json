@@ -474,7 +474,7 @@
       "id": "brunei.institutions",
       "area": "Brunei localisation",
       "requirement": "Simple presets for common Brunei banks and account providers",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "src/config/bruneiMoneyOptions.ts",
@@ -488,7 +488,7 @@
       "id": "brunei.payment_methods",
       "area": "Brunei localisation",
       "requirement": "Clear Brunei-relevant payment method choices",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "src/config/bruneiMoneyOptions.ts",

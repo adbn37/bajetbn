@@ -55,7 +55,7 @@ v0.11.10 source extends the proven Trip-money flow to optional Household and Cus
 
 ### Brunei account and payment presets
 
-Common Brunei institutions and clear payment-method choices are implemented in v0.11.8 source, including custom provider/method entries and backward compatibility. This item remains a staging-test gate until the forms and generated records are verified end to end.
+Common Brunei institutions and clear payment-method choices are implemented in v0.11.8 source, including custom provider/method entries and backward compatibility. The complete mobile and desktop end-to-end staging matrix passed on 2026-08-06.
 
 ### SME essentials
 

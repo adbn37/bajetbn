@@ -15,7 +15,6 @@ The product owner explicitly confirmed the v0.11.10 Household/Group Funds and Fi
 - Dedicated archive/closed pages and Alpha 2 browser matrix.
 - Account deletion and 30-day fresh-registration matrix.
 - Recurring money scheduler and duplicate-prevention matrix.
-- Brunei institution and payment-method matrix.
 - Background reminder/device-notification matrix.
 - Transaction receipt/document attachment matrix.
 - Final production smoke, security, rollback and explicit approval.
@@ -27,3 +26,7 @@ This is still an alpha candidate. Do not tag v1.0.0 or deploy production until e
 ## 2026-08-03 scope expansion
 
 The owner confirmed that BajetBN will be used for the shop and that both **Standard POS** and **Marketplace Consignment POS** must be included before the first live release. The canonical requirement register records the POS foundation and Standard POS as complete after staging approval. Marketplace Consignment POS Alpha 1 is implemented and awaiting staging approval; returns, refunds, seller payouts and the shop pilot remain open pre-v1 work.
+
+## Brunei localisation staging acceptance
+
+The Brunei institution and payment-method end-to-end matrix passed on 2026-08-06. Both related pre-v1 scope records are complete.

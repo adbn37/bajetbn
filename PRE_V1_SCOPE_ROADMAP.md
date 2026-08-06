@@ -46,7 +46,7 @@ General receipt/document attachments remain an explicit pre-v1 decision. Offline
 - [x] Add clear local payment-method choices and custom methods.
 - [x] Keep old custom Accounts and historic records compatible.
 - [x] Carry payment methods into normal, recurring, bill, shared and Trip-money records.
-- [ ] Deploy Functions to staging and complete the Brunei money-options test matrix.
+- [x] Functions were deployed to staging and the Brunei money-options matrix passed on 2026-08-06.
 
 The simple SME overview remains a separate pre-v1 item and is not silently bundled into this localisation phase. Advanced BusinessBajetBN remains outside v1 scope.
 

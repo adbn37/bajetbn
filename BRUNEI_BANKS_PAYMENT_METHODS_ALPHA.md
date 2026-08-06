@@ -26,3 +26,17 @@ Financial records use optional `paymentMethod` and `paymentMethodLabel` fields. 
 6. Create recurring income/expense templates and confirm generated transactions keep the selected method.
 7. Search by provider and payment-method name.
 8. Check English/Malay and mobile layouts.
+
+## Staging acceptance ? 2026-08-06
+
+The owner completed the Brunei money-options browser matrix on:
+
+- Staging: https://0586bd9b.bajetbn-staging.pages.dev
+- mobile and desktop;
+- dark and warm-light themes.
+
+Approved coverage included BIBD, Baiduri, TAIB, Standard Chartered Brunei, Cash, e-wallet and custom providers, together with Bank transfer, Cash payment, Debit card, Credit card, E-wallet and custom payment methods.
+
+Money In, Money Out, Move Money, recurring transactions, bills, shared bills, shared expenses and Trip contributions preserved the selected provider and payment method. Existing records remained compatible, balances and reports reconciled, and repeated submissions did not create duplicate financial records.
+
+The `brunei.institutions` and `brunei.payment_methods` pre-v1 gates are complete. Production remains blocked by the remaining release gates.
