@@ -1,7 +1,7 @@
 {
-  "auditVersion": "2026-08-04.2",
-  "auditedRelease": "BajetBN v0.11.15 Marketplace Consignment POS Alpha 1",
-  "sourceBasis": "Verified Standard POS staging pass plus seller profiles, seller-owned listings, mixed-seller checkout, commission splits, seller balances, role isolation and Marketplace archive views",
+  "auditVersion": "2026-08-06.1",
+  "auditedRelease": "BajetBN v0.11.16 SME POS Returns & Seller Payouts Alpha 1",
+  "sourceBasis": "Standard and Marketplace POS return/refund posting, stock restoration, seller balance reversals, seller payouts, account ledger integration, role controls and structural verification",
   "statusDefinitions": {
     "complete": "Implemented with code evidence and automated checks",
     "manual_test": "Implemented but still requires browser staging approval",
@@ -78,24 +78,36 @@
       "id": "sme.pos_money_link",
       "area": "SME POS",
       "requirement": "POS sales, refunds, commissions and payouts post safely to the selected SME payment account and reports",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
         "STANDARD_POS_ALPHA.md",
         "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
-        "functions/src/index.ts"
+        "functions/src/index.ts",
+        "src/features/sme-pos/StandardPosWorkspace.tsx",
+        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+        "src/repositories/smePosRepository.ts",
+        "firestore.rules",
+        "scripts/verify-sme-pos-returns-payouts.mjs",
+        "SME_POS_RETURNS_PAYOUTS_ALPHA.md"
       ]
     },
     {
       "id": "sme.pos_returns_payouts",
       "area": "SME POS",
       "requirement": "POS return-safe sale records, returns/refunds, seller balances and seller payouts",
-      "status": "partial",
+      "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
         "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
         "functions/src/index.ts",
-        "src/types/models.ts"
+        "src/types/models.ts",
+        "src/features/sme-pos/StandardPosWorkspace.tsx",
+        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+        "src/repositories/smePosRepository.ts",
+        "firestore.rules",
+        "scripts/verify-sme-pos-returns-payouts.mjs",
+        "SME_POS_RETURNS_PAYOUTS_ALPHA.md"
       ]
     },
     {

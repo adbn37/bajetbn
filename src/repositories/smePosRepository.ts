@@ -18,6 +18,7 @@ import type {
   SmePosListingCondition,
   SmePosMode,
   SmePosPaymentAccount,
+  SmePosPayout,
   SmePosProduct,
   SmePosRole,
   SmePosSeller,
@@ -232,6 +233,7 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
   customers: SmePosCustomer[];
   sales: SmePosSale[];
   sellerLedger: SmePosSellerLedgerEntry[];
+  payouts: SmePosPayout[];
 }> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'getMarketplacePosWorkspace');
@@ -242,6 +244,7 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
     customers?: SmePosCustomer[];
     sales?: SmePosSale[];
     sellerLedger?: SmePosSellerLedgerEntry[];
+    payouts?: SmePosPayout[];
   };
   return {
     sellers: data.sellers || [],
@@ -249,6 +252,7 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
     customers: data.customers || [],
     sales: data.sales || [],
     sellerLedger: data.sellerLedger || [],
+    payouts: data.payouts || [],
   };
 }
 
@@ -334,5 +338,32 @@ export async function checkoutMarketplacePos(input: {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'checkoutMarketplacePos');
   return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }>;
+}
+
+export async function returnSmePosSale(input: {
+  spaceId: string;
+  saleId: string;
+  items: Array<{ itemId: string; quantity: number }>;
+  returnDate: string;
+  reason?: string;
+}): Promise<{ data: { returnId: string; saleId: string; refundMinor: number; transactionId: string } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'returnSmePosSale');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { returnId: string; saleId: string; refundMinor: number; transactionId: string } }>;
+}
+
+export async function recordMarketplaceSellerPayout(input: {
+  spaceId: string;
+  sellerId: string;
+  amountMinor: number;
+  paymentAccountId: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  payoutDate: string;
+  note?: string;
+}): Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; balanceAfterMinor: number } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'recordMarketplaceSellerPayout');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; balanceAfterMinor: number } }>;
 }
 

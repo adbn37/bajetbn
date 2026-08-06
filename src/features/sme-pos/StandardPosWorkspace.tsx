@@ -9,6 +9,7 @@ import {
   listSmePosPaymentAccounts,
   listSmePosProducts,
   listSmePosSales,
+  returnSmePosSale,
   saveSmePosCustomer,
   saveSmePosProduct,
   setSmePosCustomerArchived,
@@ -40,6 +41,13 @@ type ProductStockMode = 'physical' | 'unlimited';
 type ConfirmPayload =
   | { kind: 'product'; id: string }
   | { kind: 'customer'; id: string };
+
+interface ReturnFormState {
+  sale: SmePosSale;
+  quantities: Record<string, number>;
+  returnDate: string;
+  reason: string;
+}
 
 const paymentMethods: Array<{ code: PaymentMethodCode; label: string }> = [
   { code: 'cash', label: 'Cash' },
@@ -91,6 +99,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const [stockForm, setStockForm] = useState<SmePosProduct | null>(null);
   const [customerForm, setCustomerForm] = useState<SmePosCustomer | 'new' | null>(null);
   const [receipt, setReceipt] = useState<SmePosSale | null>(null);
+  const [returnForm, setReturnForm] = useState<ReturnFormState | null>(null);
   const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -107,6 +116,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const canManageCustomers = ['owner', 'manager', 'cashier'].includes(role);
   const canArchiveCustomers = ['owner', 'manager'].includes(role);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
+  const canManageReturns = role === 'owner' || role === 'manager';
   const canViewReports = ['owner', 'manager'].includes(role);
   const canViewSales = ['owner', 'manager', 'cashier'].includes(role);
 
@@ -355,6 +365,47 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     }
   }
 
+
+  function openReturnForm(sale: SmePosSale) {
+    const quantities = Object.fromEntries(sale.items.map((item) => [item.productId, 0]));
+    setReceipt(null);
+    setReturnForm({ sale, quantities, returnDate: today(), reason: '' });
+    setError('');
+    setSuccess('');
+  }
+
+  async function submitReturn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!returnForm || !requireOnline()) return;
+    const items = returnForm.sale.items
+      .map((item) => ({ itemId: item.productId, quantity: Math.floor(returnForm.quantities[item.productId] || 0) }))
+      .filter((item) => item.quantity > 0);
+    if (!items.length) {
+      setError('Choose at least one item quantity to return.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await returnSmePosSale({
+        spaceId: space.id,
+        saleId: returnForm.sale.id,
+        items,
+        returnDate: returnForm.returnDate,
+        reason: returnForm.reason,
+      });
+      setReturnForm(null);
+      setSuccess(`Return recorded. ${formatMoney(result.data.refundMinor, returnForm.sale.currency)} was refunded from the original payment account.`);
+      await load();
+      await onChanged();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (role === 'seller') {
     return <section className="panel"><span className="eyebrow">Seller access</span><h2>Marketplace seller workspace</h2><p>Seller listings, balances, and payouts are added in the Marketplace Consignment POS phase.</p></section>;
   }
@@ -454,7 +505,55 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
 
     {customerForm && <Modal title={customerForm === 'new' ? 'Add customer' : 'Edit customer'} onClose={() => !busy && setCustomerForm(null)}><form className="form-stack" onSubmit={saveCustomer}><label>Customer name<input name="name" defaultValue={customerForm === 'new' ? '' : customerForm.name} maxLength={100} required /></label><div className="form-grid"><label>Phone<input name="phone" defaultValue={customerForm === 'new' ? '' : customerForm.phone || ''} maxLength={30} /></label><label>Email<input name="email" type="email" defaultValue={customerForm === 'new' ? '' : customerForm.email || ''} maxLength={120} /></label></div><label>Note<textarea name="note" rows={3} defaultValue={customerForm === 'new' ? '' : customerForm.note || ''} maxLength={300} /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setCustomerForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save customer'}</button></div></form></Modal>}
 
-    {receipt && <Modal title={`Receipt ${receipt.receiptNumber}`} onClose={() => setReceipt(null)}><div className="sme-pos-receipt"><header><strong>{receipt.receiptName}</strong><span>{receipt.saleDate}</span><small>{receipt.customerName || 'Walk-in customer'}</small></header>{receipt.items.map((item) => <div className="sme-pos-receipt-line" key={item.productId}><span>{item.quantity} × {item.productName}</span><strong>{formatMoney(item.lineTotalMinor, receipt.currency)}</strong></div>)}<div className="sme-pos-receipt-totals"><span>Subtotal <strong>{formatMoney(receipt.subtotalMinor, receipt.currency)}</strong></span><span>Discount <strong>-{formatMoney(receipt.discountMinor, receipt.currency)}</strong></span><span>Total <strong>{formatMoney(receipt.totalMinor, receipt.currency)}</strong></span></div><p>{receipt.receiptFooter}</p><small>Paid into {receipt.paymentAccountName}</small></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => window.print()}>Print</button><button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button></div></Modal>}
+    {receipt && <Modal title={`Receipt ${receipt.receiptNumber}`} onClose={() => setReceipt(null)}>
+      <div className="sme-pos-receipt">
+        <header><strong>{receipt.receiptName}</strong><span>{receipt.saleDate}</span><small>{receipt.customerName || 'Walk-in customer'}</small></header>
+        {receipt.items.map((item) => <div className="sme-pos-receipt-line" key={item.productId}>
+          <span>{item.quantity} × {item.productName}{item.returnedQuantity > 0 ? ` · ${item.returnedQuantity} returned` : ''}</span>
+          <strong>{formatMoney(item.lineTotalMinor, receipt.currency)}</strong>
+        </div>)}
+        <div className="sme-pos-receipt-totals">
+          <span>Original total <strong>{formatMoney(receipt.totalMinor, receipt.currency)}</strong></span>
+          {receipt.returnedMinor > 0 && <span>Refunded <strong>-{formatMoney(receipt.returnedMinor, receipt.currency)}</strong></span>}
+          <span>Net sale <strong>{formatMoney(receipt.totalMinor - receipt.returnedMinor, receipt.currency)}</strong></span>
+        </div>
+        <p>{receipt.receiptFooter}</p>
+        <small>Paid into {receipt.paymentAccountName}</small>
+      </div>
+      <div className="modal-actions">
+        <button className="button secondary" type="button" onClick={() => window.print()}>Print</button>
+        {canManageReturns && receipt.status !== 'refunded' && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
+        <button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button>
+      </div>
+    </Modal>}
+
+    {returnForm && <Modal title={`Return items · ${returnForm.sale.receiptNumber}`} onClose={() => !busy && setReturnForm(null)}>
+      <form className="form-stack" onSubmit={submitReturn}>
+        <div className="notice">Refunds are posted as Money Out from the original payment account. Returned physical stock is restored automatically.</div>
+        <div className="sme-pos-cart-lines">
+          {returnForm.sale.items.map((item) => {
+            const remaining = Math.max(0, item.quantity - item.returnedQuantity);
+            return <div key={item.productId}>
+              <div><strong>{item.productName}</strong><small>{remaining} returnable of {item.quantity} sold</small></div>
+              <input
+                type="number"
+                min="0"
+                max={remaining}
+                value={returnForm.quantities[item.productId] || 0}
+                onChange={(event) => setReturnForm((current) => current ? {
+                  ...current,
+                  quantities: { ...current.quantities, [item.productId]: Math.min(remaining, Math.max(0, Number(event.target.value) || 0)) },
+                } : current)}
+                aria-label={`${item.productName} return quantity`}
+              />
+            </div>;
+          })}
+        </div>
+        <label>Return date<input type="date" value={returnForm.returnDate} onChange={(event) => setReturnForm((current) => current ? { ...current, returnDate: event.target.value } : current)} required /></label>
+        <label>Reason or note<textarea rows={3} value={returnForm.reason} onChange={(event) => setReturnForm((current) => current ? { ...current, reason: event.target.value } : current)} maxLength={500} placeholder="Optional" /></label>
+        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setReturnForm(null)} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Recording return…' : 'Confirm return and refund'}</button></div>
+      </form>
+    </Modal>}
 
     {confirm && <ActionConfirmModal state={confirm} busy={busy} error={error} onClose={() => { setConfirm(null); setError(''); }} onConfirm={() => void archiveConfirmed()} />}
   </section>;

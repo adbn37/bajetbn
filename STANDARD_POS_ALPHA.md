@@ -24,6 +24,15 @@ Alpha 2 separates daily shop work from owner setup and strengthens stock and sta
 - Concurrent attempts cannot push tracked quantity below zero.
 - The server returns clear **out of stock** or **only N available** messages.
 
+
+## Returns and refunds in v0.11.16
+
+- Owner or Manager can return selected quantities from a completed sale.
+- Partial and full returns restore physical stock without changing service or unlimited stock.
+- The customer refund posts once as Money Out from the original business payment account.
+- The sale keeps its original receipt, records returned quantities, and updates net sales and estimated profit.
+- Duplicate-safe return commands and append-only return records protect financial history.
+
 ## Staff privacy and permissions
 
 - Cashier, Stock staff and View only screens use a sanitized callable workspace rather than direct product, customer and sale reads.
@@ -41,4 +50,4 @@ Alpha 2 separates daily shop work from owner setup and strengthens stock and sta
 - Owner/Manager daily and monthly sales, estimated profit and low-stock report.
 - Dedicated archived POS records for owner/manager restore.
 
-Standard POS Alpha 2 passed staging. Production remains blocked until Marketplace Consignment POS, returns, refunds, seller payouts, reporting adjustments and shop pilot testing pass.
+Standard POS Alpha 2 passed staging. v0.11.16 return/refund handling is implemented and remains under staging approval. Production stays blocked until all POS adjustment tests and shop pilot testing pass.

@@ -476,3 +476,45 @@ Notes: ____________________
 - [ ] Archived Marketplace records use the dedicated archive page and can be restored safely.
 - [ ] Mobile and desktop register layouts have no horizontal page overflow.
 - [ ] Returns, refunds and seller payout actions remain unavailable and clearly scheduled for v0.11.16.
+
+## v0.11.16 — SME POS Returns & Seller Payouts Alpha 1
+
+### Standard POS returns
+
+- [ ] Complete a Standard POS sale with two physical products and one service/unlimited item.
+- [ ] Return part of one physical product and confirm the exact quantity is restored to stock.
+- [ ] Confirm the service/unlimited item does not gain stock after return.
+- [ ] Confirm one Money Out transaction and one account-ledger entry are posted to the original payment account.
+- [ ] Repeat the same return command and confirm no duplicate refund, stock or financial posting occurs.
+- [ ] Finish the remaining return and confirm the sale becomes **refunded**.
+- [ ] Confirm Sales today/month and Estimated profit use the net amount after returns.
+
+### Marketplace returns
+
+- [ ] Complete one mixed-seller sale with percentage and fixed-per-item commission listings.
+- [ ] Return selected quantities from both sellers in one action.
+- [ ] Confirm listing stock, sold quantity, gross sales, shop commission and seller earnings reverse proportionally.
+- [ ] Confirm each affected seller receives one negative **Return adjustment** balance entry.
+- [ ] Confirm the customer refund posts once from the original business account.
+- [ ] Confirm seller, cashier, stock staff and viewer cannot perform a return.
+- [ ] Confirm a linked seller sees only their adjusted own sales and balance activity.
+- [ ] Confirm a later full return reaches the exact original sale total without a one-cent rounding difference.
+
+### Seller payouts
+
+- [ ] Record a partial payout from a selected SME business account.
+- [ ] Confirm one Money Out transaction, one account-ledger entry, one payout record and one negative seller-ledger entry.
+- [ ] Confirm seller `balanceMinor` decreases and `paidOutMinor` increases exactly once.
+- [ ] Confirm a payout above the positive balance is blocked.
+- [ ] Confirm a zero or negative seller balance cannot be paid out.
+- [ ] Confirm Owner and Manager can record payouts; all other POS roles cannot.
+- [ ] Confirm the seller sees the payout in their own balance activity without seeing another seller’s data.
+- [ ] Confirm a return after payout can create a negative seller balance and later sale earnings reduce it safely.
+
+### Layout and regression
+
+- [ ] Verify return and payout forms on 320px, 375px, 390px, 430px and desktop without horizontal overflow.
+- [ ] Verify dark and warm-light themes.
+- [ ] Confirm no browser-native `confirm()` or `alert()` appears.
+- [ ] Run `node scripts/verify-sme-pos-returns-payouts.mjs`.
+- [ ] Run Functions build, app typecheck, app build, full structural suite and `git diff --check`.

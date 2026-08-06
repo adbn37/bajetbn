@@ -35,7 +35,7 @@ const unexpectedMissing = missing.filter((item) => !allowedMissing.has(item.id))
 if (unexpectedMissing.length) throw new Error(`Unexpected missing scope items remain: ${unexpectedMissing.map((item) => item.id).join(', ')}`);
 for (const id of allowedMissing) if (!missing.some((item) => item.id === id)) throw new Error(`${id} must remain explicit until the SME POS release sequence is complete.`);
 const returnsAndPayouts = scope.items.find((item) => item.id === 'sme.pos_returns_payouts');
-if (!returnsAndPayouts || !['missing', 'partial'].includes(returnsAndPayouts.status)) throw new Error('sme.pos_returns_payouts must remain an explicit incomplete POS gate until v0.11.16 is staging passed.');
+if (!returnsAndPayouts || !['manual_test', 'complete'].includes(returnsAndPayouts.status)) throw new Error('sme.pos_returns_payouts must be implemented and awaiting staging approval.');
 for (const id of ['collab.household_fund', 'sme.essentials', 'insights.financial_health', 'pwa.offline_mutations']) {
   if (scope.items.find((item) => item.id === id)?.status !== 'complete') throw new Error(`${id} must reflect the confirmed staging pass.`);
 }
