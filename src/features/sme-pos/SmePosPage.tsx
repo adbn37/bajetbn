@@ -136,26 +136,6 @@ export function SmePosPage() {
     <Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>
   </div>;
 
-  const roleAction = role === 'cashier'
-    ? {
-        title: 'Register',
-        detail: 'Add items and take payment.',
-        button: 'Open register',
-      }
-    : role === 'stock_staff'
-      ? {
-          title: 'Stock',
-          detail: 'Update products and quantities.',
-          button: 'Manage stock',
-        }
-      : role === 'seller'
-        ? {
-            title: 'Seller area',
-            detail: 'View listings, sales, and balance.',
-            button: 'View seller area',
-          }
-        : null;
-
   return <main className={`page sme-pos-page sme-pos-role-${role}`}>
     <PageHeader
       eyebrow="SME SPACE"
@@ -176,24 +156,6 @@ export function SmePosPage() {
 
     {space.archivedAt && <div className="notice">This SME Space is archived. Restore it before using the POS.</div>}
     {error && <div className="notice error">{error}</div>}
-    <div className="pos-status-strip">
-      <span className={`status-badge ${settings.status === 'active' ? 'posted' : settings.status === 'paused' ? 'needs_attention' : 'pending'}`}>{settings.status === 'active' ? 'Active' : settings.status === 'paused' ? 'Paused' : 'Setup'}</span>
-      <span>{roleLabels[role]}</span>
-      {settings.status !== 'active' && isOwner && <Link to={`/spaces/${space.id}/pos/settings`}>Open settings</Link>}
-    </div>
-
-    {roleAction && <section className="sme-pos-mobile-command">
-      <div>
-        <span className="eyebrow">{roleLabels[role]}</span>
-        <strong>{roleAction.title}</strong>
-        <small>{roleAction.detail}</small>
-      </div>
-
-      <a className="button primary" href="#sme-pos-workspace">
-        {roleAction.button}
-      </a>
-    </section>}
-
     <div id="sme-pos-workspace">
       {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
         space={space}
