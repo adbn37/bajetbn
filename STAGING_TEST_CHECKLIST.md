@@ -194,15 +194,32 @@ Notes: ____________________
 
 ## v0.11.8 Brunei banks and payment methods
 
-- [ ] Create Accounts using BIBD, Baiduri, TAIB and Standard Chartered presets.
-- [ ] Create Cash, e-wallet and custom-provider Accounts.
-- [ ] Edit an older custom Account and confirm its provider name is preserved.
-- [ ] Record each standard payment method in Money activity.
-- [ ] Record an Other method and confirm a custom label is required.
-- [ ] Confirm transaction details and Search show the method/provider.
-- [ ] Confirm recurring generated transactions keep their selected method.
-- [ ] Confirm bills, shared bills, shared expenses and Trip contributions save the selected method.
-- [ ] Verify English/Malay and mobile layouts without horizontal scrolling.
+- [x] Create Accounts using BIBD, Baiduri, TAIB and Standard Chartered presets.
+- [x] Create Cash, e-wallet and custom-provider Accounts.
+- [x] Edit an older custom Account and confirm its provider name is preserved.
+- [x] Record each standard payment method in Money activity.
+- [x] Record an Other method and confirm a custom label is required.
+- [x] Confirm transaction details and Search show the method/provider.
+- [x] Confirm recurring generated transactions keep their selected method.
+- [x] Confirm bills, shared bills, shared expenses and Trip contributions save the selected method.
+- [x] Verify English/Malay and mobile layouts without horizontal scrolling.
+
+### v0.11.8 staging acceptance ? 2026-08-06
+
+The owner approved the Brunei institution and payment-method end-to-end matrix on staging.
+
+Additional confirmed coverage:
+
+- Money In, Money Out and Move Money posted correctly;
+- Account balances, reports, Search and filters remained correct;
+- older Accounts and transactions remained compatible;
+- archived or closed Accounts remained historical only;
+- repeated submissions did not create duplicate activity;
+- desktop and mobile layouts passed;
+- dark and warm-light themes passed; and
+- custom institutions and custom payment methods persisted after refresh.
+
+Both `brunei.institutions` and `brunei.payment_methods` are complete.
 
 ## v0.11.9 Background notifications
 
