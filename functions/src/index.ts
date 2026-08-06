@@ -159,6 +159,13 @@ function nonNegativeMoney(value: unknown): number {
   return Number(value);
 }
 
+function signedMoney(value: unknown, field = 'Amount'): number {
+  if (!Number.isSafeInteger(value) || Math.abs(Number(value)) > 99_999_999_999) {
+    throw new HttpsError('invalid-argument', `${field} must be a safe integer in minor units.`);
+  }
+  return Number(value);
+}
+
 function localDate(value: unknown, field = 'Transaction date'): string {
   const result = stringValue(value, field, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(result)) throw new HttpsError('invalid-argument', `${field} must use YYYY-MM-DD.`);
@@ -1844,11 +1851,16 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
 
   const sellerQuery = db.collection('smePosSellers').where('spaceId', '==', spaceId);
   const listingQuery = db.collection('smePosListings').where('spaceId', '==', spaceId);
-  const [sellerSnapshot, listingSnapshot, saleSnapshot, ledgerSnapshot] = await Promise.all([
+  const [sellerSnapshot, listingSnapshot, saleSnapshot, ledgerSnapshot, payoutSnapshot] = await Promise.all([
     sellerQuery.get(),
     listingQuery.get(),
     ['owner', 'manager', 'cashier', 'seller'].includes(context.role) ? db.collection('smePosSales').where('spaceId', '==', spaceId).get() : Promise.resolve(null),
     context.role === 'seller' ? db.collection('smePosSellerLedger').where('sellerUid', '==', uid).get() : Promise.resolve(null),
+    ['owner', 'manager'].includes(context.role)
+      ? db.collection('smePosPayouts').where('spaceId', '==', spaceId).get()
+      : context.role === 'seller'
+        ? db.collection('smePosPayouts').where('sellerUid', '==', uid).get()
+        : Promise.resolve(null),
   ]);
 
   const allSellers = sellerSnapshot.docs
@@ -1865,6 +1877,7 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
   let customers: DocumentData[] = [];
   let sales: DocumentData[] = [];
   let sellerLedger: DocumentData[] = [];
+  let payouts: DocumentData[] = [];
 
   if (context.role === 'owner' || context.role === 'manager') {
     sellers = allSellers;
@@ -1875,6 +1888,7 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
     ]);
     customers = customersResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => !item.archivedAt);
     sales = salesResult.docs.map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => item.sourceMode === 'marketplace_consignment');
+    payouts = (payoutSnapshot?.docs || []).map((item): DocumentData => ({ id: item.id, ...item.data() }));
   } else if (context.role === 'cashier') {
     listings = allListings.map((item) => ({
       ...item,
@@ -1912,28 +1926,30 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
         .filter((item) => item.sourceMode === 'marketplace_consignment' && Array.isArray(item.items) && item.items.some((line: DocumentData) => line.sellerId === ownSeller.id));
       sales = ownSaleRows.map((sale) => {
         const items = (sale.items as DocumentData[]).filter((line) => line.sellerId === ownSeller.id);
-        const sellerEarningsMinor = items.reduce((sum, line) => sum + Number(line.sellerEarningMinor || 0), 0);
-        const commissionMinor = items.reduce((sum, line) => sum + Number(line.commissionMinor || 0), 0);
+        const sellerEarningsMinor = items.reduce((sum, line) => sum + Math.max(0, Number(line.sellerEarningMinor || 0) - Number(line.sellerEarningReturnedMinor || 0)), 0);
+        const commissionMinor = items.reduce((sum, line) => sum + Math.max(0, Number(line.commissionMinor || 0) - Number(line.commissionReturnedMinor || 0)), 0);
         const totalMinor = items.reduce((sum, line) => sum + Number(line.netLineMinor || line.lineTotalMinor || 0), 0);
+        const returnedMinor = items.reduce((sum, line) => sum + Number(line.returnedMinor || 0), 0);
         return {
           id: sale.id, displayId: sale.displayId, receiptNumber: sale.receiptNumber, spaceId, ownerId: sale.ownerId,
           createdBy: sale.createdBy, status: sale.status, returnStatus: sale.returnStatus, sourceMode: sale.sourceMode,
           customerId: null, customerName: null, paymentAccountId: '', paymentAccountName: '', paymentMethod: null, paymentMethodLabel: null,
           items, itemCount: items.reduce((sum, line) => sum + Number(line.quantity || 0), 0), subtotalMinor: totalMinor,
           discountMinor: 0, totalMinor, costMinor: sellerEarningsMinor, profitMinor: commissionMinor,
-          marketplaceCommissionMinor: commissionMinor, sellerEarningsMinor, sellerCount: 1, returnedMinor: 0,
+          marketplaceCommissionMinor: commissionMinor, sellerEarningsMinor, sellerCount: 1, returnedMinor,
           currency: sale.currency, saleDate: sale.saleDate, note: '', transactionId: '', ledgerEntryId: '',
           receiptName: sale.receiptName, receiptFooter: '', createdAt: sale.createdAt, updatedAt: sale.updatedAt,
         };
       });
       sellerLedger = (ledgerSnapshot?.docs || []).map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => item.spaceId === spaceId);
+      payouts = (payoutSnapshot?.docs || []).map((item): DocumentData => ({ id: item.id, ...item.data() })).filter((item) => item.spaceId === spaceId);
     }
   }
 
   const sorter = (a: DocumentData, b: DocumentData) => marketplaceSortValue(b) - marketplaceSortValue(a);
   return {
     sellers: sellers.sort(sorter), listings: listings.sort(sorter), customers: customers.sort(sorter),
-    sales: sales.sort(sorter), sellerLedger: sellerLedger.sort(sorter),
+    sales: sales.sort(sorter), sellerLedger: sellerLedger.sort(sorter), payouts: payouts.sort(sorter),
   };
 });
 
@@ -2206,7 +2222,8 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
         sellerId, sellerName: String(item.listing.sellerName || sellerById.get(sellerId)?.data()?.name || 'Seller'), sellerUid: item.listing.sellerUid || sellerById.get(sellerId)?.data()?.linkedUid || null,
         condition: oneOf(item.listing.condition, smePosListingConditions, 'item condition'), quantity: item.requested.quantity,
         unitPriceMinor: item.unitPriceMinor, unitCostMinor: Math.floor(sellerEarningMinor / item.requested.quantity),
-        lineTotalMinor: item.lineSubtotalMinor, lineCostMinor: sellerEarningMinor, discountShareMinor, netLineMinor, commissionMinor, sellerEarningMinor, returnedQuantity: 0,
+        lineTotalMinor: item.lineSubtotalMinor, lineCostMinor: sellerEarningMinor, discountShareMinor, netLineMinor, commissionMinor, sellerEarningMinor,
+        returnedQuantity: 0, returnedMinor: 0, commissionReturnedMinor: 0, sellerEarningReturnedMinor: 0,
       };
     });
     const totalMinor = subtotalMinor - discountMinor;
@@ -2242,7 +2259,7 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
     sellerTotals.forEach((totals, sellerId) => {
       const snapshot = sellerById.get(sellerId);
       if (!snapshot) throw new HttpsError('internal', 'Seller balance record is unavailable.');
-      const currentBalance = nonNegativeMoney(snapshot.data()?.balanceMinor ?? 0);
+      const currentBalance = signedMoney(snapshot.data()?.balanceMinor ?? 0, 'Seller balance');
       const nextBalance = currentBalance + totals.earnings;
       if (!Number.isSafeInteger(nextBalance)) throw new HttpsError('out-of-range', 'Seller balance is too large.');
       transaction.update(snapshot.ref, {
@@ -2273,6 +2290,386 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
     const result = { saleId: saleRef.id, receiptNumber, transactionId: financialRef.id };
     transaction.create(commandRef, { uid, kind: 'checkout_marketplace_pos', idempotencyKey: key, result, createdAt: now });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'marketplace_pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed Marketplace sale ${receiptNumber} for ${totalMinor / 100} ${account.currency} across ${sellerTotals.size} seller(s).`, now });
+    return result;
+  });
+});
+
+
+function parseSmePosReturnItems(value: unknown): Array<{ itemId: string; quantity: number }> {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 50) {
+    throw new HttpsError('invalid-argument', 'Choose at least one item to return.');
+  }
+  const seen = new Set<string>();
+  return value.map((row) => {
+    if (!row || typeof row !== 'object') throw new HttpsError('invalid-argument', 'Invalid return item.');
+    const item = row as Record<string, unknown>;
+    const itemId = stringValue(item.itemId, 'Return item ID', 80);
+    if (seen.has(itemId)) throw new HttpsError('invalid-argument', 'The same return item appears more than once.');
+    seen.add(itemId);
+    return { itemId, quantity: integerBetween(item.quantity, 'Return quantity', 1, 9_999) };
+  });
+}
+
+function cumulativeShare(totalMinor: number, totalQuantity: number, quantity: number): number {
+  if (quantity <= 0) return 0;
+  if (quantity >= totalQuantity) return totalMinor;
+  return Math.floor(totalMinor * quantity / totalQuantity);
+}
+
+function smePosNetLineTotals(items: DocumentData[], discountMinor: number): number[] {
+  const explicit = items.every((item) => Number.isSafeInteger(item.netLineMinor));
+  if (explicit) return items.map((item) => nonNegativeMoney(item.netLineMinor));
+  const subtotalMinor = items.reduce((sum, item) => sum + nonNegativeMoney(item.lineTotalMinor || 0), 0);
+  if (subtotalMinor <= 0) throw new HttpsError('failed-precondition', 'The sale item totals are invalid.');
+  let remainingDiscount = nonNegativeMoney(discountMinor || 0);
+  return items.map((item, index) => {
+    const lineTotalMinor = nonNegativeMoney(item.lineTotalMinor || 0);
+    const discountShareMinor = index === items.length - 1
+      ? remainingDiscount
+      : Math.floor(nonNegativeMoney(discountMinor || 0) * lineTotalMinor / subtotalMinor);
+    remainingDiscount -= discountShareMinor;
+    return lineTotalMinor - discountShareMinor;
+  });
+}
+
+export const returnSmePosSale = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const saleId = stringValue(request.data?.saleId, 'Sale ID', 80);
+  const requestedItems = parseSmePosReturnItems(request.data?.items);
+  const returnDate = localDate(request.data?.returnDate, 'Return date');
+  const reason = optionalString(request.data?.reason, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const saleRef = db.collection('smePosSales').doc(saleId);
+  const returnRef = db.collection('smePosReturns').doc();
+  const financialRef = db.collection('transactions').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const [command, saleSnapshot] = await Promise.all([transaction.get(commandRef), transaction.get(saleRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!saleSnapshot.exists) throw new HttpsError('not-found', 'POS sale not found.');
+    const sale = saleSnapshot.data() || {};
+    if (sale.spaceId !== spaceId || sale.ownerId !== context.settings.ownerId) throw new HttpsError('permission-denied', 'This sale belongs to another shop.');
+    const sourceMode = oneOf(sale.sourceMode, smePosModes, 'POS sale mode');
+    if (sale.status === 'refunded' || sale.returnStatus === 'full') throw new HttpsError('failed-precondition', 'This sale has already been fully refunded.');
+    const items = Array.isArray(sale.items) ? sale.items.map((item: unknown) => ({ ...((item || {}) as DocumentData) })) : [];
+    if (!items.length) throw new HttpsError('failed-precondition', 'This sale has no returnable items.');
+    const lineIds = items.map((item) => String(sourceMode === 'marketplace_consignment' ? item.listingId || item.productId || '' : item.productId || ''));
+    const lineIndexes = new Map(lineIds.map((id, index) => [id, index]));
+    requestedItems.forEach((requested) => {
+      if (!lineIndexes.has(requested.itemId)) throw new HttpsError('invalid-argument', 'One selected item is not part of this sale.');
+    });
+
+    const accountRef = db.collection('accounts').doc(stringValue(sale.paymentAccountId, 'Original payment account', 80));
+    const itemRefs = requestedItems.map((requested) => sourceMode === 'marketplace_consignment'
+      ? db.collection('smePosListings').doc(requested.itemId)
+      : db.collection('smePosProducts').doc(requested.itemId));
+    const sellerIds = sourceMode === 'marketplace_consignment'
+      ? [...new Set(requestedItems.map((requested) => String(items[lineIndexes.get(requested.itemId)!]?.sellerId || '')).filter(Boolean))]
+      : [];
+    const sellerRefs = sellerIds.map((sellerId) => db.collection('smePosSellers').doc(sellerId));
+    const customerRef = sale.customerId ? db.collection('smePosCustomers').doc(String(sale.customerId)) : null;
+    const [accountSnapshot, itemSnapshots, sellerSnapshots, customerSnapshot] = await Promise.all([
+      transaction.get(accountRef),
+      Promise.all(itemRefs.map((ref) => transaction.get(ref))),
+      Promise.all(sellerRefs.map((ref) => transaction.get(ref))),
+      customerRef ? transaction.get(customerRef) : Promise.resolve(null),
+    ]);
+    const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Original payment account');
+    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'The original POS account is not a business account.');
+    if (account.currency !== sale.currency) throw new HttpsError('failed-precondition', 'The original payment account currency no longer matches this sale.');
+    const sellerById = new Map(sellerSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+    const netLineTotals = smePosNetLineTotals(items, nonNegativeMoney(sale.discountMinor || 0));
+
+    let refundMinor = 0;
+    let costReversedMinor = 0;
+    let commissionReversedMinor = 0;
+    let sellerEarningReversedMinor = 0;
+    let returnedItemCount = 0;
+    const sellerAdjustments = new Map<string, { gross: number; commission: number; earnings: number; quantity: number; name: string; uid: string | null }>();
+    const returnItems: DocumentData[] = [];
+
+    requestedItems.forEach((requested, requestedIndex) => {
+      const lineIndex = lineIndexes.get(requested.itemId)!;
+      const line = items[lineIndex];
+      const totalQuantity = integerBetween(line.quantity, 'Sold quantity', 1, 9_999);
+      const previousReturned = integerBetween(line.returnedQuantity || 0, 'Returned quantity', 0, totalQuantity);
+      if (requested.quantity > totalQuantity - previousReturned) {
+        throw new HttpsError('failed-precondition', `${line.productName || 'This item'} only has ${totalQuantity - previousReturned} returnable.`);
+      }
+      const nextReturned = previousReturned + requested.quantity;
+      const lineNetMinor = netLineTotals[lineIndex];
+      const previousRefundMinor = cumulativeShare(lineNetMinor, totalQuantity, previousReturned);
+      const nextRefundMinor = cumulativeShare(lineNetMinor, totalQuantity, nextReturned);
+      const lineRefundMinor = nextRefundMinor - previousRefundMinor;
+      if (lineRefundMinor <= 0) throw new HttpsError('failed-precondition', 'The selected return amount is invalid.');
+
+      const itemSnapshot = itemSnapshots[requestedIndex];
+      if (!itemSnapshot.exists || itemSnapshot.data()?.spaceId !== spaceId || itemSnapshot.data()?.ownerId !== context.settings.ownerId) {
+        throw new HttpsError('failed-precondition', 'A returned item record is unavailable.');
+      }
+
+      let lineCommissionReversedMinor = 0;
+      let lineSellerEarningReversedMinor = 0;
+      if (sourceMode === 'marketplace_consignment') {
+        const totalCommissionMinor = nonNegativeMoney(line.commissionMinor || 0);
+        const previousCommission = cumulativeShare(totalCommissionMinor, totalQuantity, previousReturned);
+        const nextCommission = cumulativeShare(totalCommissionMinor, totalQuantity, nextReturned);
+        lineCommissionReversedMinor = nextCommission - previousCommission;
+        lineSellerEarningReversedMinor = lineRefundMinor - lineCommissionReversedMinor;
+        const sellerId = stringValue(line.sellerId, 'Seller ID', 80);
+        const sellerSnapshot = sellerById.get(sellerId);
+        if (!sellerSnapshot?.exists || sellerSnapshot.data()?.spaceId !== spaceId || sellerSnapshot.data()?.ownerId !== context.settings.ownerId) {
+          throw new HttpsError('failed-precondition', 'The seller balance record is unavailable.');
+        }
+        const current = sellerAdjustments.get(sellerId) || {
+          gross: 0, commission: 0, earnings: 0, quantity: 0,
+          name: String(sellerSnapshot.data()?.name || line.sellerName || 'Seller'),
+          uid: sellerSnapshot.data()?.linkedUid || line.sellerUid || null,
+        };
+        current.gross += lineRefundMinor;
+        current.commission += lineCommissionReversedMinor;
+        current.earnings += lineSellerEarningReversedMinor;
+        current.quantity += requested.quantity;
+        sellerAdjustments.set(sellerId, current);
+        transaction.update(itemSnapshot.ref, {
+          quantityOnHand: Number(itemSnapshot.data()?.quantityOnHand || 0) + requested.quantity,
+          soldQuantity: Math.max(0, Number(itemSnapshot.data()?.soldQuantity || 0) - requested.quantity),
+          grossSalesMinor: Math.max(0, Number(itemSnapshot.data()?.grossSalesMinor || 0) - lineRefundMinor),
+          commissionEarnedMinor: Math.max(0, Number(itemSnapshot.data()?.commissionEarnedMinor || 0) - lineCommissionReversedMinor),
+          sellerEarningsMinor: Math.max(0, Number(itemSnapshot.data()?.sellerEarningsMinor || 0) - lineSellerEarningReversedMinor),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        const lineCostMinor = nonNegativeMoney(line.lineCostMinor || 0);
+        const previousCost = cumulativeShare(lineCostMinor, totalQuantity, previousReturned);
+        const nextCost = cumulativeShare(lineCostMinor, totalQuantity, nextReturned);
+        const lineCostReversedMinor = nextCost - previousCost;
+        costReversedMinor += lineCostReversedMinor;
+        const lineGrossMinor = nonNegativeMoney(line.lineTotalMinor || 0);
+        const previousGross = cumulativeShare(lineGrossMinor, totalQuantity, previousReturned);
+        const nextGross = cumulativeShare(lineGrossMinor, totalQuantity, nextReturned);
+        const lineGrossReversedMinor = nextGross - previousGross;
+        const product = itemSnapshot.data() || {};
+        transaction.update(itemSnapshot.ref, {
+          quantityOnHand: product.trackStock === false ? 0 : Number(product.quantityOnHand || 0) + requested.quantity,
+          soldQuantity: Math.max(0, Number(product.soldQuantity || 0) - requested.quantity),
+          salesRevenueMinor: Math.max(0, Number(product.salesRevenueMinor || 0) - lineGrossReversedMinor),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      items[lineIndex] = {
+        ...line,
+        returnedQuantity: nextReturned,
+        returnedMinor: nextRefundMinor,
+        commissionReturnedMinor: nonNegativeMoney(line.commissionReturnedMinor || 0) + lineCommissionReversedMinor,
+        sellerEarningReturnedMinor: nonNegativeMoney(line.sellerEarningReturnedMinor || 0) + lineSellerEarningReversedMinor,
+      };
+      refundMinor += lineRefundMinor;
+      commissionReversedMinor += lineCommissionReversedMinor;
+      sellerEarningReversedMinor += lineSellerEarningReversedMinor;
+      returnedItemCount += requested.quantity;
+      returnItems.push({
+        productId: String(line.productId || requested.itemId),
+        listingId: sourceMode === 'marketplace_consignment' ? String(line.listingId || requested.itemId) : null,
+        productName: String(line.productName || 'Item'),
+        sellerId: sourceMode === 'marketplace_consignment' ? String(line.sellerId || '') : null,
+        sellerName: sourceMode === 'marketplace_consignment' ? String(line.sellerName || '') : null,
+        quantity: requested.quantity,
+        refundMinor: lineRefundMinor,
+        commissionReversedMinor: lineCommissionReversedMinor,
+        sellerEarningReversedMinor: lineSellerEarningReversedMinor,
+      });
+    });
+
+    const currentReturnedMinor = nonNegativeMoney(sale.returnedMinor || 0);
+    const nextReturnedMinor = currentReturnedMinor + refundMinor;
+    if (nextReturnedMinor > nonNegativeMoney(sale.totalMinor || 0)) throw new HttpsError('failed-precondition', 'The return would exceed the original sale total.');
+    const fullyReturned = items.every((line) => Number(line.returnedQuantity || 0) >= Number(line.quantity || 0));
+    const now = FieldValue.serverTimestamp();
+    const accountDelta = accountEffect(account.type, 'out', refundMinor);
+    updateAccountBalance(transaction, accountRef, account, accountDelta);
+    const ledgerEntryId = createLedgerEntry(transaction, {
+      accountId: accountRef.id,
+      ownerId: String(context.settings.ownerId),
+      spaceId,
+      transactionId: financialRef.id,
+      entryType: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_refund' : 'sme_pos_refund',
+      amountMinor: accountDelta,
+      currency: account.currency,
+      idempotencyKey: key,
+      now,
+    });
+    const refundCategory = systemCategories.get('expense-other');
+    if (!refundCategory) throw new HttpsError('internal', 'Refund category is unavailable.');
+    transaction.create(financialRef, {
+      displayId: displayId('TXN'), ownerId: context.settings.ownerId, createdBy: uid, type: 'expense', status: 'posted',
+      spaceId, accountId: accountRef.id, destinationAccountId: null, amountMinor: refundMinor, currency: account.currency,
+      category: refundCategory.name, categoryId: refundCategory.id, categoryIcon: refundCategory.icon, categoryColor: refundCategory.color,
+      categoryScope: 'business', categoryIsSystem: true, counterparty: sale.customerName || 'POS customer',
+      note: reason || `Refund for POS receipt ${sale.receiptNumber || saleId}`,
+      paymentMethod: sale.paymentMethod || null, paymentMethodLabel: sale.paymentMethodLabel || null, transactionDate: returnDate,
+      reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
+      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null, recurringTemplateId: null,
+      recurringRunId: null, recurringScheduledDate: null, posSaleId: saleId, posReturnId: returnRef.id,
+      createdAt: now, postedAt: now, updatedAt: now,
+    });
+
+    sellerAdjustments.forEach((adjustment, sellerId) => {
+      const sellerSnapshot = sellerById.get(sellerId)!;
+      const currentBalance = signedMoney(sellerSnapshot.data()?.balanceMinor || 0, 'Seller balance');
+      const nextBalance = currentBalance - adjustment.earnings;
+      transaction.update(sellerSnapshot.ref, {
+        grossSalesMinor: Math.max(0, Number(sellerSnapshot.data()?.grossSalesMinor || 0) - adjustment.gross),
+        commissionEarnedMinor: Math.max(0, Number(sellerSnapshot.data()?.commissionEarnedMinor || 0) - adjustment.commission),
+        balanceMinor: nextBalance,
+        soldQuantity: Math.max(0, Number(sellerSnapshot.data()?.soldQuantity || 0) - adjustment.quantity),
+        updatedAt: now,
+      });
+      const ledgerRef = db.collection('smePosSellerLedger').doc();
+      transaction.create(ledgerRef, {
+        displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId,
+        sellerName: adjustment.name, sellerUid: adjustment.uid, kind: 'return_adjustment',
+        amountMinor: -adjustment.earnings, balanceAfterMinor: nextBalance, currency: account.currency,
+        saleId, receiptNumber: sale.receiptNumber || null, payoutId: null, returnId: returnRef.id,
+        note: `Return adjustment for ${adjustment.quantity} item(s)`, createdAt: now,
+      });
+    });
+
+    if (customerRef && customerSnapshot?.exists && customerSnapshot.data()?.spaceId === spaceId) {
+      transaction.update(customerRef, {
+        totalSpentMinor: Math.max(0, Number(customerSnapshot.data()?.totalSpentMinor || 0) - refundMinor),
+        updatedAt: now,
+      });
+    }
+
+    const remainingProfitMinor = sourceMode === 'marketplace_consignment'
+      ? Math.max(0, nonNegativeMoney(sale.marketplaceCommissionMinor || sale.profitMinor || 0) - commissionReversedMinor)
+      : Math.max(0, nonNegativeMoney(sale.profitMinor || 0) - (refundMinor - costReversedMinor));
+    const remainingSellerEarningsMinor = sourceMode === 'marketplace_consignment'
+      ? Math.max(0, nonNegativeMoney(sale.sellerEarningsMinor || sale.costMinor || 0) - sellerEarningReversedMinor)
+      : nonNegativeMoney(sale.costMinor || 0) - costReversedMinor;
+    transaction.update(saleRef, {
+      items,
+      status: fullyReturned ? 'refunded' : 'partially_returned',
+      returnStatus: fullyReturned ? 'full' : 'partial',
+      returnedMinor: nextReturnedMinor,
+      returnIds: FieldValue.arrayUnion(returnRef.id),
+      lastReturnDate: returnDate,
+      costMinor: Math.max(0, remainingSellerEarningsMinor),
+      profitMinor: remainingProfitMinor,
+      marketplaceCommissionMinor: sourceMode === 'marketplace_consignment' ? remainingProfitMinor : sale.marketplaceCommissionMinor || null,
+      sellerEarningsMinor: sourceMode === 'marketplace_consignment' ? Math.max(0, remainingSellerEarningsMinor) : sale.sellerEarningsMinor || null,
+      updatedAt: now,
+    });
+    transaction.create(returnRef, {
+      displayId: displayId('RET'), spaceId, ownerId: context.settings.ownerId, saleId,
+      receiptNumber: String(sale.receiptNumber || saleId), sourceMode, status: 'posted', items: returnItems,
+      itemCount: returnedItemCount, refundMinor, commissionReversedMinor, sellerEarningReversedMinor,
+      paymentAccountId: accountRef.id, paymentAccountName: accountSnapshot.data()?.name || sale.paymentAccountName || 'Business account',
+      currency: account.currency, returnDate, reason, transactionId: financialRef.id, ledgerEntryId, createdBy: uid, createdAt: now,
+    });
+    const result = { returnId: returnRef.id, saleId, refundMinor, transactionId: financialRef.id };
+    transaction.create(commandRef, { uid, kind: 'return_sme_pos_sale', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, {
+      spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email,
+      action: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_sale_returned' : 'pos_sale_returned',
+      targetType: 'sme_pos_sale', targetId: saleId,
+      summary: `Returned ${returnedItemCount} item(s) from ${sale.receiptNumber || saleId} and refunded ${refundMinor / 100} ${account.currency}.`,
+      now,
+    });
+    return result;
+  });
+});
+
+export const recordMarketplaceSellerPayout = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const sellerId = stringValue(request.data?.sellerId, 'Seller ID', 80);
+  const amountMinor = positiveMoney(request.data?.amountMinor);
+  const paymentAccountId = stringValue(request.data?.paymentAccountId, 'Payment account', 80);
+  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
+  const payoutDate = localDate(request.data?.payoutDate, 'Payout date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  requireMarketplaceSettings(context);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const sellerRef = db.collection('smePosSellers').doc(sellerId);
+  const accountRef = db.collection('accounts').doc(paymentAccountId);
+  const payoutRef = db.collection('smePosPayouts').doc();
+  const financialRef = db.collection('transactions').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const [command, sellerSnapshot, accountSnapshot] = await Promise.all([
+      transaction.get(commandRef), transaction.get(sellerRef), transaction.get(accountRef),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!sellerSnapshot.exists || sellerSnapshot.data()?.spaceId !== spaceId || sellerSnapshot.data()?.ownerId !== context.settings.ownerId) {
+      throw new HttpsError('not-found', 'Seller not found.');
+    }
+    const currentBalance = signedMoney(sellerSnapshot.data()?.balanceMinor || 0, 'Seller balance');
+    if (currentBalance <= 0) throw new HttpsError('failed-precondition', 'This seller has no positive balance available for payout.');
+    if (amountMinor > currentBalance) throw new HttpsError('failed-precondition', `The maximum payout is ${(currentBalance / 100).toFixed(2)} ${sellerSnapshot.data()?.currency || 'BND'}.`);
+    const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payout account');
+    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for seller payouts.');
+    if (account.currency !== sellerSnapshot.data()?.currency || account.currency !== context.settings.currency) {
+      throw new HttpsError('failed-precondition', 'Payout account and seller balance currencies must match.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const nextBalance = currentBalance - amountMinor;
+    const accountDelta = accountEffect(account.type, 'out', amountMinor);
+    updateAccountBalance(transaction, accountRef, account, accountDelta);
+    const ledgerEntryId = createLedgerEntry(transaction, {
+      accountId: paymentAccountId, ownerId: String(context.settings.ownerId), spaceId,
+      transactionId: financialRef.id, entryType: 'marketplace_seller_payout', amountMinor: accountDelta,
+      currency: account.currency, idempotencyKey: key, now,
+    });
+    const payoutCategory = systemCategories.get('expense-supplier');
+    if (!payoutCategory) throw new HttpsError('internal', 'Seller payout category is unavailable.');
+    transaction.create(financialRef, {
+      displayId: displayId('TXN'), ownerId: context.settings.ownerId, createdBy: uid, type: 'expense', status: 'posted',
+      spaceId, accountId: paymentAccountId, destinationAccountId: null, amountMinor, currency: account.currency,
+      category: payoutCategory.name, categoryId: payoutCategory.id, categoryIcon: payoutCategory.icon, categoryColor: payoutCategory.color,
+      categoryScope: 'business', categoryIsSystem: true, counterparty: sellerSnapshot.data()?.name || 'Marketplace seller',
+      note: note || `Seller payout ${payoutRef.id}`, paymentMethod, paymentMethodLabel, transactionDate: payoutDate,
+      reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
+      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null, recurringTemplateId: null,
+      recurringRunId: null, recurringScheduledDate: null, posPayoutId: payoutRef.id,
+      createdAt: now, postedAt: now, updatedAt: now,
+    });
+    transaction.update(sellerRef, {
+      balanceMinor: nextBalance,
+      paidOutMinor: Number(sellerSnapshot.data()?.paidOutMinor || 0) + amountMinor,
+      updatedAt: now,
+    });
+    transaction.create(payoutRef, {
+      displayId: displayId('PAY'), spaceId, ownerId: context.settings.ownerId, sellerId,
+      sellerName: sellerSnapshot.data()?.name || 'Seller', sellerUid: sellerSnapshot.data()?.linkedUid || null,
+      status: 'posted', amountMinor, balanceAfterMinor: nextBalance, currency: account.currency,
+      paymentAccountId, paymentAccountName: accountSnapshot.data()?.name || 'Business account',
+      paymentMethod, paymentMethodLabel, payoutDate, note, transactionId: financialRef.id, ledgerEntryId,
+      createdBy: uid, createdAt: now,
+    });
+    const sellerLedgerRef = db.collection('smePosSellerLedger').doc();
+    transaction.create(sellerLedgerRef, {
+      displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId,
+      sellerName: sellerSnapshot.data()?.name || 'Seller', sellerUid: sellerSnapshot.data()?.linkedUid || null,
+      kind: 'payout', amountMinor: -amountMinor, balanceAfterMinor: nextBalance, currency: account.currency,
+      saleId: null, receiptNumber: null, payoutId: payoutRef.id, note: note || `Seller payout on ${payoutDate}`, createdAt: now,
+    });
+    const result = { payoutId: payoutRef.id, sellerId, transactionId: financialRef.id, balanceAfterMinor: nextBalance };
+    transaction.create(commandRef, { uid, kind: 'record_marketplace_seller_payout', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, {
+      spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email,
+      action: 'marketplace_seller_payout_recorded', targetType: 'sme_pos_payout', targetId: payoutRef.id,
+      summary: `Paid ${(amountMinor / 100).toFixed(2)} ${account.currency} to ${sellerSnapshot.data()?.name || 'a seller'}.`,
+      now,
+    });
     return result;
   });
 });

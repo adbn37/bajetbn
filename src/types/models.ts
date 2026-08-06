@@ -151,6 +151,67 @@ export interface SmePosSellerLedgerEntry {
   createdAt?: Timestamp;
 }
 
+export interface SmePosReturnItem {
+  productId: string;
+  listingId?: string;
+  productName: string;
+  sellerId?: string;
+  sellerName?: string;
+  quantity: number;
+  refundMinor: number;
+  commissionReversedMinor?: number;
+  sellerEarningReversedMinor?: number;
+}
+
+export interface SmePosReturn {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  saleId: string;
+  receiptNumber: string;
+  sourceMode: SmePosMode;
+  status: 'posted';
+  items: SmePosReturnItem[];
+  itemCount: number;
+  refundMinor: number;
+  commissionReversedMinor: number;
+  sellerEarningReversedMinor: number;
+  paymentAccountId: string;
+  paymentAccountName: string;
+  currency: string;
+  returnDate: string;
+  reason?: string;
+  transactionId: string;
+  ledgerEntryId: string;
+  createdBy: string;
+  createdAt?: Timestamp;
+}
+
+export interface SmePosPayout {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  sellerId: string;
+  sellerName: string;
+  sellerUid?: string | null;
+  status: 'posted';
+  amountMinor: number;
+  balanceAfterMinor: number;
+  currency: string;
+  paymentAccountId: string;
+  paymentAccountName: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  payoutDate: string;
+  note?: string;
+  transactionId: string;
+  ledgerEntryId: string;
+  createdBy: string;
+  createdAt?: Timestamp;
+}
+
 export interface SmePosCustomer {
   id: string;
   displayId: string;
@@ -185,6 +246,9 @@ export interface SmePosSaleItem {
   lineTotalMinor: number;
   lineCostMinor: number;
   returnedQuantity: number;
+  returnedMinor?: number;
+  commissionReturnedMinor?: number;
+  sellerEarningReturnedMinor?: number;
   listingId?: string;
   sellerId?: string;
   sellerName?: string;
@@ -226,6 +290,8 @@ export interface SmePosSale {
   sellerEarningsMinor?: number;
   sellerCount?: number;
   returnedMinor: number;
+  returnIds?: string[];
+  lastReturnDate?: string | null;
   currency: string;
   saleDate: string;
   note?: string;

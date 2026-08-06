@@ -28,7 +28,7 @@ for (const token of [
   'Add listing',
   'Shared register',
   'One sale can contain items from several sellers.',
-  'Money waiting payout',
+  'Seller money waiting',
   'My balance',
   'Seller area',
   'Complete sale',
@@ -90,7 +90,7 @@ const scope = JSON.parse(read('scope/pre-v1-scope.json'));
 const byId = new Map(scope.items.map((item) => [item.id, item]));
 if (byId.get('sme.standard_pos')?.status !== 'complete') fail('Standard POS must be complete after its staging pass.');
 if (!['manual_test', 'complete'].includes(byId.get('sme.marketplace_pos')?.status)) fail('Marketplace POS must be manual_test or complete.');
-if (byId.get('sme.pos_returns_payouts')?.status !== 'partial') fail('Returns and payouts must stay partial until v0.11.16.');
+if (!['manual_test', 'complete'].includes(byId.get('sme.pos_returns_payouts')?.status)) fail('Returns and payouts must be implemented and awaiting staging approval.');
 
 for (const file of [
   'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',

@@ -7,6 +7,8 @@ import {
   getMarketplacePosWorkspace,
   listSmePosAccess,
   listSmePosPaymentAccounts,
+  recordMarketplaceSellerPayout,
+  returnSmePosSale,
   saveMarketplaceListing,
   saveMarketplaceSeller,
   saveSmePosCustomer,
@@ -23,6 +25,7 @@ import type {
   SmePosListing,
   SmePosListingCondition,
   SmePosPaymentAccount,
+  SmePosPayout,
   SmePosRole,
   SmePosSale,
   SmePosSeller,
@@ -45,6 +48,23 @@ type ConfirmPayload =
   | { kind: 'seller'; id: string }
   | { kind: 'listing'; id: string }
   | { kind: 'customer'; id: string };
+
+interface ReturnFormState {
+  sale: SmePosSale;
+  quantities: Record<string, number>;
+  returnDate: string;
+  reason: string;
+}
+
+interface PayoutFormState {
+  seller: SmePosSeller;
+  amount: string;
+  paymentAccountId: string;
+  paymentMethod: PaymentMethodCode;
+  paymentMethodLabel: string;
+  payoutDate: string;
+  note: string;
+}
 
 const paymentMethods: Array<{ code: PaymentMethodCode; label: string }> = [
   { code: 'cash', label: 'Cash' },
@@ -99,6 +119,18 @@ function commissionCopy(type: SmePosCommissionType, rateBps: number, fixedMinor:
     : `${formatMoney(fixedMinor, currency)} per item`;
 }
 
+function sellerBalanceLabel(balanceMinor: number) {
+  if (balanceMinor < 0) return 'Seller owes shop';
+  if (balanceMinor === 0) return 'Settled';
+  return 'Waiting payout';
+}
+
+function ledgerKindLabel(entry: SmePosSellerLedgerEntry) {
+  if (entry.kind === 'sale_earning') return 'Sale earning';
+  if (entry.kind === 'return_adjustment') return 'Return adjustment';
+  return 'Seller payout';
+}
+
 export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onChanged }: Props) {
   const availableTabs = useMemo(() => tabsForRole(role), [role]);
   const [tab, setTab] = useState<MarketplaceTab>(() => initialTab(role));
@@ -107,6 +139,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
   const [sales, setSales] = useState<SmePosSale[]>([]);
   const [sellerLedger, setSellerLedger] = useState<SmePosSellerLedgerEntry[]>([]);
+  const [payouts, setPayouts] = useState<SmePosPayout[]>([]);
   const [sellerAccess, setSellerAccess] = useState<SmePosAccess[]>([]);
   const [paymentAccounts, setPaymentAccounts] = useState<SmePosPaymentAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,6 +155,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [stockForm, setStockForm] = useState<SmePosListing | null>(null);
   const [customerForm, setCustomerForm] = useState<SmePosCustomer | 'new' | null>(null);
   const [receipt, setReceipt] = useState<SmePosSale | null>(null);
+  const [returnForm, setReturnForm] = useState<ReturnFormState | null>(null);
+  const [payoutForm, setPayoutForm] = useState<PayoutFormState | null>(null);
   const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [customerId, setCustomerId] = useState('');
@@ -138,6 +173,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const canManageCustomers = ['owner', 'manager', 'cashier'].includes(role);
   const canArchiveCustomers = role === 'owner' || role === 'manager';
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
+  const canManageReturns = role === 'owner' || role === 'manager';
+  const canManagePayouts = role === 'owner' || role === 'manager';
   const canViewReports = role === 'owner' || role === 'manager';
   const canViewSales = ['owner', 'manager', 'cashier', 'seller'].includes(role);
 
@@ -155,6 +192,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       setCustomers(workspace.customers);
       setSales(workspace.sales);
       setSellerLedger(workspace.sellerLedger);
+      setPayouts(workspace.payouts);
       setPaymentAccounts(accounts);
       setSellerAccess(access.filter((item) => item.role === 'seller' && item.status === 'active'));
     } catch (nextError) {
@@ -370,6 +408,108 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     } finally { setBusy(false); }
   }
 
+
+  function openReturnForm(sale: SmePosSale) {
+    const quantities = Object.fromEntries(sale.items.map((item) => [item.listingId || item.productId, 0]));
+    setReceipt(null);
+    setReturnForm({ sale, quantities, returnDate: today(), reason: '' });
+    setError('');
+    setSuccess('');
+  }
+
+  async function submitReturn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!returnForm || !requireOnline()) return;
+    const items = returnForm.sale.items
+      .map((item) => {
+        const itemId = item.listingId || item.productId;
+        return { itemId, quantity: Math.floor(returnForm.quantities[itemId] || 0) };
+      })
+      .filter((item) => item.quantity > 0);
+    if (!items.length) {
+      setError('Choose at least one item quantity to return.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await returnSmePosSale({
+        spaceId: space.id,
+        saleId: returnForm.sale.id,
+        items,
+        returnDate: returnForm.returnDate,
+        reason: returnForm.reason,
+      });
+      setReturnForm(null);
+      setSuccess(`Return recorded. ${formatMoney(result.data.refundMinor, returnForm.sale.currency)} was refunded and seller balances were adjusted.`);
+      await load();
+      await onChanged();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openPayoutForm(seller: SmePosSeller) {
+    setPayoutForm({
+      seller,
+      amount: seller.balanceMinor > 0 ? (seller.balanceMinor / 100).toFixed(2) : '0.00',
+      paymentAccountId: settings.defaultPaymentAccountId || paymentAccounts[0]?.id || '',
+      paymentMethod: 'bank_transfer',
+      paymentMethodLabel: '',
+      payoutDate: today(),
+      note: '',
+    });
+    setError('');
+    setSuccess('');
+  }
+
+  async function submitPayout(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!payoutForm || !requireOnline()) return;
+    let amountMinor = 0;
+    try {
+      amountMinor = toMinorUnits(payoutForm.amount);
+    } catch {
+      setError('Enter a valid payout amount.');
+      return;
+    }
+    if (amountMinor <= 0 || amountMinor > payoutForm.seller.balanceMinor) {
+      setError(`Payout must be more than zero and no more than ${formatMoney(Math.max(0, payoutForm.seller.balanceMinor), payoutForm.seller.currency)}.`);
+      return;
+    }
+    if (!payoutForm.paymentAccountId) {
+      setError('Choose the business account used for this payout.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await recordMarketplaceSellerPayout({
+        spaceId: space.id,
+        sellerId: payoutForm.seller.id,
+        amountMinor,
+        paymentAccountId: payoutForm.paymentAccountId,
+        paymentMethod: payoutForm.paymentMethod,
+        paymentMethodLabel: payoutForm.paymentMethod === 'other' ? payoutForm.paymentMethodLabel : null,
+        payoutDate: payoutForm.payoutDate,
+        note: payoutForm.note,
+      });
+      const sellerName = payoutForm.seller.name;
+      setPayoutForm(null);
+      setSuccess(`Payout recorded for ${sellerName}. Remaining balance: ${formatMoney(result.data.balanceAfterMinor, payoutForm.seller.currency)}.`);
+      await load();
+      await onChanged();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return <section className="sme-standard-pos-workspace marketplace-pos-workspace">
     <div className="pos-workspace-heading">
       <div>
@@ -416,9 +556,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card" key={seller.id}>
           <div><span className="type-badge">Seller</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
-          <div className="marketplace-balance-row"><span>Waiting payout</span><strong>{formatMoney(seller.balanceMinor, seller.currency)}</strong></div>
-          <small>{seller.soldQuantity} item(s) sold · Shop earned {formatMoney(seller.commissionEarnedMinor, seller.currency)}</small>
-          <div className="button-row"><button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button><button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'seller', id: seller.id }, title: 'Archive this seller?', description: 'The seller will leave the active list. Existing listings, sales, balances and history stay recorded.', note: 'Archive or move active listings first. Sellers with active listings cannot be archived.', confirmLabel: 'Archive seller' })}>Archive</button></div>
+          <div className="marketplace-balance-row"><span>{sellerBalanceLabel(seller.balanceMinor)}</span><strong>{formatMoney(Math.abs(seller.balanceMinor), seller.currency)}</strong></div>
+          <small>{seller.soldQuantity} item(s) sold · Shop earned {formatMoney(seller.commissionEarnedMinor, seller.currency)} · Paid out {formatMoney(seller.paidOutMinor, seller.currency)}</small>
+          <div className="button-row"><button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button>{canManagePayouts && seller.balanceMinor > 0 && <button className="button primary small" type="button" onClick={() => openPayoutForm(seller)}>Record payout</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'seller', id: seller.id }, title: 'Archive this seller?', description: 'The seller will leave the active list. Existing listings, sales, balances and history stay recorded.', note: 'Archive or move active listings first. Sellers with active listings cannot be archived.', confirmLabel: 'Archive seller' })}>Archive</button></div>
         </article>)}</div>
         {!sellers.length && <div className="empty-inline">No sellers yet. Add a seller before creating a listing.</div>}
       </section>}
@@ -475,13 +615,14 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </form>}
 
       {tab === 'balance' && role === 'seller' && <div className="sme-pos-sales-section">
-        <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Money waiting payout</span><strong>{formatMoney(mySeller?.balanceMinor || 0, settings.currency)}</strong><small>Payout recording is added in v0.11.16</small></article><article className="summary-card"><span>My gross sales</span><strong>{formatMoney(mySeller?.grossSalesMinor || 0, settings.currency)}</strong><small>{mySeller?.soldQuantity || 0} item(s) sold</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(mySeller?.commissionEarnedMinor || 0, settings.currency)}</strong><small>Kept by the shop</small></article></div>
-        <section className="panel"><div className="panel-heading"><div><h3>Balance activity</h3><p>Every completed sale adds one entry to your seller balance.</p></div></div><div className="sme-pos-sales-list">{sellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || entry.displayId}</strong><small>{entry.kind === 'sale_earning' ? 'Sale earning' : entry.kind} · {entry.note || entry.sellerName}</small></div><strong>+{formatMoney(entry.amountMinor, entry.currency)}</strong><small>Balance {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!sellerLedger.length && <div className="empty-inline">No seller balance activity yet.</div>}</section>
+        <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>{sellerBalanceLabel(mySeller?.balanceMinor || 0)}</span><strong>{formatMoney(Math.abs(mySeller?.balanceMinor || 0), settings.currency)}</strong><small>Sales, returns and payouts update this balance</small></article><article className="summary-card"><span>My gross sales</span><strong>{formatMoney(mySeller?.grossSalesMinor || 0, settings.currency)}</strong><small>{mySeller?.soldQuantity || 0} item(s) currently sold</small></article><article className="summary-card"><span>Paid out</span><strong>{formatMoney(mySeller?.paidOutMinor || 0, settings.currency)}</strong><small>Recorded seller payouts</small></article></div>
+        <section className="panel"><div className="panel-heading"><div><h3>Balance activity</h3><p>Sales increase the balance. Returns and payouts reduce it.</p></div></div><div className="sme-pos-sales-list">{sellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || entry.displayId}</strong><small>{ledgerKindLabel(entry)} · {entry.note || entry.sellerName}</small></div><strong>{entry.amountMinor >= 0 ? '+' : '-'}{formatMoney(Math.abs(entry.amountMinor), entry.currency)}</strong><small>Balance {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!sellerLedger.length && <div className="empty-inline">No seller balance activity yet.</div>}</section>
       </div>}
 
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
         {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller money waiting</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
-        <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My recent sales' : role === 'seller' ? 'My sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' ? 'Only the part of each sale belonging to you is shown.' : 'Open a sale to view or print its receipt.'}</p></div></div><div className="sme-pos-sales-list">{sales.map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || 'Walk-in customer'} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!sales.length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
+        <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My recent sales' : role === 'seller' ? 'My sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' ? 'Only the part of each sale belonging to you is shown.' : 'Open a sale to view its receipt or record a return.'}</p></div></div><div className="sme-pos-sales-list">{sales.map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || 'Walk-in customer'} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!sales.length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
+        {canViewReports && <section className="panel"><div className="panel-heading"><div><h3>Recent seller payouts</h3><p>Each payout posts Money Out from the selected business account.</p></div></div><div className="sme-pos-sales-list">{payouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.sellerName}</strong><small>{payout.payoutDate} · {payout.paymentAccountName}</small></div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Balance {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!payouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>}
       </div>}
     </>}
 
@@ -514,7 +655,68 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {customerForm && <Modal title={customerForm === 'new' ? 'Add customer' : 'Edit customer'} onClose={() => !busy && setCustomerForm(null)}><form className="form-stack" onSubmit={saveCustomer}><label>Customer name<input name="name" defaultValue={customerForm === 'new' ? '' : customerForm.name} maxLength={100} required /></label><div className="form-grid"><label>Phone<input name="phone" defaultValue={customerForm === 'new' ? '' : customerForm.phone || ''} maxLength={30} /></label><label>Email<input name="email" type="email" defaultValue={customerForm === 'new' ? '' : customerForm.email || ''} maxLength={120} /></label></div><label>Note<textarea name="note" rows={3} defaultValue={customerForm === 'new' ? '' : customerForm.note || ''} maxLength={300} /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setCustomerForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save customer'}</button></div></form></Modal>}
 
-    {receipt && <Modal title={`Receipt ${receipt.receiptNumber}`} onClose={() => setReceipt(null)}><div className="sme-pos-receipt"><header><strong>{receipt.receiptName}</strong><span>{receipt.saleDate}</span><small>{receipt.customerName || 'Walk-in customer'}</small></header>{receipt.items.map((item, index) => <div className="sme-pos-receipt-line" key={`${item.listingId || item.productId}-${index}`}><span>{item.quantity} × {item.productName}</span><strong>{formatMoney(item.netLineMinor ?? item.lineTotalMinor, receipt.currency)}</strong></div>)}<div className="sme-pos-receipt-totals"><span>Subtotal <strong>{formatMoney(receipt.subtotalMinor, receipt.currency)}</strong></span><span>Discount <strong>-{formatMoney(receipt.discountMinor, receipt.currency)}</strong></span><span>Total <strong>{formatMoney(receipt.totalMinor, receipt.currency)}</strong></span></div><p>{receipt.receiptFooter}</p>{receipt.paymentAccountName && <small>Paid into {receipt.paymentAccountName}</small>}</div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => window.print()}>Print</button><button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button></div></Modal>}
+    {receipt && <Modal title={`Receipt ${receipt.receiptNumber}`} onClose={() => setReceipt(null)}>
+      <div className="sme-pos-receipt">
+        <header><strong>{receipt.receiptName}</strong><span>{receipt.saleDate}</span><small>{receipt.customerName || 'Walk-in customer'}</small></header>
+        {receipt.items.map((item, index) => <div className="sme-pos-receipt-line" key={`${item.listingId || item.productId}-${index}`}>
+          <span>{item.quantity} × {item.productName}{item.returnedQuantity > 0 ? ` · ${item.returnedQuantity} returned` : ''}</span>
+          <strong>{formatMoney(item.netLineMinor ?? item.lineTotalMinor, receipt.currency)}</strong>
+        </div>)}
+        <div className="sme-pos-receipt-totals">
+          <span>Original total <strong>{formatMoney(receipt.totalMinor, receipt.currency)}</strong></span>
+          {receipt.returnedMinor > 0 && <span>Refunded <strong>-{formatMoney(receipt.returnedMinor, receipt.currency)}</strong></span>}
+          <span>Net sale <strong>{formatMoney(receipt.totalMinor - receipt.returnedMinor, receipt.currency)}</strong></span>
+        </div>
+        <p>{receipt.receiptFooter}</p>
+        {receipt.paymentAccountName && <small>Paid into {receipt.paymentAccountName}</small>}
+      </div>
+      <div className="modal-actions">
+        <button className="button secondary" type="button" onClick={() => window.print()}>Print</button>
+        {canManageReturns && receipt.status !== 'refunded' && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
+        <button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button>
+      </div>
+    </Modal>}
+
+    {returnForm && <Modal title={`Return items · ${returnForm.sale.receiptNumber}`} onClose={() => !busy && setReturnForm(null)}>
+      <form className="form-stack" onSubmit={submitReturn}>
+        <div className="notice">The customer refund posts as Money Out from the original shop account. Seller balances, commission, listing stock and reports are adjusted together.</div>
+        <div className="sme-pos-cart-lines">
+          {returnForm.sale.items.map((item) => {
+            const itemId = item.listingId || item.productId;
+            const remaining = Math.max(0, item.quantity - item.returnedQuantity);
+            return <div key={itemId}>
+              <div><strong>{item.productName}</strong><small>{item.sellerName || 'Seller'} · {remaining} returnable of {item.quantity} sold</small></div>
+              <input
+                type="number"
+                min="0"
+                max={remaining}
+                value={returnForm.quantities[itemId] || 0}
+                onChange={(event) => setReturnForm((current) => current ? {
+                  ...current,
+                  quantities: { ...current.quantities, [itemId]: Math.min(remaining, Math.max(0, Number(event.target.value) || 0)) },
+                } : current)}
+                aria-label={`${item.productName} return quantity`}
+              />
+            </div>;
+          })}
+        </div>
+        <label>Return date<input type="date" value={returnForm.returnDate} onChange={(event) => setReturnForm((current) => current ? { ...current, returnDate: event.target.value } : current)} required /></label>
+        <label>Reason or note<textarea rows={3} value={returnForm.reason} onChange={(event) => setReturnForm((current) => current ? { ...current, reason: event.target.value } : current)} maxLength={500} placeholder="Optional" /></label>
+        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setReturnForm(null)} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Recording return…' : 'Confirm return and refund'}</button></div>
+      </form>
+    </Modal>}
+
+    {payoutForm && <Modal title={`Record payout · ${payoutForm.seller.name}`} onClose={() => !busy && setPayoutForm(null)}>
+      <form className="form-stack" onSubmit={submitPayout}>
+        <div className="notice">Available seller balance: {formatMoney(Math.max(0, payoutForm.seller.balanceMinor), payoutForm.seller.currency)}. The payout posts as Money Out and creates permanent payout and seller-balance history.</div>
+        <label>Payout amount (BND)<input inputMode="decimal" value={payoutForm.amount} onChange={(event) => setPayoutForm((current) => current ? { ...current, amount: event.target.value } : current)} required /></label>
+        <label>Paid from<select value={payoutForm.paymentAccountId} onChange={(event) => setPayoutForm((current) => current ? { ...current, paymentAccountId: event.target.value } : current)} required><option value="">Choose business account</option>{paymentAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.currency}</option>)}</select></label>
+        <div className="form-grid"><label>Payment method<select value={payoutForm.paymentMethod} onChange={(event) => setPayoutForm((current) => current ? { ...current, paymentMethod: event.target.value as PaymentMethodCode } : current)}>{paymentMethods.map((method) => <option value={method.code} key={method.code}>{method.label}</option>)}</select></label><label>Payout date<input type="date" value={payoutForm.payoutDate} onChange={(event) => setPayoutForm((current) => current ? { ...current, payoutDate: event.target.value } : current)} required /></label></div>
+        {payoutForm.paymentMethod === 'other' && <label>Other payment method<input value={payoutForm.paymentMethodLabel} onChange={(event) => setPayoutForm((current) => current ? { ...current, paymentMethodLabel: event.target.value } : current)} required /></label>}
+        <label>Note<textarea rows={3} value={payoutForm.note} onChange={(event) => setPayoutForm((current) => current ? { ...current, note: event.target.value } : current)} maxLength={500} placeholder="Optional reference or note" /></label>
+        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setPayoutForm(null)} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Recording payout…' : 'Confirm seller payout'}</button></div>
+      </form>
+    </Modal>}
 
     {confirm && <ActionConfirmModal state={confirm} busy={busy} error={error} onClose={() => { setConfirm(null); setError(''); }} onConfirm={() => void archiveConfirmed()} />}
   </section>;

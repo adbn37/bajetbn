@@ -203,6 +203,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /smePosReturns/{returnId} {
+      allow read: if isSpaceOwner(resource.data.spaceId) || isPosManager(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
     match /smePosPayouts/{payoutId} {
       allow read: if isSpaceOwner(resource.data.spaceId) || isPosManager(resource.data.spaceId)
         || (hasActivePosAccess(resource.data.spaceId)

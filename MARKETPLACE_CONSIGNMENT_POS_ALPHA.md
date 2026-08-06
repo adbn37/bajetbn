@@ -43,7 +43,7 @@ Fixed-per-item commission is capped by the final line amount so a seller balance
 
 The customer’s full payment enters the selected shop account because the shop physically receives the money. BajetBN separately records the seller portion as money waiting for payout. The shop’s Marketplace earnings are the calculated commission.
 
-Seller payout posting, returns, refunds and balance reversals remain in v0.11.16. Alpha 1 does not mark seller balances as paid.
+v0.11.16 adds partial and full item returns, customer refund posting from the original shop account, automatic listing-stock restoration, commission reversal, seller-balance adjustment and seller payout posting. Every adjustment is duplicate-safe and keeps append-only return, payout, Money Activity, account-ledger and seller-ledger history.
 
 ## Access
 
@@ -58,4 +58,4 @@ Seller payout posting, returns, refunds and balance reversals remain in v0.11.16
 
 This phase remains `manual_test` until staging confirms seller setup, repeated item names across sellers, mixed-seller checkout, stock blocking, commission calculations, seller balance isolation, role restrictions, account posting and mobile layout.
 
-Production remains blocked. v0.11.16 must add returns, refunds, seller payouts and the related report adjustments before the shop pilot.
+Production remains blocked until staging confirms returns, refunds, seller-balance reversals, seller payouts, report adjustments and the real shop pilot.
