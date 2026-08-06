@@ -69,11 +69,11 @@ v0.11.11 source adds persistent cached reads and a device-local queue for new Mo
 
 ## Historic roadmap item requiring an explicit v1 decision
 
-The original architecture still records one item that is not implemented:
+The original architecture's receipt/document decision is now resolved:
 
-- General transaction receipt/document attachments.
+- General transaction receipt/document attachments were implemented in v0.11.12 and passed staging on 2026-08-06.
 
-It must either be implemented before v1.0.0 or explicitly approved as a post-v1 item. It must not disappear silently from the roadmap.
+No unresolved pre-v1 receipt/document decision remains.
 
 ## Deferred after v1.0.0
 
@@ -89,7 +89,7 @@ Do not tag or announce v1.0.0 until every item in `scope/pre-v1-scope.json` with
 
 - The product owner confirmed v0.11.10 Household/Group Funds and Financial Health passed staging.
 - The product owner confirmed v0.11.11 Offline Sync passed staging.
-- General Money activity receipt/document attachments are implemented and now require staging approval.
+- General Money activity receipt/document attachments passed the complete staging matrix on 2026-08-06.
 - No scope item remains classified as `missing`.
 - Production remains NO-GO under `PRODUCTION_READINESS_GATE.md`.
 
@@ -100,3 +100,7 @@ The canonical register contains 58 requirements. The SME POS foundation and Stan
 ## Recurring transactions staging acceptance
 
 The complete v0.11.7 recurring-money matrix passed on 2026-08-06, including scheduler execution, month-end handling, deterministic duplicate prevention, Budget effects, lifecycle actions and Account/Space safeguards.
+
+## Transaction-receipt staging acceptance
+
+The complete image, PDF, five-file limit, privacy, offline, retry, removal and cleanup matrix passed on 2026-08-06. The `data.general_receipts` pre-v1 scope record is complete.

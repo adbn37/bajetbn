@@ -38,7 +38,7 @@ Includes the seven-day deletion cooling-off period, safe anonymisation and a 30-
 - [x] Add dedicated active and stopped pages plus Calendar and Search visibility.
 - [x] Rules, indexes and Functions were deployed to staging and the recurring-transaction matrix passed on 2026-08-06.
 
-General receipt/document attachments remain an explicit pre-v1 decision. Offline financial entry synchronisation is implemented separately in v0.11.11.
+General receipt/document attachments were implemented in v0.11.12 and the complete staging matrix passed on 2026-08-06. Offline financial entry synchronisation is implemented separately in v0.11.11.
 
 ## v0.11.8 — Brunei Banks and Payment Methods — Completed in source
 

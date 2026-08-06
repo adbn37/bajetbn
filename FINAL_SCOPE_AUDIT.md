@@ -15,7 +15,6 @@ The product owner explicitly confirmed the v0.11.10 Household/Group Funds and Fi
 - Dedicated archive/closed pages and Alpha 2 browser matrix.
 - Account deletion and 30-day fresh-registration matrix.
 - Background reminder/device-notification matrix.
-- Transaction receipt/document attachment matrix.
 - Final production smoke, security, rollback and explicit approval.
 
 ## Release decision
@@ -33,3 +32,7 @@ The Brunei institution and payment-method end-to-end matrix passed on 2026-08-06
 ## Recurring-money staging acceptance
 
 The recurring-money scheduler, month-end and duplicate-prevention matrix passed on 2026-08-06. The `recurring.transactions` pre-v1 scope record is complete.
+
+## Transaction-receipt staging acceptance
+
+The transaction receipt and document-attachment matrix passed on 2026-08-06. The `data.general_receipts` pre-v1 scope record is complete.

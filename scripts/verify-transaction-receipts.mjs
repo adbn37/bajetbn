@@ -28,7 +28,13 @@ requireText('PRODUCTION_READINESS_GATE.md', 'Current decision: NO-GO');
 
 const scope = JSON.parse(read('scope/pre-v1-scope.json'));
 const receipt = scope.items.find((item) => item.id === 'data.general_receipts');
-if (receipt?.status !== 'manual_test' || receipt?.gate !== 'pre_v1') throw new Error('Receipt scope item is not registered as a pre-v1 staging-test gate.');
+if (
+  !receipt
+  || !['manual_test', 'complete'].includes(receipt.status)
+  || receipt.gate !== 'pre_v1'
+) {
+  throw new Error('Receipt scope item must be a pre-v1 manual_test or complete gate.');
+}
 const missing = scope.items.filter((item) => item.status === 'missing');
 const allowedMissing = new Set();
 const unexpectedMissing = missing.filter((item) => !allowedMissing.has(item.id));

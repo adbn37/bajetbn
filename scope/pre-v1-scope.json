@@ -636,7 +636,7 @@
       "id": "data.general_receipts",
       "area": "Documents",
       "requirement": "General transaction receipt/document attachments",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "src/features/transactions/TransactionsPage.tsx",
