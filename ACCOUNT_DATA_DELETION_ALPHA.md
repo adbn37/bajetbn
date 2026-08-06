@@ -61,3 +61,31 @@ This phase changes Firestore rules and Firebase Functions. Deploy both to the st
 ## Re-registration after deletion
 
 After completed self-service deletion, the same email or Google account must wait 30 days before creating a fresh BajetBN account. Ordinary self-deletion is allowed automatically after the cooldown; administrator approval is not required. Fraud, abuse, security and legal-hold restrictions require manual review. Re-registration never restores old private data, Spaces, balances or memberships. See `ACCOUNT_REREGISTRATION_POLICY_ALPHA.md`.
+
+## Staging acceptance ? 2026-08-06
+
+The owner completed and approved the disposable-user account-deletion matrix on staging:
+
+- Staging environment: https://0586bd9b.bajetbn-staging.pages.dev
+- password and Google reauthentication passed;
+- recent data-export protection passed;
+- typed permanent-deletion confirmation passed;
+- seven-day cooling-off and cancellation passed;
+- duplicate-request protection passed;
+- shared-Space ownership blockers and ownership transfer passed;
+- Trip money-holder blockers and reassignment passed;
+- final private-data and Storage cleanup passed;
+- authentication disablement, token revocation and final Auth deletion passed;
+- retained shared financial history was anonymised as `Deleted member`;
+- names, email addresses and private proof links were removed;
+- shared totals and settlement balances remained unchanged;
+- 30-day email and Google re-registration restrictions passed;
+- post-cooldown registration created a fresh account;
+- previous private data and memberships were not restored;
+- manual-review restrictions remained blocked;
+- processing failure, safe retry and duplicate-record protection passed; and
+- phone and desktop staging operation passed.
+
+The `data.delete_account` pre-production gate is complete.
+
+This acceptance does not authorize production deployment. Alpha 2 staging approval and the final production release gate remain separate.

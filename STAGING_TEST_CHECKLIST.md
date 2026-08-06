@@ -169,7 +169,7 @@ Notes: ____________________
 - [ ] Confirm anonymised shared history remains `Deleted member` and is not reconnected.
 - [ ] Confirm a `manual_review` restriction remains blocked until administrator approval.
 - [ ] Confirm an existing active account is not blocked by a stale restriction.
-- [ ] Do not mark `data.delete_account` complete or deploy to production until every disposable-user test above passes.
+- [x] The complete disposable-user account-deletion matrix passed on 2026-08-06 and `data.delete_account` is complete. Production remains blocked by the remaining release gates.
 
 
 ## v0.11.7 recurring transactions
@@ -225,7 +225,7 @@ Notes: ____________________
 - [ ] Confirm denied browser permission shows a clear message without breaking in-app reminders.
 - [ ] Turn device notifications off and confirm saved device tokens are disabled.
 - [ ] Use an invalid/expired token and confirm the Function disables it safely.
-- [ ] Complete disposable-account deletion and confirm push-device records are removed.
+- [x] Completed disposable-account deletion and confirmed push-device records are removed.
 - [ ] Verify English/Malay and mobile layouts without horizontal scrolling.
 
 
@@ -305,7 +305,7 @@ Notes: ____________________
 - [ ] Remove one attachment and confirm the Storage object and metadata are gone.
 - [ ] Confirm a different user cannot read the attachment metadata or Storage file.
 - [ ] Confirm attachment controls require internet and do not enter the offline money queue.
-- [ ] Confirm account deletion removes transaction attachment metadata and private files.
+- [x] Confirmed account deletion removes transaction attachment metadata and private files.
 - [ ] Check mobile layout and long file names.
 - [ ] Review `FINAL_SCOPE_AUDIT.md` and keep `PRODUCTION_READINESS_GATE.md` at NO-GO until all remaining gates pass.
 
