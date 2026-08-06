@@ -69,6 +69,27 @@ function outstandingAmount(assignment: SharedBillAssignment) {
   return assignment.outstandingMinor ?? Math.max(0, assignment.assignedMinor - settledAmount(assignment));
 }
 
+function isInternalUid(value?: string) {
+  const normalized = value?.trim() || '';
+  return Boolean(normalized && /^[A-Za-z0-9]{20,}$/.test(normalized));
+}
+
+function memberDisplayLabel(member: SpaceMember) {
+  const displayName = member.displayName?.trim() || '';
+
+  return displayName && !isInternalUid(displayName)
+    ? displayName
+    : 'Member';
+}
+
+function memberDetailLabel(member: SpaceMember) {
+  const email = member.email?.trim() || '';
+
+  return email && !isInternalUid(email)
+    ? email
+    : 'Profile details unavailable';
+}
+
 export type CollaborationTab = 'members' | 'bills' | 'activity' | 'settings';
 
 type CollaborationConfirmation =
@@ -255,22 +276,22 @@ export function CollaborationPage({
       <section className="panel collaboration-panel">
         <div className="panel-heading"><div><span className="eyebrow">Access</span><h2>Members</h2></div>{embedded && canManage && <button className="button primary" onClick={() => setInviteOpen(true)}>Invite member</button>}</div>
         <div className="member-list">{members.map((member) => <article className={`member-row status-${member.status || 'active'}`} key={member.id}>
-          <span className="avatar">{(member.displayName || member.email || 'M').charAt(0).toUpperCase()}</span>
-          <div><strong>{member.displayName || member.email || member.uid}</strong><small>{member.email || member.uid}</small></div>
+          <span className="avatar">{memberDisplayLabel(member).charAt(0).toUpperCase()}</span>
+          <div><strong>{memberDisplayLabel(member)}</strong><small>{memberDetailLabel(member)}</small></div>
           <span className="type-badge">{roleLabel[member.role] || member.role}</span>
           <div className="permission-chips"><span>{member.canUseAccounts ? 'Use accounts' : 'No account use'}</span><span>{member.canViewBalances ? 'See balances' : 'Balances hidden'}</span><span>{member.canViewLedger ? 'See account activity' : 'Account activity hidden'}</span></div>
           {canManage && member.role !== 'owner' && <div className="button-row">
             <button className="text-button" onClick={() => setEditingMember(member)}>Manage</button>
             {isOwner && (member.status || 'active') === 'active' && <button className="text-button" onClick={() => setConfirmDialog({
               payload: { kind: 'transfer-owner', member },
-              title: `Make ${member.displayName || member.email || 'this member'} the owner?`,
+              title: `Make ${memberDisplayLabel(member)} the owner?`,
               description: 'They will become the Space owner. You will remain as a manager and can then delete your BajetBN account without removing this shared history.',
               note: 'Only transfer ownership to someone you trust. The new owner will control members and Space settings.',
               confirmLabel: 'Transfer ownership',
             })}>Make owner</button>}
             <button className="text-button danger" onClick={() => setConfirmDialog({
               payload: { kind: 'remove-member', member },
-              title: `Remove ${member.displayName || member.email || 'this member'}?`,
+              title: `Remove ${memberDisplayLabel(member)}?`,
               description: 'They will lose access to this Space. Their previous shared bills, payments and activity will stay in the history.',
               note: 'You can invite them again later if needed.',
               confirmLabel: 'Remove member',
@@ -415,7 +436,7 @@ function AssignmentForm({ space, members, commitments, onSaved }: { space: Space
     {commitments.length === 0 || members.length === 0 ? <div className="notice">Add a bill and invite at least one person before sharing the bill.</div> : <>
       <label>Bill or instalment<select value={commitmentId} onChange={(event) => setCommitmentId(event.target.value)}>{commitments.map((item) => <option value={item.id} key={item.id}>{item.name} — {formatMoney(item.amountMinor, item.currency)}</option>)}</select></label>
       <label>How should it be shared?<select value={splitMode} onChange={(event) => setSplitMode(event.target.value as 'equal' | 'custom')}><option value="equal">Split equally</option><option value="custom">Enter different amounts</option></select></label>
-      <fieldset className="member-split-fieldset"><legend>Who should pay?</legend>{members.map((member) => <div className="member-split-row" key={member.uid}><label className="checkbox-label"><input type="checkbox" checked={Boolean(selectedMembers[member.uid])} onChange={(event) => setSelectedMembers((current) => ({ ...current, [member.uid]: event.target.checked }))} /> {member.displayName || member.email || member.uid}{member.role === 'owner' ? ' (Owner)' : ''}</label>{splitMode === 'custom' && selectedMembers[member.uid] && <input aria-label={`${member.displayName || member.email || 'Member'} share`} inputMode="decimal" placeholder="BND" value={amounts[member.uid] || ''} onChange={(event) => setAmounts((current) => ({ ...current, [member.uid]: event.target.value }))} />}</div>)}</fieldset>
+      <fieldset className="member-split-fieldset"><legend>Who should pay?</legend>{members.map((member) => <div className="member-split-row" key={member.uid}><label className="checkbox-label"><input type="checkbox" checked={Boolean(selectedMembers[member.uid])} onChange={(event) => setSelectedMembers((current) => ({ ...current, [member.uid]: event.target.checked }))} /> {memberDisplayLabel(member)}{member.role === 'owner' ? ' (Owner)' : ''}</label>{splitMode === 'custom' && selectedMembers[member.uid] && <input aria-label={`${member.displayName || member.email || 'Member'} share`} inputMode="decimal" placeholder="BND" value={amounts[member.uid] || ''} onChange={(event) => setAmounts((current) => ({ ...current, [member.uid]: event.target.value }))} />}</div>)}</fieldset>
       {selected && <div className="transaction-preview"><div><span>Amount due</span><strong>{formatMoney(selected.amountMinor, selected.currency)}</strong></div><div><span>People selected</span><strong>{chosen.length}</strong></div><small>{splitMode === 'equal' ? 'BajetBN will divide the full amount equally, including any 1-cent difference.' : 'The amounts can be different, but cannot be more than the bill amount.'}</small></div>}
       <label>Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required readOnly /></label>
       <label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label>

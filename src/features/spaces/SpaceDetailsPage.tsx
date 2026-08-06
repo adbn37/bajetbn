@@ -189,7 +189,7 @@ export function SpaceDetailsPage() {
       title={space.name}
       description={
         space.type === 'sme'
-          ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} ? SME`
+          ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · SME`
           : spaceDescription(space)
       }
       action={<Link className="button secondary" to="/spaces">Back</Link>}
@@ -205,7 +205,7 @@ export function SpaceDetailsPage() {
           <strong>{spaceTypeLabel[space.type]}</strong>
           <span>
             {shared
-              ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} ? Shared Space`
+              ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Shared Space`
               : 'Private Space'}
           </span>
         </div>
