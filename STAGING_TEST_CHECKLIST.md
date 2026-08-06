@@ -98,9 +98,9 @@ Notes: ____________________
 
 ## Pre-v1.0 scope-completion gate
 
-- [ ] Run `node scripts/verify-pre-v1-scope-audit.mjs`
-- [ ] Review `PRE_V1_SCOPE_COMPLETION_AUDIT.md`
-- [ ] Review every non-complete `pre_production` item in `scope/pre-v1-scope.json`
+- [x] Run `node scripts/verify-pre-v1-scope-audit.mjs`
+- [x] Review `PRE_V1_SCOPE_COMPLETION_AUDIT.md`
+- [x] Review every non-complete `pre_production` item in `scope/pre-v1-scope.json`
 - [x] Confirm all Alpha 2 mobile/archive routes and lifecycle actions in the browser
 - [ ] Do not merge to production while a pre-production blocker remains open
 - [ ] Do not tag v1.0.0 while a required pre-v1 item remains open or lacks an explicit scope decision
@@ -632,3 +632,37 @@ Accepted on 2026-08-06 using the staging deployment.
 - [x] Owner approved the real-shop pilot.
 - [x] `sme.shop_pilot` is complete.
 - [ ] Production remains blocked until all other pre-production gates are complete.
+
+## v0.11.16 ? Alpha 2 final staging acceptance
+
+Accepted by the product owner on 2026-08-06.
+
+- Staging URL: https://0586bd9b.bajetbn-staging.pages.dev
+- Final reduced release smoke test: **PASS**
+- Full structural verification: required before closure
+- Production deployment: **not authorized**
+
+The final release smoke test confirmed:
+
+- [x] Login and logout.
+- [x] Money In.
+- [x] Money Out.
+- [x] Move Money between Accounts.
+- [x] Edit, archive and restore.
+- [x] Shared Space invitation and shared expense.
+- [x] Transaction receipt upload and removal.
+- [x] Recurring Money visibility.
+- [x] Notification Centre operation.
+- [x] SME POS checkout.
+- [x] Direct-route browser refresh.
+- [x] Mobile operation at approximately 375px.
+- [x] Desktop operation.
+- [x] Dark theme.
+- [x] Warm-light theme.
+- [x] No blocking browser-console errors.
+
+This acceptance is supported by the previously approved detailed staging matrices for archive and lifecycle controls, account deletion, Brunei money options, recurring transactions, reminders, transaction receipts, Standard POS, Marketplace Consignment POS, returns, refunds, seller payouts and the real-shop pilot.
+
+Historical granular checklist entries are not being represented as newly re-run where equivalent feature-specific acceptance evidence already exists.
+
+The `release.alpha2_staging` gate is complete. The separate `release.production` gate remains open and production remains NO-GO.

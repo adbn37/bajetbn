@@ -2,9 +2,9 @@
 
 ## Baseline gate — v0.11.4 Alpha 2
 
-- Merge the mobile/archive feature into staging.
-- Complete mobile and desktop manual testing.
-- Fix Alpha 2 defects without opening a new major scope phase.
+- [x] The mobile/archive feature was merged into staging.
+- [x] Mobile and desktop staging acceptance was completed on 2026-08-06.
+- [x] Alpha 2 defects were resolved without opening a new major scope phase.
 
 ## v0.11.5 — Release Governance and Safety Hardening — Completed in source
 
@@ -13,7 +13,7 @@
 - [x] Require the full package-level structural suite in staging CI.
 - [x] Review Firebase Functions dependencies and production deployment warnings.
 - [x] Add production smoke-test and rollback checklists.
-- [ ] Complete manual browser testing on staging before merging this phase onward.
+- [x] Manual browser testing and the final Alpha 2 staging smoke test passed on 2026-08-06.
 
 ## v0.11.6 — Account and Data Controls — Completed in source
 
@@ -118,3 +118,7 @@ BajetBN will be used in the owner's shop. Production is therefore blocked until 
 7. v1.0.0 — Production only after explicit approval
 
 The pre-v1 scope now includes SME products, inventory, customers, checkout, receipts, seller-linked listings, commission calculation, seller balances, payouts, returns, refunds and shop reports.
+
+## Alpha 2 staging acceptance
+
+The final mobile and desktop staging release smoke test passed on 2026-08-06. All required pre-v1 feature matrices are complete. Production remains governed by the separate final release gate.

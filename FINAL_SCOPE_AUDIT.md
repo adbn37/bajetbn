@@ -12,14 +12,11 @@ The product owner explicitly confirmed the v0.11.10 Household/Group Funds and Fi
 
 ## Remaining manual gates
 
-- Dedicated archive/closed pages and Alpha 2 browser matrix.
-- Account deletion and 30-day fresh-registration matrix.
-- Background reminder/device-notification matrix.
 - Final production smoke, security, rollback and explicit approval.
 
 ## Release decision
 
-This is still an alpha candidate. Do not tag v1.0.0 or deploy production until every pre-production gate is complete and the remaining pre-v1 manual tests are approved or explicitly reclassified.
+Alpha 2 staging acceptance and all required pre-v1 feature matrices are complete. Do not tag v1.0.0 or deploy production until the separate `release.production` gate is explicitly approved.
 
 ## 2026-08-03 scope expansion
 
@@ -36,3 +33,9 @@ The recurring-money scheduler, month-end and duplicate-prevention matrix passed 
 ## Transaction-receipt staging acceptance
 
 The transaction receipt and document-attachment matrix passed on 2026-08-06. The `data.general_receipts` pre-v1 scope record is complete.
+
+## Alpha 2 staging acceptance
+
+The final mobile and desktop release smoke test passed on 2026-08-06. The `release.alpha2_staging` pre-production scope record is complete.
+
+Production remains NO-GO pending final CI, security, production smoke, rollback and explicit product-owner approval.
