@@ -64,7 +64,7 @@
       "id": "sme.marketplace_pos",
       "area": "SME POS",
       "requirement": "Marketplace Consignment POS with seller-linked listings or stock batches, commission rules, mixed-seller checkout and seller reports",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
@@ -78,7 +78,7 @@
       "id": "sme.pos_money_link",
       "area": "SME POS",
       "requirement": "POS sales, refunds, commissions and payouts post safely to the selected SME payment account and reports",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "STANDARD_POS_ALPHA.md",
@@ -96,7 +96,7 @@
       "id": "sme.pos_returns_payouts",
       "area": "SME POS",
       "requirement": "POS return-safe sale records, returns/refunds, seller balances and seller payouts",
-      "status": "manual_test",
+      "status": "complete",
       "gate": "pre_v1",
       "evidence": [
         "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",

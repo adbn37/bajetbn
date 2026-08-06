@@ -50,4 +50,4 @@ Alpha 2 separates daily shop work from owner setup and strengthens stock and sta
 - Owner/Manager daily and monthly sales, estimated profit and low-stock report.
 - Dedicated archived POS records for owner/manager restore.
 
-Standard POS Alpha 2 passed staging. v0.11.16 return/refund handling is implemented and remains under staging approval. Production stays blocked until all POS adjustment tests and shop pilot testing pass.
+Standard POS Alpha 2 and the v0.11.16 return/refund staging matrix passed. Partial and full returns, stock restoration, refund posting, duplicate protection and adjusted reports are approved for staging. Production remains blocked by the separate shop pilot and remaining production-readiness gates.
