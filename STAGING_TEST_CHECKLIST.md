@@ -79,27 +79,29 @@ Notes: ____________________
 
 ## v0.11.4 Alpha 2 — Mobile UX and dedicated archive pages
 
-- [ ] Spaces shows active Spaces only and opens `/spaces/archived` from the header button.
-- [ ] Accounts shows active accounts only and opens `/accounts/closed` from the header or summary count.
-- [ ] Budgets, Goals, Bills & instalments, and custom Categories keep inactive records on their dedicated pages.
-- [ ] Restore/Reopen returns a record to the active page without duplicating balances or history.
-- [ ] Permanent delete works only for an unused record.
-- [ ] A blocked delete explains why and offers Archive, Close, Stop, or Hide instead.
-- [ ] No browser-native confirmation appears for module lifecycle actions.
+> Archive-page staging acceptance passed on 2026-08-06. Spaces, Accounts, Budgets, Goals, Bills, Categories, restore/reopen, safe-delete protection, mobile layouts and desktop archive pages were confirmed.
+
+- [x] Spaces shows active Spaces only and opens `/spaces/archived` from the header button.
+- [x] Accounts shows active accounts only and opens `/accounts/closed` from the header or summary count.
+- [x] Budgets, Goals, Bills & instalments, and custom Categories keep inactive records on their dedicated pages.
+- [x] Restore/Reopen returns a record to the active page without duplicating balances or history.
+- [x] Permanent delete works only for an unused record.
+- [x] A blocked delete explains why and offers Archive, Close, Stop, or Hide instead.
+- [x] No browser-native confirmation appears for module lifecycle actions.
 - [ ] Overview account tiles show only icon, account name/provider, and balance.
 - [ ] Tapping an Overview account opens Money Activity filtered to that account.
-- [ ] Closed accounts remain visible in historical filters but do not appear in new money activity forms.
-- [ ] At 320px, 375px, 390px, and 430px widths, there is no horizontal page overflow.
+- [x] Closed accounts remain visible in historical filters but do not appear in new money activity forms.
+- [x] At 320px, 375px, 390px, and 430px widths, there is no horizontal page overflow.
 - [ ] Mobile summary cards and Overview account tiles use a compact two-column layout where space permits.
-- [ ] Mobile dialogs appear as touch-friendly bottom sheets and all primary actions remain reachable.
-- [ ] Desktop archive pages show search, count, preserved details, restore/reopen, and safe delete controls.
+- [x] Mobile dialogs appear as touch-friendly bottom sheets and all primary actions remain reachable.
+- [x] Desktop archive pages show search, count, preserved details, restore/reopen, and safe delete controls.
 
 ## Pre-v1.0 scope-completion gate
 
 - [ ] Run `node scripts/verify-pre-v1-scope-audit.mjs`
 - [ ] Review `PRE_V1_SCOPE_COMPLETION_AUDIT.md`
 - [ ] Review every non-complete `pre_production` item in `scope/pre-v1-scope.json`
-- [ ] Confirm all Alpha 2 mobile/archive routes and lifecycle actions in the browser
+- [x] Confirm all Alpha 2 mobile/archive routes and lifecycle actions in the browser
 - [ ] Do not merge to production while a pre-production blocker remains open
 - [ ] Do not tag v1.0.0 while a required pre-v1 item remains open or lacks an explicit scope decision
 
