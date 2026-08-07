@@ -666,3 +666,21 @@ This acceptance is supported by the previously approved detailed staging matrice
 Historical granular checklist entries are not being represented as newly re-run where equivalent feature-specific acceptance evidence already exists.
 
 The `release.alpha2_staging` gate is complete. The separate `release.production` gate remains open and production remains NO-GO.
+
+
+## v0.11.17 ? Login Theme Presets
+
+- [ ] Open BajetBN signed out and expand the Theme chooser.
+- [ ] Confirm all 13 choices are visible.
+- [ ] Select each theme and confirm the login page changes immediately.
+- [ ] Reload while signed out and confirm the selected guest theme remains.
+- [ ] Select System Default and confirm it follows device light/dark preference.
+- [ ] Select Black and sign in; confirm Settings shows Black.
+- [ ] Select Pink & White while signed out, sign in, reload, and confirm the profile keeps Pink & White.
+- [ ] Change the theme in Settings, save, sign out and sign back in; confirm it persists.
+- [ ] Confirm an existing profile with legacy `dark` opens as Black.
+- [ ] Test the chooser at 375?390 px mobile width without horizontal page overflow.
+- [ ] Test desktop layout.
+- [ ] Test High Contrast keyboard focus, readable text, buttons, inputs and navigation.
+- [ ] Confirm ordinary Dark/Black and Light appearance remains visually usable throughout Overview, Spaces, Money Activity, Reports and SME POS.
+- [ ] Confirm theme switching does not change financial data, notification state or Space permissions.

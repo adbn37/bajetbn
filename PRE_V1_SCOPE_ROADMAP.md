@@ -122,3 +122,11 @@ The pre-v1 scope now includes SME products, inventory, customers, checkout, rece
 ## Alpha 2 staging acceptance
 
 The final mobile and desktop staging release smoke test passed on 2026-08-06. All required pre-v1 feature matrices are complete. Production remains governed by the separate final release gate.
+
+
+## v0.11.17 ? Discussion-to-Code Reconciliation
+
+- [ ] Login-page theme chooser and expanded theme presets.
+- [ ] Reconcile unregistered POS extensions.
+- [ ] Reconcile remaining Trip Fund extensions.
+- [ ] Re-run staging acceptance before production preparation resumes.
