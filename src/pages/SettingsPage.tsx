@@ -1,3 +1,4 @@
+import { ThemeChooser } from '../components/ThemeChooser';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Timestamp } from 'firebase/firestore';
 import { AccountDeletionModal } from '../components/AccountDeletionModal';
@@ -20,7 +21,7 @@ import {
   releaseDownloadUrl,
   type DataHealthResult,
 } from '../repositories/releaseCandidateRepository';
-import type { AccountDeletionEligibility, AccountDeletionRequest, Appearance, Language, TextSize } from '../types/models';
+import type { AccountDeletionEligibility, AccountDeletionRequest, Language, TextSize } from '../types/models';
 import {
   disableBrowserPush,
   enableBrowserPush,
@@ -296,23 +297,15 @@ export function SettingsPage() {
                 <option value="ms">Bahasa Melayu</option>
               </select>
             </label>
-            <label>Appearance
-              <select value={preferences.appearance} onChange={(event) => preferences.setAppearance(event.target.value as Appearance)}>
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="system">Use device setting</option>
-              </select>
-            </label>
+            <div className="settings-theme-field">
+              <ThemeChooser />
+            </div>
             <label>Text size
               <select value={preferences.textSize} onChange={(event) => preferences.setTextSize(event.target.value as TextSize)}>
                 <option value="normal">Normal</option>
                 <option value="large">Large</option>
               </select>
             </label>
-            <div className="theme-preview" aria-label="Appearance preview">
-              <span className="theme-preview-dot" />
-              <div><strong>{preferences.resolvedTheme === 'dark' ? 'Dark' : 'Light'}</strong><small>Current view</small></div>
-            </div>
           </div>
         </section>
 

@@ -20,3 +20,8 @@ Production remains blocked until this document is updated to GO with evidence re
 ## Added production blocker — SME POS
 
 Production remains **NO-GO**. Standard POS passed staging. Marketplace Consignment POS Alpha 1 is implemented but still requires staging approval. Returns, refunds, seller payouts, report adjustments and the real shop pilot remain mandatory before production.
+
+
+## v0.11.17 reconciliation hold
+
+Production remains NO-GO while the newly identified discussion-to-code requirements are reconciled. The expanded login/theme preset item must pass staging before the production gate can be reconsidered.

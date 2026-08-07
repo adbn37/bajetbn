@@ -108,3 +108,10 @@ The complete image, PDF, five-file limit, privacy, offline, retry, removal and c
 The complete Alpha 2 mobile and desktop staging acceptance passed on 2026-08-06. Detailed feature-specific matrices and the final reduced release smoke test provide the acceptance evidence.
 
 Only the final production approval gate remains open.
+
+
+## 2026-08-07 reconciliation reopening
+
+The statement that only production approval remained was based on the earlier canonical register. A project-history comparison identified later requirements that were not registered.
+
+The first reopened item is `core.theme_presets_login`. Additional POS and Trip extensions identified by the reconciliation will be handled as separate explicit scope work rather than being silently treated as complete.
