@@ -3013,3 +3013,34 @@ code {
   }
 }
 
+/* v0.11.17 light auth button hotfix */
+
+:root[data-theme='light']
+.auth-card .button.secondary,
+:root[data-theme='pink-white']
+.auth-card .button.secondary,
+:root[data-theme='sand-cream']
+.auth-card .button.secondary {
+  color: #f7fbfc;
+  background: #0e1619;
+  border-color: #0e1619;
+}
+
+:root[data-theme='light']
+.auth-card .button.secondary:hover,
+:root[data-theme='pink-white']
+.auth-card .button.secondary:hover,
+:root[data-theme='sand-cream']
+.auth-card .button.secondary:hover {
+  color: #ffffff;
+  background: #182629;
+  border-color: #182629;
+}
+
+@media (min-width: 821px) {
+  .auth-intro >
+  .theme-chooser-compact[open] {
+    top: 8.75rem;
+  }
+}
+
