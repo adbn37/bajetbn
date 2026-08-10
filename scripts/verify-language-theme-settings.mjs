@@ -154,7 +154,7 @@ const checks = [
   [styles, '.preference-toggle-list', 'Settings layout styles'],
 
   [onboarding, '<option value="BND">', 'BND onboarding option'],
-  [onboarding, 'Brunei Dollar</option>', 'BND onboarding label'],
+  [onboarding, 'Brunei Dollar', 'BND onboarding label'],
   [calendar, 'localeForLanguage(language)', 'Calendar Brunei locale'],
   [calendar, 'whatsappRemindersEnabled', 'Calendar WhatsApp preference'],
   [reports, 'localeForLanguage(language)', 'Report month locale'],

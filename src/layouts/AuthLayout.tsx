@@ -1,13 +1,24 @@
-import { Outlet } from 'react-router-dom';
+import {
+  Outlet,
+  useLocation,
+} from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ThemeChooser } from '../components/ThemeChooser';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 export function AuthLayout() {
+  const location = useLocation();
+
   const {
     language,
     setLanguage,
   } = usePreferences();
+
+  const isLogin =
+    location.pathname === '/login';
+
+  const isRegister =
+    location.pathname === '/register';
 
   return (
     <main className="auth-shell">
@@ -49,7 +60,7 @@ export function AuthLayout() {
           </div>
         </div>
 
-        <ThemeChooser compact />
+        {isLogin && <ThemeChooser compact />}
 
         <div>
           <span className="eyebrow">
@@ -57,35 +68,50 @@ export function AuthLayout() {
           </span>
 
           <h1>
-            One place for the money
-            behind your life.
+            Your money, your goals,
+            one clear place.
           </h1>
 
           <p>
-            Organise personal finances,
-            households, trips, goals,
-            custom projects, and SME
-            activity through Spaces.
+            Track spending, manage household
+            and trip funds, grow your savings,
+            and keep SME finances organised
+            —all with BajetBN.
           </p>
         </div>
 
         <div className="auth-points">
-          <span>
-            Default currency: BND
-          </span>
-
-          <span>
-            English &amp; Malay-ready
-          </span>
-
-          <span>
-            Private by design
-          </span>
+          <span>Default currency: BND</span>
+          <span>English &amp; Malay-ready</span>
+          <span>Private by design</span>
         </div>
       </section>
 
       <section className="auth-panel">
-        <Outlet />
+        {isRegister ? (
+          <div className="auth-register-stack">
+            <Outlet />
+
+            <blockquote className="signup-money-reminder">
+              <p>
+                &ldquo;
+                {language === 'ms'
+                  ? 'Tidak akan berganjak kaki seorang hamba pada hari kiamat sehingga dia ditanya... tentang hartanya; dari mana diperolehnya dan ke mana dibelanjakannya.'
+                  : 'A servant will not move on the Day of Judgement until questioned... about his wealth: how it was earned and how it was spent.'}
+                &rdquo;
+              </p>
+
+              <cite>
+                &mdash;{' '}
+                {language === 'ms'
+                  ? "Riwayat Jami' al-Tirmidhi (No. 2417)"
+                  : "Jami' al-Tirmidhi (No. 2417)"}
+              </cite>
+            </blockquote>
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </section>
     </main>
   );

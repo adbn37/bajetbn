@@ -3044,3 +3044,73 @@ code {
   }
 }
 
+/* v0.11.18 signup theme onboarding */
+
+.auth-register-stack {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 32rem);
+}
+
+.auth-register-stack .auth-card {
+  width: 100%;
+}
+
+.signup-money-reminder {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0.9rem;
+  line-height: 1.55;
+}
+
+.signup-money-reminder p {
+  margin: 0;
+}
+
+.signup-money-reminder cite {
+  display: block;
+  margin-top: 0.65rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-style: normal;
+}
+
+.onboarding-theme-card {
+  width: min(100%, 62rem);
+}
+
+.onboarding-theme-preview {
+  margin-top: 1.25rem;
+}
+
+.onboarding-theme-actions {
+  display: grid;
+  grid-template-columns:
+    minmax(7rem, auto)
+    minmax(9rem, auto)
+    minmax(14rem, 1fr);
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.onboarding-theme-note {
+  display: block;
+  margin-top: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .auth-register-stack {
+    width: 100%;
+  }
+
+  .onboarding-theme-actions {
+    grid-template-columns: 1fr;
+  }
+}
+

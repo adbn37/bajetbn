@@ -667,7 +667,7 @@
     {
       "id": "core.theme_presets_login",
       "area": "Core settings",
-      "requirement": "Signed-out theme chooser with System Default and 12 named presets, immediate guest preview, local persistence, post-login profile sync, Settings reuse, shared design tokens and accessible focus/contrast",
+      "requirement": "Login-only signed-out theme chooser with System Default and 12 named presets, guest persistence and profile sync; optional post-signup theme preview or skip before Home; bilingual signup financial accountability reminder; Settings reuse, shared tokens and accessible focus/contrast",
       "status": "manual_test",
       "gate": "pre_v1",
       "evidence": [
@@ -678,7 +678,10 @@
         "src/pages/SettingsPage.tsx",
         "src/styles/global.css",
         "THEME_PRESETS_LOGIN_ALPHA.md",
-        "scripts/verify-theme-presets-login.mjs"
+        "scripts/verify-theme-presets-login.mjs",
+        "src/features/onboarding/OnboardingPage.tsx",
+        "scripts/verify-signup-theme-onboarding.mjs",
+        "SIGNUP_THEME_ONBOARDING_ALPHA.md"
       ]
     },
     {
