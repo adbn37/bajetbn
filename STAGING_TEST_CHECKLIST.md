@@ -684,3 +684,19 @@ The `release.alpha2_staging` gate is complete. The separate `release.production`
 - [ ] Test High Contrast keyboard focus, readable text, buttons, inputs and navigation.
 - [ ] Confirm ordinary Dark/Black and Light appearance remains visually usable throughout Overview, Spaces, Money Activity, Reports and SME POS.
 - [ ] Confirm theme switching does not change financial data, notification state or Space permissions.
+
+
+## v0.11.18 ? Signup Theme Onboarding
+
+- [ ] Confirm Theme chooser appears on Login.
+- [ ] Confirm Theme chooser does not appear on Register.
+- [ ] Confirm the signup reminder switches between English and Malay.
+- [ ] Complete email signup and reach onboarding.
+- [ ] Complete Google signup and reach onboarding.
+- [ ] Confirm Step 2 displays all 13 theme samples.
+- [ ] Select a theme and confirm it applies immediately.
+- [ ] Save the theme and confirm it persists after Home reload.
+- [ ] Repeat onboarding and use Skip for now.
+- [ ] Confirm Skip reaches Home without saving the previewed change.
+- [ ] Confirm Settings still allows theme changes.
+- [ ] Test mobile layout without horizontal overflow.
