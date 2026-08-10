@@ -2943,3 +2943,73 @@ code {
     font-size: .62rem;
   }
 }
+
+/* v0.11.17 login theme UI hotfix */
+
+:root[data-theme='light'] .auth-card label,
+:root[data-theme='pink-white'] .auth-card label,
+:root[data-theme='sand-cream'] .auth-card label {
+  color: var(--text);
+}
+
+:root[data-theme='light'] .auth-card .button.secondary,
+:root[data-theme='pink-white'] .auth-card .button.secondary,
+:root[data-theme='sand-cream'] .auth-card .button.secondary {
+  color: #f7fbfc;
+}
+
+.auth-intro {
+  position: relative;
+}
+
+.theme-chooser-compact[open] {
+  animation: theme-chooser-open 160ms ease-out;
+}
+
+@keyframes theme-chooser-open {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 821px) {
+  .auth-intro > .theme-chooser-compact[open] {
+    position: absolute;
+    top: 7.75rem;
+    left: clamp(2rem, 5vw, 4rem);
+    right: clamp(2rem, 5vw, 4rem);
+    z-index: 50;
+    max-height: calc(100vh - 10rem);
+    overflow-y: auto;
+    background: var(--surface);
+    box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.3);
+  }
+
+  .auth-intro >
+  .theme-chooser-compact[open]
+  .theme-choice-grid {
+    grid-template-columns:
+      repeat(auto-fit, minmax(10rem, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .theme-chooser-compact[open]
+  .theme-choice-grid {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-chooser-compact[open] {
+    animation: none;
+  }
+}
+
