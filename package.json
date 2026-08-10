@@ -1,7 +1,7 @@
 {
   "name": "bajetbn",
   "private": true,
-  "version": "0.11.16",
+  "version": "0.11.18",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -21,7 +21,7 @@
     "verify:release-candidate": "node scripts/verify-release-candidate-hardening.mjs",
     "verify:build-output": "node scripts/verify-build-output.mjs",
     "verify:pre-v1-scope": "node scripts/verify-pre-v1-scope-audit.mjs",
-    "verify:all-structural": "node scripts/verify-release-candidate-hardening.mjs && node scripts/verify-language-theme-settings.mjs && node scripts/verify-calendar-search-reminders.mjs && node scripts/verify-reports-money-insights.mjs && node scripts/verify-simple-language.mjs && node scripts/verify-collaboration-whatsapp.mjs && node scripts/verify-shared-bill-payment-finalisation.mjs && node scripts/verify-shared-expenses-balances.mjs && node scripts/verify-space-centred-workflow.mjs && node scripts/verify-invitations-notifications.mjs && node scripts/verify-safe-delete-archive-restore.mjs && node scripts/verify-mobile-archive-pages.mjs && node scripts/verify-budgets-goals-commitments.mjs && node scripts/verify-transaction-ledger.mjs && node scripts/verify-commitment-amount-labels.mjs && node scripts/verify-categories-transaction-ux.mjs && node scripts/verify-structure.mjs && node scripts/verify-release-safety-hardening.mjs && node scripts/verify-account-data-deletion.mjs && node scripts/verify-account-reregistration-policy.mjs && node scripts/verify-recurring-transactions.mjs && node scripts/verify-brunei-money-options.mjs && node scripts/verify-background-notifications.mjs && node scripts/verify-household-funds-financial-health.mjs && node scripts/verify-household-fund-setup-guard.mjs && node scripts/verify-offline-sync.mjs && node scripts/verify-premium-themes.mjs && node scripts/verify-sme-pos-foundation.mjs && node scripts/verify-standard-pos.mjs && node scripts/verify-marketplace-consignment-pos.mjs && node scripts/verify-money-activity-shortcuts.mjs && node scripts/verify-inline-transaction-attachments.mjs && node scripts/verify-transaction-receipts.mjs && node scripts/verify-sme-pos-returns-payouts.mjs && node scripts/verify-pre-v1-scope-audit.mjs",
+    "verify:all-structural": "node scripts/verify-release-candidate-hardening.mjs && node scripts/verify-language-theme-settings.mjs && node scripts/verify-calendar-search-reminders.mjs && node scripts/verify-reports-money-insights.mjs && node scripts/verify-simple-language.mjs && node scripts/verify-collaboration-whatsapp.mjs && node scripts/verify-shared-bill-payment-finalisation.mjs && node scripts/verify-shared-expenses-balances.mjs && node scripts/verify-space-centred-workflow.mjs && node scripts/verify-invitations-notifications.mjs && node scripts/verify-safe-delete-archive-restore.mjs && node scripts/verify-mobile-archive-pages.mjs && node scripts/verify-budgets-goals-commitments.mjs && node scripts/verify-transaction-ledger.mjs && node scripts/verify-commitment-amount-labels.mjs && node scripts/verify-categories-transaction-ux.mjs && node scripts/verify-structure.mjs && node scripts/verify-release-safety-hardening.mjs && node scripts/verify-account-data-deletion.mjs && node scripts/verify-account-reregistration-policy.mjs && node scripts/verify-recurring-transactions.mjs && node scripts/verify-brunei-money-options.mjs && node scripts/verify-background-notifications.mjs && node scripts/verify-household-funds-financial-health.mjs && node scripts/verify-household-fund-setup-guard.mjs && node scripts/verify-offline-sync.mjs && node scripts/verify-premium-themes.mjs && node scripts/verify-sme-pos-foundation.mjs && node scripts/verify-standard-pos.mjs && node scripts/verify-marketplace-consignment-pos.mjs && node scripts/verify-money-activity-shortcuts.mjs && node scripts/verify-inline-transaction-attachments.mjs && node scripts/verify-transaction-receipts.mjs && node scripts/verify-sme-pos-returns-payouts.mjs && node scripts/verify-theme-presets-login.mjs && node scripts/verify-signup-theme-onboarding.mjs && node scripts/verify-pre-v1-scope-audit.mjs && node scripts/verify-single-notification-entry.mjs",
     "verify:release-safety": "node scripts/verify-release-safety-hardening.mjs",
     "verify:account-deletion": "node scripts/verify-account-data-deletion.mjs",
     "verify:account-reregistration": "node scripts/verify-account-reregistration-policy.mjs",
@@ -37,7 +37,9 @@
     "verify:money-activity-shortcuts": "node scripts/verify-money-activity-shortcuts.mjs",
     "verify:sme-pos-foundation": "node scripts/verify-sme-pos-foundation.mjs",
     "verify:marketplace-pos": "node scripts/verify-marketplace-consignment-pos.mjs",
-    "verify:sme-pos-returns-payouts": "node scripts/verify-sme-pos-returns-payouts.mjs"
+    "verify:sme-pos-returns-payouts": "node scripts/verify-sme-pos-returns-payouts.mjs",
+    "verify:theme-presets-login": "node scripts/verify-theme-presets-login.mjs",
+    "verify:signup-theme-onboarding": "node scripts/verify-signup-theme-onboarding.mjs"
   },
   "dependencies": {
     "firebase": "12.16.0",

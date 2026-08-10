@@ -25,6 +25,27 @@ const navigation = [
   ['/reports', 'Money reports', '⌁'],
 ];
 
+function NotificationBellIcon() {
+  return (
+    <svg
+      className="notification-bell-icon"
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+      <path d="M10 21h4" />
+    </svg>
+  );
+}
+
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -160,11 +181,11 @@ export function AppShell() {
         <header className="mobile-header">
           <button className="icon-button" onClick={() => setMobileOpen(true)} aria-label="Open menu">☰</button>
           <Brand compact />
-          <div className="mobile-header-actions"><button className="icon-button notification-button" onClick={() => navigate('/notifications')} aria-label={`${unreadNotifications} unread notifications`}>♢{unreadNotifications > 0 && <span className="notification-count">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}</button><button className="icon-button" onClick={() => navigate('/search')} aria-label="Search">⌕</button><span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span></div>
+          <div className="mobile-header-actions"><button className="icon-button" onClick={() => navigate('/search')} aria-label="Search">⌕</button><span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span></div>
         </header>
         <div className="desktop-environment">
           <form className="top-search-form" onSubmit={submitSearch}><span>⌕</span><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search BajetBN" aria-label="Search BajetBN" /></form>
-          <button className="icon-button notification-button" onClick={() => navigate('/notifications')} aria-label={`${unreadNotifications} unread notifications`}>♢{unreadNotifications > 0 && <span className="notification-count">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}</button>
+          <button className="icon-button notification-button" onClick={() => navigate('/notifications')} aria-label={`${unreadNotifications} unread notifications`}><NotificationBellIcon />{unreadNotifications > 0 && <span className="notification-count">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}</button>
           <span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span>
         </div>
         <ConnectivityBanner />
@@ -211,7 +232,7 @@ export function AppShell() {
             className={({ isActive }) => isActive ? 'active' : ''}
           >
             <span className="mobile-bottom-alert-icon" aria-hidden="true">
-              ◇
+              <NotificationBellIcon />
               {unreadNotifications > 0 && (
                 <b>{unreadNotifications > 9 ? '9+' : unreadNotifications}</b>
               )}

@@ -24,6 +24,18 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   return snapshot.exists() ? ({ uid: snapshot.id, ...snapshot.data() } as UserProfile) : null;
 }
 
+export async function updateUserAppearance(
+  uid: string,
+  appearance: Appearance,
+): Promise<void> {
+  const { db } = requireFirebase();
+
+  await updateDoc(doc(db, 'users', uid), {
+    appearance,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateUserPreferences(uid: string, input: UserPreferenceUpdate): Promise<void> {
   const { db } = requireFirebase();
   const fullName = input.fullName.trim();

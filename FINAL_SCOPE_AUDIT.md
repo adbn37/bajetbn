@@ -39,3 +39,10 @@ The transaction receipt and document-attachment matrix passed on 2026-08-06. The
 The final mobile and desktop release smoke test passed on 2026-08-06. The `release.alpha2_staging` pre-production scope record is complete.
 
 Production remains NO-GO pending final CI, security, production smoke, rollback and explicit product-owner approval.
+
+
+## 2026-08-07 discussion-to-code reconciliation
+
+A later project-history audit found that the original `core.theme` item covered only Dark, Light and device appearance. The previously discussed signed-out theme chooser and expanded preset collection were not represented in the 58-item register.
+
+`core.theme_presets_login` is now a separate pre-v1 staging gate. Production remains blocked until this new scope item and the remaining discussion-to-code reconciliation are complete.

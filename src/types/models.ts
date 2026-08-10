@@ -1,7 +1,21 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export type Language = 'en' | 'ms';
-export type Appearance = 'dark' | 'light' | 'system';
+export type Appearance =
+  | 'system'
+  | 'black'
+  | 'light'
+  | 'pink-white'
+  | 'black-pink'
+  | 'midnight-teal'
+  | 'navy-blue'
+  | 'forest-green'
+  | 'royal-purple'
+  | 'sand-cream'
+  | 'slate-grey'
+  | 'ocean-blue'
+  | 'high-contrast'
+  | 'dark'; // Legacy value: treated as Black.
 export type TextSize = 'normal' | 'large';
 export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'custom';
 export type SpaceRole = 'owner' | 'admin' | 'contributor' | 'payer' | 'viewer' | 'member';
