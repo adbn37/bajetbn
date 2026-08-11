@@ -1,748 +1,750 @@
 {
-  "auditVersion": "2026-08-06.1",
-  "auditedRelease": "BajetBN v0.11.16 SME POS Returns & Seller Payouts Alpha 1",
-  "sourceBasis": "Standard and Marketplace POS return/refund posting, stock restoration, seller balance reversals, seller payouts, account ledger integration, role controls and structural verification",
-  "statusDefinitions": {
-    "complete": "Implemented with code evidence and automated checks",
-    "manual_test": "Implemented but still requires browser staging approval",
-    "partial": "Core exists but the agreed experience is incomplete",
-    "missing": "Agreed or historically planned capability is not implemented",
-    "deferred": "Explicitly parked for a later product phase"
-  },
-  "items": [
-    {
-      "id": "core.spaces",
-      "area": "Core",
-      "requirement": "Personal, Household, SME, Trip, Goal and Custom Spaces",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/types/models.ts",
-        "src/features/spaces/SpacesPage.tsx"
-      ]
-    },
-    {
-      "id": "core.multiple_sme",
-      "area": "Core",
-      "requirement": "Users can create multiple SME Spaces",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/SpacesPage.tsx"
-      ]
-    },
-    {
-      "id": "sme.pos_foundation",
-      "area": "SME POS",
-      "requirement": "Each SME Space can enable a POS and choose Standard POS or Marketplace Consignment POS",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "SME_POS_FOUNDATION_ALPHA.md",
-        "src/features/sme-pos/SmePosPage.tsx",
-        "src/repositories/smePosRepository.ts",
-        "functions/src/index.ts",
-        "firestore.rules"
-      ]
-    },
-    {
-      "id": "sme.standard_pos",
-      "area": "SME POS",
-      "requirement": "Standard POS for shop-owned products, stock, checkout, receipts, customers and sales reports",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "STANDARD_POS_ALPHA.md",
-        "src/features/sme-pos/StandardPosWorkspace.tsx",
-        "src/features/sme-pos/SmePosArchivedRecordsPage.tsx",
-        "src/repositories/smePosRepository.ts",
-        "functions/src/index.ts",
-        "firestore.rules"
-      ]
-    },
-    {
-      "id": "sme.marketplace_pos",
-      "area": "SME POS",
-      "requirement": "Marketplace Consignment POS with seller-linked listings or stock batches, commission rules, mixed-seller checkout and seller reports",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
-        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
-        "src/repositories/smePosRepository.ts",
-        "functions/src/index.ts",
-        "firestore.rules"
-      ]
-    },
-    {
-      "id": "sme.pos_money_link",
-      "area": "SME POS",
-      "requirement": "POS sales, refunds, commissions and payouts post safely to the selected SME payment account and reports",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "STANDARD_POS_ALPHA.md",
-        "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
-        "functions/src/index.ts",
-        "src/features/sme-pos/StandardPosWorkspace.tsx",
-        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
-        "src/repositories/smePosRepository.ts",
-        "firestore.rules",
-        "scripts/verify-sme-pos-returns-payouts.mjs",
-        "SME_POS_RETURNS_PAYOUTS_ALPHA.md"
-      ]
-    },
-    {
-      "id": "sme.pos_returns_payouts",
-      "area": "SME POS",
-      "requirement": "POS return-safe sale records, returns/refunds, seller balances and seller payouts",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
-        "functions/src/index.ts",
-        "src/types/models.ts",
-        "src/features/sme-pos/StandardPosWorkspace.tsx",
-        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
-        "src/repositories/smePosRepository.ts",
-        "firestore.rules",
-        "scripts/verify-sme-pos-returns-payouts.mjs",
-        "SME_POS_RETURNS_PAYOUTS_ALPHA.md"
-      ]
-    },
-    {
-      "id": "sme.shop_pilot",
-      "area": "SME POS",
-      "requirement": "Standard and Marketplace POS complete a real staging pilot for the owner’s shop before production",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        "SME_POS_FOUNDATION_ALPHA.md",
-        "STAGING_TEST_CHECKLIST.md"
-      ]
-    },
-    {
-      "id": "core.accounts_independent",
-      "area": "Core",
-      "requirement": "Accounts remain independent from Spaces",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "ARCHITECTURE.md",
-        "src/types/models.ts"
-      ]
-    },
-    {
-      "id": "core.multiple_accounts",
-      "area": "Core",
-      "requirement": "Multiple personal and business accounts",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/accounts/AccountsPage.tsx"
-      ]
-    },
-    {
-      "id": "core.transactions",
-      "area": "Core",
-      "requirement": "Income, expense, transfer and safe reversal",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/types/models.ts",
-        "functions/src/index.ts",
-        "src/features/transactions/TransactionsPage.tsx"
-      ]
-    },
-    {
-      "id": "core.budgets",
-      "area": "Planning",
-      "requirement": "Budgets by Space and category",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/budgets/BudgetsPage.tsx"
-      ]
-    },
-    {
-      "id": "core.goals",
-      "area": "Planning",
-      "requirement": "Savings goals with contribution history and reversal",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/goals/GoalsPage.tsx",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "core.commitments",
-      "area": "Planning",
-      "requirement": "Bills and instalment tracking",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/commitments/CommitmentsPage.tsx"
-      ]
-    },
-    {
-      "id": "core.commitment_frequency",
-      "area": "Planning",
-      "requirement": "Once, weekly, monthly, quarterly and yearly commitments",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/types/models.ts",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "core.calendar",
-      "area": "Productivity",
-      "requirement": "Calendar view",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/calendar/CalendarPage.tsx"
-      ]
-    },
-    {
-      "id": "core.search",
-      "area": "Productivity",
-      "requirement": "Global search",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/search/SearchPage.tsx",
-        "src/layouts/AppShell.tsx"
-      ]
-    },
-    {
-      "id": "core.reports",
-      "area": "Reports",
-      "requirement": "Core money reports and beginner-friendly insights",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/reports/ReportsPage.tsx"
-      ]
-    },
-    {
-      "id": "core.language",
-      "area": "Accessibility",
-      "requirement": "English and Bahasa Melayu",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/services/i18n.ts"
-      ]
-    },
-    {
-      "id": "core.theme",
-      "area": "Accessibility",
-      "requirement": "Dark, light and device appearance",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/contexts/PreferencesContext.tsx"
-      ]
-    },
-    {
-      "id": "core.pwa_shell",
-      "area": "PWA",
-      "requirement": "Installable PWA and offline application shell",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "public/manifest.webmanifest",
-        "scripts/generate-service-worker.mjs",
-        "src/components/ConnectivityBanner.tsx"
-      ]
-    },
-    {
-      "id": "collab.space_centred",
-      "area": "Collaboration",
-      "requirement": "Collaboration lives inside each Space; no top-level Sharing page",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/app/App.tsx",
-        "src/features/spaces/SpaceDetailsPage.tsx",
-        "src/layouts/AppShell.tsx"
-      ]
-    },
-    {
-      "id": "collab.invitations",
-      "area": "Collaboration",
-      "requirement": "Incoming invitations can be accepted, declined and revoked",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/pages/NotificationsPage.tsx",
-        "src/features/collaboration/JoinSpacePage.tsx",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "collab.roles",
-      "area": "Collaboration",
-      "requirement": "Owner/admin/member roles and permission controls",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/types/models.ts",
-        "src/features/collaboration/CollaborationPage.tsx"
-      ]
-    },
-    {
-      "id": "collab.optional_approval",
-      "area": "Collaboration",
-      "requirement": "Payment approval can be optional per Space",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/types/models.ts",
-        "src/features/collaboration/CollaborationPage.tsx"
-      ]
-    },
-    {
-      "id": "collab.proof",
-      "area": "Collaboration",
-      "requirement": "Members can upload payment proof",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/repositories/collaborationRepository.ts",
-        "src/repositories/sharedExpenseRepository.ts",
-        "storage.rules"
-      ]
-    },
-    {
-      "id": "collab.whatsapp",
-      "area": "Collaboration",
-      "requirement": "Manual WhatsApp notification when a member pays",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/collaboration/CollaborationPage.tsx",
-        "scripts/verify-collaboration-whatsapp.mjs"
-      ]
-    },
-    {
-      "id": "collab.equal_split",
-      "area": "Shared expenses",
-      "requirement": "Equal expense splitting",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/SharedExpensesPanel.tsx",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "collab.custom_split",
-      "area": "Shared expenses",
-      "requirement": "Custom amount splitting",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/SharedExpensesPanel.tsx",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "collab.percentage_split",
-      "area": "Shared expenses",
-      "requirement": "Percentage splitting",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/SharedExpensesPanel.tsx",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "collab.settle_up",
-      "area": "Shared expenses",
-      "requirement": "Who-owes-whom balances and partial/full settle-up",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/SharedExpensesPanel.tsx",
-        "src/repositories/sharedExpenseRepository.ts"
-      ]
-    },
-    {
-      "id": "collab.trip_fund",
-      "area": "Group funds",
-      "requirement": "Trip money holder, contributions and collected-money spending",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/TripMoneyPanel.tsx",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "collab.household_fund",
-      "area": "Group funds",
-      "requirement": "Optional Household or general group fund, without forcing every group to use a wallet",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/SpaceFundPanel.tsx",
-        "src/features/spaces/SpaceDetailsPage.tsx",
-        "src/features/spaces/SharedExpensesPanel.tsx",
-        "functions/src/index.ts",
-        "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
-        "scripts/verify-household-funds-financial-health.mjs"
-      ]
-    },
-    {
-      "id": "safety.lifecycle",
-      "area": "Safety",
-      "requirement": "Edit, Archive/Hide, Restore, Close, Delete, Stop and Undo protections",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/repositories/lifecycleRepository.ts",
-        "functions/src/index.ts",
-        "scripts/verify-safe-delete-archive-restore.mjs"
-      ]
-    },
-    {
-      "id": "safety.archive_pages",
-      "area": "Safety",
-      "requirement": "Inactive records use dedicated archive/closed pages",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        "src/app/App.tsx",
-        "scripts/verify-mobile-archive-pages.mjs"
-      ]
-    },
-    {
-      "id": "safety.financial_history",
-      "area": "Safety",
-      "requirement": "Financial history is preserved through reversals rather than silent edits",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "ARCHITECTURE.md",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "safety.native_confirm",
-      "area": "Safety",
-      "requirement": "All destructive actions use BajetBN mobile-friendly dialogs instead of browser confirm boxes",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        "src/components/ActionConfirmModal.tsx",
-        "src/features/transactions/TransactionsPage.tsx",
-        "src/features/goals/GoalsPage.tsx",
-        "src/features/spaces/SharedExpensesPanel.tsx",
-        "src/features/spaces/TripMoneyPanel.tsx",
-        "src/features/collaboration/CollaborationPage.tsx",
-        "scripts/verify-release-safety-hardening.mjs"
-      ]
-    },
-    {
-      "id": "brunei.currency",
-      "area": "Brunei localisation",
-      "requirement": "BND and Asia/Brunei defaults",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/onboarding/OnboardingPage.tsx",
-        "src/types/models.ts"
-      ]
-    },
-    {
-      "id": "brunei.categories",
-      "area": "Brunei localisation",
-      "requirement": "Brunei-friendly personal and SME categories",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/categories/defaultCategories.ts",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "brunei.institutions",
-      "area": "Brunei localisation",
-      "requirement": "Simple presets for common Brunei banks and account providers",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/config/bruneiMoneyOptions.ts",
-        "src/features/accounts/AccountsPage.tsx",
-        "functions/src/index.ts",
-        "BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md",
-        "scripts/verify-brunei-money-options.mjs"
-      ]
-    },
-    {
-      "id": "brunei.payment_methods",
-      "area": "Brunei localisation",
-      "requirement": "Clear Brunei-relevant payment method choices",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/config/bruneiMoneyOptions.ts",
-        "src/components/PaymentMethodField.tsx",
-        "src/features/transactions/TransactionsPage.tsx",
-        "src/features/collaboration/CollaborationPage.tsx",
-        "functions/src/index.ts",
-        "BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md",
-        "scripts/verify-brunei-money-options.mjs"
-      ]
-    },
-    {
-      "id": "recurring.commitments",
-      "area": "Recurring workflows",
-      "requirement": "Recurring bills and instalments",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/types/models.ts",
-        "src/features/commitments/CommitmentsPage.tsx"
-      ]
-    },
-    {
-      "id": "recurring.transactions",
-      "area": "Recurring workflows",
-      "requirement": "Recurring ordinary income/expense templates such as salary, rent and subscriptions",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/types/models.ts",
-        "src/features/recurring/RecurringTransactionsPage.tsx",
-        "src/repositories/recurringTransactionRepository.ts",
-        "functions/src/index.ts",
-        "scripts/verify-recurring-transactions.mjs",
-        "RECURRING_TRANSACTIONS_ALPHA.md"
-      ]
-    },
-    {
-      "id": "notifications.in_app",
-      "area": "Notifications",
-      "requirement": "In-app invitation, payment and goal notifications",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/pages/NotificationsPage.tsx",
-        "functions/src/index.ts"
-      ]
-    },
-    {
-      "id": "notifications.reminders",
-      "area": "Notifications",
-      "requirement": "Upcoming, due-today and late bill/goal reminders generated in the background with history, preferences and duplicate prevention",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "BACKGROUND_NOTIFICATIONS_ALPHA.md",
-        "src/pages/SettingsPage.tsx",
-        "src/pages/NotificationsPage.tsx",
-        "src/repositories/notificationRepository.ts",
-        "functions/src/index.ts",
-        "scripts/verify-background-notifications.mjs"
-      ]
-    },
-    {
-      "id": "sme.foundation",
-      "area": "SME",
-      "requirement": "SME Spaces, business accounts and business categories",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/spaces/SpacesPage.tsx",
-        "src/features/accounts/AccountsPage.tsx",
-        "src/features/categories/defaultCategories.ts"
-      ]
-    },
-    {
-      "id": "sme.essentials",
-      "area": "SME",
-      "requirement": "Simple SME overview for income, expenses, cash position and upcoming commitments",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/reports/ReportsPage.tsx",
-        "src/features/reports/financialHealth.ts",
-        "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
-        "scripts/verify-household-funds-financial-health.mjs"
-      ]
-    },
-    {
-      "id": "sme.advanced",
-      "area": "SME",
-      "requirement": "Advanced BusinessBajetBN accounting, invoicing, tax and payroll",
-      "status": "deferred",
-      "gate": "post_v1",
-      "evidence": [
-        "PRE_V1_SCOPE_ROADMAP.md"
-      ]
-    },
-    {
-      "id": "insights.financial_health",
-      "area": "Insights",
-      "requirement": "Financial health insights beyond static totals",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/reports/ReportsPage.tsx",
-        "src/features/reports/financialHealth.ts",
-        "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
-        "scripts/verify-household-funds-financial-health.mjs"
-      ]
-    },
-    {
-      "id": "data.export",
-      "area": "Privacy and data",
-      "requirement": "User can download a private copy of their BajetBN data",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/pages/SettingsPage.tsx",
-        "src/repositories/releaseCandidateRepository.ts"
-      ]
-    },
-    {
-      "id": "data.delete_account",
-      "area": "Privacy and data",
-      "requirement": "User can request account and personal-data deletion with protected financial-history handling",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        "src/pages/SettingsPage.tsx",
-        "src/components/AccountDeletionModal.tsx",
-        "src/repositories/accountDeletionRepository.ts",
-        "src/contexts/AuthContext.tsx",
-        "src/features/collaboration/CollaborationPage.tsx",
-        "functions/src/index.ts",
-        "firestore.rules",
-        "ACCOUNT_DATA_DELETION_ALPHA.md",
-        "DATA_RETENTION_AND_DELETION.md",
-        "scripts/verify-account-data-deletion.mjs",
-        "ACCOUNT_REREGISTRATION_POLICY_ALPHA.md",
-        "scripts/verify-account-reregistration-policy.mjs"
-      ]
-    },
-    {
-      "id": "data.general_receipts",
-      "area": "Documents",
-      "requirement": "General transaction receipt/document attachments",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/features/transactions/TransactionsPage.tsx",
-        "src/repositories/transactionRepository.ts",
-        "src/types/models.ts",
-        "functions/src/index.ts",
-        "firestore.rules",
-        "storage.rules",
-        "TRANSACTION_RECEIPTS_ALPHA.md",
-        "scripts/verify-transaction-receipts.mjs"
-      ]
-    },
-    {
-      "id": "pwa.offline_mutations",
-      "area": "PWA",
-      "requirement": "Offline money activity queue with duplicate-safe sync and conflict handling",
-      "status": "complete",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/services/offlineQueue.ts",
-        "src/contexts/OfflineSyncContext.tsx",
-        "src/pages/OfflineSyncPage.tsx",
-        "src/repositories/transactionRepository.ts",
-        "OFFLINE_SYNC_ALPHA.md",
-        "scripts/verify-offline-sync.mjs"
-      ]
-    },
-    {
-      "id": "core.theme_presets_login",
-      "area": "Core settings",
-      "requirement": "Login-only signed-out theme chooser with System Default and 12 named presets, guest persistence and profile sync; optional post-signup theme preview or skip before Home; bilingual signup financial accountability reminder; Settings reuse, shared tokens and accessible focus/contrast",
-      "status": "manual_test",
-      "gate": "pre_v1",
-      "evidence": [
-        "src/config/themePresets.ts",
-        "src/components/ThemeChooser.tsx",
-        "src/contexts/PreferencesContext.tsx",
-        "src/layouts/AuthLayout.tsx",
-        "src/pages/SettingsPage.tsx",
-        "src/styles/global.css",
-        "THEME_PRESETS_LOGIN_ALPHA.md",
-        "scripts/verify-theme-presets-login.mjs",
-        "src/features/onboarding/OnboardingPage.tsx",
-        "scripts/verify-signup-theme-onboarding.mjs",
-        "SIGNUP_THEME_ONBOARDING_ALPHA.md"
-      ]
-    },
-    {
-      "id": "release.alpha2_staging",
-      "area": "Release readiness",
-      "requirement": "Alpha 2 browser testing on staging across mobile and desktop",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        "STAGING_TEST_CHECKLIST.md"
-      ]
-    },
-    {
-      "id": "release.version_source",
-      "area": "Release readiness",
-      "requirement": "One consistent app version source across package, settings and service worker",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        "release.json",
-        "src/config/release.ts",
-        "package.json",
-        "package-lock.json",
-        "src/pages/SettingsPage.tsx",
-        "scripts/generate-service-worker.mjs",
-        "scripts/verify-release-safety-hardening.mjs"
-      ]
-    },
-    {
-      "id": "release.ci_coverage",
-      "area": "Release readiness",
-      "requirement": "CI runs every current structural verification suite",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        ".github/workflows/staging-ci.yml"
-      ]
-    },
-    {
-      "id": "release.dependencies",
-      "area": "Release readiness",
-      "requirement": "Review Firebase Functions dependency warning before final production release",
-      "status": "complete",
-      "gate": "pre_production",
-      "evidence": [
-        "functions/package.json",
-        "functions/package-lock.json",
-        "FUNCTIONS_DEPENDENCY_REVIEW.md",
-        "scripts/verify-release-safety-hardening.mjs"
-      ]
-    },
-    {
-      "id": "release.production",
-      "area": "Release readiness",
-      "requirement": "Production deploy only after all pre-production blockers are complete and staging is approved",
-      "status": "manual_test",
-      "gate": "pre_production",
-      "evidence": [
-        "PRE_V1_SCOPE_ROADMAP.md"
-      ]
-    }
-  ],
-  "auditedVersion": "0.11.13"
+    "auditVersion":  "2026-08-06.1",
+    "auditedRelease":  "BajetBN v0.11.16 SME POS Returns \u0026 Seller Payouts Alpha 1",
+    "sourceBasis":  "Standard and Marketplace POS return/refund posting, stock restoration, seller balance reversals, seller payouts, account ledger integration, role controls and structural verification",
+    "statusDefinitions":  {
+                              "complete":  "Implemented with code evidence and automated checks",
+                              "manual_test":  "Implemented but still requires browser staging approval",
+                              "partial":  "Core exists but the agreed experience is incomplete",
+                              "missing":  "Agreed or historically planned capability is not implemented",
+                              "deferred":  "Explicitly parked for a later product phase"
+                          },
+    "items":  [
+                  {
+                      "id":  "core.spaces",
+                      "area":  "Core",
+                      "requirement":  "Personal, Household, SME, Trip, Goal and Custom Spaces",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/types/models.ts",
+                                       "src/features/spaces/SpacesPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.multiple_sme",
+                      "area":  "Core",
+                      "requirement":  "Users can create multiple SME Spaces",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/SpacesPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.pos_foundation",
+                      "area":  "SME POS",
+                      "requirement":  "Each SME Space can enable a POS and choose Standard POS or Marketplace Consignment POS",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "SME_POS_FOUNDATION_ALPHA.md",
+                                       "src/features/sme-pos/SmePosPage.tsx",
+                                       "src/repositories/smePosRepository.ts",
+                                       "functions/src/index.ts",
+                                       "firestore.rules"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.standard_pos",
+                      "area":  "SME POS",
+                      "requirement":  "Standard POS for shop-owned products, stock, checkout, receipts, customers and sales reports",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "STANDARD_POS_ALPHA.md",
+                                       "src/features/sme-pos/StandardPosWorkspace.tsx",
+                                       "src/features/sme-pos/SmePosArchivedRecordsPage.tsx",
+                                       "src/repositories/smePosRepository.ts",
+                                       "functions/src/index.ts",
+                                       "firestore.rules"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.marketplace_pos",
+                      "area":  "SME POS",
+                      "requirement":  "Marketplace Consignment POS with seller-linked listings or stock batches, commission rules, mixed-seller checkout and seller reports",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
+                                       "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+                                       "src/repositories/smePosRepository.ts",
+                                       "functions/src/index.ts",
+                                       "firestore.rules"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.pos_money_link",
+                      "area":  "SME POS",
+                      "requirement":  "POS sales, refunds, commissions and payouts post safely to the selected SME payment account and reports",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "STANDARD_POS_ALPHA.md",
+                                       "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
+                                       "functions/src/index.ts",
+                                       "src/features/sme-pos/StandardPosWorkspace.tsx",
+                                       "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+                                       "src/repositories/smePosRepository.ts",
+                                       "firestore.rules",
+                                       "scripts/verify-sme-pos-returns-payouts.mjs",
+                                       "SME_POS_RETURNS_PAYOUTS_ALPHA.md"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.pos_returns_payouts",
+                      "area":  "SME POS",
+                      "requirement":  "POS return-safe sale records, returns/refunds, seller balances and seller payouts",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "MARKETPLACE_CONSIGNMENT_POS_ALPHA.md",
+                                       "functions/src/index.ts",
+                                       "src/types/models.ts",
+                                       "src/features/sme-pos/StandardPosWorkspace.tsx",
+                                       "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+                                       "src/repositories/smePosRepository.ts",
+                                       "firestore.rules",
+                                       "scripts/verify-sme-pos-returns-payouts.mjs",
+                                       "SME_POS_RETURNS_PAYOUTS_ALPHA.md"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.shop_pilot",
+                      "area":  "SME POS",
+                      "requirement":  "Standard and Marketplace POS complete a real staging pilot for the ownerâ€™s shop before production",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "SME_POS_FOUNDATION_ALPHA.md",
+                                       "STAGING_TEST_CHECKLIST.md"
+                                   ]
+                  },
+                  {
+                      "id":  "core.accounts_independent",
+                      "area":  "Core",
+                      "requirement":  "Accounts remain independent from Spaces",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "ARCHITECTURE.md",
+                                       "src/types/models.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "core.multiple_accounts",
+                      "area":  "Core",
+                      "requirement":  "Multiple personal and business accounts",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/accounts/AccountsPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.transactions",
+                      "area":  "Core",
+                      "requirement":  "Income, expense, transfer and safe reversal",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/types/models.ts",
+                                       "functions/src/index.ts",
+                                       "src/features/transactions/TransactionsPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.budgets",
+                      "area":  "Planning",
+                      "requirement":  "Budgets by Space and category",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/budgets/BudgetsPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.goals",
+                      "area":  "Planning",
+                      "requirement":  "Savings goals with contribution history and reversal",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/goals/GoalsPage.tsx",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "core.commitments",
+                      "area":  "Planning",
+                      "requirement":  "Bills and instalment tracking",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/commitments/CommitmentsPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.commitment_frequency",
+                      "area":  "Planning",
+                      "requirement":  "Once, weekly, monthly, quarterly and yearly commitments",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/types/models.ts",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "core.calendar",
+                      "area":  "Productivity",
+                      "requirement":  "Calendar view",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/calendar/CalendarPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.search",
+                      "area":  "Productivity",
+                      "requirement":  "Global search",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/search/SearchPage.tsx",
+                                       "src/layouts/AppShell.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.reports",
+                      "area":  "Reports",
+                      "requirement":  "Core money reports and beginner-friendly insights",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/reports/ReportsPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.language",
+                      "area":  "Accessibility",
+                      "requirement":  "English and Bahasa Melayu",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/services/i18n.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "core.theme",
+                      "area":  "Accessibility",
+                      "requirement":  "Dark, light and device appearance",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/contexts/PreferencesContext.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "core.pwa_shell",
+                      "area":  "PWA",
+                      "requirement":  "Installable PWA and offline application shell",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "public/manifest.webmanifest",
+                                       "scripts/generate-service-worker.mjs",
+                                       "src/components/ConnectivityBanner.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.space_centred",
+                      "area":  "Collaboration",
+                      "requirement":  "Collaboration lives inside each Space; no top-level Sharing page",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/app/App.tsx",
+                                       "src/features/spaces/SpaceDetailsPage.tsx",
+                                       "src/layouts/AppShell.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.invitations",
+                      "area":  "Collaboration",
+                      "requirement":  "Incoming invitations can be accepted, declined and revoked",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/pages/NotificationsPage.tsx",
+                                       "src/features/collaboration/JoinSpacePage.tsx",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.roles",
+                      "area":  "Collaboration",
+                      "requirement":  "Owner/admin/member roles and permission controls",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/types/models.ts",
+                                       "src/features/collaboration/CollaborationPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.optional_approval",
+                      "area":  "Collaboration",
+                      "requirement":  "Payment approval can be optional per Space",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/types/models.ts",
+                                       "src/features/collaboration/CollaborationPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.proof",
+                      "area":  "Collaboration",
+                      "requirement":  "Members can upload payment proof",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/repositories/collaborationRepository.ts",
+                                       "src/repositories/sharedExpenseRepository.ts",
+                                       "storage.rules"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.whatsapp",
+                      "area":  "Collaboration",
+                      "requirement":  "Manual WhatsApp notification when a member pays",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/collaboration/CollaborationPage.tsx",
+                                       "scripts/verify-collaboration-whatsapp.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.equal_split",
+                      "area":  "Shared expenses",
+                      "requirement":  "Equal expense splitting",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/SharedExpensesPanel.tsx",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.custom_split",
+                      "area":  "Shared expenses",
+                      "requirement":  "Custom amount splitting",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/SharedExpensesPanel.tsx",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.percentage_split",
+                      "area":  "Shared expenses",
+                      "requirement":  "Percentage splitting",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/SharedExpensesPanel.tsx",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.settle_up",
+                      "area":  "Shared expenses",
+                      "requirement":  "Who-owes-whom balances and partial/full settle-up",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/SharedExpensesPanel.tsx",
+                                       "src/repositories/sharedExpenseRepository.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.trip_fund",
+                      "area":  "Group funds",
+                      "requirement":  "Trip money holder, contributions and collected-money spending",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/TripMoneyPanel.tsx",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "collab.household_fund",
+                      "area":  "Group funds",
+                      "requirement":  "Optional Household or general group fund, without forcing every group to use a wallet",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/SpaceFundPanel.tsx",
+                                       "src/features/spaces/SpaceDetailsPage.tsx",
+                                       "src/features/spaces/SharedExpensesPanel.tsx",
+                                       "functions/src/index.ts",
+                                       "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
+                                       "scripts/verify-household-funds-financial-health.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "safety.lifecycle",
+                      "area":  "Safety",
+                      "requirement":  "Edit, Archive/Hide, Restore, Close, Delete, Stop and Undo protections",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/repositories/lifecycleRepository.ts",
+                                       "functions/src/index.ts",
+                                       "scripts/verify-safe-delete-archive-restore.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "safety.archive_pages",
+                      "area":  "Safety",
+                      "requirement":  "Inactive records use dedicated archive/closed pages",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "src/app/App.tsx",
+                                       "scripts/verify-mobile-archive-pages.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "safety.financial_history",
+                      "area":  "Safety",
+                      "requirement":  "Financial history is preserved through reversals rather than silent edits",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "ARCHITECTURE.md",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "safety.native_confirm",
+                      "area":  "Safety",
+                      "requirement":  "All destructive actions use BajetBN mobile-friendly dialogs instead of browser confirm boxes",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "src/components/ActionConfirmModal.tsx",
+                                       "src/features/transactions/TransactionsPage.tsx",
+                                       "src/features/goals/GoalsPage.tsx",
+                                       "src/features/spaces/SharedExpensesPanel.tsx",
+                                       "src/features/spaces/TripMoneyPanel.tsx",
+                                       "src/features/collaboration/CollaborationPage.tsx",
+                                       "scripts/verify-release-safety-hardening.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "brunei.currency",
+                      "area":  "Brunei localisation",
+                      "requirement":  "BND and Asia/Brunei defaults",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/onboarding/OnboardingPage.tsx",
+                                       "src/types/models.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "brunei.categories",
+                      "area":  "Brunei localisation",
+                      "requirement":  "Brunei-friendly personal and SME categories",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/categories/defaultCategories.ts",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "brunei.institutions",
+                      "area":  "Brunei localisation",
+                      "requirement":  "Simple presets for common Brunei banks and account providers",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/config/bruneiMoneyOptions.ts",
+                                       "src/features/accounts/AccountsPage.tsx",
+                                       "functions/src/index.ts",
+                                       "BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md",
+                                       "scripts/verify-brunei-money-options.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "brunei.payment_methods",
+                      "area":  "Brunei localisation",
+                      "requirement":  "Clear Brunei-relevant payment method choices",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/config/bruneiMoneyOptions.ts",
+                                       "src/components/PaymentMethodField.tsx",
+                                       "src/features/transactions/TransactionsPage.tsx",
+                                       "src/features/collaboration/CollaborationPage.tsx",
+                                       "functions/src/index.ts",
+                                       "BRUNEI_BANKS_PAYMENT_METHODS_ALPHA.md",
+                                       "scripts/verify-brunei-money-options.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "recurring.commitments",
+                      "area":  "Recurring workflows",
+                      "requirement":  "Recurring bills and instalments",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/types/models.ts",
+                                       "src/features/commitments/CommitmentsPage.tsx"
+                                   ]
+                  },
+                  {
+                      "id":  "recurring.transactions",
+                      "area":  "Recurring workflows",
+                      "requirement":  "Recurring ordinary income/expense templates such as salary, rent and subscriptions",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/types/models.ts",
+                                       "src/features/recurring/RecurringTransactionsPage.tsx",
+                                       "src/repositories/recurringTransactionRepository.ts",
+                                       "functions/src/index.ts",
+                                       "scripts/verify-recurring-transactions.mjs",
+                                       "RECURRING_TRANSACTIONS_ALPHA.md"
+                                   ]
+                  },
+                  {
+                      "id":  "notifications.in_app",
+                      "area":  "Notifications",
+                      "requirement":  "In-app invitation, payment and goal notifications",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/pages/NotificationsPage.tsx",
+                                       "functions/src/index.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "notifications.reminders",
+                      "area":  "Notifications",
+                      "requirement":  "Upcoming, due-today and late bill/goal reminders generated in the background with history, preferences and duplicate prevention",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "BACKGROUND_NOTIFICATIONS_ALPHA.md",
+                                       "src/pages/SettingsPage.tsx",
+                                       "src/pages/NotificationsPage.tsx",
+                                       "src/repositories/notificationRepository.ts",
+                                       "functions/src/index.ts",
+                                       "scripts/verify-background-notifications.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.foundation",
+                      "area":  "SME",
+                      "requirement":  "SME Spaces, business accounts and business categories",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/spaces/SpacesPage.tsx",
+                                       "src/features/accounts/AccountsPage.tsx",
+                                       "src/features/categories/defaultCategories.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.essentials",
+                      "area":  "SME",
+                      "requirement":  "Simple SME overview for income, expenses, cash position and upcoming commitments",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/reports/ReportsPage.tsx",
+                                       "src/features/reports/financialHealth.ts",
+                                       "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
+                                       "scripts/verify-household-funds-financial-health.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "sme.advanced",
+                      "area":  "SME",
+                      "requirement":  "Advanced BusinessBajetBN accounting, invoicing, tax and payroll",
+                      "status":  "deferred",
+                      "gate":  "post_v1",
+                      "evidence":  [
+                                       "PRE_V1_SCOPE_ROADMAP.md"
+                                   ]
+                  },
+                  {
+                      "id":  "insights.financial_health",
+                      "area":  "Insights",
+                      "requirement":  "Financial health insights beyond static totals",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/reports/ReportsPage.tsx",
+                                       "src/features/reports/financialHealth.ts",
+                                       "HOUSEHOLD_FUNDS_FINANCIAL_HEALTH_ALPHA.md",
+                                       "scripts/verify-household-funds-financial-health.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "data.export",
+                      "area":  "Privacy and data",
+                      "requirement":  "User can download a private copy of their BajetBN data",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/pages/SettingsPage.tsx",
+                                       "src/repositories/releaseCandidateRepository.ts"
+                                   ]
+                  },
+                  {
+                      "id":  "data.delete_account",
+                      "area":  "Privacy and data",
+                      "requirement":  "User can request account and personal-data deletion with protected financial-history handling",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "src/pages/SettingsPage.tsx",
+                                       "src/components/AccountDeletionModal.tsx",
+                                       "src/repositories/accountDeletionRepository.ts",
+                                       "src/contexts/AuthContext.tsx",
+                                       "src/features/collaboration/CollaborationPage.tsx",
+                                       "functions/src/index.ts",
+                                       "firestore.rules",
+                                       "ACCOUNT_DATA_DELETION_ALPHA.md",
+                                       "DATA_RETENTION_AND_DELETION.md",
+                                       "scripts/verify-account-data-deletion.mjs",
+                                       "ACCOUNT_REREGISTRATION_POLICY_ALPHA.md",
+                                       "scripts/verify-account-reregistration-policy.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "data.general_receipts",
+                      "area":  "Documents",
+                      "requirement":  "General transaction receipt/document attachments",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/features/transactions/TransactionsPage.tsx",
+                                       "src/repositories/transactionRepository.ts",
+                                       "src/types/models.ts",
+                                       "functions/src/index.ts",
+                                       "firestore.rules",
+                                       "storage.rules",
+                                       "TRANSACTION_RECEIPTS_ALPHA.md",
+                                       "scripts/verify-transaction-receipts.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "pwa.offline_mutations",
+                      "area":  "PWA",
+                      "requirement":  "Offline money activity queue with duplicate-safe sync and conflict handling",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/services/offlineQueue.ts",
+                                       "src/contexts/OfflineSyncContext.tsx",
+                                       "src/pages/OfflineSyncPage.tsx",
+                                       "src/repositories/transactionRepository.ts",
+                                       "OFFLINE_SYNC_ALPHA.md",
+                                       "scripts/verify-offline-sync.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "core.theme_presets_login",
+                      "area":  "Core settings",
+                      "requirement":  "Login-only signed-out theme chooser with System Default and 12 named presets, guest persistence and profile sync; optional post-signup theme preview or skip before Home; bilingual signup financial accountability reminder; Settings reuse, shared tokens and accessible focus/contrast",
+                      "status":  "complete",
+                      "gate":  "pre_v1",
+                      "evidence":  [
+                                       "src/config/themePresets.ts",
+                                       "src/components/ThemeChooser.tsx",
+                                       "src/contexts/PreferencesContext.tsx",
+                                       "src/layouts/AuthLayout.tsx",
+                                       "src/pages/SettingsPage.tsx",
+                                       "src/styles/global.css",
+                                       "THEME_PRESETS_LOGIN_ALPHA.md",
+                                       "scripts/verify-theme-presets-login.mjs",
+                                       "src/features/onboarding/OnboardingPage.tsx",
+                                       "scripts/verify-signup-theme-onboarding.mjs",
+                                       "SIGNUP_THEME_ONBOARDING_ALPHA.md",
+                                       "PRE_V1_MANUAL_VERIFICATION.md"
+                                   ]
+                  },
+                  {
+                      "id":  "release.alpha2_staging",
+                      "area":  "Release readiness",
+                      "requirement":  "Alpha 2 browser testing on staging across mobile and desktop",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "STAGING_TEST_CHECKLIST.md"
+                                   ]
+                  },
+                  {
+                      "id":  "release.version_source",
+                      "area":  "Release readiness",
+                      "requirement":  "One consistent app version source across package, settings and service worker",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "release.json",
+                                       "src/config/release.ts",
+                                       "package.json",
+                                       "package-lock.json",
+                                       "src/pages/SettingsPage.tsx",
+                                       "scripts/generate-service-worker.mjs",
+                                       "scripts/verify-release-safety-hardening.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "release.ci_coverage",
+                      "area":  "Release readiness",
+                      "requirement":  "CI runs every current structural verification suite",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       ".github/workflows/staging-ci.yml"
+                                   ]
+                  },
+                  {
+                      "id":  "release.dependencies",
+                      "area":  "Release readiness",
+                      "requirement":  "Review Firebase Functions dependency warning before final production release",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "functions/package.json",
+                                       "functions/package-lock.json",
+                                       "FUNCTIONS_DEPENDENCY_REVIEW.md",
+                                       "scripts/verify-release-safety-hardening.mjs"
+                                   ]
+                  },
+                  {
+                      "id":  "release.production",
+                      "area":  "Release readiness",
+                      "requirement":  "Production deploy only after all pre-production blockers are complete and staging is approved",
+                      "status":  "complete",
+                      "gate":  "pre_production",
+                      "evidence":  [
+                                       "PRE_V1_SCOPE_ROADMAP.md",
+                                       "PRE_V1_MANUAL_VERIFICATION.md"
+                                   ]
+                  }
+              ],
+    "auditedVersion":  "0.11.13"
 }
