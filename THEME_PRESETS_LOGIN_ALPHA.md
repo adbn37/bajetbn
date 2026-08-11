@@ -67,4 +67,4 @@ Pages do not use separate theme-specific layouts.
 
 ## Staging gate
 
-This item remains `manual_test` until the full signed-out, signed-in, reload, cross-session, mobile, desktop, System Default and High Contrast matrix passes.
+The staging verification matrix passed. This scope item is now `complete`.

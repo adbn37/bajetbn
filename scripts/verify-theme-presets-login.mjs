@@ -194,8 +194,8 @@ expect(
 );
 
 expect(
-  scopeItem?.status === 'manual_test',
-  'Theme preset scope item must remain manual_test until staging passes.',
+  scopeItem?.status === 'complete',
+  'Theme preset scope item must be complete after staging verification.',
 );
 
 expect(
