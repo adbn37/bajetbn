@@ -14,7 +14,7 @@ const release = JSON.parse(read('release.json'));
 const pkg = JSON.parse(read('package.json'));
 if (release.version !== pkg.version) fail('package.json and release.json must match.');
 const [major, minor, patch] = release.version.split('.').map(Number);
-if (major !== 0 || minor !== 11 || patch < 14) fail('Standard POS requires v0.11.14 or later.');
+if (major === 0 && (minor < 11 || (minor === 11 && patch < 14))) fail('Standard POS requires v0.11.14 or later.');
 
 for (const file of [
   'STANDARD_POS_ALPHA.md',
