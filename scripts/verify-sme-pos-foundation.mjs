@@ -16,7 +16,7 @@ const release = JSON.parse(read('release.json'));
 const packageJson = JSON.parse(read('package.json'));
 if (packageJson.version !== release.version) fail('package.json and release.json must match.');
 const [major, minor, patch] = release.version.split('.').map(Number);
-if (major !== 0 || minor !== 11 || patch < 13) fail('SME POS foundation requires v0.11.13 or later.');
+if (major === 0 && (minor < 11 || (minor === 11 && patch < 13))) fail('SME POS foundation requires v0.11.13 or later.');
 
 requireFile('SME_POS_FOUNDATION_ALPHA.md');
 requireFile('src/features/sme-pos/SmePosPage.tsx');

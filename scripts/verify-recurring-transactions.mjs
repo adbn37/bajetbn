@@ -129,7 +129,30 @@ includes('package.json', [
 ]);
 const packageJson = JSON.parse(read('package.json'));
 const releaseJson = JSON.parse(read('release.json'));
-if (Number(packageJson.version.split('.')[2]) < 7 || Number(releaseJson.version.split('.')[2]) < 7) fail('Recurring transactions require v0.11.7 or later.');
+const recurringVersionPassed = (version) => {
+  const [major = 0, minor = 0, patch = 0] = version
+    .split('-')[0]
+    .split('.')
+    .map(Number);
+
+  return major > 0
+    || (
+      major === 0
+      && (
+        minor > 11
+        || (minor === 11 && patch >= 7)
+      )
+    );
+};
+
+if (
+  !recurringVersionPassed(packageJson.version)
+  || !recurringVersionPassed(releaseJson.version)
+) {
+  throw new Error(
+    'Recurring transactions require v0.11.7 or later.',
+  );
+}
 
 function lastDay(year, month) { return new Date(Date.UTC(year, month, 0)).getUTCDate(); }
 function nextDate(date, frequency, preferredDay, monthEnd) {
