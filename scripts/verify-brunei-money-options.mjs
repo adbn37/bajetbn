@@ -1,3 +1,28 @@
+function versionAtLeastForReleaseGate(
+  current,
+  minimum,
+) {
+  const currentParts = String(current)
+    .split('-')[0]
+    .split('.')
+    .map(Number);
+
+  const minimumParts = String(minimum)
+    .split('-')[0]
+    .split('.')
+    .map(Number);
+
+  for (let index = 0; index < 3; index += 1) {
+    const currentPart = currentParts[index] ?? 0;
+    const minimumPart = minimumParts[index] ?? 0;
+
+    if (currentPart > minimumPart) return true;
+    if (currentPart < minimumPart) return false;
+  }
+
+  return true;
+}
+
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -13,7 +38,7 @@ const includes = (file, tokens) => {
 };
 
 const release = JSON.parse(read('release.json'));
-if (Number(release.version.split('.')[2]) < 8) fail('Brunei money options require v0.11.8 or later.');
+if (!versionAtLeastForReleaseGate(release.version, '0.11.8')) fail('Brunei money options require v0.11.8 or later.');
 includes('src/config/bruneiMoneyOptions.ts', [
   "code: 'bibd'", "code: 'baiduri'", "code: 'taib'", "code: 'standard_chartered_brunei'",
   "code: 'bank_transfer'", "code: 'cash'", "code: 'debit_card'", "code: 'credit_card'",

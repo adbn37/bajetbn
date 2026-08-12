@@ -1,6 +1,6 @@
 {
-  "version": "0.11.20",
-  "label": "Mobile-First UX Alpha 1",
-  "channel": "alpha",
-  "releasedAt": "2026-08-05"
+    "version":  "1.0.0",
+    "label":  "Mobile-First UX Alpha 1",
+    "channel":  "alpha",
+    "releasedAt":  "2026-08-05"
 }
