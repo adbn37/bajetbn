@@ -17,7 +17,7 @@ export type Appearance =
   | 'high-contrast'
   | 'dark'; // Legacy value: treated as Black.
 export type TextSize = 'normal' | 'large';
-export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'custom';
+export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'custom';
 export type SpaceRole = 'owner' | 'admin' | 'contributor' | 'payer' | 'viewer' | 'member';
 export type SpaceMemberStatus = 'active' | 'suspended' | 'removed';
 export type SpaceApprovalMode = 'none' | 'owner_approval';
@@ -524,6 +524,35 @@ export interface UserProfile {
   lastDataExportAt?: Timestamp | null;
   accountDeletionStatus?: AccountDeletionRequestStatus | null;
   accountDeletionScheduledFor?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export type CollectionItemCondition = 'new' | 'sealed' | 'open_box' | 'used' | 'damaged' | 'other';
+
+export interface CollectionItem {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  createdBy: string;
+  name: string;
+  category: string;
+  brand: string;
+  series: string;
+  variant: string;
+  condition: CollectionItemCondition;
+  conditionNote: string;
+  barcodes: string[];
+  internalCode: string;
+  quantity: number;
+  storageLocation: string;
+  purchasePriceMinor: number | null;
+  estimatedValueMinor: number | null;
+  currency: string;
+  notes: string;
+  tags: string[];
+  archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }

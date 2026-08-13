@@ -29,7 +29,7 @@ for (const item of audit.items) {
 }
 
 // Core implemented evidence.
-requireText('src/types/models.ts', "export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'custom'");
+requireText('src/types/models.ts', "export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'custom'");
 requireText('src/types/models.ts', "export type SharedExpenseSplitMode = 'equal' | 'custom' | 'percentage'");
 requireText('src/features/spaces/SharedExpensesPanel.tsx', 'Who owes whom');
 requireText('src/features/spaces/TripMoneyPanel.tsx', 'Trip money');

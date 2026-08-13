@@ -4307,6 +4307,7 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('spaceFundContributions').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceInvitations').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('collectionItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('smePosProducts').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('smePosCustomers').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('smePosSellers').where('spaceId', '==', spaceId)),
@@ -6034,7 +6035,7 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
     'sharedBillPaymentReversals', 'spaceActivities', 'sharedExpenses', 'sharedExpenseShares',
     'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
     'userNotifications', 'reminderHistory', 'recurringTransactionTemplates', 'recurringTransactionRuns',
-    'transactionAttachments', 'smePosAccess', 'smePosProducts', 'smePosCustomers',
+    'transactionAttachments', 'collectionItems', 'smePosAccess', 'smePosProducts', 'smePosCustomers',
     'smePosSellers', 'smePosListings', 'smePosSales', 'smePosPayouts',
   ];
   for (const collectionName of collections) {
@@ -6246,6 +6247,7 @@ async function finalizeAccountDeletion(uid: string) {
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'targetId', uid, updates: () => ({ targetId: anonymousId, summary: 'Member-related activity retained after account deletion.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, paidByName: deletedMemberName, paidByEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'collectionItems', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenseShares', field: 'memberUid', uid, updates: () => ({ memberUid: anonymousId, memberName: deletedMemberName, memberEmail: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpensePayments', field: 'fromUid', uid, proofPaths, updates: () => ({ fromUid: anonymousId, fromName: deletedMemberName, fromEmail: '', proofPath: null, proofName: null, note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpensePayments', field: 'toUid', uid, proofPaths, updates: () => ({ toUid: anonymousId, toName: deletedMemberName, toEmail: '', proofPath: null, proofName: null, note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
