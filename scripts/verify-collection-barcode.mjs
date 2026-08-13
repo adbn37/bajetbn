@@ -18,8 +18,8 @@ const packageJson = JSON.parse(read('package.json'));
 const release = JSON.parse(read('release.json'));
 checks += 5;
 if (packageJson.version !== '1.1.0' || release.version !== '1.1.0') fail('Expected package.json and release.json version 1.1.0.');
-if (packageJson.dependencies?.['@zxing/browser'] !== '0.1.5') fail('Expected exact @zxing/browser 0.1.5.');
-if (packageJson.dependencies?.['@zxing/library'] !== '0.21.3') fail('Expected exact @zxing/library 0.21.3.');
+if (packageJson.dependencies?.['@zxing/browser'] !== '0.2.1') fail('Expected exact @zxing/browser 0.2.1.');
+if (packageJson.dependencies?.['@zxing/library'] !== '0.23.0') fail('Expected exact @zxing/library 0.23.0.');
 if (packageJson.dependencies?.['@bwip-js/browser'] !== '4.11.2') fail('Expected exact @bwip-js/browser 4.11.2.');
 if (!packageJson.scripts?.['verify:all-structural']?.includes('verify-collection-barcode.mjs')) fail('Collection verifier is not part of verify:all-structural.');
 
