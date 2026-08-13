@@ -30,6 +30,53 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role in ['owner', 'admin'];
     }
 
+    function isCollectionSpace(spaceId) {
+      return exists(/databases/$(database)/documents/spaces/$(spaceId))
+        && get(/databases/$(database)/documents/spaces/$(spaceId)).data.type == 'collection';
+    }
+
+    function canEditCollection(spaceId) {
+      return isCollectionSpace(spaceId)
+        && isSpaceMember(spaceId)
+        && get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role in ['owner', 'admin', 'contributor'];
+    }
+
+    function validCollectionItem(data) {
+      return data.keys().hasOnly([
+          'displayId', 'spaceId', 'ownerId', 'createdBy', 'name', 'category', 'brand',
+          'series', 'variant', 'condition', 'conditionNote', 'barcodes', 'internalCode',
+          'quantity', 'storageLocation', 'purchasePriceMinor', 'estimatedValueMinor',
+          'currency', 'notes', 'tags', 'archivedAt', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'displayId', 'spaceId', 'ownerId', 'createdBy', 'name', 'category', 'brand',
+          'series', 'variant', 'condition', 'conditionNote', 'barcodes', 'internalCode',
+          'quantity', 'storageLocation', 'purchasePriceMinor', 'estimatedValueMinor',
+          'currency', 'notes', 'tags', 'archivedAt', 'createdAt', 'updatedAt'
+        ])
+        && data.displayId is string && data.displayId.size() > 0 && data.displayId.size() <= 80
+        && data.spaceId is string && data.ownerId is string && data.createdBy is string
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 80
+        && data.brand is string && data.brand.size() <= 100
+        && data.series is string && data.series.size() <= 100
+        && data.variant is string && data.variant.size() <= 120
+        && data.condition in ['new', 'sealed', 'open_box', 'used', 'damaged', 'other']
+        && data.conditionNote is string && data.conditionNote.size() <= 500
+        && data.barcodes is list && data.barcodes.size() > 0 && data.barcodes.size() <= 20
+        && data.internalCode is string && data.internalCode.size() > 0 && data.internalCode.size() <= 80
+        && data.barcodes.hasAny([data.internalCode])
+        && data.quantity is int && data.quantity >= 0 && data.quantity <= 1000000
+        && data.storageLocation is string && data.storageLocation.size() <= 160
+        && (data.purchasePriceMinor == null || (data.purchasePriceMinor is int && data.purchasePriceMinor >= 0))
+        && (data.estimatedValueMinor == null || (data.estimatedValueMinor is int && data.estimatedValueMinor >= 0))
+        && data.currency == 'BND'
+        && data.notes is string && data.notes.size() <= 2000
+        && data.tags is list && data.tags.size() <= 20
+        && (data.archivedAt == null || data.archivedAt is timestamp)
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
     function posAccessId(spaceId, uid) {
       return spaceId + '_' + uid;
     }
@@ -148,6 +195,27 @@ service cloud.firestore {
         && request.resource.data.role == 'owner'
         && getAfter(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId == request.auth.uid;
       allow update, delete: if false; // Membership changes move to Cloud Functions in collaboration phase.
+    }
+
+    match /collectionItems/{itemId} {
+      allow read: if isCollectionSpace(resource.data.spaceId) && isSpaceMember(resource.data.spaceId);
+      allow create: if canEditCollection(request.resource.data.spaceId)
+        && validCollectionItem(request.resource.data)
+        && request.resource.data.ownerId == get(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.archivedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if canEditCollection(resource.data.spaceId)
+        && validCollectionItem(request.resource.data)
+        && request.resource.data.spaceId == resource.data.spaceId
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.displayId == resource.data.displayId
+        && request.resource.data.internalCode == resource.data.internalCode
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
     }
 
     match /smePosSettings/{spaceId} {

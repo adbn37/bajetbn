@@ -42,6 +42,7 @@ const spaceTypeLabel: Record<SpaceType, string> = {
   sme: 'SME',
   trip: 'Trip',
   goal: 'Goal',
+  collection: 'Collection',
   custom: 'Custom',
 };
 
@@ -58,6 +59,7 @@ function spaceDescription(space: Space) {
   if (space.type === 'trip') return 'Keep trip spending, members, and shared payments in one place.';
   if (space.type === 'sme') return 'Keep business money separate from personal money.';
   if (space.type === 'goal') return 'Track money for a shared goal or project.';
+  if (space.type === 'collection') return 'Organise collectibles, quantities, barcodes, labels, and storage locations.';
   return 'A separate place for this money activity.';
 }
 
@@ -245,9 +247,24 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
+    {space.type === 'collection' && !space.archivedAt && (
+      <section className="sme-pos-hero collection-space-hero">
+        <div className="sme-pos-hero-copy">
+          <h2>Collection inventory</h2>
+          <p>Scan barcodes, organise collectibles, and print internal labels.</p>
+        </div>
+        <div className="sme-pos-hero-actions">
+          <Link className="button primary sme-pos-open-button" to={`/spaces/${space.id}/collection`}>
+            Open collection
+          </Link>
+        </div>
+      </section>
+    )}
+
     <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
       {space.type === 'sme' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/pos`}>Point of sale</Link>}
+      {space.type === 'collection' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/collection`}>Collection</Link>}
     </nav>
 
     {activeTab === 'overview' ? <SpaceOverview
@@ -298,6 +315,9 @@ function SpaceOverview({
   ];
   if (space.type === 'sme') {
     quickLinks.unshift({ to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Open the register and daily shop tools.', featured: true });
+  }
+  if (space.type === 'collection') {
+    quickLinks.unshift({ to: `/spaces/${space.id}/collection`, icon: 'C', title: 'Collection inventory', detail: 'Scan, find, label, and organise collectibles.', featured: true });
   }
   if (space.type === 'personal' || space.type === 'goal' || space.type === 'custom') {
     quickLinks.splice(2, 0, { to: `/goals?spaceId=${space.id}`, icon: '◇', title: 'Goals', detail: 'Track money you are saving.' });
