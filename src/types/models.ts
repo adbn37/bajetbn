@@ -529,6 +529,7 @@ export interface UserProfile {
 }
 
 export type CollectionItemCondition = 'new' | 'sealed' | 'open_box' | 'used' | 'damaged' | 'other';
+export type CollectionQuantityReason = 'initial' | 'acquired' | 'sold' | 'gifted' | 'lost' | 'damaged' | 'correction' | 'other';
 
 export interface CollectionItem {
   id: string;
@@ -552,9 +553,26 @@ export interface CollectionItem {
   currency: string;
   notes: string;
   tags: string[];
+  lastMovementId?: string;
   archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+export interface CollectionQuantityMovement {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  itemId: string;
+  itemName: string;
+  createdBy: string;
+  reason: CollectionQuantityReason;
+  note: string;
+  delta: number;
+  previousQuantity: number;
+  nextQuantity: number;
+  createdAt?: Timestamp;
 }
 
 export interface Space {
