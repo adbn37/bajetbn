@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import * as bwipjs from '@bwip-js/browser';
@@ -43,7 +43,18 @@ function timestampValue(value?: { toMillis?: () => number } | null) {
   return value?.toMillis?.() || 0;
 }
 
+type CollectionPageMode = 'inventory' | 'add';
+
 export function CollectionInventoryPage() {
+  return <CollectionPage mode="inventory" />;
+}
+
+export function CollectionAddItemPage() {
+  return <CollectionPage mode="add" />;
+}
+
+function CollectionPage({ mode }: { mode: CollectionPageMode }) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { spaceId = '' } = useParams();
   const [space, setSpace] = useState<Space | null>(null);
@@ -61,6 +72,7 @@ export function CollectionInventoryPage() {
   const [createBarcode, setCreateBarcode] = useState<string | null>(null);
   const [labelItems, setLabelItems] = useState<CollectionItem[] | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<CollectionItem | null>(null);
+  const [detailItem, setDetailItem] = useState<CollectionItem | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scannerRef = useRef<IScannerControls | null>(null);
   const scanHandledRef = useRef(false);
@@ -133,20 +145,17 @@ export function CollectionInventoryPage() {
     setNotice('');
     try {
       const match = await findCollectionItemByBarcode(space.id, barcode);
-      if (match?.archivedAt) {
-        setShowArchived(true);
+      if (match) {
+        setShowArchived(Boolean(match.archivedAt));
         setSearch(match.internalCode);
-        setNotice(`${match.name} is archived. Restore it before changing quantity.`);
+        setDetailItem(match);
+        setNotice(match.archivedAt
+          ? `${match.name} found in Archived items.`
+          : `${match.name} found. Quantity unchanged.`);
         return;
       }
-      if (match) {
-        setSearch(match.internalCode);
-        setShowArchived(false);
-        if (canEdit) {
-          setNotice(`${match.name} found. Quantity unchanged. Use +1 to add another piece.`);
-        } else {
-          setNotice(`${match.name} found. Your role has view-only access.`);
-        }
+      if (mode === 'inventory') {
+        setError('No existing item uses this barcode. Open Add item if you want to save it.');
         return;
       }
       if (!canEdit) {
@@ -159,12 +168,14 @@ export function CollectionInventoryPage() {
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     }
-  }, [canEdit, space]);
+  }, [canEdit, mode, space]);
 
   const startScanner = async () => {
-    if (!canEdit) return;
+    if (mode === 'add' && !canEdit) return;
     setError('');
-    setNotice('Camera is scanning. Keep the barcode horizontal, fill the camera view, and use good light.');
+    setNotice(mode === 'inventory'
+      ? 'Camera is searching your saved collection. Keep the barcode horizontal and in focus.'
+      : 'Camera is scanning a new barcode. Keep it horizontal, fill the camera view, and use good light.');
     scanHandledRef.current = false;
     setScanning(true);
     try {
@@ -239,6 +250,7 @@ export function CollectionInventoryPage() {
     try {
       await archiveCollectionItem(item.id);
       setArchiveTarget(null);
+      setDetailItem(null);
       await load();
       setNotice(`${item.name} archived.`);
     }
@@ -248,14 +260,26 @@ export function CollectionInventoryPage() {
 
   const runRestore = async (item: CollectionItem) => {
     setBusyId(item.id); setError('');
-    try { await restoreCollectionItem(item.id); await load(); setNotice(`${item.name} restored.`); }
+    try {
+      await restoreCollectionItem(item.id);
+      setDetailItem(null);
+      await load();
+      setNotice(`${item.name} restored.`);
+    }
     catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusyId(''); }
   };
 
   const runAddOne = async (item: CollectionItem) => {
     setBusyId(item.id); setError('');
-    try { await addCollectionItemQuantity(item.id, 1); await load(); setNotice(`${item.name} quantity increased.`); }
+    try {
+      await addCollectionItemQuantity(item.id, 1);
+      setDetailItem((current) => current?.id === item.id
+        ? { ...current, quantity: current.quantity + 1 }
+        : current);
+      await load();
+      setNotice(`${item.name} quantity increased.`);
+    }
     catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusyId(''); }
   };
@@ -272,10 +296,17 @@ export function CollectionInventoryPage() {
 
   return <main className="page collection-page">
     <PageHeader
-      eyebrow="Collection inventory"
-      title={space.name}
-      description="Scan, find, label, and safely organise cards, toys, figures, plush, accessories, and other collectibles."
-      action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back to Space</Link>}
+      eyebrow={mode === 'add' ? 'Add collection item' : 'Collection inventory'}
+      title={mode === 'add' ? 'Add item' : space.name}
+      description={mode === 'add'
+        ? `Scan or enter a barcode to add an item to ${space.name}.`
+        : 'Search, review, label, and safely manage your saved collectibles.'}
+      action={mode === 'add'
+        ? <Link className="button secondary" to={`/spaces/${space.id}/collection`}>Back to Inventory</Link>
+        : <div className="button-row">
+          {canEdit && <Link className="button primary" to={`/spaces/${space.id}/collection/add`}>Add item</Link>}
+          <Link className="button secondary" to={`/spaces/${space.id}`}>Back to Space</Link>
+        </div>}
     />
 
     {space.archivedAt && <div className="notice">This Space is archived. Collection records are view-only until the Space is restored.</div>}
@@ -283,66 +314,112 @@ export function CollectionInventoryPage() {
     {error && <div className="notice error">{error}</div>}
     {notice && <div className="notice success">{notice}</div>}
 
-    <section className="summary-grid collection-summary-grid">
-      <article className="summary-card featured"><span>Different items</span><strong>{activeItems.length}</strong><small>Active collection records</small></article>
-      <article className="summary-card"><span>Total quantity</span><strong>{quantityTotal}</strong><small>Individual pieces</small></article>
-      <article className="summary-card"><span>Total cost</span><strong>{formatMoney(totalCostMinor, space.currency)}</strong><small>Based on saved purchase prices</small></article>
-      <article className="summary-card"><span>Estimated value</span><strong>{formatMoney(totalValueMinor, space.currency)}</strong><small>Based on saved estimates</small></article>
-    </section>
+    {mode === 'inventory' ? <>
+      <section className="summary-grid collection-summary-grid">
+        <article className="summary-card featured"><span>Different items</span><strong>{activeItems.length}</strong><small>Active collection records</small></article>
+        <article className="summary-card"><span>Total quantity</span><strong>{quantityTotal}</strong><small>Individual pieces</small></article>
+        <article className="summary-card"><span>Total cost</span><strong>{formatMoney(totalCostMinor, space.currency)}</strong><small>Based on saved purchase prices</small></article>
+        <article className="summary-card"><span>Estimated value</span><strong>{formatMoney(totalValueMinor, space.currency)}</strong><small>Based on saved estimates</small></article>
+      </section>
 
-    <section className="panel collection-scan-panel">
-      <div className="panel-heading">
-        <div><span className="eyebrow">Phone camera</span><h2>Scan or enter a barcode</h2></div>
-        <div className="button-row">
-          {canEdit && !scanning && <button className="button primary" onClick={() => void startScanner()}>Start camera</button>}
-          {scanning && <button className="button secondary" onClick={stopScanner}>Stop camera</button>}
-          {canEdit && <button className="button secondary" onClick={() => { setEditing(null); setCreateBarcode(''); }}>Add without barcode</button>}
-        </div>
-      </div>
-      <video ref={videoRef} className={`collection-scanner-video ${scanning ? 'active' : ''}`} muted playsInline />
-      <form className="collection-barcode-entry" onSubmit={submitManualBarcode}>
-        <label>Barcode number or code<input value={manualBarcode} onChange={(event) => setManualBarcode(event.target.value)} placeholder="Scan with a USB scanner or type the code" /></label>
-        <button className="button secondary" disabled={!manualBarcode.trim()}>Find barcode</button>
-      </form>
-    </section>
-
-    <section className="panel collection-list-panel">
-      <div className="panel-heading collection-list-heading">
-        <div><span className="eyebrow">Inventory</span><h2>{showArchived ? 'Archived items' : 'Active collection'}</h2></div>
-        <div className="collection-list-actions">
-          <input aria-label="Search collection" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, code, brand, or location" />
-          <button className="button secondary" onClick={() => { setShowArchived((value) => !value); setSearch(''); }}>{showArchived ? `Active (${activeItems.length})` : `Archived (${archivedItems.length})`}</button>
-          {!showArchived && visibleItems.length > 0 && <button className="button secondary" onClick={() => setLabelItems(visibleItems)}>Print batch labels</button>}
-        </div>
-      </div>
-
-      {visibleItems.length === 0 ? <EmptyState
-        title={showArchived ? 'No archived items' : search ? 'No matching items' : 'No collection items yet'}
-        description={showArchived ? 'Archived items will appear here and can be restored.' : 'Scan an existing barcode or add the first collectible.'}
-      /> : <div className="collection-item-grid">
-        {visibleItems.map((item) => <article className={`collection-item-card ${item.archivedAt ? 'archived' : ''}`} key={item.id}>
-          <header>
-            <div><span className="eyebrow">{item.category}</span><h3>{item.name}</h3></div>
-            <span className="type-badge">{conditionLabel(item.condition)}</span>
-          </header>
-          <div className="collection-item-meta">
-            {(item.brand || item.series || item.variant) && <span>{[item.brand, item.series, item.variant].filter(Boolean).join(' - ')}</span>}
-            <span><strong>{item.quantity}</strong> in collection</span>
-            <span>Location: {item.storageLocation || 'Not set'}</span>
-            <span>Code: {item.internalCode}</span>
-            <span>{item.barcodes.length} saved barcode{item.barcodes.length === 1 ? '' : 's'}</span>
-            <span>Updated {new Date(timestampValue(item.updatedAt) || Date.now()).toLocaleDateString('en-BN')}</span>
+      <section className="panel collection-scan-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Camera search</span>
+            <h2>Find an existing item</h2>
+            <p>Scan a saved barcode to open its details without changing quantity.</p>
           </div>
-          <footer className="button-row">
-            {!item.archivedAt && canEdit && <button className="button primary small" disabled={busyId === item.id} onClick={() => void runAddOne(item)}>+1 quantity</button>}
-            {!item.archivedAt && canEdit && <button className="button secondary small" onClick={() => { setEditing(item); setCreateBarcode(null); }}>Edit</button>}
-            {!item.archivedAt && <button className="button secondary small" onClick={() => setLabelItems([item])}>Labels</button>}
-            {!item.archivedAt && canEdit && <button className="text-button danger" disabled={busyId === item.id} onClick={() => setArchiveTarget(item)}>Archive</button>}
-            {item.archivedAt && canEdit && <button className="button primary small" disabled={busyId === item.id} onClick={() => void runRestore(item)}>Restore</button>}
-          </footer>
-        </article>)}
-      </div>}
-    </section>
+          <div className="button-row">
+            {!scanning && <button className="button primary" onClick={() => void startScanner()}>Find with camera</button>}
+            {scanning && <button className="button secondary" onClick={stopScanner}>Stop camera</button>}
+          </div>
+        </div>
+        <video ref={videoRef} className={`collection-scanner-video ${scanning ? 'active' : ''}`} muted playsInline />
+      </section>
+
+      <section className="panel collection-list-panel">
+        <div className="panel-heading collection-list-heading">
+          <div><span className="eyebrow">Inventory</span><h2>{showArchived ? 'Archived items' : 'Active collection'}</h2></div>
+          <div className="collection-list-actions">
+            <input
+              aria-label="Search collection"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search name, barcode, code, brand, or location"
+            />
+            <button className="button secondary" onClick={() => { setShowArchived((value) => !value); setSearch(''); }}>
+              {showArchived ? `Active (${activeItems.length})` : `Archived (${archivedItems.length})`}
+            </button>
+            {!showArchived && visibleItems.length > 0 && <button className="button secondary" onClick={() => setLabelItems(visibleItems)}>Print batch labels</button>}
+          </div>
+        </div>
+
+        {visibleItems.length === 0 ? <EmptyState
+          title={showArchived ? 'No archived items' : search ? 'No matching items' : 'No collection items yet'}
+          description={showArchived
+            ? 'Archived items will appear here and can be restored.'
+            : search
+              ? 'Try another name, barcode, code, brand, or storage location.'
+              : 'Use Add item to save the first collectible.'}
+        /> : <div className="collection-item-grid">
+          {visibleItems.map((item) => <article className={`collection-item-card ${item.archivedAt ? 'archived' : ''}`} key={item.id}>
+            <header>
+              <div><span className="eyebrow">{item.category}</span><h3>{item.name}</h3></div>
+              <span className="type-badge">{conditionLabel(item.condition)}</span>
+            </header>
+            <div className="collection-item-meta">
+              {(item.brand || item.series || item.variant) && <span>{[item.brand, item.series, item.variant].filter(Boolean).join(' - ')}</span>}
+              <span><strong>{item.quantity}</strong> in collection</span>
+              <span>Location: {item.storageLocation || 'Not set'}</span>
+              <span>Code: {item.internalCode}</span>
+              <span>{item.barcodes.length} saved barcode{item.barcodes.length === 1 ? '' : 's'}</span>
+              <span>Updated {new Date(timestampValue(item.updatedAt) || Date.now()).toLocaleDateString('en-BN')}</span>
+            </div>
+            <footer className="button-row">
+              <button className="button primary small" onClick={() => setDetailItem(item)}>Details</button>
+              {!item.archivedAt && canEdit && <button className="button secondary small" disabled={busyId === item.id} onClick={() => void runAddOne(item)}>+1 quantity</button>}
+              {!item.archivedAt && canEdit && <button className="button secondary small" onClick={() => { setEditing(item); setCreateBarcode(null); }}>Edit</button>}
+              {!item.archivedAt && <button className="button secondary small" onClick={() => setLabelItems([item])}>Labels</button>}
+              {!item.archivedAt && canEdit && <button className="text-button danger" disabled={busyId === item.id} onClick={() => setArchiveTarget(item)}>Archive</button>}
+              {item.archivedAt && canEdit && <button className="button primary small" disabled={busyId === item.id} onClick={() => void runRestore(item)}>Restore</button>}
+            </footer>
+          </article>)}
+        </div>}
+      </section>
+    </> : <>
+      <section className="panel collection-scan-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">New item</span>
+            <h2>Scan or enter a barcode</h2>
+            <p>An existing barcode will open its saved item instead of creating a duplicate.</p>
+          </div>
+          <div className="button-row">
+            {canEdit && !scanning && <button className="button primary" onClick={() => void startScanner()}>Start camera</button>}
+            {scanning && <button className="button secondary" onClick={stopScanner}>Stop camera</button>}
+            {canEdit && <button className="button secondary" onClick={() => { setEditing(null); setCreateBarcode(''); }}>Add without barcode</button>}
+          </div>
+        </div>
+        <video ref={videoRef} className={`collection-scanner-video ${scanning ? 'active' : ''}`} muted playsInline />
+        <form className="collection-barcode-entry" onSubmit={submitManualBarcode}>
+          <label>
+            Barcode number or code
+            <input
+              value={manualBarcode}
+              onChange={(event) => setManualBarcode(event.target.value)}
+              placeholder="Scan with a USB scanner or type the code"
+            />
+          </label>
+          <button className="button secondary" disabled={!manualBarcode.trim()}>Find barcode</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <span className="eyebrow">Safe adding</span>
+        <h2>New items only</h2>
+        <p>BajetBN checks the barcode before opening the Add Item form. Existing items are shown without changing their quantity.</p>
+      </section>
+    </>}
 
     {(createBarcode !== null || editing) && <CollectionItemForm
       key={editing?.id || createBarcode || 'new-item'}
@@ -352,9 +429,41 @@ export function CollectionInventoryPage() {
       scannedBarcode={createBarcode || ''}
       onClose={() => { setEditing(null); setCreateBarcode(null); }}
       onSaved={async () => {
-        setEditing(null); setCreateBarcode(null); setSearch(''); setShowArchived(false);
-        await load(); setNotice(editing ? 'Collection item updated.' : 'Collection item added.');
+        const message = editing ? 'Collection item updated.' : 'Collection item added.';
+        setEditing(null);
+        setCreateBarcode(null);
+        setSearch('');
+        setShowArchived(false);
+        await load();
+        if (mode === 'add') {
+          navigate(`/spaces/${space.id}/collection`);
+          return;
+        }
+        setNotice(message);
       }}
+    />}
+
+    {detailItem && <CollectionItemDetailsModal
+      item={detailItem}
+      currency={space.currency}
+      canEdit={canEdit}
+      busy={busyId === detailItem.id}
+      onClose={() => setDetailItem(null)}
+      onEdit={() => {
+        setEditing(detailItem);
+        setCreateBarcode(null);
+        setDetailItem(null);
+      }}
+      onAddOne={() => void runAddOne(detailItem)}
+      onLabels={() => {
+        setLabelItems([detailItem]);
+        setDetailItem(null);
+      }}
+      onArchive={() => {
+        setArchiveTarget(detailItem);
+        setDetailItem(null);
+      }}
+      onRestore={() => void runRestore(detailItem)}
     />}
 
     {archiveTarget && <Modal title={`Archive ${archiveTarget.name}?`} onClose={() => setArchiveTarget(null)}>
@@ -372,6 +481,64 @@ export function CollectionInventoryPage() {
 
     {labelItems && <CollectionLabelSheet items={labelItems} onClose={() => setLabelItems(null)} />}
   </main>;
+}
+
+function CollectionItemDetailsModal({
+  item,
+  currency,
+  canEdit,
+  busy,
+  onClose,
+  onEdit,
+  onAddOne,
+  onLabels,
+  onArchive,
+  onRestore,
+}: {
+  item: CollectionItem;
+  currency: string;
+  canEdit: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onAddOne: () => void;
+  onLabels: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+}) {
+  return <Modal title={item.name} onClose={onClose}>
+    <div className="form-stack">
+      <article className={`collection-item-card ${item.archivedAt ? 'archived' : ''}`}>
+        <header>
+          <div><span className="eyebrow">{item.category}</span><h3>{item.name}</h3></div>
+          <span className="type-badge">{conditionLabel(item.condition)}</span>
+        </header>
+        <div className="collection-item-meta">
+          {(item.brand || item.series || item.variant) && <span>Identity: {[item.brand, item.series, item.variant].filter(Boolean).join(' - ')}</span>}
+          <span><strong>{item.quantity}</strong> in collection</span>
+          <span>Storage location: {item.storageLocation || 'Not set'}</span>
+          <span>Internal code: {item.internalCode}</span>
+          <span>Saved barcodes: {item.barcodes.join(', ') || 'None'}</span>
+          <span>Purchase price per item: {formatMoney(item.purchasePriceMinor || 0, currency)}</span>
+          <span>Estimated value per item: {formatMoney(item.estimatedValueMinor || 0, currency)}</span>
+          {item.conditionNote && <span>Condition note: {item.conditionNote}</span>}
+          {item.tags.length > 0 && <span>Tags: {item.tags.join(', ')}</span>}
+          <span>Updated {new Date(timestampValue(item.updatedAt) || Date.now()).toLocaleDateString('en-BN')}</span>
+        </div>
+        {item.notes && <div className="notice">Notes: {item.notes}</div>}
+        {item.archivedAt && <div className="notice">This item is archived.</div>}
+      </article>
+
+      <div className="modal-actions">
+        <button className="button secondary" onClick={onClose}>Close</button>
+        <button className="button secondary" onClick={onLabels}>Labels</button>
+        {!item.archivedAt && canEdit && <button className="button secondary" disabled={busy} onClick={onAddOne}>{busy ? 'Updating...' : '+1 quantity'}</button>}
+        {!item.archivedAt && canEdit && <button className="button primary" onClick={onEdit}>Edit</button>}
+        {!item.archivedAt && canEdit && <button className="button danger" disabled={busy} onClick={onArchive}>Archive</button>}
+        {item.archivedAt && canEdit && <button className="button primary" disabled={busy} onClick={onRestore}>{busy ? 'Restoring...' : 'Restore'}</button>}
+      </div>
+    </div>
+  </Modal>;
 }
 
 function decimalToMinor(value: string): number | null {
