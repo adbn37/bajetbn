@@ -154,6 +154,7 @@ export async function buildUserDataExport(uid: string) {
   const sharedBillAssignments = allSharedBillAssignments.filter((item) => item.memberUid === uid);
   const sharedBillPayments = allSharedBillPayments.filter((item) => item.memberUid === uid);
 
+  const collectionItems = await rowsForValues('collectionItems', 'spaceId', activeSpaceIds);
   const data = {
     exportInformation: {
       exportedAt: new Date().toISOString(),
@@ -181,7 +182,8 @@ export async function buildUserDataExport(uid: string) {
     sharedExpensePayments: allSharedExpensePayments.filter((item) => item.fromUid === uid || item.toUid === uid),
     tripMoney: allTripFunds,
     tripMoneyContributions: allTripMoneyContributions.filter((item) => item.memberUid === uid),
-    reminders: reminderHistory,
+      collectionItems,
+      reminders: reminderHistory,
     notifications,
     invitations,
   };
