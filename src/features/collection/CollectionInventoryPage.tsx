@@ -166,26 +166,44 @@ export function CollectionInventoryPage() {
   const startScanner = async () => {
     if (!canEdit) return;
     setError('');
-    setNotice('Point the camera at a UPC, EAN, Code 128, or QR code.');
+    setNotice('Camera is scanning. Keep the barcode horizontal, fill the camera view, and use good light.');
     scanHandledRef.current = false;
     setScanning(true);
     try {
       const hints = new Map<DecodeHintType, unknown>();
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-        BarcodeFormat.EAN_13,
+        BarcodeFormat.AZTEC,
+        BarcodeFormat.CODABAR,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.CODE_93,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.DATA_MATRIX,
         BarcodeFormat.EAN_8,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.ITF,
+        BarcodeFormat.MAXICODE,
+        BarcodeFormat.MICRO_QR_CODE,
+        BarcodeFormat.PDF_417,
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.RSS_14,
+        BarcodeFormat.RSS_EXPANDED,
         BarcodeFormat.UPC_A,
         BarcodeFormat.UPC_E,
-        BarcodeFormat.CODE_128,
-        BarcodeFormat.CODE_39,
-        BarcodeFormat.QR_CODE,
       ]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
       const reader = new BrowserMultiFormatReader(hints, {
         delayBetweenScanAttempts: 180,
         delayBetweenScanSuccess: 800,
       });
       const controls = await reader.decodeFromConstraints(
-        { audio: false, video: { facingMode: { ideal: 'environment' } } },
+        {
+          audio: false,
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
         videoRef.current || undefined,
         (result, _scanError, activeControls) => {
           if (!result || scanHandledRef.current) return;
@@ -197,6 +215,13 @@ export function CollectionInventoryPage() {
         },
       );
       scannerRef.current = controls;
+      try {
+        await controls.streamVideoConstraintsApply?.({
+          advanced: [{ focusMode: 'continuous' }],
+        } as unknown as MediaTrackConstraints);
+      } catch {
+        // Continuous autofocus is optional and is not supported by every camera.
+      }
     } catch (nextError) {
       setScanning(false);
       setError(`Camera could not start. ${getErrorMessage(nextError)} You can enter the barcode manually instead.`);
