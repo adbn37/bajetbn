@@ -46,7 +46,7 @@ service cloud.firestore {
           'displayId', 'spaceId', 'ownerId', 'createdBy', 'name', 'category', 'brand',
           'series', 'variant', 'condition', 'conditionNote', 'barcodes', 'internalCode',
           'quantity', 'storageLocation', 'purchasePriceMinor', 'estimatedValueMinor',
-          'currency', 'notes', 'tags', 'archivedAt', 'createdAt', 'updatedAt'
+          'currency', 'notes', 'tags', 'lastMovementId', 'archivedAt', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
           'displayId', 'spaceId', 'ownerId', 'createdBy', 'name', 'category', 'brand',
@@ -73,8 +73,61 @@ service cloud.firestore {
         && data.currency == 'BND'
         && data.notes is string && data.notes.size() <= 2000
         && data.tags is list && data.tags.size() <= 20
+        && (!('lastMovementId' in data) || (data.lastMovementId is string && data.lastMovementId.size() > 0 && data.lastMovementId.size() <= 80))
         && (data.archivedAt == null || data.archivedAt is timestamp)
         && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validCollectionMovement(data) {
+      return data.keys().hasOnly([
+          'displayId', 'spaceId', 'ownerId', 'itemId', 'itemName', 'createdBy',
+          'reason', 'note', 'delta', 'previousQuantity', 'nextQuantity', 'createdAt'
+        ])
+        && data.keys().hasAll([
+          'displayId', 'spaceId', 'ownerId', 'itemId', 'itemName', 'createdBy',
+          'reason', 'note', 'delta', 'previousQuantity', 'nextQuantity', 'createdAt'
+        ])
+        && data.displayId is string && data.displayId.size() > 0 && data.displayId.size() <= 80
+        && data.spaceId is string && data.ownerId is string && data.itemId is string
+        && data.itemName is string && data.itemName.size() > 0 && data.itemName.size() <= 120
+        && data.createdBy == request.auth.uid
+        && data.reason in ['initial', 'acquired', 'sold', 'gifted', 'lost', 'damaged', 'correction', 'other']
+        && data.note is string && data.note.size() <= 500
+        && data.delta is int && data.delta >= -1000000 && data.delta <= 1000000
+        && data.previousQuantity is int && data.previousQuantity >= 0 && data.previousQuantity <= 1000000
+        && data.nextQuantity is int && data.nextQuantity >= 0 && data.nextQuantity <= 1000000
+        && data.nextQuantity == data.previousQuantity + data.delta
+        && data.createdAt == request.time;
+    }
+
+    function validOpeningMovement(itemId, data) {
+      return ('lastMovementId' in data)
+        && existsAfter(/databases/$(database)/documents/collectionItemMovements/$(data.lastMovementId))
+        && getAfter(/databases/$(database)/documents/collectionItemMovements/$(data.lastMovementId)).data.itemId == itemId
+        && getAfter(/databases/$(database)/documents/collectionItemMovements/$(data.lastMovementId)).data.spaceId == data.spaceId
+        && getAfter(/databases/$(database)/documents/collectionItemMovements/$(data.lastMovementId)).data.reason == 'initial'
+        && getAfter(/databases/$(database)/documents/collectionItemMovements/$(data.lastMovementId)).data.previousQuantity == 0
+        && getAfter(/databases/$(database)/documents/collectionItemMovements/$(data.lastMovementId)).data.nextQuantity == data.quantity;
+    }
+
+    function validQuantityUpdate(itemId, before, after) {
+      return (
+          after.quantity == before.quantity
+          && (
+            (!('lastMovementId' in before) && !('lastMovementId' in after))
+            || (('lastMovementId' in before) && ('lastMovementId' in after) && after.lastMovementId == before.lastMovementId)
+          )
+        ) || (
+          after.quantity != before.quantity
+          && ('lastMovementId' in after)
+          && (!('lastMovementId' in before) || after.lastMovementId != before.lastMovementId)
+          && existsAfter(/databases/$(database)/documents/collectionItemMovements/$(after.lastMovementId))
+          && getAfter(/databases/$(database)/documents/collectionItemMovements/$(after.lastMovementId)).data.itemId == itemId
+          && getAfter(/databases/$(database)/documents/collectionItemMovements/$(after.lastMovementId)).data.spaceId == after.spaceId
+          && getAfter(/databases/$(database)/documents/collectionItemMovements/$(after.lastMovementId)).data.previousQuantity == before.quantity
+          && getAfter(/databases/$(database)/documents/collectionItemMovements/$(after.lastMovementId)).data.nextQuantity == after.quantity
+          && getAfter(/databases/$(database)/documents/collectionItemMovements/$(after.lastMovementId)).data.createdAt == request.time
+        );
     }
 
     function posAccessId(spaceId, uid) {
@@ -201,6 +254,7 @@ service cloud.firestore {
       allow read: if isCollectionSpace(resource.data.spaceId) && isSpaceMember(resource.data.spaceId);
       allow create: if canEditCollection(request.resource.data.spaceId)
         && validCollectionItem(request.resource.data)
+        && validOpeningMovement(itemId, request.resource.data)
         && request.resource.data.ownerId == get(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.archivedAt == null
@@ -208,6 +262,7 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
       allow update: if canEditCollection(resource.data.spaceId)
         && validCollectionItem(request.resource.data)
+        && validQuantityUpdate(itemId, resource.data, request.resource.data)
         && request.resource.data.spaceId == resource.data.spaceId
         && request.resource.data.ownerId == resource.data.ownerId
         && request.resource.data.createdBy == resource.data.createdBy
@@ -216,6 +271,18 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
       allow delete: if false;
+    }
+
+    match /collectionItemMovements/{movementId} {
+      allow read: if isCollectionSpace(resource.data.spaceId) && isSpaceMember(resource.data.spaceId);
+      allow create: if canEditCollection(request.resource.data.spaceId)
+        && validCollectionMovement(request.resource.data)
+        && request.resource.data.ownerId == get(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId
+        && existsAfter(/databases/$(database)/documents/collectionItems/$(request.resource.data.itemId))
+        && getAfter(/databases/$(database)/documents/collectionItems/$(request.resource.data.itemId)).data.spaceId == request.resource.data.spaceId
+        && getAfter(/databases/$(database)/documents/collectionItems/$(request.resource.data.itemId)).data.name == request.resource.data.itemName
+        && getAfter(/databases/$(database)/documents/collectionItems/$(request.resource.data.itemId)).data.lastMovementId == movementId;
+      allow update, delete: if false;
     }
 
     match /smePosSettings/{spaceId} {

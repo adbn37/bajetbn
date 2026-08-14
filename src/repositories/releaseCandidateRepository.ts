@@ -154,13 +154,16 @@ export async function buildUserDataExport(uid: string) {
   const sharedBillAssignments = allSharedBillAssignments.filter((item) => item.memberUid === uid);
   const sharedBillPayments = allSharedBillPayments.filter((item) => item.memberUid === uid);
 
-  const collectionItems = await rowsForValues('collectionItems', 'spaceId', activeSpaceIds);
+  const [collectionItems, collectionItemMovements] = await Promise.all([
+    rowsForValues('collectionItems', 'spaceId', activeSpaceIds),
+    rowsForValues('collectionItemMovements', 'spaceId', activeSpaceIds),
+  ]);
   const data = {
     exportInformation: {
       exportedAt: new Date().toISOString(),
       environment: import.meta.env.VITE_APP_ENV || 'local',
       projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-      formatVersion: 4,
+      formatVersion: 5,
     },
     profile: profileSnapshot.exists() ? { id: profileSnapshot.id, ...profileSnapshot.data() } : null,
     spaces,
@@ -182,8 +185,9 @@ export async function buildUserDataExport(uid: string) {
     sharedExpensePayments: allSharedExpensePayments.filter((item) => item.fromUid === uid || item.toUid === uid),
     tripMoney: allTripFunds,
     tripMoneyContributions: allTripMoneyContributions.filter((item) => item.memberUid === uid),
-      collectionItems,
-      reminders: reminderHistory,
+    collectionItems,
+    collectionItemMovements,
+    reminders: reminderHistory,
     notifications,
     invitations,
   };

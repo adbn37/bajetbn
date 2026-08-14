@@ -1,17 +1,24 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
-  increment,
   limit,
+  orderBy,
   query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { requireFirebase } from '../services/firebase';
-import type { CollectionItem, CollectionItemCondition } from '../types/models';
+import type {
+  CollectionItem,
+  CollectionItemCondition,
+  CollectionQuantityMovement,
+  CollectionQuantityReason,
+} from '../types/models';
 import { createClientDisplayId } from '../utils/ids';
 
 export interface CollectionItemInput {
@@ -78,6 +85,13 @@ export async function listCollectionItems(spaceId: string, includeArchived = fal
   return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
 }
 
+export async function getCollectionItem(spaceId: string, itemId: string): Promise<CollectionItem | null> {
+  const { db } = requireFirebase();
+  const snapshot = await getDoc(doc(db, 'collectionItems', itemId));
+  if (!snapshot.exists() || snapshot.data().spaceId !== spaceId) return null;
+  return { id: snapshot.id, ...snapshot.data() } as CollectionItem;
+}
+
 export async function findCollectionItemByBarcode(spaceId: string, barcode: string): Promise<CollectionItem | null> {
   const { db } = requireFirebase();
   const value = barcode.trim();
@@ -92,6 +106,18 @@ export async function findCollectionItemByBarcode(spaceId: string, barcode: stri
   return match ? ({ id: match.id, ...match.data() } as CollectionItem) : null;
 }
 
+export async function listCollectionQuantityMovements(spaceId: string, itemId: string): Promise<CollectionQuantityMovement[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(
+    collection(db, 'collectionItemMovements'),
+    where('spaceId', '==', spaceId),
+    where('itemId', '==', itemId),
+    orderBy('createdAt', 'desc'),
+    limit(100),
+  ));
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as CollectionQuantityMovement);
+}
+
 export async function createCollectionItem(input: {
   spaceId: string;
   ownerId: string;
@@ -100,36 +126,104 @@ export async function createCollectionItem(input: {
   item: CollectionItemInput;
 }): Promise<string> {
   const { db } = requireFirebase();
-  const ref = doc(collection(db, 'collectionItems'));
+  const itemRef = doc(collection(db, 'collectionItems'));
+  const movementRef = doc(collection(db, 'collectionItemMovements'));
   const internalCode = input.item.internalCode.trim();
-  await setDoc(ref, {
+  const cleaned = cleanedInput({ ...input.item, internalCode });
+  const batch = writeBatch(db);
+  batch.set(itemRef, {
     displayId: createClientDisplayId('CIT'),
     spaceId: input.spaceId,
     ownerId: input.ownerId,
     createdBy: input.createdBy,
     internalCode,
     currency: input.currency,
-    ...cleanedInput({ ...input.item, internalCode }),
+    ...cleaned,
+    lastMovementId: movementRef.id,
     archivedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  return ref.id;
+  batch.set(movementRef, {
+    displayId: createClientDisplayId('CMV'),
+    spaceId: input.spaceId,
+    ownerId: input.ownerId,
+    itemId: itemRef.id,
+    itemName: cleaned.name,
+    createdBy: input.createdBy,
+    reason: 'initial',
+    note: 'Opening collection quantity',
+    delta: cleaned.quantity,
+    previousQuantity: 0,
+    nextQuantity: cleaned.quantity,
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
+  return itemRef.id;
 }
 
 export async function updateCollectionItem(itemId: string, input: CollectionItemInput) {
   const { db } = requireFirebase();
+  const cleaned = cleanedInput(input);
   await updateDoc(doc(db, 'collectionItems', itemId), {
-    ...cleanedInput(input),
+    name: cleaned.name,
+    category: cleaned.category,
+    brand: cleaned.brand,
+    series: cleaned.series,
+    variant: cleaned.variant,
+    condition: cleaned.condition,
+    conditionNote: cleaned.conditionNote,
+    barcodes: cleaned.barcodes,
+    storageLocation: cleaned.storageLocation,
+    purchasePriceMinor: cleaned.purchasePriceMinor,
+    estimatedValueMinor: cleaned.estimatedValueMinor,
+    notes: cleaned.notes,
+    tags: cleaned.tags,
     updatedAt: serverTimestamp(),
   });
 }
 
-export async function addCollectionItemQuantity(itemId: string, amount = 1) {
+export async function adjustCollectionItemQuantity(input: {
+  spaceId: string;
+  itemId: string;
+  createdBy: string;
+  delta: number;
+  reason: CollectionQuantityReason;
+  note?: string;
+}) {
+  const delta = Math.trunc(input.delta);
+  if (!Number.isSafeInteger(delta) || delta === 0) throw new Error('Quantity adjustment must be a non-zero whole number.');
   const { db } = requireFirebase();
-  await updateDoc(doc(db, 'collectionItems', itemId), {
-    quantity: increment(Math.max(1, Math.trunc(amount))),
-    updatedAt: serverTimestamp(),
+  const itemRef = doc(db, 'collectionItems', input.itemId);
+  const movementRef = doc(collection(db, 'collectionItemMovements'));
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(itemRef);
+    if (!snapshot.exists() || snapshot.data().spaceId !== input.spaceId) throw new Error('Collection item not found.');
+    if (snapshot.data().archivedAt) throw new Error('Restore this item before changing its quantity.');
+    const previousQuantity = Number(snapshot.data().quantity || 0);
+    const nextQuantity = previousQuantity + delta;
+    if (!Number.isSafeInteger(nextQuantity) || nextQuantity < 0 || nextQuantity > 1000000) {
+      throw new Error('The adjustment would create an invalid collection quantity.');
+    }
+    transaction.update(itemRef, {
+      quantity: nextQuantity,
+      lastMovementId: movementRef.id,
+      updatedAt: serverTimestamp(),
+    });
+    transaction.set(movementRef, {
+      displayId: createClientDisplayId('CMV'),
+      spaceId: input.spaceId,
+      ownerId: String(snapshot.data().ownerId || ''),
+      itemId: input.itemId,
+      itemName: String(snapshot.data().name || 'Collection item'),
+      createdBy: input.createdBy,
+      reason: input.reason,
+      note: String(input.note || '').trim().slice(0, 500),
+      delta,
+      previousQuantity,
+      nextQuantity,
+      createdAt: serverTimestamp(),
+    });
   });
 }
 

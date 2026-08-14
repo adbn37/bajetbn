@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
-import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import * as bwipjs from '@bwip-js/browser';
+import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listSpaceMembers } from '../../repositories/collaborationRepository';
 import {
-  addCollectionItemQuantity,
+  adjustCollectionItemQuantity,
   archiveCollectionItem,
   createCollectionInternalCode,
   createCollectionItem,
@@ -67,15 +66,10 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
   const [search, setSearch] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const [showArchived, setShowArchived] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [editing, setEditing] = useState<CollectionItem | null>(null);
   const [createBarcode, setCreateBarcode] = useState<string | null>(null);
   const [labelItems, setLabelItems] = useState<CollectionItem[] | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<CollectionItem | null>(null);
-  const [detailItem, setDetailItem] = useState<CollectionItem | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const scannerRef = useRef<IScannerControls | null>(null);
-  const scanHandledRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!user || !spaceId) return;
@@ -103,8 +97,9 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
     }
   }, [spaceId, user]);
 
+  // The route loader owns this page's loading-state lifecycle.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => () => scannerRef.current?.stop(), []);
 
   const currentMember = members.find((item) => item.uid === user?.uid);
   const canEdit = Boolean(currentMember && editableRoles.has(currentMember.role) && !space?.archivedAt);
@@ -131,12 +126,6 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
   const totalCostMinor = activeItems.reduce((sum, item) => sum + (item.purchasePriceMinor || 0) * item.quantity, 0);
   const totalValueMinor = activeItems.reduce((sum, item) => sum + (item.estimatedValueMinor || 0) * item.quantity, 0);
 
-  const stopScanner = useCallback(() => {
-    scannerRef.current?.stop();
-    scannerRef.current = null;
-    setScanning(false);
-  }, []);
-
   const handleBarcode = useCallback(async (rawValue: string) => {
     if (!space || space.type !== 'collection') return;
     const barcode = rawValue.trim();
@@ -146,12 +135,7 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
     try {
       const match = await findCollectionItemByBarcode(space.id, barcode);
       if (match) {
-        setShowArchived(Boolean(match.archivedAt));
-        setSearch(match.internalCode);
-        setDetailItem(match);
-        setNotice(match.archivedAt
-          ? `${match.name} found in Archived items.`
-          : `${match.name} found. Quantity unchanged.`);
+        navigate(`/spaces/${space.id}/collection/items/${match.id}`);
         return;
       }
       if (mode === 'inventory') {
@@ -168,74 +152,7 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     }
-  }, [canEdit, mode, space]);
-
-  const startScanner = async () => {
-    if (mode === 'add' && !canEdit) return;
-    setError('');
-    setNotice(mode === 'inventory'
-      ? 'Camera is searching your saved collection. Keep the barcode horizontal and in focus.'
-      : 'Camera is scanning a new barcode. Keep it horizontal, fill the camera view, and use good light.');
-    scanHandledRef.current = false;
-    setScanning(true);
-    try {
-      const hints = new Map<DecodeHintType, unknown>();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-        BarcodeFormat.AZTEC,
-        BarcodeFormat.CODABAR,
-        BarcodeFormat.CODE_39,
-        BarcodeFormat.CODE_93,
-        BarcodeFormat.CODE_128,
-        BarcodeFormat.DATA_MATRIX,
-        BarcodeFormat.EAN_8,
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.ITF,
-        BarcodeFormat.MAXICODE,
-        BarcodeFormat.MICRO_QR_CODE,
-        BarcodeFormat.PDF_417,
-        BarcodeFormat.QR_CODE,
-        BarcodeFormat.RSS_14,
-        BarcodeFormat.RSS_EXPANDED,
-        BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E,
-      ]);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-      const reader = new BrowserMultiFormatReader(hints, {
-        delayBetweenScanAttempts: 180,
-        delayBetweenScanSuccess: 800,
-      });
-      const controls = await reader.decodeFromConstraints(
-        {
-          audio: false,
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        },
-        videoRef.current || undefined,
-        (result, _scanError, activeControls) => {
-          if (!result || scanHandledRef.current) return;
-          scanHandledRef.current = true;
-          activeControls.stop();
-          scannerRef.current = null;
-          setScanning(false);
-          void handleBarcode(result.getText());
-        },
-      );
-      scannerRef.current = controls;
-      try {
-        await controls.streamVideoConstraintsApply?.({
-          advanced: [{ focusMode: 'continuous' }],
-        } as unknown as MediaTrackConstraints);
-      } catch {
-        // Continuous autofocus is optional and is not supported by every camera.
-      }
-    } catch (nextError) {
-      setScanning(false);
-      setError(`Camera could not start. ${getErrorMessage(nextError)} You can enter the barcode manually instead.`);
-    }
-  };
+  }, [canEdit, mode, navigate, space]);
 
   const submitManualBarcode = (event: FormEvent) => {
     event.preventDefault();
@@ -250,7 +167,6 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
     try {
       await archiveCollectionItem(item.id);
       setArchiveTarget(null);
-      setDetailItem(null);
       await load();
       setNotice(`${item.name} archived.`);
     }
@@ -262,7 +178,6 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
     setBusyId(item.id); setError('');
     try {
       await restoreCollectionItem(item.id);
-      setDetailItem(null);
       await load();
       setNotice(`${item.name} restored.`);
     }
@@ -273,10 +188,14 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
   const runAddOne = async (item: CollectionItem) => {
     setBusyId(item.id); setError('');
     try {
-      await addCollectionItemQuantity(item.id, 1);
-      setDetailItem((current) => current?.id === item.id
-        ? { ...current, quantity: current.quantity + 1 }
-        : current);
+      await adjustCollectionItemQuantity({
+	        spaceId,
+        itemId: item.id,
+        createdBy: user?.uid || '',
+        delta: 1,
+        reason: 'acquired',
+        note: 'Quick +1 from inventory',
+      });
       await load();
       setNotice(`${item.name} quantity increased.`);
     }
@@ -329,12 +248,8 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
             <h2>Find an existing item</h2>
             <p>Scan a saved barcode to open its details without changing quantity.</p>
           </div>
-          <div className="button-row">
-            {!scanning && <button className="button primary" onClick={() => void startScanner()}>Find with camera</button>}
-            {scanning && <button className="button secondary" onClick={stopScanner}>Stop camera</button>}
-          </div>
         </div>
-        <video ref={videoRef} className={`collection-scanner-video ${scanning ? 'active' : ''}`} muted playsInline />
+        <BarcodeCameraScanner startLabel="Find with camera" onDetected={handleBarcode} onError={setError} />
       </section>
 
       <section className="panel collection-list-panel">
@@ -373,10 +288,10 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
               <span>Location: {item.storageLocation || 'Not set'}</span>
               <span>Code: {item.internalCode}</span>
               <span>{item.barcodes.length} saved barcode{item.barcodes.length === 1 ? '' : 's'}</span>
-              <span>Updated {new Date(timestampValue(item.updatedAt) || Date.now()).toLocaleDateString('en-BN')}</span>
+              <span>Updated {timestampValue(item.updatedAt) ? new Date(timestampValue(item.updatedAt)).toLocaleDateString('en-BN') : 'Not recorded'}</span>
             </div>
             <footer className="button-row">
-              <button className="button primary small" onClick={() => setDetailItem(item)}>Details</button>
+              <Link className="button primary small" to={`/spaces/${space.id}/collection/items/${item.id}`}>Details</Link>
               {!item.archivedAt && canEdit && <button className="button secondary small" disabled={busyId === item.id} onClick={() => void runAddOne(item)}>+1 quantity</button>}
               {!item.archivedAt && canEdit && <button className="button secondary small" onClick={() => { setEditing(item); setCreateBarcode(null); }}>Edit</button>}
               {!item.archivedAt && <button className="button secondary small" onClick={() => setLabelItems([item])}>Labels</button>}
@@ -395,12 +310,10 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
             <p>An existing barcode will open its saved item instead of creating a duplicate.</p>
           </div>
           <div className="button-row">
-            {canEdit && !scanning && <button className="button primary" onClick={() => void startScanner()}>Start camera</button>}
-            {scanning && <button className="button secondary" onClick={stopScanner}>Stop camera</button>}
             {canEdit && <button className="button secondary" onClick={() => { setEditing(null); setCreateBarcode(''); }}>Add without barcode</button>}
           </div>
         </div>
-        <video ref={videoRef} className={`collection-scanner-video ${scanning ? 'active' : ''}`} muted playsInline />
+        <BarcodeCameraScanner startLabel="Start camera" disabled={!canEdit} onDetected={handleBarcode} onError={setError} />
         <form className="collection-barcode-entry" onSubmit={submitManualBarcode}>
           <label>
             Barcode number or code
@@ -443,29 +356,6 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
       }}
     />}
 
-    {detailItem && <CollectionItemDetailsModal
-      item={detailItem}
-      currency={space.currency}
-      canEdit={canEdit}
-      busy={busyId === detailItem.id}
-      onClose={() => setDetailItem(null)}
-      onEdit={() => {
-        setEditing(detailItem);
-        setCreateBarcode(null);
-        setDetailItem(null);
-      }}
-      onAddOne={() => void runAddOne(detailItem)}
-      onLabels={() => {
-        setLabelItems([detailItem]);
-        setDetailItem(null);
-      }}
-      onArchive={() => {
-        setArchiveTarget(detailItem);
-        setDetailItem(null);
-      }}
-      onRestore={() => void runRestore(detailItem)}
-    />}
-
     {archiveTarget && <Modal title={`Archive ${archiveTarget.name}?`} onClose={() => setArchiveTarget(null)}>
       <div className="form-stack">
         <p>This item will move to Archived items. Its barcode, quantity, and history will be kept.</p>
@@ -481,64 +371,6 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
 
     {labelItems && <CollectionLabelSheet items={labelItems} onClose={() => setLabelItems(null)} />}
   </main>;
-}
-
-function CollectionItemDetailsModal({
-  item,
-  currency,
-  canEdit,
-  busy,
-  onClose,
-  onEdit,
-  onAddOne,
-  onLabels,
-  onArchive,
-  onRestore,
-}: {
-  item: CollectionItem;
-  currency: string;
-  canEdit: boolean;
-  busy: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onAddOne: () => void;
-  onLabels: () => void;
-  onArchive: () => void;
-  onRestore: () => void;
-}) {
-  return <Modal title={item.name} onClose={onClose}>
-    <div className="form-stack">
-      <article className={`collection-item-card ${item.archivedAt ? 'archived' : ''}`}>
-        <header>
-          <div><span className="eyebrow">{item.category}</span><h3>{item.name}</h3></div>
-          <span className="type-badge">{conditionLabel(item.condition)}</span>
-        </header>
-        <div className="collection-item-meta">
-          {(item.brand || item.series || item.variant) && <span>Identity: {[item.brand, item.series, item.variant].filter(Boolean).join(' - ')}</span>}
-          <span><strong>{item.quantity}</strong> in collection</span>
-          <span>Storage location: {item.storageLocation || 'Not set'}</span>
-          <span>Internal code: {item.internalCode}</span>
-          <span>Saved barcodes: {item.barcodes.join(', ') || 'None'}</span>
-          <span>Purchase price per item: {formatMoney(item.purchasePriceMinor || 0, currency)}</span>
-          <span>Estimated value per item: {formatMoney(item.estimatedValueMinor || 0, currency)}</span>
-          {item.conditionNote && <span>Condition note: {item.conditionNote}</span>}
-          {item.tags.length > 0 && <span>Tags: {item.tags.join(', ')}</span>}
-          <span>Updated {new Date(timestampValue(item.updatedAt) || Date.now()).toLocaleDateString('en-BN')}</span>
-        </div>
-        {item.notes && <div className="notice">Notes: {item.notes}</div>}
-        {item.archivedAt && <div className="notice">This item is archived.</div>}
-      </article>
-
-      <div className="modal-actions">
-        <button className="button secondary" onClick={onClose}>Close</button>
-        <button className="button secondary" onClick={onLabels}>Labels</button>
-        {!item.archivedAt && canEdit && <button className="button secondary" disabled={busy} onClick={onAddOne}>{busy ? 'Updating...' : '+1 quantity'}</button>}
-        {!item.archivedAt && canEdit && <button className="button primary" onClick={onEdit}>Edit</button>}
-        {!item.archivedAt && canEdit && <button className="button danger" disabled={busy} onClick={onArchive}>Archive</button>}
-        {item.archivedAt && canEdit && <button className="button primary" disabled={busy} onClick={onRestore}>{busy ? 'Restoring...' : 'Restore'}</button>}
-      </div>
-    </div>
-  </Modal>;
 }
 
 function decimalToMinor(value: string): number | null {
@@ -632,7 +464,7 @@ function CollectionItemForm({
         <label>Series or set<input value={series} onChange={(event) => setSeries(event.target.value)} placeholder="Series, set, or collection" /></label>
         <label>Variant<input value={variant} onChange={(event) => setVariant(event.target.value)} placeholder="Colour, edition, card number" /></label>
         <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value as CollectionItemCondition)}>{conditions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        <label>Quantity<input type="number" min="0" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+        {initial ? <div className="collection-readonly-quantity"><span>Quantity</span><strong>{initial.quantity}</strong><small>Use Item Details to record a quantity adjustment.</small></div> : <label>Quantity<input type="number" min="0" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>}
         <label>Storage location<input value={storageLocation} onChange={(event) => setStorageLocation(event.target.value)} placeholder="Shelf, box, binder, or room" /></label>
         <label>Purchase price per item (BND)<input type="number" min="0" step="0.01" inputMode="decimal" value={purchasePrice} onChange={(event) => setPurchasePrice(event.target.value)} /></label>
         <label>Estimated value per item (BND)<input type="number" min="0" step="0.01" inputMode="decimal" value={estimatedValue} onChange={(event) => setEstimatedValue(event.target.value)} /></label>
