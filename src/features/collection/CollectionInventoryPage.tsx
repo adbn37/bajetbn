@@ -143,9 +143,7 @@ export function CollectionInventoryPage() {
         setSearch(match.internalCode);
         setShowArchived(false);
         if (canEdit) {
-          await addCollectionItemQuantity(match.id, 1);
-          await load();
-          setNotice(`${match.name} found. Quantity increased to ${match.quantity + 1}.`);
+          setNotice(`${match.name} found. Quantity unchanged. Use +1 to add another piece.`);
         } else {
           setNotice(`${match.name} found. Your role has view-only access.`);
         }
@@ -161,7 +159,7 @@ export function CollectionInventoryPage() {
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     }
-  }, [canEdit, load, space]);
+  }, [canEdit, space]);
 
   const startScanner = async () => {
     if (!canEdit) return;
