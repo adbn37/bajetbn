@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { CollectionItemPhoto } from '../../components/CollectionItemPhoto';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,11 +10,15 @@ import {
   archiveCollectionItem,
   getCollectionItem,
   listCollectionQuantityMovements,
+  removeCollectionItemPhoto,
   restoreCollectionItem,
+  setPrimaryCollectionItemPhoto,
+  uploadCollectionItemPhoto,
 } from '../../repositories/collectionRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import type {
   CollectionItem,
+  CollectionItemPhoto as CollectionPhoto,
   CollectionQuantityMovement,
   CollectionQuantityReason,
   Space,
@@ -21,6 +26,7 @@ import type {
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
+import { prepareCollectionPhoto } from '../../utils/collectionPhotos';
 
 const editableRoles = new Set(['owner', 'admin', 'contributor']);
 const reasons: Array<{ value: CollectionQuantityReason; label: string }> = [
@@ -55,6 +61,8 @@ export function CollectionItemDetailsPage() {
   const [notice, setNotice] = useState('');
   const [showAdjustment, setShowAdjustment] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [removePhotoTarget, setRemovePhotoTarget] = useState<CollectionPhoto | null>(null);
 
   const load = useCallback(async () => {
     if (!user || !spaceId || !itemId) return;
@@ -135,6 +143,42 @@ export function CollectionItemDetailsPage() {
     finally { setBusy(false); }
   };
 
+  const uploadPhoto = async (file: File | undefined) => {
+    if (!file || !item || !space) return;
+    setPhotoBusy(true); setError(''); setNotice('');
+    try {
+      if ((item.photos || []).length >= 6) throw new Error('A collection item can have up to six photos.');
+      const prepared = await prepareCollectionPhoto(file);
+      await uploadCollectionItemPhoto({ spaceId: space.id, itemId: item.id, ...prepared });
+      await load();
+      setNotice('Photo added. The first photo is selected as primary automatically.');
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setPhotoBusy(false); }
+  };
+
+  const choosePrimaryPhoto = async (photoId: string) => {
+    if (!item || !space) return;
+    setPhotoBusy(true); setError('');
+    try {
+      await setPrimaryCollectionItemPhoto({ spaceId: space.id, itemId: item.id, photoId });
+      await load();
+      setNotice('Primary photo updated.');
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setPhotoBusy(false); }
+  };
+
+  const removePhoto = async () => {
+    if (!item || !space || !removePhotoTarget) return;
+    setPhotoBusy(true); setError('');
+    try {
+      await removeCollectionItemPhoto({ spaceId: space.id, itemId: item.id, photoId: removePhotoTarget.id });
+      setRemovePhotoTarget(null);
+      await load();
+      setNotice('Photo removed.');
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setPhotoBusy(false); }
+  };
+
   if (loading) return <main className="page"><div className="loading-panel">Loading item details...</div></main>;
 
   if (!space || !item) return <main className="page">
@@ -161,6 +205,26 @@ export function CollectionItemDetailsPage() {
       <article className="summary-card"><span>Estimated value</span><strong>{formatMoney(totalValueMinor, space.currency)}</strong><small>Quantity × saved estimate</small></article>
     </section>
 
+    <section className="panel collection-photo-panel">
+      <div className="panel-heading">
+        <div><span className="eyebrow">Item photos</span><h2>Photos</h2><p>Add up to six compressed photos. The primary photo appears in Inventory.</p></div>
+        {!item.archivedAt && canEdit && (item.photos || []).length < 6 && <label className={`button primary collection-photo-upload ${photoBusy ? 'disabled' : ''}`}>
+          {photoBusy ? 'Preparing photo...' : 'Take or choose photo'}
+          <input type="file" accept="image/*" capture="environment" disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void uploadPhoto(file); }} />
+        </label>}
+      </div>
+      {(item.photos || []).length === 0 ? <div className="empty-inline">No photos yet. On a phone, Take or choose photo can open the rear camera.</div> : <div className="collection-photo-grid">
+        {(item.photos || []).map((photo) => <article className={photo.id === item.primaryPhotoId ? 'primary' : ''} key={photo.id}>
+          <CollectionItemPhoto photo={photo} alt={`${item.name} collection`} className="collection-photo-thumbnail" />
+          <div><strong>{photo.id === item.primaryPhotoId ? 'Primary photo' : 'Item photo'}</strong><small>{photo.width} × {photo.height}</small></div>
+          {!item.archivedAt && canEdit && <div className="button-row">
+            {photo.id !== item.primaryPhotoId && <button className="button secondary small" disabled={photoBusy} onClick={() => void choosePrimaryPhoto(photo.id)}>Make primary</button>}
+            <button className="text-button danger" disabled={photoBusy} onClick={() => setRemovePhotoTarget(photo)}>Remove</button>
+          </div>}
+        </article>)}
+      </div>}
+    </section>
+
     <div className="collection-detail-layout">
       <section className="panel collection-detail-card">
         <div className="panel-heading"><div><span className="eyebrow">Item record</span><h2>Saved details</h2></div></div>
@@ -170,7 +234,8 @@ export function CollectionItemDetailsPage() {
           <div><dt>Condition</dt><dd>{item.condition.replace('_', ' ')}</dd></div>
           <div><dt>Location</dt><dd>{item.storageLocation || 'Not set'}</dd></div>
           <div><dt>Internal code</dt><dd>{item.internalCode}</dd></div>
-          <div><dt>Barcodes</dt><dd>{item.barcodes.join(', ')}</dd></div>
+          <div><dt>Primary barcode</dt><dd>{item.primaryBarcode || item.internalCode}</dd></div>
+          <div><dt>All barcodes</dt><dd>{item.barcodes.join(', ')}</dd></div>
           <div><dt>Purchase price</dt><dd>{formatMoney(item.purchasePriceMinor || 0, space.currency)} each</dd></div>
           <div><dt>Estimated value</dt><dd>{formatMoney(item.estimatedValueMinor || 0, space.currency)} each</dd></div>
           <div><dt>Tags</dt><dd>{item.tags.join(', ') || 'None'}</dd></div>
@@ -213,6 +278,14 @@ export function CollectionItemDetailsPage() {
 
     {showArchive && <Modal title={`Archive ${item.name}?`} onClose={() => setShowArchive(false)}>
       <div className="form-stack"><p>The item will move to Archived items. Its barcode and quantity history will remain available.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={() => setShowArchive(false)}>Cancel</button><button className="button danger" disabled={busy} onClick={() => void archive()}>{busy ? 'Archiving...' : 'Archive item'}</button></div></div>
+    </Modal>}
+
+    {removePhotoTarget && <Modal title="Remove this photo?" onClose={() => setRemovePhotoTarget(null)}>
+      <div className="form-stack">
+        <p>The photo will be removed from this item and cannot be restored.</p>
+        {removePhotoTarget.id === item.primaryPhotoId && <div className="notice">The next saved photo will become primary.</div>}
+        <div className="modal-actions"><button className="button secondary" disabled={photoBusy} onClick={() => setRemovePhotoTarget(null)}>Cancel</button><button className="button danger" disabled={photoBusy} onClick={() => void removePhoto()}>{photoBusy ? 'Removing...' : 'Remove photo'}</button></div>
+      </div>
     </Modal>}
   </main>;
 }

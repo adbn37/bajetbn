@@ -13,5 +13,5 @@ This phase strengthens the dedicated Collection Space without mixing it with SME
 
 ## Deferred
 
-- Item photos and primary-barcode management are planned for v1.2.0 Alpha 2.
+- Item photos and primary-barcode management are delivered in v1.2.0 Alpha 2.
 - SME POS barcode receiving, checkout, stocktake, returns, and consignment labels are planned for v1.3.0.

@@ -531,6 +531,16 @@ export interface UserProfile {
 export type CollectionItemCondition = 'new' | 'sealed' | 'open_box' | 'used' | 'damaged' | 'other';
 export type CollectionQuantityReason = 'initial' | 'acquired' | 'sold' | 'gifted' | 'lost' | 'damaged' | 'correction' | 'other';
 
+export interface CollectionItemPhoto {
+  id: string;
+  storagePath: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+}
+
 export interface CollectionItem {
   id: string;
   displayId: string;
@@ -545,7 +555,10 @@ export interface CollectionItem {
   condition: CollectionItemCondition;
   conditionNote: string;
   barcodes: string[];
+  primaryBarcode?: string;
   internalCode: string;
+  photos?: CollectionItemPhoto[];
+  primaryPhotoId?: string | null;
   quantity: number;
   storageLocation: string;
   purchasePriceMinor: number | null;

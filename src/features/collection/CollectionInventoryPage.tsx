@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as bwipjs from '@bwip-js/browser';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
+import { CollectionItemPhoto } from '../../components/CollectionItemPhoto';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
@@ -278,6 +279,12 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
               : 'Use Add item to save the first collectible.'}
         /> : <div className="collection-item-grid">
           {visibleItems.map((item) => <article className={`collection-item-card ${item.archivedAt ? 'archived' : ''}`} key={item.id}>
+            <CollectionItemPhoto
+              key={item.primaryPhotoId || 'no-photo'}
+              photo={(item.photos || []).find((photo) => photo.id === item.primaryPhotoId) || item.photos?.[0]}
+              alt={item.name}
+              className="collection-item-card-photo"
+            />
             <header>
               <div><span className="eyebrow">{item.category}</span><h3>{item.name}</h3></div>
               <span className="type-badge">{conditionLabel(item.condition)}</span>
@@ -287,6 +294,7 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
               <span><strong>{item.quantity}</strong> in collection</span>
               <span>Location: {item.storageLocation || 'Not set'}</span>
               <span>Code: {item.internalCode}</span>
+              <span>Primary barcode: {item.primaryBarcode || item.internalCode}</span>
               <span>{item.barcodes.length} saved barcode{item.barcodes.length === 1 ? '' : 's'}</span>
               <span>Updated {timestampValue(item.updatedAt) ? new Date(timestampValue(item.updatedAt)).toLocaleDateString('en-BN') : 'Not recorded'}</span>
             </div>
@@ -410,6 +418,9 @@ function CollectionItemForm({
   const [barcodeText, setBarcodeText] = useState(
     initial ? initial.barcodes.filter((value) => value !== initial.internalCode).join('\n') : scannedBarcode,
   );
+  const [primaryBarcode, setPrimaryBarcode] = useState(
+    initial?.primaryBarcode || scannedBarcode || initial?.barcodes.find((value) => value !== initial.internalCode) || internalCode,
+  );
   const [quantity, setQuantity] = useState(String(initial?.quantity ?? 1));
   const [storageLocation, setStorageLocation] = useState(initial?.storageLocation || '');
   const [purchasePrice, setPurchasePrice] = useState(minorToDecimal(initial?.purchasePriceMinor));
@@ -418,6 +429,11 @@ function CollectionItemForm({
   const [tags, setTags] = useState(initial?.tags.join(', ') || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const barcodeOptions = useMemo(() => [...new Set([
+    ...barcodeText.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
+    internalCode,
+  ])], [barcodeText, internalCode]);
+  const selectedPrimaryBarcode = barcodeOptions.includes(primaryBarcode) ? primaryBarcode : internalCode;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -435,6 +451,7 @@ function CollectionItemForm({
         condition,
         conditionNote,
         barcodes,
+        primaryBarcode: selectedPrimaryBarcode,
         internalCode,
         quantity: parsedQuantity,
         storageLocation,
@@ -470,6 +487,7 @@ function CollectionItemForm({
         <label>Estimated value per item (BND)<input type="number" min="0" step="0.01" inputMode="decimal" value={estimatedValue} onChange={(event) => setEstimatedValue(event.target.value)} /></label>
       </div>
       <label>Existing UPC, EAN, or other barcodes<textarea rows={3} value={barcodeText} onChange={(event) => setBarcodeText(event.target.value)} placeholder="One barcode per line. The internal code is added automatically." /></label>
+      <label>Primary barcode<select value={selectedPrimaryBarcode} onChange={(event) => setPrimaryBarcode(event.target.value)}>{barcodeOptions.map((value) => <option key={value} value={value}>{value}{value === internalCode ? ' (internal code)' : ''}</option>)}</select><small>This is the preferred identity shown for the item. Every saved barcode can still find it.</small></label>
       <label>Condition note<input value={conditionNote} onChange={(event) => setConditionNote(event.target.value)} placeholder="Optional condition details" /></label>
       <label>Tags<input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="rare, favourite, sell later" /></label>
       <label>Notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
