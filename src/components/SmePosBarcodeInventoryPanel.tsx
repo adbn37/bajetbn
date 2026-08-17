@@ -18,6 +18,8 @@ interface Props<T extends SmePosBarcodeItem> {
   onCreate?: (barcode: string) => void;
   onOpen?: (item: T) => void;
   onReceive?: (item: T) => void;
+  onStocktake?: (item: T) => void;
+  onPrintLabel?: (item: T) => void;
 }
 
 function barcodeKey(value: string) {
@@ -31,6 +33,8 @@ export function SmePosBarcodeInventoryPanel<T extends SmePosBarcodeItem>({
   onCreate,
   onOpen,
   onReceive,
+  onStocktake,
+  onPrintLabel,
 }: Props<T>) {
   const [barcode, setBarcode] = useState('');
   const [matchedItem, setMatchedItem] = useState<T | null>(null);
@@ -102,6 +106,8 @@ export function SmePosBarcodeInventoryPanel<T extends SmePosBarcodeItem>({
       <div className="button-row">
         {onOpen && <button className="button secondary small" type="button" onClick={() => onOpen(matchedItem)}>Open {itemLabel}</button>}
         {onReceive && matchedItem.trackStock !== false && <button className="button primary small" type="button" onClick={() => onReceive(matchedItem)}>Receive stock</button>}
+        {onStocktake && matchedItem.trackStock !== false && <button className="button secondary small" type="button" onClick={() => onStocktake(matchedItem)}>Count stock</button>}
+        {onPrintLabel && matchedItem.barcode && <button className="button secondary small" type="button" onClick={() => onPrintLabel(matchedItem)}>Print label</button>}
         <button className="button ghost small" type="button" onClick={() => { setMatchedItem(null); setSearchedBarcode(''); }}>Clear</button>
       </div>
     </div>}

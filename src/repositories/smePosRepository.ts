@@ -173,6 +173,8 @@ export async function updateSmePosProductStock(input: {
   productId: string;
   quantityOnHand: number;
   lowStockLevel: number;
+  stocktake?: boolean;
+  note?: string;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'updateSmePosProductStock');
@@ -325,6 +327,8 @@ export async function updateMarketplaceListingStock(input: {
   listingId: string;
   quantityOnHand: number;
   lowStockLevel: number;
+  stocktake?: boolean;
+  note?: string;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'updateMarketplaceListingStock');
@@ -390,4 +394,3 @@ export async function recordMarketplaceSellerPayout(input: {
   const call = httpsCallable(functions, 'recordMarketplaceSellerPayout');
   return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; balanceAfterMinor: number } }>;
 }
-

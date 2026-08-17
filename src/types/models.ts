@@ -256,6 +256,7 @@ export interface SmePosSaleItem {
   productId: string;
   productName: string;
   sku?: string;
+  barcode?: string;
   quantity: number;
   unitPriceMinor: number;
   unitCostMinor: number;
