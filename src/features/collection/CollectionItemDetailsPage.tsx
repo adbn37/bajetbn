@@ -210,7 +210,7 @@ export function CollectionItemDetailsPage() {
         <div><span className="eyebrow">Item photos</span><h2>Photos</h2><p>Add up to six compressed photos. The primary photo appears in Inventory.</p></div>
         {!item.archivedAt && canEdit && (item.photos || []).length < 6 && <label className={`button primary collection-photo-upload ${photoBusy ? 'disabled' : ''}`}>
           {photoBusy ? 'Preparing photo...' : 'Take or choose photo'}
-          <input type="file" accept="image/*" capture="environment" disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void uploadPhoto(file); }} />
+          <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void uploadPhoto(file); }} />
         </label>}
       </div>
       {(item.photos || []).length === 0 ? <div className="empty-inline">No photos yet. On a phone, Take or choose photo can open the rear camera.</div> : <div className="collection-photo-grid">

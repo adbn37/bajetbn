@@ -51,6 +51,7 @@ requireText('src/features/collection/CollectionItemDetailsPage.tsx', 'Make prima
 requireText('src/features/collection/CollectionInventoryPage.tsx', 'Primary barcode');
 requireText('src/components/CollectionItemPhoto.tsx', 'getCollectionItemPhotoUrl');
 requireText('src/utils/collectionPhotos.ts', "canvas.toBlob");
+requireText('src/utils/collectionPhotos.ts', 'createImageBitmap');
 requireText('src/repositories/collectionRepository.ts', "collection(db, 'collectionItems')");
 requireText('src/repositories/collectionRepository.ts', "collection(db, 'collectionItemMovements')");
 requireText('src/repositories/collectionRepository.ts', 'runTransaction');
