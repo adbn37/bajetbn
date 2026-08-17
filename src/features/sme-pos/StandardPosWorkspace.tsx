@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
+import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInventoryPanel';
 import {
   checkoutStandardPos,
   getSmePosStaffWorkspace,
@@ -9,6 +10,7 @@ import {
   listSmePosPaymentAccounts,
   listSmePosProducts,
   listSmePosSales,
+  receiveSmePosProductStock,
   returnSmePosSale,
   saveSmePosCustomer,
   saveSmePosProduct,
@@ -95,8 +97,10 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [productForm, setProductForm] = useState<SmePosProduct | 'new' | null>(null);
+  const [newProductBarcode, setNewProductBarcode] = useState('');
   const [productStockMode, setProductStockMode] = useState<ProductStockMode>('physical');
   const [stockForm, setStockForm] = useState<SmePosProduct | null>(null);
+  const [receiveForm, setReceiveForm] = useState<SmePosProduct | null>(null);
   const [customerForm, setCustomerForm] = useState<SmePosCustomer | 'new' | null>(null);
   const [receipt, setReceipt] = useState<SmePosSale | null>(null);
   const [returnForm, setReturnForm] = useState<ReturnFormState | null>(null);
@@ -168,7 +172,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return products.filter((item) => !term || [item.name, item.category, item.sku].some((value) => value?.toLowerCase().includes(term)));
+    return products.filter((item) => !term || [item.name, item.category, item.sku, item.barcode].some((value) => value?.toLowerCase().includes(term)));
   }, [products, search]);
 
   const cartLines = useMemo(() => Object.entries(cart).map(([id, quantity]) => {
@@ -192,8 +196,9 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     return false;
   }
 
-  function openProductForm(value: SmePosProduct | 'new') {
+  function openProductForm(value: SmePosProduct | 'new', barcode = '') {
     setProductStockMode(value === 'new' || value.trackStock ? 'physical' : 'unlimited');
+    setNewProductBarcode(value === 'new' ? barcode : '');
     setProductForm(value);
   }
 
@@ -212,6 +217,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
         name: String(form.get('name') || ''),
         category: String(form.get('category') || ''),
         sku: String(form.get('sku') || ''),
+        barcode: String(form.get('barcode') || ''),
         note: String(form.get('note') || ''),
         sellingPriceMinor: toMinorUnits(String(form.get('sellingPrice') || '')),
         costPriceMinor: String(form.get('costPrice') || '').trim() ? toMinorUnits(String(form.get('costPrice'))) : null,
@@ -220,6 +226,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
         lowStockLevel: trackStock ? Number(form.get('lowStock') || 0) : 0,
       });
       setProductForm(null);
+      setNewProductBarcode('');
       setSuccess(productForm === 'new' ? 'Product added.' : 'Product updated.');
       await load();
       await onChanged();
@@ -246,6 +253,34 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
       });
       setStockForm(null);
       setSuccess('Stock updated.');
+      await load();
+      await onChanged();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function receiveStock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!receiveForm || !requireOnline()) return;
+    const form = new FormData(event.currentTarget);
+    const quantityReceived = Math.floor(Number(form.get('quantityReceived') || 0));
+    if (quantityReceived < 1) { setError('Enter at least one received unit.'); return; }
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await receiveSmePosProductStock({
+        spaceId: space.id,
+        productId: receiveForm.id,
+        quantityReceived,
+        note: String(form.get('note') || ''),
+      });
+      const name = receiveForm.name;
+      setReceiveForm(null);
+      setSuccess(`Received ${quantityReceived} unit(s) of ${name}. New stock: ${result.data.quantityOnHand}.`);
       await load();
       await onChanged();
     } catch (nextError) {
@@ -427,16 +462,24 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     {loading ? <div className="loading-panel">Loading shop records…</div> : <>
       {tab === 'products' && <div className="panel sme-pos-module-panel">
         <div className="panel-heading"><div><h3>Products and stock</h3><p>{products.length} active product{products.length === 1 ? '' : 's'}</p></div>{canManageProducts && <button className="button primary" type="button" onClick={() => openProductForm('new')}>Add product</button>}</div>
-        <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product, category or SKU" />
+        <SmePosBarcodeInventoryPanel
+          itemLabel="product"
+          items={products}
+          canCreate={canManageProducts}
+          onCreate={canManageProducts ? (barcode) => openProductForm('new', barcode) : undefined}
+          onOpen={canManageProducts ? (product) => openProductForm(product) : undefined}
+          onReceive={canManageStock ? setReceiveForm : undefined}
+        />
+        <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product, category, SKU or barcode" />
         <div className="sme-pos-product-grid">{filteredProducts.map((product) => {
           const outOfStock = product.trackStock && product.quantityOnHand < 1;
           const low = product.trackStock && product.quantityOnHand > 0 && product.quantityOnHand <= product.lowStockLevel;
           return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={product.id}>
-            <div><span className="type-badge">{product.category || 'Product'}</span><h3>{product.name}</h3><small>{product.sku || product.displayId}</small></div>
+            <div><span className="type-badge">{product.category || 'Product'}</span><h3>{product.name}</h3><small>{product.sku || product.displayId}</small>{product.barcode && <small>Barcode · {product.barcode}</small>}</div>
             <strong>{formatMoney(product.sellingPriceMinor, product.currency)}</strong>
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{product.trackStock ? outOfStock ? 'Out of stock' : `${product.quantityOnHand} in stock${low ? ' · Low stock' : ''}` : 'Service or unlimited item'}</p>
-            {canManageProducts && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openProductForm(product)}>Edit</button><button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'product', id: product.id }, title: 'Archive this product?', description: 'It will leave the active product list but its sales history will stay.', note: 'You can restore it from Archived POS records.', confirmLabel: 'Archive product' })}>Archive</button></div>}
-            {!canManageProducts && canManageStock && product.trackStock && <div className="button-row"><button className="button secondary small" type="button" onClick={() => setStockForm(product)}>Update stock</button></div>}
+            {canManageProducts && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openProductForm(product)}>Edit</button>{product.trackStock && <button className="button primary small" type="button" onClick={() => setReceiveForm(product)}>Receive stock</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'product', id: product.id }, title: 'Archive this product?', description: 'It will leave the active product list but its sales history will stay.', note: 'You can restore it from Archived POS records.', confirmLabel: 'Archive product' })}>Archive</button></div>}
+            {!canManageProducts && canManageStock && product.trackStock && <div className="button-row"><button className="button primary small" type="button" onClick={() => setReceiveForm(product)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStockForm(product)}>Update stock</button></div>}
           </article>;
         })}</div>
         {!filteredProducts.length && <div className="empty-inline">No active products found.</div>}
@@ -487,6 +530,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
           <label>Product name<input name="name" defaultValue={productForm === 'new' ? '' : productForm.name} maxLength={100} required /></label>
           <label>Category<input name="category" defaultValue={productForm === 'new' ? '' : productForm.category || ''} maxLength={60} placeholder="Example: Food, electronics" /></label>
           <label>SKU (optional)<input name="sku" defaultValue={productForm === 'new' ? '' : productForm.sku || ''} maxLength={50} /></label>
+          <label>Barcode (optional)<input name="barcode" defaultValue={productForm === 'new' ? newProductBarcode : productForm.barcode || ''} maxLength={240} autoComplete="off" /></label>
           <label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={productForm === 'new' ? '' : (productForm.sellingPriceMinor / 100).toFixed(2)} required /></label>
           <label>Cost price (BND)<input name="costPrice" inputMode="decimal" defaultValue={productForm === 'new' || productForm.costPriceMinor == null ? '' : (productForm.costPriceMinor / 100).toFixed(2)} placeholder="Optional · owner/manager only" /></label>
         </div>
@@ -500,6 +544,8 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
         <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setProductForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save product'}</button></div>
       </form>
     </Modal>}
+
+    {receiveForm && <Modal title={`Receive stock · ${receiveForm.name}`} onClose={() => !busy && setReceiveForm(null)}><form className="form-stack" onSubmit={receiveStock}><div className="notice">Current stock: <strong>{receiveForm.quantityOnHand}</strong>. Scanning did not change this number.</div><label>Quantity received<input name="quantityReceived" type="number" min="1" max={Math.max(1, 999999 - receiveForm.quantityOnHand)} defaultValue={1} required autoFocus /></label><label>Receiving note<textarea name="note" rows={2} maxLength={300} placeholder="Optional supplier, delivery or reference" /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setReceiveForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Receiving…' : 'Confirm received stock'}</button></div></form></Modal>}
 
     {stockForm && <Modal title={`Update stock · ${stockForm.name}`} onClose={() => !busy && setStockForm(null)}><form className="form-stack" onSubmit={saveStock}><div className="notice">Stock staff can change available quantity and the low-stock alert. Prices and cost remain owner or manager controlled.</div><div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={stockForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={stockForm.lowStockLevel} required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setStockForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save stock'}</button></div></form></Modal>}
 

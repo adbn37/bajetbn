@@ -3204,3 +3204,18 @@ code {
     flex-direction: column;
   }
 }
+/* v1.3.0 SME POS barcode inventory Alpha 1 */
+.sme-pos-barcode-panel{display:grid;gap:.85rem;margin:.9rem 0 1rem;padding:1rem;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+.sme-pos-barcode-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.sme-pos-barcode-heading h4{margin:.2rem 0;font-size:1rem}
+.sme-pos-barcode-heading p{margin:0;color:var(--muted);font-size:.78rem}
+.sme-pos-barcode-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:.75rem}
+.sme-pos-barcode-entry label{margin:0}
+.sme-pos-barcode-result{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.9rem;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.sme-pos-barcode-result>div:first-child{display:grid;gap:.28rem}
+.sme-pos-barcode-result p{margin:0;color:var(--muted);font-size:.8rem}
+.sme-pos-barcode-result small{color:var(--muted)}
+.sme-pos-barcode-result.found{border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}
+.sme-pos-barcode-result.missing{border-style:dashed}
+.sme-pos-product-card>div:first-child>small{display:block;margin-top:.2rem}
+@media(max-width:680px){.sme-pos-barcode-heading,.sme-pos-barcode-result{align-items:stretch;flex-direction:column}.sme-pos-barcode-heading .barcode-camera-scanner>.button-row{justify-content:stretch}.sme-pos-barcode-entry{grid-template-columns:1fr}.sme-pos-barcode-entry .button,.sme-pos-barcode-result .button-row .button{width:100%}}

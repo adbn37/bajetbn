@@ -1397,6 +1397,32 @@ function smePosQuantity(value: unknown, field: string, maximum = 999_999): numbe
   return integerBetween(value, field, 0, maximum);
 }
 
+function smePosBarcode(value: unknown): { barcode: string; barcodeKey: string } {
+  const barcode = optionalString(value, 240);
+  if (!barcode) return { barcode: '', barcodeKey: '' };
+  const hasControlCharacter = Array.from(barcode).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 31 || codePoint === 127);
+  });
+  if (hasControlCharacter) {
+    throw new HttpsError('invalid-argument', 'Barcode contains unsupported control characters.');
+  }
+  return { barcode, barcodeKey: barcode.normalize('NFKC').toLowerCase() };
+}
+
+function assertUniqueSmePosBarcode(
+  documents: QueryDocumentSnapshot[],
+  currentId: string,
+  barcodeKey: string,
+  recordLabel: string,
+) {
+  if (!barcodeKey) return;
+  const duplicate = documents.find((item) => item.id !== currentId && String(item.data().barcodeKey || '') === barcodeKey);
+  if (duplicate) {
+    throw new HttpsError('already-exists', `This barcode is already assigned to another ${recordLabel}, including archived records.`);
+  }
+}
+
 function parseSmePosCheckoutItems(value: unknown): Array<{ productId: string; quantity: number }> {
   if (!Array.isArray(value) || value.length < 1 || value.length > 50) {
     throw new HttpsError('invalid-argument', 'Checkout must contain between 1 and 50 product lines.');
@@ -1449,6 +1475,7 @@ export const getSmePosStaffWorkspace = onCall({ region }, async (request) => {
         name: String(row.name || 'Product'),
         category: String(row.category || ''),
         sku: String(row.sku || ''),
+        barcode: String(row.barcode || ''),
         note: '',
         sellingPriceMinor: nonNegativeMoney(row.sellingPriceMinor),
         costPriceMinor: null,
@@ -1553,6 +1580,7 @@ export const saveSmePosProduct = onCall({ region }, async (request) => {
   const name = stringValue(request.data?.name, 'Product name', 100);
   const category = optionalString(request.data?.category, 60);
   const sku = optionalString(request.data?.sku, 50);
+  const { barcode, barcodeKey } = smePosBarcode(request.data?.barcode);
   const note = optionalString(request.data?.note, 300);
   const sellingPriceMinor = positiveMoney(request.data?.sellingPriceMinor);
   const costPriceMinor = request.data?.costPriceMinor == null ? null : nonNegativeMoney(request.data?.costPriceMinor);
@@ -1562,15 +1590,19 @@ export const saveSmePosProduct = onCall({ region }, async (request) => {
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
   const productRef = productId ? db.collection('smePosProducts').doc(productId) : db.collection('smePosProducts').doc();
+  const productQuery = db.collection('smePosProducts').where('spaceId', '==', spaceId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
-    const [command, existing] = await Promise.all([transaction.get(commandRef), transaction.get(productRef)]);
+    const [command, existing, spaceProducts] = await Promise.all([
+      transaction.get(commandRef), transaction.get(productRef), transaction.get(productQuery),
+    ]);
     if (command.exists) return command.data()?.result;
     if (productId && !existing.exists) throw new HttpsError('not-found', 'Product not found.');
     if (existing.exists && (existing.data()?.spaceId !== spaceId || existing.data()?.ownerId !== context.settings.ownerId)) {
       throw new HttpsError('permission-denied', 'This product belongs to another shop.');
     }
     if (existing.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Restore this product before editing it.');
+    assertUniqueSmePosBarcode(spaceProducts.docs, productRef.id, barcodeKey, 'POS product');
     const now = FieldValue.serverTimestamp();
     const payload = {
       displayId: existing.data()?.displayId || displayId('PRD'),
@@ -1579,6 +1611,8 @@ export const saveSmePosProduct = onCall({ region }, async (request) => {
       name,
       category,
       sku,
+      barcode,
+      barcodeKey,
       note,
       sellingPriceMinor,
       costPriceMinor,
@@ -1629,6 +1663,42 @@ export const updateSmePosProductStock = onCall({ region }, async (request) => {
       targetType: 'sme_pos_product',
       targetId: productId,
       summary: `Updated stock for ${product.data()?.name || 'a POS product'} to ${quantityOnHand}.`,
+      now,
+    });
+    return result;
+  });
+});
+
+export const receiveSmePosProductStock = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const productId = stringValue(request.data?.productId, 'Product ID', 80);
+  const quantityReceived = integerBetween(request.data?.quantityReceived, 'Quantity received', 1, 999_999);
+  const note = optionalString(request.data?.note, 300);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  const productRef = db.collection('smePosProducts').doc(productId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, product] = await Promise.all([transaction.get(commandRef), transaction.get(productRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!product.exists || product.data()?.spaceId !== spaceId || product.data()?.ownerId !== context.settings.ownerId || product.data()?.archivedAt) {
+      throw new HttpsError('not-found', 'Active product not found.');
+    }
+    if (product.data()?.trackStock === false) throw new HttpsError('failed-precondition', 'This service or unlimited item does not use stock quantity.');
+    const currentQuantity = smePosQuantity(product.data()?.quantityOnHand, 'Current quantity');
+    const quantityOnHand = currentQuantity + quantityReceived;
+    if (quantityOnHand > 999_999) throw new HttpsError('failed-precondition', 'Received stock would exceed the maximum available quantity.');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(productRef, { quantityOnHand, updatedAt: now });
+    const result = { productId, quantityReceived, quantityOnHand };
+    transaction.create(commandRef, { uid, kind: 'receive_sme_pos_product_stock', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, {
+      spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email,
+      action: 'pos_stock_received', targetType: 'sme_pos_product', targetId: productId,
+      summary: note
+        ? `Received ${quantityReceived} unit(s) of ${product.data()?.name || 'a POS product'}: ${note}`
+        : `Received ${quantityReceived} unit(s) of ${product.data()?.name || 'a POS product'}.`,
       now,
     });
     return result;
@@ -2049,6 +2119,7 @@ export const saveMarketplaceListing = onCall({ region }, async (request) => {
   const name = stringValue(request.data?.name, 'Item name', 100);
   const category = optionalString(request.data?.category, 60);
   const sku = optionalString(request.data?.sku, 50);
+  const { barcode, barcodeKey } = smePosBarcode(request.data?.barcode);
   const note = optionalString(request.data?.note, 300);
   const condition = oneOf(request.data?.condition, smePosListingConditions, 'item condition');
   const conditionNote = optionalString(request.data?.conditionNote, 120);
@@ -2061,19 +2132,23 @@ export const saveMarketplaceListing = onCall({ region }, async (request) => {
   requireMarketplaceSettings(context);
 
   const listingRef = listingId ? db.collection('smePosListings').doc(listingId) : db.collection('smePosListings').doc();
+  const listingQuery = db.collection('smePosListings').where('spaceId', '==', spaceId);
   const sellerRef = db.collection('smePosSellers').doc(sellerId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
-    const [command, current, seller] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef), transaction.get(sellerRef)]);
+    const [command, current, seller, spaceListings] = await Promise.all([
+      transaction.get(commandRef), transaction.get(listingRef), transaction.get(sellerRef), transaction.get(listingQuery),
+    ]);
     if (command.exists) return command.data()?.result;
     if (listingId && (!current.exists || current.data()?.spaceId !== spaceId)) throw new HttpsError('not-found', 'Listing not found.');
     if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active seller.');
+    assertUniqueSmePosBarcode(spaceListings.docs, listingRef.id, barcodeKey, 'Marketplace listing');
     const existing = current.data() || {};
     const now = FieldValue.serverTimestamp();
     transaction.set(listingRef, {
       displayId: existing.displayId || displayId('LST'), spaceId, ownerId: context.settings.ownerId,
       sellerId, sellerName: seller.data()?.name || 'Seller', sellerUid: seller.data()?.linkedUid || null,
-      name, category, sku, note, condition, conditionNote, sellingPriceMinor, currency: context.settings.currency || 'BND',
+      name, category, sku, barcode, barcodeKey, note, condition, conditionNote, sellingPriceMinor, currency: context.settings.currency || 'BND',
       commissionType: commission.commissionType, commissionRateBps: commission.commissionRateBps, commissionMinor: commission.commissionMinor,
       quantityOnHand, lowStockLevel,
       soldQuantity: Number(existing.soldQuantity || 0), grossSalesMinor: Number(existing.grossSalesMinor || 0),
@@ -2106,6 +2181,40 @@ export const updateMarketplaceListingStock = onCall({ region }, async (request) 
     transaction.update(listingRef, { quantityOnHand, lowStockLevel, updatedAt: now });
     const result = { listingId, quantityOnHand, lowStockLevel };
     transaction.create(commandRef, { uid, kind: 'update_marketplace_listing_stock', idempotencyKey: key, result, createdAt: now });
+    return result;
+  });
+});
+
+export const receiveMarketplaceListingStock = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const listingId = stringValue(request.data?.listingId, 'Listing ID', 80);
+  const quantityReceived = integerBetween(request.data?.quantityReceived, 'Quantity received', 1, 999_999);
+  const note = optionalString(request.data?.note, 300);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
+  requireMarketplaceSettings(context);
+  const listingRef = db.collection('smePosListings').doc(listingId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!listing.exists || listing.data()?.spaceId !== spaceId || listing.data()?.archivedAt) throw new HttpsError('not-found', 'Active listing not found.');
+    const currentQuantity = smePosQuantity(listing.data()?.quantityOnHand, 'Current quantity');
+    const quantityOnHand = currentQuantity + quantityReceived;
+    if (quantityOnHand > 999_999) throw new HttpsError('failed-precondition', 'Received stock would exceed the maximum available quantity.');
+    const now = FieldValue.serverTimestamp();
+    transaction.update(listingRef, { quantityOnHand, updatedAt: now });
+    const result = { listingId, quantityReceived, quantityOnHand };
+    transaction.create(commandRef, { uid, kind: 'receive_marketplace_listing_stock', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, {
+      spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email,
+      action: 'marketplace_stock_received', targetType: 'sme_pos_listing', targetId: listingId,
+      summary: note
+        ? `Received ${quantityReceived} unit(s) of ${listing.data()?.name || 'a Marketplace listing'}: ${note}`
+        : `Received ${quantityReceived} unit(s) of ${listing.data()?.name || 'a Marketplace listing'}.`,
+      now,
+    });
     return result;
   });
 });
