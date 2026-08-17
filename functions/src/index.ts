@@ -6042,7 +6042,18 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
   for (const collectionName of collections) {
     const rows = await documentsWhere(collectionName, 'spaceId', spaceId);
     for (const row of rows) {
-      addProofPath(proofPaths, row.data());
+      const rowData = row.data();
+      addProofPath(proofPaths, rowData);
+      if (collectionName === 'collectionItems' && Array.isArray(rowData.photos)) {
+        for (const photo of rowData.photos as unknown[]) {
+          if (!photo || typeof photo !== 'object') continue;
+          const storagePath = String((photo as { storagePath?: unknown }).storagePath || '');
+          if (storagePath.startsWith(`spaces/${spaceId}/collection-items/`)) {
+            // Collection photo path retained for Storage privacy cleanup.
+            proofPaths.add(storagePath);
+          }
+        }
+      }
       queueDelete(plan, row.ref);
     }
   }

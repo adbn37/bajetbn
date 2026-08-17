@@ -45,6 +45,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           'displayId', 'spaceId', 'ownerId', 'createdBy', 'name', 'category', 'brand',
           'series', 'variant', 'condition', 'conditionNote', 'barcodes', 'internalCode',
+          'primaryBarcode', 'photos', 'primaryPhotoId',
           'quantity', 'storageLocation', 'purchasePriceMinor', 'estimatedValueMinor',
           'currency', 'notes', 'tags', 'lastMovementId', 'archivedAt', 'createdAt', 'updatedAt'
         ])
@@ -66,6 +67,9 @@ service cloud.firestore {
         && data.barcodes is list && data.barcodes.size() > 0 && data.barcodes.size() <= 20
         && data.internalCode is string && data.internalCode.size() > 0 && data.internalCode.size() <= 80
         && data.barcodes.hasAny([data.internalCode])
+        && (!('primaryBarcode' in data) || (data.primaryBarcode is string && data.primaryBarcode.size() > 0 && data.primaryBarcode.size() <= 240 && data.barcodes.hasAny([data.primaryBarcode])))
+        && (!('photos' in data) || (data.photos is list && data.photos.size() <= 6))
+        && (!('primaryPhotoId' in data) || data.primaryPhotoId == null || (data.primaryPhotoId is string && data.primaryPhotoId.size() > 0 && data.primaryPhotoId.size() <= 80))
         && data.quantity is int && data.quantity >= 0 && data.quantity <= 1000000
         && data.storageLocation is string && data.storageLocation.size() <= 160
         && (data.purchasePriceMinor == null || (data.purchasePriceMinor is int && data.purchasePriceMinor >= 0))

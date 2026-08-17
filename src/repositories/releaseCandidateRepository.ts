@@ -163,7 +163,7 @@ export async function buildUserDataExport(uid: string) {
       exportedAt: new Date().toISOString(),
       environment: import.meta.env.VITE_APP_ENV || 'local',
       projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-      formatVersion: 5,
+      formatVersion: 6,
     },
     profile: profileSnapshot.exists() ? { id: profileSnapshot.id, ...profileSnapshot.data() } : null,
     spaces,

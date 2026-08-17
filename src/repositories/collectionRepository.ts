@@ -12,10 +12,12 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import type {
   CollectionItem,
   CollectionItemCondition,
+  CollectionItemPhoto,
   CollectionQuantityMovement,
   CollectionQuantityReason,
 } from '../types/models';
@@ -30,6 +32,7 @@ export interface CollectionItemInput {
   condition: CollectionItemCondition;
   conditionNote: string;
   barcodes: string[];
+  primaryBarcode: string;
   internalCode: string;
   quantity: number;
   storageLocation: string;
@@ -56,6 +59,8 @@ function uniqueBarcodes(values: string[], internalCode: string) {
 }
 
 function cleanedInput(input: CollectionItemInput) {
+  const barcodes = uniqueBarcodes(input.barcodes, input.internalCode);
+  const requestedPrimary = input.primaryBarcode.trim();
   return {
     name: input.name.trim(),
     category: input.category.trim() || 'Other',
@@ -64,7 +69,8 @@ function cleanedInput(input: CollectionItemInput) {
     variant: input.variant.trim(),
     condition: input.condition,
     conditionNote: input.conditionNote.trim(),
-    barcodes: uniqueBarcodes(input.barcodes, input.internalCode),
+    barcodes,
+    primaryBarcode: barcodes.includes(requestedPrimary) ? requestedPrimary : input.internalCode,
     quantity: Math.max(0, Math.trunc(input.quantity)),
     storageLocation: input.storageLocation.trim(),
     purchasePriceMinor: input.purchasePriceMinor,
@@ -139,6 +145,8 @@ export async function createCollectionItem(input: {
     internalCode,
     currency: input.currency,
     ...cleaned,
+    photos: [],
+    primaryPhotoId: null,
     lastMovementId: movementRef.id,
     archivedAt: null,
     createdAt: serverTimestamp(),
@@ -174,6 +182,7 @@ export async function updateCollectionItem(itemId: string, input: CollectionItem
     condition: cleaned.condition,
     conditionNote: cleaned.conditionNote,
     barcodes: cleaned.barcodes,
+    primaryBarcode: cleaned.primaryBarcode,
     storageLocation: cleaned.storageLocation,
     purchasePriceMinor: cleaned.purchasePriceMinor,
     estimatedValueMinor: cleaned.estimatedValueMinor,
@@ -181,6 +190,91 @@ export async function updateCollectionItem(itemId: string, input: CollectionItem
     tags: cleaned.tags,
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function getCollectionItemPhotoUrl(storagePath: string) {
+  const { storage } = requireFirebase();
+  return getDownloadURL(ref(storage, storagePath));
+}
+
+export async function uploadCollectionItemPhoto(input: {
+  spaceId: string;
+  itemId: string;
+  file: File;
+  width: number;
+  height: number;
+}): Promise<CollectionItemPhoto> {
+  if (!input.file.type.startsWith('image/')) throw new Error('Choose an image file.');
+  if (input.file.size <= 0 || input.file.size >= 5 * 1024 * 1024) throw new Error('The prepared photo must be smaller than 5 MB.');
+  const { db, storage } = requireFirebase();
+  const photoId = createClientDisplayId('CPH');
+  const storagePath = `spaces/${input.spaceId}/collection-items/${input.itemId}/${photoId}.jpg`;
+  const storageRef = ref(storage, storagePath);
+  const photo: CollectionItemPhoto = {
+    id: photoId,
+    storagePath,
+    fileName: input.file.name.slice(0, 180),
+    contentType: input.file.type,
+    sizeBytes: input.file.size,
+    width: Math.max(1, Math.trunc(input.width)),
+    height: Math.max(1, Math.trunc(input.height)),
+  };
+
+  await uploadBytes(storageRef, input.file, { contentType: input.file.type });
+  try {
+    await runTransaction(db, async (transaction) => {
+      const itemRef = doc(db, 'collectionItems', input.itemId);
+      const snapshot = await transaction.get(itemRef);
+      if (!snapshot.exists() || snapshot.data().spaceId !== input.spaceId) throw new Error('Collection item not found.');
+      const photos = Array.isArray(snapshot.data().photos) ? snapshot.data().photos as CollectionItemPhoto[] : [];
+      if (photos.length >= 6) throw new Error('A collection item can have up to six photos.');
+      transaction.update(itemRef, {
+        photos: [...photos, photo],
+        primaryPhotoId: snapshot.data().primaryPhotoId || photo.id,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } catch (error) {
+    try { await deleteObject(storageRef); } catch { /* Best-effort rollback of an unlinked upload. */ }
+    throw error;
+  }
+  return photo;
+}
+
+export async function setPrimaryCollectionItemPhoto(input: { spaceId: string; itemId: string; photoId: string }) {
+  const { db } = requireFirebase();
+  const itemRef = doc(db, 'collectionItems', input.itemId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(itemRef);
+    if (!snapshot.exists() || snapshot.data().spaceId !== input.spaceId) throw new Error('Collection item not found.');
+    const photos = Array.isArray(snapshot.data().photos) ? snapshot.data().photos as CollectionItemPhoto[] : [];
+    if (!photos.some((photo) => photo.id === input.photoId)) throw new Error('Photo not found.');
+    transaction.update(itemRef, { primaryPhotoId: input.photoId, updatedAt: serverTimestamp() });
+  });
+}
+
+export async function removeCollectionItemPhoto(input: { spaceId: string; itemId: string; photoId: string }) {
+  const { db, storage } = requireFirebase();
+  const itemRef = doc(db, 'collectionItems', input.itemId);
+  let storagePath = '';
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(itemRef);
+    if (!snapshot.exists() || snapshot.data().spaceId !== input.spaceId) throw new Error('Collection item not found.');
+    const photos = Array.isArray(snapshot.data().photos) ? snapshot.data().photos as CollectionItemPhoto[] : [];
+    const photo = photos.find((value) => value.id === input.photoId);
+    if (!photo) throw new Error('Photo not found.');
+    storagePath = photo.storagePath;
+    const remaining = photos.filter((value) => value.id !== input.photoId);
+    transaction.update(itemRef, {
+      photos: remaining,
+      primaryPhotoId: snapshot.data().primaryPhotoId === input.photoId ? remaining[0]?.id || null : snapshot.data().primaryPhotoId || null,
+      updatedAt: serverTimestamp(),
+    });
+  });
+  if (storagePath) {
+    try { await deleteObject(ref(storage, storagePath)); }
+    catch (error) { console.warn('[BajetBN collection] Photo metadata was removed, but Storage cleanup will need retrying.', error); }
+  }
 }
 
 export async function adjustCollectionItemQuantity(input: {

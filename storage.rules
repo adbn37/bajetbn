@@ -25,6 +25,17 @@ service firebase.storage {
           || firestore.get(/databases/(default)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.status == 'active');
     }
 
+    function isCollectionSpace(spaceId) {
+      return firestore.exists(/databases/(default)/documents/spaces/$(spaceId))
+        && firestore.get(/databases/(default)/documents/spaces/$(spaceId)).data.type == 'collection';
+    }
+
+    function canEditCollection(spaceId) {
+      return isCollectionSpace(spaceId)
+        && isActiveSpaceMember(spaceId)
+        && firestore.get(/databases/(default)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role in ['owner', 'admin', 'contributor'];
+    }
+
     match /users/{uid}/{allPaths=**} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, update: if signedIn() && request.auth.uid == uid && isImageOrPdf() && underTenMb();
@@ -35,6 +46,16 @@ service firebase.storage {
       allow read: if isActiveSpaceMember(spaceId);
       allow create: if isActiveSpaceMember(spaceId) && isImageOrPdf() && underTenMb();
       allow update, delete: if false;
+    }
+
+    match /spaces/{spaceId}/collection-items/{itemId}/{fileName} {
+      allow read: if isCollectionSpace(spaceId) && isActiveSpaceMember(spaceId);
+      allow create: if canEditCollection(spaceId)
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.size > 0
+        && request.resource.size < 5 * 1024 * 1024;
+      allow update: if false;
+      allow delete: if canEditCollection(spaceId);
     }
 
     // General transaction receipts are stored below users/{uid}/transaction-receipts.
