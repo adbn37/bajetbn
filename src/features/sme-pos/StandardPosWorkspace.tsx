@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
 import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInventoryPanel';
+import { SmePosBarcodeCheckoutScanner } from '../../components/SmePosBarcodeCheckoutScanner';
 import {
   checkoutStandardPos,
   getSmePosStaffWorkspace,
@@ -494,7 +495,14 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
           <div className="panel-heading"><div><span className="eyebrow">Register</span><h3>Choose products</h3><p>Out-of-stock physical products cannot be added.</p></div></div>
-          <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product, category or SKU" autoFocus />
+          <SmePosBarcodeCheckoutScanner
+            itemLabel="product"
+            items={products}
+            cartQuantities={cart}
+            disabled={!canCheckout || settings.status !== 'active' || busy}
+            onAdd={addToCart}
+          />
+          <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product, category, SKU or barcode" />
           <div className="sme-pos-checkout-product-grid">{filteredProducts.map((product) => {
             const outOfStock = product.trackStock && product.quantityOnHand < 1;
             return <button type="button" key={product.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(product)}><strong>{product.name}</strong><span>{formatMoney(product.sellingPriceMinor, product.currency)}</span><small>{product.trackStock ? outOfStock ? 'Out of stock' : `${product.quantityOnHand} available` : 'Service or unlimited item'}</small></button>;

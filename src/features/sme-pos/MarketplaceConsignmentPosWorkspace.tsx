@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
 import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInventoryPanel';
+import { SmePosBarcodeCheckoutScanner } from '../../components/SmePosBarcodeCheckoutScanner';
 import {
   checkoutMarketplacePos,
   getMarketplacePosWorkspace,
@@ -627,7 +628,14 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
           <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>One sale can contain items from several sellers.</p></div></div>
-          <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, condition or SKU" autoFocus />
+          <SmePosBarcodeCheckoutScanner
+            itemLabel="listing"
+            items={listings}
+            cartQuantities={cart}
+            disabled={!canCheckout || settings.status !== 'active' || busy}
+            onAdd={addToCart}
+          />
+          <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, condition, SKU or barcode" />
           <div className="sme-pos-checkout-product-grid">{filteredListings.map((listing) => {
             const outOfStock = listing.quantityOnHand < 1;
             return <button type="button" key={listing.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(listing)}><strong>{listing.name}</strong><span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span><small>{listing.sellerName} · {conditionLabels[listing.condition]}</small><small>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} available`}</small></button>;
