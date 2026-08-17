@@ -1,6 +1,6 @@
 {
   "version": "1.2.0",
-  "label": "Collection Photos and Primary Barcodes Alpha 2",
-  "channel": "alpha",
-  "releasedAt": "2026-08-14"
+  "label": "BajetBN v1.2.0",
+  "channel": "stable",
+  "releasedAt": "2026-08-17"
 }
