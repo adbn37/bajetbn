@@ -49,6 +49,8 @@ requireText('src/features/collection/CollectionItemDetailsPage.tsx', 'Adjust qua
 requireText('src/features/collection/CollectionItemDetailsPage.tsx', 'Take or choose photo');
 requireText('src/features/collection/CollectionItemDetailsPage.tsx', 'Make primary');
 requireText('src/features/collection/CollectionInventoryPage.tsx', 'Primary barcode');
+requireText('src/features/collection/CollectionInventoryPage.tsx', 'Add an optional primary photo');
+requireText('src/features/collection/CollectionInventoryPage.tsx', 'uploadCollectionItemPhoto');
 requireText('src/components/CollectionItemPhoto.tsx', 'getCollectionItemPhotoUrl');
 requireText('src/utils/collectionPhotos.ts', "canvas.toBlob");
 requireText('src/utils/collectionPhotos.ts', 'createImageBitmap');
