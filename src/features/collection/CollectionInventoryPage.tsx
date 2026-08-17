@@ -16,11 +16,13 @@ import {
   findCollectionItemByBarcode,
   listCollectionItems,
   restoreCollectionItem,
+  uploadCollectionItemPhoto,
   updateCollectionItem,
   type CollectionItemInput,
 } from '../../repositories/collectionRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import type { CollectionItem, CollectionItemCondition, Space, SpaceMember } from '../../types/models';
+import { prepareCollectionPhoto, type PreparedCollectionPhoto } from '../../utils/collectionPhotos';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 
@@ -349,18 +351,18 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
       initial={editing}
       scannedBarcode={createBarcode || ''}
       onClose={() => { setEditing(null); setCreateBarcode(null); }}
-      onSaved={async () => {
-        const message = editing ? 'Collection item updated.' : 'Collection item added.';
+      onSaved={async (savedMessage) => {
+        const message = savedMessage || (editing ? 'Collection item updated.' : 'Collection item added.');
         setEditing(null);
         setCreateBarcode(null);
         setSearch('');
         setShowArchived(false);
         await load();
+        setNotice(message);
         if (mode === 'add') {
           navigate(`/spaces/${space.id}/collection`);
           return;
         }
-        setNotice(message);
       }}
     />}
 
@@ -405,7 +407,7 @@ function CollectionItemForm({
   initial: CollectionItem | null;
   scannedBarcode: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (savedMessage?: string) => Promise<void>;
 }) {
   const internalCode = useMemo(() => initial?.internalCode || createCollectionInternalCode(), [initial]);
   const [name, setName] = useState(initial?.name || '');
@@ -428,12 +430,38 @@ function CollectionItemForm({
   const [notes, setNotes] = useState(initial?.notes || '');
   const [tags, setTags] = useState(initial?.tags.join(', ') || '');
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [pendingPhoto, setPendingPhoto] = useState<PreparedCollectionPhoto | null>(null);
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState('');
   const [error, setError] = useState('');
   const barcodeOptions = useMemo(() => [...new Set([
     ...barcodeText.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
     internalCode,
   ])], [barcodeText, internalCode]);
   const selectedPrimaryBarcode = barcodeOptions.includes(primaryBarcode) ? primaryBarcode : internalCode;
+
+  const clearPendingPhoto = () => {
+    if (pendingPhotoUrl) URL.revokeObjectURL(pendingPhotoUrl);
+    setPendingPhoto(null);
+    setPendingPhotoUrl('');
+  };
+
+  const closeForm = () => {
+    clearPendingPhoto();
+    onClose();
+  };
+
+  const choosePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setPhotoBusy(true); setError('');
+    try {
+      const prepared = await prepareCollectionPhoto(file);
+      if (pendingPhotoUrl) URL.revokeObjectURL(pendingPhotoUrl);
+      setPendingPhoto(prepared);
+      setPendingPhotoUrl(URL.createObjectURL(prepared.file));
+    } catch (nextError) { setError(getErrorMessage(nextError)); }
+    finally { setPhotoBusy(false); }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -460,9 +488,21 @@ function CollectionItemForm({
         notes,
         tags: tags.split(',').map((value) => value.trim()).filter(Boolean),
       };
+      let savedMessage = '';
       if (initial) await updateCollectionItem(initial.id, item);
-      else await createCollectionItem({ spaceId: space.id, ownerId: space.ownerId, createdBy: userId, currency: space.currency, item });
-      await onSaved();
+      else {
+        const itemId = await createCollectionItem({ spaceId: space.id, ownerId: space.ownerId, createdBy: userId, currency: space.currency, item });
+        if (pendingPhoto) {
+          try {
+            await uploadCollectionItemPhoto({ spaceId: space.id, itemId, ...pendingPhoto });
+            savedMessage = 'Collection item and primary photo added.';
+          } catch (photoError) {
+            savedMessage = `Collection item added, but its photo could not be uploaded: ${getErrorMessage(photoError)} Open Details to retry.`;
+          }
+        }
+      }
+      clearPendingPhoto();
+      await onSaved(savedMessage);
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -470,7 +510,7 @@ function CollectionItemForm({
     }
   };
 
-  return <Modal title={initial ? `Edit ${initial.name}` : 'Add collection item'} onClose={onClose}>
+  return <Modal title={initial ? `Edit ${initial.name}` : 'Add collection item'} onClose={closeForm}>
     <form className="form-stack collection-item-form" onSubmit={submit}>
       {error && <div className="notice error">{error}</div>}
       <div className="collection-code-preview"><span>Internal label code</span><strong>{internalCode}</strong></div>
@@ -486,12 +526,28 @@ function CollectionItemForm({
         <label>Purchase price per item (BND)<input type="number" min="0" step="0.01" inputMode="decimal" value={purchasePrice} onChange={(event) => setPurchasePrice(event.target.value)} /></label>
         <label>Estimated value per item (BND)<input type="number" min="0" step="0.01" inputMode="decimal" value={estimatedValue} onChange={(event) => setEstimatedValue(event.target.value)} /></label>
       </div>
+      {!initial && <section className="collection-photo-panel">
+        <div className="panel-heading">
+          <div><strong>Add an optional primary photo</strong><small>Take a photo now or add photos later from Item Details.</small></div>
+          <label className={`button secondary collection-photo-upload ${photoBusy ? 'disabled' : ''}`}>
+            {photoBusy ? 'Preparing photo...' : pendingPhoto ? 'Retake photo' : 'Take or choose photo'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photoBusy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void choosePhoto(file); }} />
+          </label>
+        </div>
+        {pendingPhoto && <div className="collection-photo-grid">
+          <article className="primary">
+            <img className="collection-photo-thumbnail" src={pendingPhotoUrl} alt="New collection item preview" />
+            <div><strong>Primary photo preview</strong><small>{pendingPhoto.width} × {pendingPhoto.height}</small></div>
+            <button type="button" className="text-button danger" disabled={photoBusy} onClick={clearPendingPhoto}>Remove photo</button>
+          </article>
+        </div>}
+      </section>}
       <label>Existing UPC, EAN, or other barcodes<textarea rows={3} value={barcodeText} onChange={(event) => setBarcodeText(event.target.value)} placeholder="One barcode per line. The internal code is added automatically." /></label>
       <label>Primary barcode<select value={selectedPrimaryBarcode} onChange={(event) => setPrimaryBarcode(event.target.value)}>{barcodeOptions.map((value) => <option key={value} value={value}>{value}{value === internalCode ? ' (internal code)' : ''}</option>)}</select><small>This is the preferred identity shown for the item. Every saved barcode can still find it.</small></label>
       <label>Condition note<input value={conditionNote} onChange={(event) => setConditionNote(event.target.value)} placeholder="Optional condition details" /></label>
       <label>Tags<input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="rare, favourite, sell later" /></label>
       <label>Notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-      <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || !name.trim()}>{busy ? 'Saving...' : initial ? 'Save changes' : 'Add item'}</button></div>
+      <div className="modal-actions"><button type="button" className="button secondary" onClick={closeForm}>Cancel</button><button className="button primary" disabled={busy || photoBusy || !name.trim()}>{busy ? 'Saving...' : initial ? 'Save changes' : 'Add item'}</button></div>
     </form>
   </Modal>;
 }
