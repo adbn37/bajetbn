@@ -78,6 +78,7 @@ export interface SmePosProduct {
   name: string;
   category?: string;
   sku?: string;
+  barcode?: string;
   note?: string;
   sellingPriceMinor: number;
   costPriceMinor?: number | null;
@@ -127,6 +128,7 @@ export interface SmePosListing {
   name: string;
   category?: string;
   sku?: string;
+  barcode?: string;
   note?: string;
   condition: SmePosListingCondition;
   conditionNote?: string;

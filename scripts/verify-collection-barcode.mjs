@@ -22,7 +22,14 @@ for (const file of requiredFiles) { checks += 1; if (!fs.existsSync(file)) fail(
 const packageJson = JSON.parse(read('package.json'));
 const release = JSON.parse(read('release.json'));
 checks += 5;
-if (packageJson.version !== '1.2.0' || release.version !== '1.2.0') fail('Expected package.json and release.json version 1.2.0.');
+const collectionVersion = String(packageJson.version).split('.').map(Number);
+const collectionVersionNumber = collectionVersion[0] * 1_000_000 + collectionVersion[1] * 1_000 + collectionVersion[2];
+if (
+  packageJson.version !== release.version ||
+  collectionVersion.length !== 3 ||
+  collectionVersion.some((part) => !Number.isInteger(part) || part < 0) ||
+  collectionVersionNumber < 1_002_000
+) fail('Expected matching package.json and release.json versions at 1.2.0 or later.');
 if (packageJson.dependencies?.['@zxing/browser'] !== '0.2.1') fail('Expected exact @zxing/browser 0.2.1.');
 if (packageJson.dependencies?.['@zxing/library'] !== '0.23.0') fail('Expected exact @zxing/library 0.23.0.');
 if (packageJson.dependencies?.['@bwip-js/browser'] !== '4.11.2') fail('Expected exact @bwip-js/browser 4.11.2.');
