@@ -1640,6 +1640,8 @@ export const updateSmePosProductStock = onCall({ region }, async (request) => {
   const productId = stringValue(request.data?.productId, 'Product ID', 80);
   const quantityOnHand = smePosQuantity(request.data?.quantityOnHand, 'Quantity');
   const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
+  const stocktake = request.data?.stocktake === true;
+  const note = optionalString(request.data?.note, 300);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
   const productRef = db.collection('smePosProducts').doc(productId);
@@ -1651,18 +1653,22 @@ export const updateSmePosProductStock = onCall({ region }, async (request) => {
       throw new HttpsError('not-found', 'Active product not found.');
     }
     if (product.data()?.trackStock === false) throw new HttpsError('failed-precondition', 'This service or unlimited item does not use stock quantity.');
+    const previousQuantity = smePosQuantity(product.data()?.quantityOnHand, 'Current quantity');
+    const difference = quantityOnHand - previousQuantity;
     const now = FieldValue.serverTimestamp();
     transaction.update(productRef, { quantityOnHand, lowStockLevel, updatedAt: now });
-    const result = { productId, quantityOnHand, lowStockLevel };
-    transaction.create(commandRef, { uid, kind: 'update_sme_pos_product_stock', idempotencyKey: key, result, createdAt: now });
+    const result = { productId, previousQuantity, quantityOnHand, difference, lowStockLevel };
+    transaction.create(commandRef, { uid, kind: stocktake ? 'stocktake_sme_pos_product' : 'update_sme_pos_product_stock', idempotencyKey: key, result, createdAt: now });
     createActivity(transaction, {
       spaceId,
       actorUid: uid,
       actorName: context.member.displayName || context.member.email,
-      action: 'pos_stock_updated',
+      action: stocktake ? 'pos_stocktake_counted' : 'pos_stock_updated',
       targetType: 'sme_pos_product',
       targetId: productId,
-      summary: `Updated stock for ${product.data()?.name || 'a POS product'} to ${quantityOnHand}.`,
+      summary: stocktake
+        ? `Counted ${quantityOnHand} unit(s) of ${product.data()?.name || 'a POS product'}; difference ${difference >= 0 ? '+' : ''}${difference}.${note ? ` ${note}` : ''}`
+        : `Updated stock for ${product.data()?.name || 'a POS product'} to ${quantityOnHand}.`,
       now,
     });
     return result;
@@ -1828,7 +1834,7 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
       const lineCostMinor = unitCostMinor * quantity;
       if (!Number.isSafeInteger(lineTotalMinor) || !Number.isSafeInteger(lineCostMinor)) throw new HttpsError('out-of-range', 'Sale amount is too large.');
       subtotalMinor += lineTotalMinor; costMinor += lineCostMinor; itemCount += quantity;
-      return { productId: snapshot.id, productName: String(product.name || 'Product'), sku: String(product.sku || ''), quantity, unitPriceMinor, unitCostMinor, lineTotalMinor, lineCostMinor, returnedQuantity: 0 };
+      return { productId: snapshot.id, productName: String(product.name || 'Product'), sku: String(product.sku || ''), barcode: String(product.barcode || ''), quantity, unitPriceMinor, unitCostMinor, lineTotalMinor, lineCostMinor, returnedQuantity: 0 };
     });
     if (discountMinor >= subtotalMinor) throw new HttpsError('invalid-argument', 'Discount must be less than the subtotal.');
     const totalMinor = subtotalMinor - discountMinor;
@@ -2168,6 +2174,8 @@ export const updateMarketplaceListingStock = onCall({ region }, async (request) 
   const listingId = stringValue(request.data?.listingId, 'Listing ID', 80);
   const quantityOnHand = smePosQuantity(request.data?.quantityOnHand, 'Available quantity');
   const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
+  const stocktake = request.data?.stocktake === true;
+  const note = optionalString(request.data?.note, 300);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'stock_staff']);
   requireMarketplaceSettings(context);
@@ -2177,10 +2185,24 @@ export const updateMarketplaceListingStock = onCall({ region }, async (request) 
     const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
     if (command.exists) return command.data()?.result;
     if (!listing.exists || listing.data()?.spaceId !== spaceId || listing.data()?.archivedAt) throw new HttpsError('not-found', 'Active listing not found.');
+    const previousQuantity = smePosQuantity(listing.data()?.quantityOnHand, 'Current quantity');
+    const difference = quantityOnHand - previousQuantity;
     const now = FieldValue.serverTimestamp();
     transaction.update(listingRef, { quantityOnHand, lowStockLevel, updatedAt: now });
-    const result = { listingId, quantityOnHand, lowStockLevel };
-    transaction.create(commandRef, { uid, kind: 'update_marketplace_listing_stock', idempotencyKey: key, result, createdAt: now });
+    const result = { listingId, previousQuantity, quantityOnHand, difference, lowStockLevel };
+    transaction.create(commandRef, { uid, kind: stocktake ? 'stocktake_marketplace_listing' : 'update_marketplace_listing_stock', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: context.member.displayName || context.member.email,
+      action: stocktake ? 'marketplace_stocktake_counted' : 'marketplace_stock_updated',
+      targetType: 'sme_pos_listing',
+      targetId: listingId,
+      summary: stocktake
+        ? `Counted ${quantityOnHand} unit(s) of ${listing.data()?.name || 'a Marketplace listing'}; difference ${difference >= 0 ? '+' : ''}${difference}.${note ? ` ${note}` : ''}`
+        : `Updated stock for ${listing.data()?.name || 'a Marketplace listing'} to ${quantityOnHand}.`,
+      now,
+    });
     return result;
   });
 });
@@ -2327,7 +2349,7 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
       aggregate.quantity += item.requested.quantity;
       sellerTotals.set(sellerId, aggregate);
       return {
-        productId: item.snapshot.id, listingId: item.snapshot.id, productName: String(item.listing.name || 'Item'), sku: String(item.listing.sku || ''),
+        productId: item.snapshot.id, listingId: item.snapshot.id, productName: String(item.listing.name || 'Item'), sku: String(item.listing.sku || ''), barcode: String(item.listing.barcode || ''),
         sellerId, sellerName: String(item.listing.sellerName || sellerById.get(sellerId)?.data()?.name || 'Seller'), sellerUid: item.listing.sellerUid || sellerById.get(sellerId)?.data()?.linkedUid || null,
         condition: oneOf(item.listing.condition, smePosListingConditions, 'item condition'), quantity: item.requested.quantity,
         unitPriceMinor: item.unitPriceMinor, unitCostMinor: Math.floor(sellerEarningMinor / item.requested.quantity),

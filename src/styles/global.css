@@ -3228,3 +3228,17 @@ code {
 .sme-pos-checkout-scanner-entry label{margin:0}
 .sme-pos-checkout-scan-result{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:0}
 @media(max-width:680px){.sme-pos-checkout-scanner-heading,.sme-pos-checkout-scan-result{align-items:stretch;flex-direction:column}.sme-pos-checkout-scanner-heading .barcode-camera-scanner>.button-row{justify-content:stretch}.sme-pos-checkout-scanner-entry{grid-template-columns:1fr}.sme-pos-checkout-scanner-entry .button{width:100%}}
+/* v1.3.0 SME POS barcode operations Alpha 3 */
+.sme-pos-return-scanner{display:grid;gap:.8rem;padding:1rem;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+.sme-pos-return-matches{display:grid;gap:.55rem}
+.sme-pos-return-matches>div{display:grid;gap:.2rem}
+.sme-pos-return-matches>.button{display:flex;align-items:center;justify-content:space-between;text-align:left}
+.sme-pos-return-matches>.button small{color:var(--muted)}
+.sme-pos-label-dialog{display:grid;gap:1rem}
+.sme-pos-label-sheet{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7mm;padding:2mm;background:#fff;color:#000}
+.sme-pos-print-label{break-inside:avoid;display:grid;gap:2mm;min-height:38mm;padding:4mm;border:1px solid #111;border-radius:2mm;background:#fff;color:#000}
+.sme-pos-print-label header strong,.sme-pos-print-label header span{display:block}
+.sme-pos-print-label header strong{font-size:11pt}.sme-pos-print-label header span,.sme-pos-print-label small{font-size:8pt}
+.sme-pos-print-label canvas{display:block;max-width:100%;height:auto;margin:auto}
+@media(max-width:680px){.sme-pos-label-sheet{grid-template-columns:1fr}.sme-pos-return-matches>.button{align-items:flex-start;flex-direction:column}.sme-pos-return-scanner .sme-pos-barcode-heading{align-items:stretch;flex-direction:column}}
+@media print{body.sme-pos-label-printing *{visibility:hidden}.sme-pos-label-sheet,.sme-pos-label-sheet *{visibility:visible}.sme-pos-label-sheet{position:absolute;inset:0;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:6mm;padding:0}.sme-pos-print-label{border-color:#000}}
