@@ -3219,3 +3219,12 @@ code {
 .sme-pos-barcode-result.missing{border-style:dashed}
 .sme-pos-product-card>div:first-child>small{display:block;margin-top:.2rem}
 @media(max-width:680px){.sme-pos-barcode-heading,.sme-pos-barcode-result{align-items:stretch;flex-direction:column}.sme-pos-barcode-heading .barcode-camera-scanner>.button-row{justify-content:stretch}.sme-pos-barcode-entry{grid-template-columns:1fr}.sme-pos-barcode-entry .button,.sme-pos-barcode-result .button-row .button{width:100%}}
+/* v1.3.0 SME POS barcode checkout Alpha 2 */
+.sme-pos-checkout-scanner{display:grid;gap:.75rem;padding:.9rem;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:14px;background:var(--surface-2)}
+.sme-pos-checkout-scanner-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.sme-pos-checkout-scanner-heading h4{margin:.2rem 0;font-size:1rem}
+.sme-pos-checkout-scanner-heading p{margin:0;color:var(--muted);font-size:.78rem}
+.sme-pos-checkout-scanner-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:.75rem}
+.sme-pos-checkout-scanner-entry label{margin:0}
+.sme-pos-checkout-scan-result{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:0}
+@media(max-width:680px){.sme-pos-checkout-scanner-heading,.sme-pos-checkout-scan-result{align-items:stretch;flex-direction:column}.sme-pos-checkout-scanner-heading .barcode-camera-scanner>.button-row{justify-content:stretch}.sme-pos-checkout-scanner-entry{grid-template-columns:1fr}.sme-pos-checkout-scanner-entry .button{width:100%}}
