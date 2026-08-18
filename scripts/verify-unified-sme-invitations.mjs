@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const read = (path) => fs.readFileSync(path, 'utf8');
+const read = (path) => fs.readFileSync(path, 'utf8').replace(/\r\n?/g, '\n');
 const requireText = (text, expected, label) => {
   if (!text.includes(expected)) throw new Error(`Missing ${label}: ${expected}`);
 };
