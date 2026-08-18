@@ -30,6 +30,7 @@ import {
   uploadSharedBillProof,
 } from '../../repositories/collaborationRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
+import { getSmePosSettings, listSmePosAccess } from '../../repositories/smePosRepository';
 import type {
   Account,
   Commitment,
@@ -39,6 +40,9 @@ import type {
   SharedBillSettlementMode,
   Space,
   SpaceActivity,
+  SmePosAccess,
+  SmePosMode,
+  SmePosRole,
   SpaceInvitation,
   SpaceMember,
   SpaceRole,
@@ -54,6 +58,28 @@ const roleDescription: Record<Exclude<SpaceRole, 'owner' | 'member'>, string> = 
   contributor: 'Add and update shared money records.',
   payer: 'Record payments assigned to them.',
   viewer: 'View shared information without changing anything.',
+};
+const smePosRoleLabel: Record<SmePosRole, string> = {
+  owner: 'Owner',
+  manager: 'Manager',
+  cashier: 'Cashier',
+  stock_staff: 'Stock staff',
+  seller: 'Seller',
+  viewer: 'View only',
+};
+const smePosRoleDescription: Record<Exclude<SmePosRole, 'owner'>, string> = {
+  manager: 'Manage the shop, team, products, stock, customers, sales, returns, and payouts.',
+  cashier: 'Use the register, take payment, and issue receipts.',
+  stock_staff: 'Add products, receive stock, and update stock counts.',
+  seller: 'See only the Marketplace seller account linked to this login.',
+  viewer: 'View permitted shop information without making changes.',
+};
+const smePosSpaceRole: Record<Exclude<SmePosRole, 'owner'>, Exclude<SpaceRole, 'owner' | 'member'>> = {
+  manager: 'admin',
+  cashier: 'viewer',
+  stock_staff: 'viewer',
+  seller: 'viewer',
+  viewer: 'viewer',
 };
 const statusLabel: Record<string, string> = {
   unpaid: 'Not paid',
@@ -120,6 +146,7 @@ export function CollaborationPage({
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [spaceId, setSpaceId] = useState('');
   const [members, setMembers] = useState<SpaceMember[]>([]);
+  const [posAccess, setPosAccess] = useState<SmePosAccess[]>([]);
   const [invitations, setInvitations] = useState<SpaceInvitation[]>([]);
   const [assignments, setAssignments] = useState<SharedBillAssignment[]>([]);
   const [payments, setPayments] = useState<SharedBillPayment[]>([]);
@@ -146,6 +173,7 @@ export function CollaborationPage({
   const unreadForSpace = notifications.filter((item) => item.spaceId === spaceId);
   const pendingAssignments = assignments.filter((item) => item.status !== 'paid');
   const paymentMap = useMemo(() => new Map(payments.map((item) => [item.id, item])), [payments]);
+  const posAccessByUid = useMemo(() => new Map(posAccess.map((item) => [item.uid, item])), [posAccess]);
 
   const loadSpaces = async () => {
     if (!user) return;
@@ -164,8 +192,10 @@ export function CollaborationPage({
     try {
       const nextMembers = await listSpaceMembers(selectedId);
       const signedInMember = nextMembers.find((member) => member.uid === user.uid);
+      const selected = spaces.find((item) => item.id === selectedId);
       const mayManageInvitations = signedInMember?.role === 'owner' || signedInMember?.role === 'admin';
-      const [nextInvitations, nextAssignments, nextPayments, nextCommitments, nextActivities, nextNotifications, nextAccounts] = await Promise.all([
+      const mayReadPosTeam = selected?.type === 'sme' && signedInMember?.role === 'owner';
+      const [nextInvitations, nextAssignments, nextPayments, nextCommitments, nextActivities, nextNotifications, nextAccounts, nextPosAccess] = await Promise.all([
         mayManageInvitations ? listSpaceInvitations(selectedId) : Promise.resolve([] as SpaceInvitation[]),
         listSharedBillAssignments(selectedId),
         listSharedBillPayments(selectedId),
@@ -173,8 +203,10 @@ export function CollaborationPage({
         listSpaceActivities(selectedId),
         listUserNotifications(user.uid),
         listAccounts(user.uid),
+        mayReadPosTeam ? listSmePosAccess(selectedId) : Promise.resolve([] as SmePosAccess[]),
       ]);
       setMembers(nextMembers);
+      setPosAccess(nextPosAccess);
       setInvitations(nextInvitations);
       setAssignments(nextAssignments);
       setPayments(nextPayments);
@@ -284,8 +316,8 @@ export function CollaborationPage({
         <div className="member-list">{members.map((member) => <article className={`member-row status-${member.status || 'active'}`} key={member.id}>
           <span className="avatar">{memberDisplayLabel(member).charAt(0).toUpperCase()}</span>
           <div><strong>{memberDisplayLabel(member)}</strong><small>{memberDetailLabel(member)}</small></div>
-          <span className="type-badge">{roleLabel[member.role] || member.role}</span>
-          <div className="permission-chips"><span>{member.canUseAccounts ? 'Use accounts' : 'No account use'}</span><span>{member.canViewBalances ? 'See balances' : 'Balances hidden'}</span><span>{member.canViewLedger ? 'See account activity' : 'Account activity hidden'}</span></div>
+          <span className="type-badge">{selectedSpace?.type === 'sme' && member.role !== 'owner' && posAccessByUid.get(member.uid)?.role ? smePosRoleLabel[posAccessByUid.get(member.uid)!.role] : roleLabel[member.role] || member.role}</span>
+          <div className="permission-chips member-access-summary"><span>{selectedSpace?.type === 'sme' && member.role !== 'owner' && posAccessByUid.get(member.uid)?.role ? smePosRoleDescription[posAccessByUid.get(member.uid)!.role as Exclude<SmePosRole, 'owner'>] : member.role === 'owner' ? 'Full control of this Space.' : roleDescription[member.role as Exclude<SpaceRole, 'owner' | 'member'>] || 'Shared Space access.'}</span></div>
           {canManage && member.role !== 'owner' && <div className="button-row">
             <button className="text-button" onClick={() => setEditingMember(member)}>Manage</button>
             {isOwner && (member.status || 'active') === 'active' && <button className="text-button" onClick={() => setConfirmDialog({
@@ -309,7 +341,7 @@ export function CollaborationPage({
       {canManage && <section className="panel collaboration-panel">
         <div className="panel-heading"><div><span className="eyebrow">Invitations</span><h2>Invitations</h2></div></div>
         <div className="invitation-list">{invitations.length === 0 ? <p>No invitations yet.</p> : invitations.map((invitation) => <article key={invitation.id} className="invitation-row">
-          <div><strong>{invitation.email}</strong><small>{roleLabel[invitation.role]} · {invitation.status}</small></div>
+          <div><strong>{invitation.email}</strong><small>{invitation.posRole ? smePosRoleLabel[invitation.posRole] : roleLabel[invitation.role]} · {invitation.status}</small></div>
           {invitation.status === 'pending' && <><button className="button secondary" onClick={() => void navigator.clipboard.writeText(inviteUrl(invitation.token))}>Copy invite link</button><a className="button secondary" href={`https://wa.me/?text=${encodeURIComponent(`Join ${selectedSpace?.name || 'my BajetBN Space'}: ${inviteUrl(invitation.token)}`)}`} target="_blank" rel="noreferrer">WhatsApp</a><button className="text-button danger" onClick={() => void runAction(() => revokeSpaceInvitation(invitation.id))}>Cancel invite</button></>}
         </article>)}</div>
       </section>}
@@ -354,7 +386,7 @@ export function CollaborationPage({
     </section>}
 
     {confirmDialog && <ActionConfirmModal state={confirmDialog} busy={confirmBusy} error={error} onClose={() => { setConfirmDialog(null); setError(''); }} onConfirm={() => void runConfirmedAction()} />}
-    {inviteOpen && selectedSpace && <Modal title={`Invite to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm spaceId={selectedSpace.id} spaceName={selectedSpace.name} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
+    {inviteOpen && selectedSpace && <Modal title={`Invite person to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm space={selectedSpace} canAssignPosRole={isOwner} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {editingMember && <Modal title="Change member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
     {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {submitting && <Modal title={`Add payment for ${submitting.commitmentName}`} onClose={() => setSubmitting(null)}><SubmitPaymentForm assignment={submitting} accounts={accounts.filter((account) => account.currency === submitting.currency)} onSaved={async () => { setSubmitting(null); await loadSpaceData(spaceId); }} /></Modal>}
@@ -371,15 +403,63 @@ function CollaborationSettings({ space, onSaved }: { space: Space; onSaved: () =
   return <section className="collaboration-settings"><div><strong>Check member payments</strong><span>{approvalMode === 'owner_approval' ? 'The Space owner or admin checks each payment before it is accepted.' : 'Member payments are accepted automatically.'}</span></div><select value={approvalMode} onChange={(event) => setApprovalMode(event.target.value as 'none' | 'owner_approval')}><option value="none">Accept automatically</option><option value="owner_approval">Owner or admin checks first</option></select><label>Head WhatsApp<input value={headWhatsapp} onChange={(event) => setHeadWhatsapp(event.target.value)} placeholder="6738XXXXXX"/><small>Used only to prepare a WhatsApp message. BajetBN does not send it automatically.</small></label><button className="button secondary" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save sharing settings'}</button>{error && <div className="notice error">{error}</div>}</section>;
 }
 
-function InviteForm({ spaceId, spaceName, onSaved }: { spaceId: string; spaceName: string; onSaved: () => Promise<void> }) {
+export function InviteForm({
+  space,
+  canAssignPosRole = false,
+  defaultPosRole,
+  onSaved,
+}: {
+  space: Space;
+  canAssignPosRole?: boolean;
+  defaultPosRole?: Exclude<SmePosRole, 'owner'>;
+  onSaved: () => Promise<void>;
+}) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Exclude<SpaceRole, 'owner' | 'member'>>('contributor');
+  const [posRole, setPosRole] = useState<Exclude<SmePosRole, 'owner'>>(defaultPosRole || 'cashier');
+  const [posMode, setPosMode] = useState<SmePosMode | null>(null);
+  const [posChecked, setPosChecked] = useState(space.type !== 'sme' || !canAssignPosRole);
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [canUseAccounts, setCanUseAccounts] = useState(false);
   const [canViewBalances, setCanViewBalances] = useState(false);
   const [canViewLedger, setCanViewLedger] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    if (space.type !== 'sme' || !canAssignPosRole) {
+      setPosMode(null);
+      setPosChecked(true);
+      return () => { active = false; };
+    }
+    setPosChecked(false);
+    void getSmePosSettings(space.id)
+      .then((settings) => {
+        if (!active) return;
+        setPosMode(settings?.mode || null);
+        setPosChecked(true);
+        if (settings?.mode === 'standard' && posRole === 'seller') setPosRole('cashier');
+      })
+      .catch((nextError) => {
+        if (!active) return;
+        setPosMode(null);
+        setPosChecked(true);
+        setError(getErrorMessage(nextError));
+      });
+    return () => { active = false; };
+  }, [space.id, space.type, canAssignPosRole]);
+
+  const checkingBusinessRoles = space.type === 'sme' && canAssignPosRole && !posChecked;
+  const businessInvite = space.type === 'sme' && canAssignPosRole && Boolean(posMode);
+  const availablePosRoles: Array<Exclude<SmePosRole, 'owner'>> = [
+    'manager',
+    'cashier',
+    'stock_staff',
+    ...(posMode === 'marketplace_consignment' ? ['seller' as const] : []),
+    'viewer',
+  ];
+
   const chooseRole = (nextRole: Exclude<SpaceRole, 'owner' | 'member'>) => {
     setRole(nextRole);
     if (nextRole === 'viewer') {
@@ -388,8 +468,21 @@ function InviteForm({ spaceId, spaceName, onSaved }: { spaceId: string; spaceNam
       setCanViewLedger(false);
     }
   };
+
+  const chooseBusinessRole = (nextRole: Exclude<SmePosRole, 'owner'>) => {
+    setPosRole(nextRole);
+    const nextSpaceRole = smePosSpaceRole[nextRole];
+    setRole(nextSpaceRole);
+    if (nextSpaceRole === 'viewer') {
+      setCanUseAccounts(false);
+      setCanViewBalances(false);
+      setCanViewLedger(false);
+    }
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!posChecked) return;
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
     const delivery = submitter?.value === 'copy' ? 'copy' : 'whatsapp';
     const whatsappWindow = delivery === 'whatsapp' ? window.open('about:blank', '_blank') : null;
@@ -397,10 +490,20 @@ function InviteForm({ spaceId, spaceName, onSaved }: { spaceId: string; spaceNam
     setBusy(true);
     setError('');
     try {
-      const result = await createSpaceInvitation({ spaceId, email, role, canUseAccounts, canViewBalances, canViewLedger });
+      const effectiveRole = businessInvite ? smePosSpaceRole[posRole] : role;
+      const result = await createSpaceInvitation({
+        spaceId: space.id,
+        email,
+        role: effectiveRole,
+        canUseAccounts: effectiveRole === 'viewer' ? false : canUseAccounts,
+        canViewBalances: effectiveRole === 'viewer' ? false : canViewBalances,
+        canViewLedger: effectiveRole === 'viewer' ? false : canViewLedger,
+        posRole: businessInvite ? posRole : null,
+      });
       const url = inviteUrl(result.data.token);
+      const accessLabel = businessInvite ? smePosRoleLabel[posRole] : roleLabel[effectiveRole];
       if (delivery === 'whatsapp') {
-        const href = whatsappHref(whatsappNumber, `Join ${spaceName} in BajetBN as ${roleLabel[role]}: ${url}`);
+        const href = whatsappHref(whatsappNumber, `Join ${space.name} in BajetBN as ${accessLabel}: ${url}`);
         if (whatsappWindow) whatsappWindow.location.href = href;
         else window.open(href, '_blank', 'noopener,noreferrer');
       } else {
@@ -414,29 +517,38 @@ function InviteForm({ spaceId, spaceName, onSaved }: { spaceId: string; spaceNam
       setBusy(false);
     }
   };
+
   return <form className="form-stack invite-member-form" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
-    <div className="info-banner"><strong>How invitations work</strong><span>The person joins using this email. Send the secure link directly through WhatsApp or copy it.</span></div>
+    {checkingBusinessRoles
+      ? <div className="info-banner"><strong>Preparing SME roles</strong><span>Loading this shop's team roles before the invitation is created.</span></div>
+      : businessInvite
+        ? <div className="info-banner"><strong>One invitation for the SME team</strong><span>Choose the person's shop role here. BajetBN will add their SME Space membership and POS access together when they join.</span></div>
+        : <div className="info-banner"><strong>How invitations work</strong><span>The person joins using this email. Send the secure link directly through WhatsApp or copy it.</span></div>}
+    {space.type === 'sme' && canAssignPosRole && posChecked && !posMode && <div className="notice">POS is not set up yet. You can invite normal SME Space members here. Set up POS first to invite Cashiers, Stock Staff, or Sellers.</div>}
     <div className="form-grid">
       <label>Email address<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="person@example.com" /><small>They must sign in to BajetBN using this email.</small></label>
       <label>WhatsApp number <span className="optional-label">Optional</span><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} inputMode="tel" placeholder="6738XXXXXX" /><small>Leave blank to choose a WhatsApp contact later.</small></label>
     </div>
-    <fieldset className="invite-role-fieldset">
+    {checkingBusinessRoles ? <div className="loading-panel">Loading business roles…</div> : businessInvite ? <fieldset className="invite-role-fieldset">
+      <legend>What is their role in this business?</legend>
+      <div className="invite-role-grid">{availablePosRoles.map((item) => <button key={item} className={`invite-role-card ${posRole === item ? 'selected' : ''}`} type="button" aria-pressed={posRole === item} onClick={() => chooseBusinessRole(item)}><strong>{smePosRoleLabel[item]}</strong><small>{smePosRoleDescription[item]}</small></button>)}</div>
+    </fieldset> : <fieldset className="invite-role-fieldset">
       <legend>What can this person do?</legend>
       <div className="invite-role-grid">{editableRoles.map((item) => <button key={item} className={`invite-role-card ${role === item ? 'selected' : ''}`} type="button" aria-pressed={role === item} onClick={() => chooseRole(item)}><strong>{roleLabel[item]}</strong><small>{roleDescription[item]}</small></button>)}</div>
-    </fieldset>
+    </fieldset>}
     <details className="invite-account-access">
-      <summary>Shared account access <span>Optional</span></summary>
-      <p>Leave these off unless this person needs information from shared Accounts.</p>
+      <summary>Advanced financial access <span>Optional</span></summary>
+      <p>Most team members do not need these permissions. Turn them on only when this person also works with shared BajetBN Accounts.</p>
       <div className="permission-editor">
-        <label><input type="checkbox" checked={canUseAccounts} disabled={role === 'viewer'} onChange={(event) => setCanUseAccounts(event.target.checked)}/><span><strong>Use shared accounts</strong><small>Choose a shared Account when recording money.</small></span></label>
-        <label><input type="checkbox" checked={canViewBalances} disabled={role === 'viewer'} onChange={(event) => setCanViewBalances(event.target.checked)}/><span><strong>See account balances</strong><small>See how much money is available.</small></span></label>
-        <label><input type="checkbox" checked={canViewLedger} disabled={role === 'viewer'} onChange={(event) => setCanViewLedger(event.target.checked)}/><span><strong>See account activity</strong><small>See money going in and out.</small></span></label>
+        <label><input type="checkbox" checked={canUseAccounts} disabled={(businessInvite ? smePosSpaceRole[posRole] : role) === 'viewer'} onChange={(event) => setCanUseAccounts(event.target.checked)}/><span><strong>Use shared accounts</strong><small>Choose a shared Account when recording money.</small></span></label>
+        <label><input type="checkbox" checked={canViewBalances} disabled={(businessInvite ? smePosSpaceRole[posRole] : role) === 'viewer'} onChange={(event) => setCanViewBalances(event.target.checked)}/><span><strong>See account balances</strong><small>See how much money is available.</small></span></label>
+        <label><input type="checkbox" checked={canViewLedger} disabled={(businessInvite ? smePosSpaceRole[posRole] : role) === 'viewer'} onChange={(event) => setCanViewLedger(event.target.checked)}/><span><strong>See account activity</strong><small>See money going in and out.</small></span></label>
       </div>
     </details>
     <div className="invite-action-grid">
-      <button className="button primary" type="submit" value="whatsapp" disabled={busy}>{busy ? 'Creating invite…' : 'Create & send with WhatsApp'}</button>
-      <button className="button secondary" type="submit" value="copy" disabled={busy}>{busy ? 'Creating invite…' : 'Create & copy link'}</button>
+      <button className="button primary" type="submit" value="whatsapp" disabled={busy || !posChecked}>{busy ? 'Creating invite…' : 'Create & send with WhatsApp'}</button>
+      <button className="button secondary" type="submit" value="copy" disabled={busy || !posChecked}>{busy ? 'Creating invite…' : 'Create & copy link'}</button>
     </div>
     <small className="form-help">WhatsApp will open with a ready message. You still choose the contact and press Send.</small>
   </form>;

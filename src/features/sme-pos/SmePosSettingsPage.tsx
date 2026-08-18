@@ -5,9 +5,9 @@ import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
+import { InviteForm } from '../collaboration/CollaborationPage';
 import { listAccounts } from '../../repositories/accountRepository';
 import {
-  createSpaceInvitation,
   listSpaceInvitations,
   listSpaceMembers,
 } from '../../repositories/collaborationRepository';
@@ -52,18 +52,6 @@ const roleLabels: Record<SmePosRole, string> = {
   seller: 'Seller',
   viewer: 'View only',
 };
-
-const roleDescriptions: Record<Exclude<SmePosRole, 'owner'>, string> = {
-  manager: 'Manage daily POS work, products, stock, customers, sales, returns, and payouts.',
-  cashier: 'Open the register, take payment, and issue receipts.',
-  stock_staff: 'Add products, receive stock, and update stock counts.',
-  seller: 'See only the Marketplace seller account linked to this login.',
-  viewer: 'View permitted POS information without making changes.',
-};
-
-function inviteUrl(token: string) {
-  return `${window.location.origin}/join?token=${encodeURIComponent(token)}`;
-}
 
 type ConfirmPayload =
   | { kind: 'save' }
@@ -329,8 +317,8 @@ export function SmePosSettingsPage() {
     </div>
 
     {settings && <section className="panel sme-pos-access-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Shop team</span><h2>POS access</h2></div><div className="button-row"><span>{access.length} active</span><button className="button primary" type="button" disabled={busy || Boolean(space.archivedAt)} onClick={() => setInviteOpen(true)}>+ Add team member</button></div></div>
-      <p>Invite a person and choose their POS role in one step. Their access starts automatically after they join this SME Space.</p>
+      <div className="panel-heading"><div><span className="eyebrow">People & access</span><h2>Shop team</h2></div><div className="button-row"><span>{access.length} active</span><button className="button primary" type="button" disabled={busy || Boolean(space.archivedAt)} onClick={() => setInviteOpen(true)}>+ Invite person</button></div></div>
+      <p>This uses the same SME invitation as the Members page. Choose the person's business role once; BajetBN applies their Space membership and POS access together.</p>
       <div className="sme-pos-access-list">
         {members.filter((member) => (member.status || 'active') === 'active').map((member) => {
           const current = member.uid === space.ownerId ? 'owner' : accessByUid.get(member.uid)?.role || '';
@@ -348,74 +336,6 @@ export function SmePosSettingsPage() {
     </section>}
 
     {confirm && <ActionConfirmModal state={confirm} busy={busy} error={error} onClose={() => { setConfirm(null); setError(''); }} onConfirm={() => void confirmAction()} />}
-    {inviteOpen && settings && <Modal title="Add POS team member" onClose={() => setInviteOpen(false)}><PosTeamInviteForm spaceId={space.id} spaceName={space.name} mode={settings.mode} onSaved={load} /></Modal>}
+    {inviteOpen && settings && <Modal title={`Invite person to ${space.name}`} onClose={() => setInviteOpen(false)}><InviteForm space={space} canAssignPosRole defaultPosRole="cashier" onSaved={async () => { setInviteOpen(false); await load(); }} /></Modal>}
   </main>;
-}
-
-function PosTeamInviteForm({
-  spaceId,
-  spaceName,
-  mode,
-  onSaved,
-}: {
-  spaceId: string;
-  spaceName: string;
-  mode: SmePosMode;
-  onSaved: () => Promise<void>;
-}) {
-  const [email, setEmail] = useState('');
-  const [posRole, setPosRole] = useState<Exclude<SmePosRole, 'owner'>>('cashier');
-  const [createdToken, setCreatedToken] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      const result = await createSpaceInvitation({
-        spaceId,
-        email,
-        role: 'viewer',
-        canUseAccounts: false,
-        canViewBalances: false,
-        canViewLedger: false,
-        posRole,
-      });
-      setCreatedToken(result.data.token);
-      await onSaved();
-    } catch (nextError) {
-      setError(getErrorMessage(nextError));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (createdToken) {
-    const url = inviteUrl(createdToken);
-    return <div className="form-stack">
-      <div className="notice success">Invite created. POS access will start automatically after this person joins.</div>
-      <label>Invite link<input value={url} readOnly onFocus={(event) => event.currentTarget.select()} /></label>
-      <div className="button-row">
-        <button className="button primary" type="button" onClick={() => void navigator.clipboard.writeText(url)}>Copy invite link</button>
-        <a className="button secondary" href={`https://wa.me/?text=${encodeURIComponent(`Join ${spaceName} as ${roleLabels[posRole]}: ${url}`)}`} target="_blank" rel="noreferrer">Send by WhatsApp</a>
-        <button className="button secondary" type="button" onClick={() => { setEmail(''); setPosRole('cashier'); setCreatedToken(''); }}>Add another person</button>
-      </div>
-    </div>;
-  }
-
-  return <form className="form-stack" onSubmit={submit}>
-    {error && <div className="notice error">{error}</div>}
-    <label>Email address<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="staff@example.com" /></label>
-    <label>POS role<select value={posRole} onChange={(event) => setPosRole(event.target.value as Exclude<SmePosRole, 'owner'>)}>
-      <option value="cashier">Cashier</option>
-      <option value="manager">Manager</option>
-      <option value="stock_staff">Stock staff</option>
-      {mode === 'marketplace_consignment' && <option value="seller">Seller</option>}
-      <option value="viewer">View only</option>
-    </select><small>{roleDescriptions[posRole]}</small></label>
-    <div className="notice">This person receives basic View only access to the SME Space. Their selected POS role controls what they can do inside the shop.</div>
-    <button className="button primary full" disabled={busy}>{busy ? 'Creating invite…' : 'Create team invite'}</button>
-  </form>;
 }
