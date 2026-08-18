@@ -341,7 +341,7 @@ export function CollaborationPage({
       {canManage && <section className="panel collaboration-panel">
         <div className="panel-heading"><div><span className="eyebrow">Invitations</span><h2>Invitations</h2></div></div>
         <div className="invitation-list">{invitations.length === 0 ? <p>No invitations yet.</p> : invitations.map((invitation) => <article key={invitation.id} className="invitation-row">
-          <div><strong>{invitation.email}</strong><small>{invitation.posRole ? smePosRoleLabel[invitation.posRole] : roleLabel[invitation.role]} · {invitation.status}</small></div>
+          <div><strong>{invitation.email || 'WhatsApp / secure link invite'}</strong><small>{invitation.posRole ? smePosRoleLabel[invitation.posRole] : roleLabel[invitation.role]} · {invitation.status}</small></div>
           {invitation.status === 'pending' && <><button className="button secondary" onClick={() => void navigator.clipboard.writeText(inviteUrl(invitation.token))}>Copy invite link</button><a className="button secondary" href={`https://wa.me/?text=${encodeURIComponent(`Join ${selectedSpace?.name || 'my BajetBN Space'}: ${inviteUrl(invitation.token)}`)}`} target="_blank" rel="noreferrer">WhatsApp</a><button className="text-button danger" onClick={() => void runAction(() => revokeSpaceInvitation(invitation.id))}>Cancel invite</button></>}
         </article>)}</div>
       </section>}
@@ -493,7 +493,7 @@ export function InviteForm({
       const effectiveRole = businessInvite ? smePosSpaceRole[posRole] : role;
       const result = await createSpaceInvitation({
         spaceId: space.id,
-        email,
+        email: email.trim() || null,
         role: effectiveRole,
         canUseAccounts: effectiveRole === 'viewer' ? false : canUseAccounts,
         canViewBalances: effectiveRole === 'viewer' ? false : canViewBalances,
@@ -523,12 +523,12 @@ export function InviteForm({
     {checkingBusinessRoles
       ? <div className="info-banner"><strong>Preparing SME roles</strong><span>Loading this shop's team roles before the invitation is created.</span></div>
       : businessInvite
-        ? <div className="info-banner"><strong>One invitation for the SME team</strong><span>Choose the person's shop role here. BajetBN will add their SME Space membership and POS access together when they join.</span></div>
-        : <div className="info-banner"><strong>How invitations work</strong><span>The person joins using this email. Send the secure link directly through WhatsApp or copy it.</span></div>}
+        ? <div className="info-banner"><strong>WhatsApp-first SME invite</strong><span>Choose their shop role, then send the secure invite through WhatsApp. Email is optional and only acts as an extra identity lock when provided.</span></div>
+        : <div className="info-banner"><strong>WhatsApp-first invitations</strong><span>Send the secure link through WhatsApp. Email is optional; if you add one, only that email can accept the invite.</span></div>}
     {space.type === 'sme' && canAssignPosRole && posChecked && !posMode && <div className="notice">POS is not set up yet. You can invite normal SME Space members here. Set up POS first to invite Cashiers, Stock Staff, or Sellers.</div>}
     <div className="form-grid">
-      <label>Email address<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="person@example.com" /><small>They must sign in to BajetBN using this email.</small></label>
-      <label>WhatsApp number <span className="optional-label">Optional</span><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} inputMode="tel" placeholder="6738XXXXXX" /><small>Leave blank to choose a WhatsApp contact later.</small></label>
+      <label>WhatsApp number <span className="optional-label">Recommended</span><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} inputMode="tel" placeholder="6738XXXXXX" /><small>Enter their number to open the chat directly, or leave blank to choose a WhatsApp contact.</small></label>
+      <label>Email address <span className="optional-label">Optional</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="person@example.com" /><small>Optional security lock. If entered, only this email can accept the invite.</small></label>
     </div>
     {checkingBusinessRoles ? <div className="loading-panel">Loading business roles…</div> : businessInvite ? <fieldset className="invite-role-fieldset">
       <legend>What is their role in this business?</legend>
@@ -547,10 +547,10 @@ export function InviteForm({
       </div>
     </details>
     <div className="invite-action-grid">
-      <button className="button primary" type="submit" value="whatsapp" disabled={busy || !posChecked}>{busy ? 'Creating invite…' : 'Create & send with WhatsApp'}</button>
-      <button className="button secondary" type="submit" value="copy" disabled={busy || !posChecked}>{busy ? 'Creating invite…' : 'Create & copy link'}</button>
+      <button className="button primary" type="submit" value="whatsapp" disabled={busy || !posChecked}>{busy ? 'Creating invite…' : 'Send invite on WhatsApp'}</button>
+      <button className="button secondary" type="submit" value="copy" disabled={busy || !posChecked}>{busy ? 'Creating invite…' : 'Copy invite link'}</button>
     </div>
-    <small className="form-help">WhatsApp will open with a ready message. You still choose the contact and press Send.</small>
+    <small className="form-help">WhatsApp is the main invite method. BajetBN creates a one-time secure link; the recipient signs in and joins from that link.</small>
   </form>;
 }
 

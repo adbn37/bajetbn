@@ -49,7 +49,7 @@ export async function listSpaceInvitations(spaceId: string): Promise<SpaceInvita
   const snapshot = await getDocs(query(collection(db, 'spaceInvitations'), where('spaceId', '==', spaceId)));
   return snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() }) as SpaceInvitation)
-    .sort((a, b) => a.email.localeCompare(b.email));
+    .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 }
 
 
@@ -135,7 +135,7 @@ export async function updateSpaceCollaborationSettings(input: {
 
 export async function createSpaceInvitation(input: {
   spaceId: string;
-  email: string;
+  email?: string | null;
   role: Exclude<SpaceRole, 'owner' | 'member'>;
   canUseAccounts: boolean;
   canViewBalances: boolean;

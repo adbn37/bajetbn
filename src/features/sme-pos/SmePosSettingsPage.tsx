@@ -364,7 +364,7 @@ export function SmePosSettingsPage() {
           </div>;
         })}
         {pendingPosInvitations.map((invitation) => <div className="sme-pos-access-row" key={invitation.id}>
-          <div><strong>{invitation.email}</strong><small>Waiting for this person to join</small></div>
+          <div><strong>{invitation.email || 'WhatsApp / secure link invite'}</strong><small>Waiting for this person to join</small></div>
           <span className="type-badge">{roleLabels[invitation.posRole!]} · Invite pending</span>
         </div>)}
       </div>

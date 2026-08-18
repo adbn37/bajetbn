@@ -1196,6 +1196,11 @@ function normalizedEmail(value: unknown): string {
   return email;
 }
 
+function optionalNormalizedEmail(value: unknown): string | null {
+  if (value == null || String(value).trim() === '') return null;
+  return normalizedEmail(value);
+}
+
 function optionalPhone(value: unknown): string {
   const phone = optionalString(value, 32);
   if (phone && !/^\+?[0-9 ()-]{7,32}$/.test(phone)) throw new HttpsError('invalid-argument', 'Enter a valid WhatsApp number.');
@@ -3255,7 +3260,7 @@ export const updateSpaceCollaborationSettings = onCall({ region }, async (reques
 export const createSpaceInvitation = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
-  const email = normalizedEmail(request.data?.email);
+  const email = optionalNormalizedEmail(request.data?.email);
   const role = oneOf(request.data?.role, collaborationRoles, 'member role');
   const posRole = request.data?.posRole == null || request.data.posRole === ''
     ? null
@@ -3270,38 +3275,90 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
   if (space.data()?.type === 'personal') throw new HttpsError('failed-precondition', 'Personal Spaces cannot have members.');
   if (posRole && space.data()?.type !== 'sme') throw new HttpsError('failed-precondition', 'POS roles are only available in an SME Space.');
   if (posRole && space.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'Only the SME Space owner can assign a POS role during an invitation.');
+
   const [existing, registeredUsers, posSettings] = await Promise.all([
-    db.collection('spaceInvitations').where('spaceId', '==', spaceId).where('email', '==', email).get(),
-    db.collection('users').where('email', '==', email).limit(1).get(),
+    email
+      ? db.collection('spaceInvitations').where('spaceId', '==', spaceId).where('email', '==', email).get()
+      : Promise.resolve(null),
+    email
+      ? db.collection('users').where('email', '==', email).limit(1).get()
+      : Promise.resolve(null),
     posRole ? db.collection('smePosSettings').doc(spaceId).get() : Promise.resolve(null),
   ]);
-  if (existing.docs.some((item) => item.data().status === 'pending')) throw new HttpsError('already-exists', 'A pending invitation already exists for this email.');
+
+  if (existing?.docs.some((item) => item.data().status === 'pending')) {
+    throw new HttpsError('already-exists', 'A pending invitation already exists for this email.');
+  }
   if (posRole && !posSettings?.exists) throw new HttpsError('failed-precondition', 'Save the POS setup before inviting a shop team member.');
   if (posRole === 'seller' && posSettings?.data()?.mode !== 'marketplace_consignment') {
     throw new HttpsError('failed-precondition', 'Seller access is only available in Marketplace Consignment POS.');
   }
-  const invitedUserUid = registeredUsers.empty ? '' : registeredUsers.docs[0].id;
+
+  const invitedUserUid = registeredUsers && !registeredUsers.empty ? registeredUsers.docs[0].id : '';
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
   const invitationRef = db.collection('spaceInvitations').doc();
   const token = randomBytes(24).toString('hex');
+
   return db.runTransaction(async (transaction) => {
     const command = await transaction.get(commandRef);
     if (command.exists) return command.data()?.result;
+
     const now = FieldValue.serverTimestamp();
     const result = { invitationId: invitationRef.id, token };
+    const inviteTarget = email || 'a WhatsApp contact';
+
     transaction.create(invitationRef, {
-      displayId: displayId('INV'), spaceId, spaceName: space.data()?.name || 'Shared Space', spaceType: space.data()?.type || 'custom',
-      email, role, canUseAccounts, canViewBalances, canViewLedger, posRole,
-      token, status: 'pending', invitedBy: uid, invitedByName: manager.displayName || request.auth?.token.email || 'Space owner', acceptedBy: null, declinedBy: null,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), createdAt: now, updatedAt: now,
+      displayId: displayId('INV'),
+      spaceId,
+      spaceName: space.data()?.name || 'Shared Space',
+      spaceType: space.data()?.type || 'custom',
+      email,
+      role,
+      canUseAccounts,
+      canViewBalances,
+      canViewLedger,
+      posRole,
+      token,
+      status: 'pending',
+      invitedBy: uid,
+      invitedByName: manager.displayName || request.auth?.token.email || 'Space owner',
+      acceptedBy: null,
+      declinedBy: null,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      createdAt: now,
+      updatedAt: now,
     });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_invited', targetType: 'invitation', targetId: invitationRef.id, summary: posRole ? `Invited ${email} with POS ${posRole} access.` : `Invited ${email} as ${role}.`, now });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: manager.displayName,
+      action: 'member_invited',
+      targetType: 'invitation',
+      targetId: invitationRef.id,
+      summary: posRole ? `Invited ${inviteTarget} with POS ${posRole} access.` : `Invited ${inviteTarget} as ${role}.`,
+      now,
+    });
+
     if (invitedUserUid) createNotification(transaction, {
-      uid: invitedUserUid, spaceId, type: 'invitation_received', title: 'You have a Space invitation',
+      uid: invitedUserUid,
+      spaceId,
+      type: 'invitation_received',
+      title: 'You have a Space invitation',
       message: `${manager.displayName || 'A Space owner'} invited you to ${space.data()?.name || 'a shared Space'}.`,
-      targetPath: '/spaces', actionLabel: 'View invitation', now,
+      targetPath: '/spaces',
+      actionLabel: 'View invitation',
+      now,
     });
-    transaction.create(commandRef, { uid, kind: 'create_space_invitation', idempotencyKey: key, result, createdAt: now });
+
+    transaction.create(commandRef, {
+      uid,
+      kind: 'create_space_invitation',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
     return result;
   });
 });
@@ -3367,61 +3424,145 @@ export const acceptSpaceInvitation = onCall({ region }, async (request) => {
   const token = stringValue(request.data?.token, 'Invitation token', 80);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const authEmail = typeof request.auth?.token.email === 'string' ? request.auth.token.email.toLowerCase() : '';
-  if (!authEmail) throw new HttpsError('failed-precondition', 'Your account does not have a verified email address.');
+
   const invitationQuery = await db.collection('spaceInvitations').where('token', '==', token).limit(1).get();
   if (invitationQuery.empty) throw new HttpsError('not-found', 'Invitation not found.');
+
   const invitationRef = invitationQuery.docs[0].ref;
-  const invitation = invitationQuery.docs[0].data();
-  if (invitation.email !== authEmail) throw new HttpsError('permission-denied', 'Sign in using the email address that received this invitation.');
-  if (invitation.status !== 'pending') throw new HttpsError('failed-precondition', 'This invitation is no longer active.');
-  if (invitation.expiresAt?.toDate?.().getTime() < Date.now()) throw new HttpsError('deadline-exceeded', 'This invitation has expired. Ask the Space owner for a new link.');
-  const spaceId = String(invitation.spaceId);
-  const posRole = typeof invitation.posRole === 'string' && smePosRoles.includes(invitation.posRole as (typeof smePosRoles)[number])
-    ? invitation.posRole as (typeof smePosRoles)[number]
-    : null;
+  const initialInvitation = invitationQuery.docs[0].data();
+  const spaceId = String(initialInvitation.spaceId || '');
+  if (!spaceId) throw new HttpsError('failed-precondition', 'This invitation is incomplete. Ask the Space owner for a new link.');
+
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
   const profileRef = db.collection('users').doc(uid);
   const spaceRef = db.collection('spaces').doc(spaceId);
-  const posSettingsRef = posRole ? db.collection('smePosSettings').doc(spaceId) : null;
-  const posAccessRef = posRole ? db.collection('smePosAccess').doc(`${spaceId}_${uid}`) : null;
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
   return db.runTransaction(async (transaction) => {
-    const [command, member, profile, space, posSettings] = await Promise.all([
+    const [command, invitationSnapshot, member, profile, space] = await Promise.all([
       transaction.get(commandRef),
+      transaction.get(invitationRef),
       transaction.get(memberRef),
       transaction.get(profileRef),
       transaction.get(spaceRef),
-      posSettingsRef ? transaction.get(posSettingsRef) : Promise.resolve(null),
     ]);
+
     if (command.exists) return command.data()?.result;
+    if (!invitationSnapshot.exists) throw new HttpsError('not-found', 'Invitation not found.');
+
+    const invitation = invitationSnapshot.data() || {};
+    if (String(invitation.spaceId || '') !== spaceId) throw new HttpsError('failed-precondition', 'This invitation is no longer valid.');
+    if (invitation.status !== 'pending') throw new HttpsError('failed-precondition', 'This invitation is no longer active.');
+    if (invitation.expiresAt?.toDate?.().getTime() < Date.now()) throw new HttpsError('deadline-exceeded', 'This invitation has expired. Ask the Space owner for a new link.');
+
+    const invitationEmail = typeof invitation.email === 'string' ? invitation.email.trim().toLowerCase() : '';
+    if (invitationEmail) {
+      if (!authEmail) throw new HttpsError('failed-precondition', 'This invitation is locked to an email address. Sign in with that email to continue.');
+      if (invitationEmail !== authEmail) throw new HttpsError('permission-denied', 'Sign in using the email address assigned to this invitation.');
+    }
+
     if (!space.exists || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'This Space is unavailable.');
+
+    const posRole = typeof invitation.posRole === 'string' && smePosRoles.includes(invitation.posRole as (typeof smePosRoles)[number])
+      ? invitation.posRole as (typeof smePosRoles)[number]
+      : null;
+    const posSettingsRef = posRole ? db.collection('smePosSettings').doc(spaceId) : null;
+    const posAccessRef = posRole ? db.collection('smePosAccess').doc(`${spaceId}_${uid}`) : null;
+    const posSettings = posSettingsRef ? await transaction.get(posSettingsRef) : null;
+
     if (posRole && (!posSettings?.exists || space.data()?.type !== 'sme')) throw new HttpsError('failed-precondition', 'The POS team invitation is no longer available. Ask the owner for a new invitation.');
     if (posRole === 'seller' && posSettings?.data()?.mode !== 'marketplace_consignment') throw new HttpsError('failed-precondition', 'Seller access is no longer available. Ask the owner for a new invitation.');
+
     const now = FieldValue.serverTimestamp();
+    const memberEmail = authEmail || (typeof profile.data()?.email === 'string' ? String(profile.data()?.email).toLowerCase() : '');
+    const memberName = profile.data()?.fullName || memberEmail || 'BajetBN member';
     const result = { spaceId, memberId: memberRef.id, posRole };
+
     transaction.set(memberRef, {
-      spaceId, uid, role: invitation.role as CollaborationRole, status: 'active',
-      displayName: profile.data()?.fullName || authEmail, email: authEmail,
-      canUseAccounts: invitation.canUseAccounts === true, canViewBalances: invitation.canViewBalances === true,
-      canViewLedger: invitation.canViewLedger === true, invitedBy: invitation.invitedBy, joinedAt: now, updatedAt: now,
+      spaceId,
+      uid,
+      role: invitation.role as CollaborationRole,
+      status: 'active',
+      displayName: memberName,
+      email: memberEmail,
+      canUseAccounts: invitation.canUseAccounts === true,
+      canViewBalances: invitation.canViewBalances === true,
+      canViewLedger: invitation.canViewLedger === true,
+      invitedBy: invitation.invitedBy,
+      joinedAt: now,
+      updatedAt: now,
     }, { merge: true });
-    transaction.update(invitationRef, { status: 'accepted', acceptedBy: uid, updatedAt: now });
+
+    transaction.update(invitationRef, {
+      status: 'accepted',
+      acceptedBy: uid,
+      updatedAt: now,
+    });
+
     if (posRole && posAccessRef) transaction.set(posAccessRef, {
       spaceId,
       uid,
       role: posRole,
       status: 'active',
-      displayName: profile.data()?.fullName || authEmail,
-      email: authEmail,
+      displayName: memberName,
+      email: memberEmail,
       createdBy: invitation.invitedBy,
       createdAt: now,
       updatedAt: now,
     }, { merge: true });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: profile.data()?.fullName || authEmail, action: member.exists ? 'member_reactivated' : 'member_joined', targetType: 'member', targetId: uid, summary: `${profile.data()?.fullName || authEmail} joined ${space.data()?.name || 'the Space'}.`, now });
-    if (posRole) createActivity(transaction, { spaceId, actorUid: uid, actorName: profile.data()?.fullName || authEmail, action: 'pos_access_added', targetType: 'member', targetId: uid, summary: `${profile.data()?.fullName || authEmail} joined the POS team as ${posRole}.`, now });
-    createNotification(transaction, { uid: String(invitation.invitedBy), spaceId, type: 'member_joined', title: 'A member joined your Space', message: `${profile.data()?.fullName || authEmail} accepted the invitation to ${space.data()?.name || 'your Space'}.`, targetPath: `/spaces/${spaceId}?tab=members`, actionLabel: 'Open members', now });
-    createNotification(transaction, { uid, spaceId, type: 'space_joined', title: 'Space joined', message: `You joined ${space.data()?.name || 'the shared Space'}.`, targetPath: `/spaces/${spaceId}`, actionLabel: 'Open Space', now });
-    transaction.create(commandRef, { uid, kind: 'accept_space_invitation', idempotencyKey: key, result, createdAt: now });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: memberName,
+      action: member.exists ? 'member_reactivated' : 'member_joined',
+      targetType: 'member',
+      targetId: uid,
+      summary: `${memberName} joined ${space.data()?.name || 'the Space'}.`,
+      now,
+    });
+
+    if (posRole) createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: memberName,
+      action: 'pos_access_added',
+      targetType: 'member',
+      targetId: uid,
+      summary: `${memberName} joined the POS team as ${posRole}.`,
+      now,
+    });
+
+    createNotification(transaction, {
+      uid: String(invitation.invitedBy),
+      spaceId,
+      type: 'member_joined',
+      title: 'A member joined your Space',
+      message: `${memberName} accepted the invitation to ${space.data()?.name || 'your Space'}.`,
+      targetPath: `/spaces/${spaceId}?tab=members`,
+      actionLabel: 'Open members',
+      now,
+    });
+
+    createNotification(transaction, {
+      uid,
+      spaceId,
+      type: 'space_joined',
+      title: 'Space joined',
+      message: `You joined ${space.data()?.name || 'the shared Space'}.`,
+      targetPath: `/spaces/${spaceId}`,
+      actionLabel: 'Open Space',
+      now,
+    });
+
+    transaction.create(commandRef, {
+      uid,
+      kind: 'accept_space_invitation',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
     return result;
   });
 });
