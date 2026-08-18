@@ -6,21 +6,25 @@ import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInven
 import { SmePosBarcodeCheckoutScanner } from '../../components/SmePosBarcodeCheckoutScanner';
 import { SmePosBarcodeLabelDialog } from '../../components/SmePosBarcodeLabelDialog';
 import { SmePosBarcodeReturnScanner } from '../../components/SmePosBarcodeReturnScanner';
+import { SmePosItemPhoto, SmePosItemPhotoField } from '../../components/SmePosItemPhoto';
 import {
   checkoutMarketplacePos,
+  deleteMarketplaceSeller,
+  deleteSmePosCustomer,
+  deleteSmePosItemPhoto,
   getMarketplacePosWorkspace,
   listSmePosAccess,
   listSmePosPaymentAccounts,
   receiveMarketplaceListingStock,
+  registerExistingMarketplaceListing,
   recordMarketplaceSellerPayout,
   returnSmePosSale,
   saveMarketplaceListing,
   saveMarketplaceSeller,
   saveSmePosCustomer,
   setMarketplaceListingArchived,
-  setMarketplaceSellerArchived,
-  setSmePosCustomerArchived,
   updateMarketplaceListingStock,
+  uploadSmePosItemPhoto,
 } from '../../repositories/smePosRepository';
 import type {
   PaymentMethodCode,
@@ -104,13 +108,15 @@ function today() {
   }).format(new Date());
 }
 
-function tabsForRole(role: SmePosRole): MarketplaceTab[] {
-  if (role === 'owner' || role === 'manager') return ['register', 'sellers', 'listings', 'customers', 'sales'];
-  if (role === 'cashier') return ['register', 'customers', 'sales'];
-  if (role === 'stock_staff') return ['listings'];
-  if (role === 'seller') return ['listings', 'balance', 'sales'];
-  if (role === 'viewer') return ['listings', 'customers'];
-  return [];
+function tabsForRole(role: SmePosRole, hasSellerProfile: boolean): MarketplaceTab[] {
+  let tabs: MarketplaceTab[] = [];
+  if (role === 'owner' || role === 'manager') tabs = ['register', 'sellers', 'listings', 'customers', 'sales'];
+  else if (role === 'cashier') tabs = ['register', 'customers', 'sales'];
+  else if (role === 'stock_staff') tabs = ['listings'];
+  else if (role === 'seller') tabs = ['listings', 'balance', 'sales'];
+  else if (role === 'viewer') tabs = ['listings', 'customers'];
+  if (hasSellerProfile && !tabs.includes('balance')) tabs.push('balance');
+  return tabs;
 }
 
 function initialTab(role: SmePosRole): MarketplaceTab {
@@ -137,14 +143,16 @@ function ledgerKindLabel(entry: SmePosSellerLedgerEntry) {
 }
 
 export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onChanged }: Props) {
-  const availableTabs = useMemo(() => tabsForRole(role), [role]);
+  const [mySeller, setMySeller] = useState<SmePosSeller | null>(null);
+  const availableTabs = useMemo(() => tabsForRole(role, Boolean(mySeller)), [role, mySeller]);
   const [tab, setTab] = useState<MarketplaceTab>(() => initialTab(role));
   const [sellers, setSellers] = useState<SmePosSeller[]>([]);
   const [listings, setListings] = useState<SmePosListing[]>([]);
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
   const [sales, setSales] = useState<SmePosSale[]>([]);
-  const [sellerLedger, setSellerLedger] = useState<SmePosSellerLedgerEntry[]>([]);
   const [payouts, setPayouts] = useState<SmePosPayout[]>([]);
+  const [mySellerLedger, setMySellerLedger] = useState<SmePosSellerLedgerEntry[]>([]);
+  const [mySellerPayouts, setMySellerPayouts] = useState<SmePosPayout[]>([]);
   const [sellerAccess, setSellerAccess] = useState<SmePosAccess[]>([]);
   const [paymentAccounts, setPaymentAccounts] = useState<SmePosPaymentAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,6 +166,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [newListingBarcode, setNewListingBarcode] = useState('');
   const [listingCommissionType, setListingCommissionType] = useState<SmePosCommissionType>('percentage');
   const [listingCondition, setListingCondition] = useState<SmePosListingCondition>('new');
+  const [listingPhotoFile, setListingPhotoFile] = useState<File | null>(null);
+  const [removeListingPhoto, setRemoveListingPhoto] = useState(false);
+  const [manualListingForm, setManualListingForm] = useState(false);
+  const [manualListingPhotoFile, setManualListingPhotoFile] = useState<File | null>(null);
+  const [manualListingCondition, setManualListingCondition] = useState<SmePosListingCondition>('new');
   const [stockForm, setStockForm] = useState<SmePosListing | null>(null);
   const [receiveForm, setReceiveForm] = useState<SmePosListing | null>(null);
   const [stocktakeForm, setStocktakeForm] = useState<SmePosListing | null>(null);
@@ -180,7 +193,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const canManageListings = role === 'owner' || role === 'manager';
   const canManageStock = ['owner', 'manager', 'stock_staff'].includes(role);
   const canManageCustomers = ['owner', 'manager', 'cashier'].includes(role);
-  const canArchiveCustomers = role === 'owner' || role === 'manager';
+  const canDeleteCustomers = role === 'owner';
+  const canDeleteSellers = role === 'owner';
+  const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
   const canManageReturns = role === 'owner' || role === 'manager';
   const canManagePayouts = role === 'owner' || role === 'manager';
@@ -200,10 +215,12 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       setListings(workspace.listings);
       setCustomers(workspace.customers);
       setSales(workspace.sales);
-      setSellerLedger(workspace.sellerLedger);
       setPayouts(workspace.payouts);
+      setMySeller(workspace.mySeller);
+      setMySellerLedger(workspace.mySellerLedger);
+      setMySellerPayouts(workspace.mySellerPayouts);
       setPaymentAccounts(accounts);
-      setSellerAccess(access.filter((item) => item.role === 'seller' && item.status === 'active'));
+      setSellerAccess(access.filter((item) => item.status === 'active'));
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -240,7 +257,6 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const monthCommission = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + (item.marketplaceCommissionMinor || item.profitMinor), 0);
   const sellerMoneyWaiting = sellers.reduce((sum, item) => sum + item.balanceMinor, 0);
   const lowStock = listings.filter((item) => item.quantityOnHand <= item.lowStockLevel).length;
-  const mySeller = role === 'seller' ? sellers[0] || null : null;
 
   function requireOnline() {
     if (navigator.onLine) return true;
@@ -255,6 +271,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
   function openListingForm(value: SmePosListing | 'new', barcode = '') {
     setNewListingBarcode(value === 'new' ? barcode : '');
+    setListingPhotoFile(null);
+    setRemoveListingPhoto(false);
     if (value === 'new') {
       const firstSeller = sellers[0];
       setListingCommissionType(firstSeller?.defaultCommissionType || 'percentage');
@@ -264,6 +282,12 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       setListingCondition(value.condition);
     }
     setListingForm(value);
+  }
+
+  function openManualListingForm() {
+    setManualListingPhotoFile(null);
+    setManualListingCondition('new');
+    setManualListingForm(true);
   }
 
   async function saveSeller(event: FormEvent<HTMLFormElement>) {
@@ -298,8 +322,12 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     const form = new FormData(event.currentTarget);
     const commissionType = String(form.get('commissionType') || 'percentage') as SmePosCommissionType;
     const rate = Number(form.get('commissionRate') || 0);
+    const existingPhotoPath = listingForm === 'new' ? null : listingForm.photoPath || null;
+    let uploadedPhotoPath: string | null = null;
     setBusy(true); setError(''); setSuccess('');
     try {
+      if (listingPhotoFile) uploadedPhotoPath = (await uploadSmePosItemPhoto(space.id, listingPhotoFile)).photoPath;
+      const photoPath = uploadedPhotoPath || (removeListingPhoto ? null : existingPhotoPath);
       await saveMarketplaceListing({
         spaceId: space.id,
         listingId: listingForm === 'new' ? undefined : listingForm.id,
@@ -308,6 +336,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         category: String(form.get('category') || ''),
         sku: String(form.get('sku') || ''),
         barcode: String(form.get('barcode') || ''),
+        photoPath,
         note: String(form.get('note') || ''),
         condition: String(form.get('condition') || 'new') as SmePosListingCondition,
         conditionNote: String(form.get('conditionNote') || ''),
@@ -318,11 +347,46 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         quantityOnHand: Number(form.get('quantity') || 0),
         lowStockLevel: Number(form.get('lowStock') || 0),
       });
-      setListingForm(null);
-      setNewListingBarcode('');
+      if (existingPhotoPath && existingPhotoPath !== photoPath) void deleteSmePosItemPhoto(existingPhotoPath).catch(() => undefined);
+      setListingForm(null); setListingPhotoFile(null); setRemoveListingPhoto(false); setNewListingBarcode('');
       setSuccess(listingForm === 'new' ? 'Seller listing added.' : 'Seller listing updated.');
       await load(); await onChanged();
-    } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
+    } catch (nextError) {
+      if (uploadedPhotoPath) void deleteSmePosItemPhoto(uploadedPhotoPath).catch(() => undefined);
+      setError(getErrorMessage(nextError));
+    } finally { setBusy(false); }
+  }
+
+  async function registerExistingListing(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!manualListingForm || !requireOnline()) return;
+    const form = new FormData(event.currentTarget);
+    let uploadedPhotoPath: string | null = null;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      if (manualListingPhotoFile) uploadedPhotoPath = (await uploadSmePosItemPhoto(space.id, manualListingPhotoFile)).photoPath;
+      await registerExistingMarketplaceListing({
+        spaceId: space.id,
+        sellerId: String(form.get('sellerId') || ''),
+        name: String(form.get('name') || ''),
+        category: String(form.get('category') || ''),
+        sku: String(form.get('sku') || ''),
+        barcode: String(form.get('barcode') || ''),
+        photoPath: uploadedPhotoPath,
+        note: String(form.get('note') || ''),
+        condition: manualListingCondition,
+        conditionNote: String(form.get('conditionNote') || ''),
+        sellingPriceMinor: toMinorUnits(String(form.get('sellingPrice') || '')),
+        quantityOnHand: Number(form.get('quantity') || 0),
+        lowStockLevel: Number(form.get('lowStock') || 0),
+      });
+      setManualListingForm(false); setManualListingPhotoFile(null);
+      setSuccess('Existing seller stock registered and added to Inventory.');
+      await load(); await onChanged();
+    } catch (nextError) {
+      if (uploadedPhotoPath) void deleteSmePosItemPhoto(uploadedPhotoPath).catch(() => undefined);
+      setError(getErrorMessage(nextError));
+    } finally { setBusy(false); }
   }
 
   async function saveStock(event: FormEvent<HTMLFormElement>) {
@@ -413,10 +477,16 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     if (!confirm || !requireOnline()) return;
     setBusy(true); setError(''); setSuccess('');
     try {
-      if (confirm.payload.kind === 'seller') await setMarketplaceSellerArchived(space.id, confirm.payload.id, true);
-      else if (confirm.payload.kind === 'listing') await setMarketplaceListingArchived(space.id, confirm.payload.id, true);
-      else await setSmePosCustomerArchived(space.id, confirm.payload.id, true);
-      setSuccess(confirm.payload.kind === 'seller' ? 'Seller archived.' : confirm.payload.kind === 'listing' ? 'Listing archived.' : 'Customer archived.');
+      if (confirm.payload.kind === 'seller') {
+        const result = await deleteMarketplaceSeller(space.id, confirm.payload.id);
+        setSuccess(result.data.preservedHistory ? 'Seller deleted. Historical sales, commission and payout records were preserved.' : 'Seller deleted.');
+      } else if (confirm.payload.kind === 'listing') {
+        await setMarketplaceListingArchived(space.id, confirm.payload.id, true);
+        setSuccess('Listing archived.');
+      } else {
+        const result = await deleteSmePosCustomer(space.id, confirm.payload.id);
+        setSuccess(result.data.preservedHistory ? 'Customer deleted. Historical sales and receipts were preserved.' : 'Customer deleted.');
+      }
       setConfirm(null); await load();
     } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
   }
@@ -612,13 +682,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>Sellers</h3><p>Seller profiles track stock, commission and payouts. A seller profile does not automatically give the person BajetBN login access.</p></div><button className="button primary" type="button" onClick={() => openSellerForm('new')}>Add seller profile</button></div>
+        <div className="panel-heading"><div><h3>Sellers</h3><p>Seller profiles track stock, commission and payouts. A seller profile does not automatically give the person BajetBN login access. For Seller-only access, invite them from Members and choose Seller. If they already have another team role, link that team member to the seller profile below.</p></div><button className="button primary" type="button" onClick={() => openSellerForm('new')}>Add seller profile</button></div>
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card" key={seller.id}>
           <div><span className="type-badge">Seller</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
           <div className="marketplace-balance-row"><span>{sellerBalanceLabel(seller.balanceMinor)}</span><strong>{formatMoney(Math.abs(seller.balanceMinor), seller.currency)}</strong></div>
           <small>{seller.soldQuantity} item(s) sold · Shop earned {formatMoney(seller.commissionEarnedMinor, seller.currency)} · Paid out {formatMoney(seller.paidOutMinor, seller.currency)}</small>
-          <div className="button-row"><button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button>{canManagePayouts && seller.balanceMinor > 0 && <button className="button primary small" type="button" onClick={() => openPayoutForm(seller)}>Record payout</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'seller', id: seller.id }, title: 'Archive this seller?', description: 'The seller will leave the active list. Existing listings, sales, balances and history stay recorded.', note: 'Archive or move active listings first. Sellers with active listings cannot be archived.', confirmLabel: 'Archive seller' })}>Archive</button></div>
+          <div className="button-row"><button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button>{canManagePayouts && seller.balanceMinor > 0 && <button className="button primary small" type="button" onClick={() => openPayoutForm(seller)}>Record payout</button>}{canDeleteSellers && <button className="button ghost danger small" type="button" onClick={() => setConfirm({ payload: { kind: 'seller', id: seller.id }, title: 'Delete this seller?', description: 'The seller profile will be removed from active and archived seller lists.', note: seller.balanceMinor !== 0 ? 'Settle the seller balance before deletion. Active listings will be removed from the register and historical sales, commission and payouts will stay preserved.' : 'Active listings will be removed from the register. Historical sales, commission and payouts stay preserved.', confirmLabel: 'Delete seller' })}>Delete</button>}</div>
         </article>)}</div>
         {!sellers.length && <div className="empty-inline">No sellers yet. Add a seller before creating a listing.</div>}
       </section>}
@@ -640,6 +710,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           const outOfStock = listing.quantityOnHand < 1;
           const low = listing.quantityOnHand > 0 && listing.quantityOnHand <= listing.lowStockLevel;
           return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={listing.id}>
+            {listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} />}
             <div><span className="type-badge">{listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
             {role !== 'stock_staff' && <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong>}
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} in stock${low ? ' · Low stock' : ''}`}</p>
@@ -653,13 +724,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       {tab === 'customers' && <section className="panel sme-pos-module-panel">
         <div className="panel-heading"><div><h3>Customers</h3><p>Optional customer details for receipts and repeat visits.</p></div>{canManageCustomers && <button className="button primary" type="button" onClick={() => setCustomerForm('new')}>Add customer</button>}</div>
-        <div className="sme-pos-customer-list">{customers.map((customer) => <div className="sme-pos-customer-row" key={customer.id}><div><strong>{customer.name}</strong><small>{[customer.phone, customer.email].filter(Boolean).join(' · ') || 'No contact details'}</small></div><span>{customer.visitCount || 0} sale{customer.visitCount === 1 ? '' : 's'}</span>{canManageCustomers && <div className="button-row"><button className="button secondary small" type="button" onClick={() => setCustomerForm(customer)}>Edit</button>{canArchiveCustomers && <button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'customer', id: customer.id }, title: 'Archive this customer?', description: 'The customer will leave the active list while old receipts and sales stay unchanged.', note: 'You can restore the customer later.', confirmLabel: 'Archive customer' })}>Archive</button>}</div>}</div>)}</div>
+        <div className="sme-pos-customer-list">{customers.map((customer) => <div className="sme-pos-customer-row" key={customer.id}><div><strong>{customer.name}</strong><small>{[customer.phone, customer.email].filter(Boolean).join(' · ') || 'No contact details'}</small></div><span>{customer.visitCount || 0} sale{customer.visitCount === 1 ? '' : 's'}</span>{canManageCustomers && <div className="button-row"><button className="button secondary small" type="button" onClick={() => setCustomerForm(customer)}>Edit</button>{canDeleteCustomers && <button className="button ghost danger small" type="button" onClick={() => setConfirm({ payload: { kind: 'customer', id: customer.id }, title: 'Delete this customer?', description: 'The customer will be removed from active and archived customer lists.', note: 'If sales or receipt history exists, BajetBN keeps those historical records but removes the customer profile from active use.', confirmLabel: 'Delete customer' })}>Delete</button>}</div>}</div>)}</div>
         {!customers.length && <div className="empty-inline">No customers yet. The register can still use Walk-in customer.</div>}
       </section>}
 
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
-          <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>One sale can contain items from several sellers.</p></div></div>
+          <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>One sale can contain items from several sellers.</p></div>{canRegisterExistingStock && <button className="button secondary" type="button" onClick={openManualListingForm} disabled={!sellers.length}>+ Register item</button>}</div>
           <SmePosBarcodeCheckoutScanner
             itemLabel="listing"
             items={listings}
@@ -670,7 +741,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, condition, SKU or barcode" />
           <div className="sme-pos-checkout-product-grid">{filteredListings.map((listing) => {
             const outOfStock = listing.quantityOnHand < 1;
-            return <button type="button" key={listing.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(listing)}><strong>{listing.name}</strong><span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span><small>{listing.sellerName} · {conditionLabels[listing.condition]}</small><small>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} available`}</small></button>;
+            return <button type="button" key={listing.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(listing)}>{listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} className="register-thumb" />}<strong>{listing.name}</strong><span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span><small>{listing.sellerName} · {conditionLabels[listing.condition]}</small><small>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} available`}</small></button>;
           })}</div>
           {!filteredListings.length && <div className="empty-inline">No seller listings found.</div>}
         </section>
@@ -691,9 +762,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         </section>
       </form>}
 
-      {tab === 'balance' && role === 'seller' && <div className="sme-pos-sales-section">
+      {tab === 'balance' && mySeller && <div className="sme-pos-sales-section">
         <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>{sellerBalanceLabel(mySeller?.balanceMinor || 0)}</span><strong>{formatMoney(Math.abs(mySeller?.balanceMinor || 0), settings.currency)}</strong><small>Sales, returns and payouts update this balance</small></article><article className="summary-card"><span>My gross sales</span><strong>{formatMoney(mySeller?.grossSalesMinor || 0, settings.currency)}</strong><small>{mySeller?.soldQuantity || 0} item(s) currently sold</small></article><article className="summary-card"><span>Paid out</span><strong>{formatMoney(mySeller?.paidOutMinor || 0, settings.currency)}</strong><small>Recorded seller payouts</small></article></div>
-        <section className="panel"><div className="panel-heading"><div><h3>Balance activity</h3><p>Sales increase the balance. Returns and payouts reduce it.</p></div></div><div className="sme-pos-sales-list">{sellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || entry.displayId}</strong><small>{ledgerKindLabel(entry)} · {entry.note || entry.sellerName}</small></div><strong>{entry.amountMinor >= 0 ? '+' : '-'}{formatMoney(Math.abs(entry.amountMinor), entry.currency)}</strong><small>Balance {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!sellerLedger.length && <div className="empty-inline">No seller balance activity yet.</div>}</section>
+        <section className="panel"><div className="panel-heading"><div><h3>Balance activity</h3><p>Sales increase the balance. Returns and payouts reduce it.</p></div></div><div className="sme-pos-sales-list">{mySellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || entry.displayId}</strong><small>{ledgerKindLabel(entry)} · {entry.note || entry.sellerName}</small></div><strong>{entry.amountMinor >= 0 ? '+' : '-'}{formatMoney(Math.abs(entry.amountMinor), entry.currency)}</strong><small>Balance {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!mySellerLedger.length && <div className="empty-inline">No seller balance activity yet.</div>}</section>
+        {mySellerPayouts.length > 0 && <section className="panel"><div className="panel-heading"><div><h3>My payouts</h3><p>Recorded payouts for this seller profile.</p></div></div><div className="sme-pos-sales-list">{mySellerPayouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.payoutDate}</strong><small>{payout.paymentAccountName}</small></div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Balance {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div></section>}
       </div>}
 
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
@@ -704,14 +776,36 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </div>}
     </>}
 
+    {manualListingForm && <Modal title="Register existing seller stock" onClose={() => !busy && setManualListingForm(false)}>
+      <form className="form-stack" onSubmit={registerExistingListing}>
+        <div className="notice">For stock already physically in the shop. No purchase record is created. The seller's default commission is applied automatically. Barcode is optional.</div>
+        <SmePosItemPhotoField currentPhotoPath={null} file={manualListingPhotoFile} removeExisting={false} onFileChange={setManualListingPhotoFile} onRemoveExisting={() => undefined} disabled={busy} />
+        <label>Seller<select name="sellerId" defaultValue={sellers[0]?.id || ''} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>
+        <div className="form-grid">
+          <label>Item name<input name="name" maxLength={100} required autoFocus /></label>
+          <label>Category<input name="category" maxLength={60} /></label>
+          <label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" required /></label>
+          <label>Quantity on hand<input name="quantity" type="number" min="0" max="999999" defaultValue={1} required /></label>
+          <label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={1} required /></label>
+          <label>SKU (optional)<input name="sku" maxLength={50} /></label>
+          <label>Barcode (optional)<input name="barcode" maxLength={240} autoComplete="off" /></label>
+          <label>Condition<select value={manualListingCondition} onChange={(event) => setManualListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>Condition details<input name="conditionNote" maxLength={120} placeholder="Optional" /></label>
+        </div>
+        <label>Note<textarea name="note" rows={2} maxLength={300} placeholder="Optional" /></label>
+        <small>Source is recorded as Existing stock / Manual registration with the staff member and time.</small>
+        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setManualListingForm(false)} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Registering…' : 'Register item'}</button></div>
+      </form>
+    </Modal>}
+
     {sellerForm && <Modal title={sellerForm === 'new' ? 'Add seller profile' : 'Edit seller profile'} onClose={() => !busy && setSellerForm(null)}><form className="form-stack" onSubmit={saveSeller}>
       <label>Seller name<input name="name" defaultValue={sellerForm === 'new' ? '' : sellerForm.name} maxLength={100} required /></label>
       <div className="form-grid"><label>WhatsApp or phone<input name="phone" defaultValue={sellerForm === 'new' ? '' : sellerForm.phone || ''} maxLength={32} /></label><label>Email<input name="email" type="email" defaultValue={sellerForm === 'new' ? '' : sellerForm.email || ''} maxLength={120} /></label></div>
-      <label>Link seller login<select name="linkedUid" defaultValue={sellerForm === 'new' ? '' : sellerForm.linkedUid || ''}><option value="">No login linked</option>{sellerAccess.map((item) => <option key={item.uid} value={item.uid}>{item.displayName && item.displayName !== item.uid
-  ? item.displayName
+      <label>Link to team member<select name="linkedUid" defaultValue={sellerForm === 'new' ? '' : sellerForm.linkedUid || ''}><option value="">No login linked</option>{sellerAccess.map((item) => <option key={item.uid} value={item.uid}>{item.displayName && item.displayName !== item.uid
+  ? `${item.displayName} · ${item.role.replace('_', ' ')}`
   : item.email && item.email !== item.uid
-    ? item.email
-    : 'Member profile unavailable'}</option>)}</select><small>Seller profiles can exist without a BajetBN login. If this seller needs app access, invite them from Members and choose Seller.</small></label>
+    ? `${item.email} · ${item.role.replace('_', ' ')}`
+    : `Team member · ${item.role.replace('_', ' ')}`}</option>)}</select><small>A Manager, Cashier, Stock Staff, Viewer or Seller-only user can also own this seller profile. Their main POS role stays unchanged.</small></label>
       <fieldset className="pos-item-type-fieldset"><legend>Default shop commission</legend><label className={`pos-item-type-option ${sellerCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={sellerCommissionType === 'percentage'} onChange={() => setSellerCommissionType('percentage')} /><span><strong>Percentage</strong><small>The shop keeps a percentage of the final selling amount.</small></span></label><label className={`pos-item-type-option ${sellerCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={sellerCommissionType === 'fixed_per_item'} onChange={() => setSellerCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>The shop keeps the same amount for every unit sold.</small></span></label></fieldset>
       {sellerCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={sellerForm === 'new' ? '3' : (sellerForm.defaultCommissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={sellerForm === 'new' ? '0.00' : (sellerForm.defaultCommissionMinor / 100).toFixed(2)} required /></label>}
       <label>Note<textarea name="note" rows={3} defaultValue={sellerForm === 'new' ? '' : sellerForm.note || ''} maxLength={300} /></label>
@@ -719,6 +813,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     </form></Modal>}
 
     {listingForm && <Modal title={listingForm === 'new' ? 'Add seller listing' : 'Edit seller listing'} onClose={() => !busy && setListingForm(null)}><form className="form-stack" onSubmit={saveListing}>
+      <SmePosItemPhotoField currentPhotoPath={listingForm === 'new' ? null : listingForm.photoPath} file={listingPhotoFile} removeExisting={removeListingPhoto} onFileChange={setListingPhotoFile} onRemoveExisting={setRemoveListingPhoto} disabled={busy} />
       <label>Seller<select name="sellerId" defaultValue={listingForm === 'new' ? sellers[0]?.id || '' : listingForm.sellerId} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>
       <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Category<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Barcode (optional)<input name="barcode" defaultValue={listingForm === 'new' ? newListingBarcode : listingForm.barcode || ''} maxLength={240} autoComplete="off" /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
       <div className="form-grid"><label>Condition<select name="condition" value={listingCondition} onChange={(event) => setListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Condition details<input name="conditionNote" defaultValue={listingForm === 'new' ? '' : listingForm.conditionNote || ''} maxLength={120} placeholder="Optional" /></label></div>

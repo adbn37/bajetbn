@@ -36,6 +36,30 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role in ['owner', 'admin', 'contributor'];
     }
 
+    function isSmeSpaceOwner(spaceId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/spaces/$(spaceId))
+        && firestore.get(/databases/(default)/documents/spaces/$(spaceId)).data.type == 'sme'
+        && firestore.get(/databases/(default)/documents/spaces/$(spaceId)).data.ownerId == request.auth.uid;
+    }
+
+    function hasActiveSmePosAccess(spaceId) {
+      return signedIn()
+        && isActiveSpaceMember(spaceId)
+        && firestore.exists(/databases/(default)/documents/smePosAccess/$(membershipId(spaceId, request.auth.uid)))
+        && firestore.get(/databases/(default)/documents/smePosAccess/$(membershipId(spaceId, request.auth.uid))).data.status == 'active';
+    }
+
+    function canManageSmePosItemPhoto(spaceId) {
+      return isSmeSpaceOwner(spaceId)
+        || (hasActiveSmePosAccess(spaceId)
+          && firestore.get(/databases/(default)/documents/smePosAccess/$(membershipId(spaceId, request.auth.uid))).data.role in ['manager', 'cashier', 'stock_staff']);
+    }
+
+    function canReadSmePosItemPhoto(spaceId) {
+      return isSmeSpaceOwner(spaceId) || hasActiveSmePosAccess(spaceId);
+    }
+
     match /users/{uid}/{allPaths=**} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, update: if signedIn() && request.auth.uid == uid && isImageOrPdf() && underTenMb();
@@ -56,6 +80,16 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024;
       allow update: if false;
       allow delete: if canEditCollection(spaceId);
+    }
+
+    match /spaces/{spaceId}/sme-pos-items/{fileName} {
+      allow read: if canReadSmePosItemPhoto(spaceId);
+      allow create: if canManageSmePosItemPhoto(spaceId)
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size > 0
+        && request.resource.size < 5 * 1024 * 1024;
+      allow update: if false;
+      allow delete: if canManageSmePosItemPhoto(spaceId);
     }
 
     // General transaction receipts are stored below users/{uid}/transaction-receipts.

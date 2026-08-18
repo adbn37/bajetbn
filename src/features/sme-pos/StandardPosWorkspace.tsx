@@ -6,24 +6,29 @@ import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInven
 import { SmePosBarcodeCheckoutScanner } from '../../components/SmePosBarcodeCheckoutScanner';
 import { SmePosBarcodeLabelDialog } from '../../components/SmePosBarcodeLabelDialog';
 import { SmePosBarcodeReturnScanner } from '../../components/SmePosBarcodeReturnScanner';
+import { SmePosItemPhoto, SmePosItemPhotoField } from '../../components/SmePosItemPhoto';
 import {
   checkoutStandardPos,
+  deleteSmePosCustomer,
+  deleteSmePosItemPhoto,
   getSmePosStaffWorkspace,
   listSmePosCustomers,
   listSmePosPaymentAccounts,
   listSmePosProducts,
   listSmePosSales,
   receiveSmePosProductStock,
+  registerExistingSmePosProduct,
   returnSmePosSale,
   saveSmePosCustomer,
   saveSmePosProduct,
-  setSmePosCustomerArchived,
   setSmePosProductArchived,
   updateSmePosProductStock,
+  uploadSmePosItemPhoto,
 } from '../../repositories/smePosRepository';
 import type {
   PaymentMethodCode,
   SmePosCustomer,
+  SmePosListingCondition,
   SmePosPaymentAccount,
   SmePosProduct,
   SmePosRole,
@@ -53,6 +58,14 @@ interface ReturnFormState {
   returnDate: string;
   reason: string;
 }
+
+const conditionLabels: Record<SmePosListingCondition, string> = {
+  new: 'New',
+  sealed: 'Sealed',
+  open_box: 'Open box',
+  used: 'Used',
+  other: 'Other',
+};
 
 const paymentMethods: Array<{ code: PaymentMethodCode; label: string }> = [
   { code: 'cash', label: 'Cash' },
@@ -102,6 +115,11 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const [productForm, setProductForm] = useState<SmePosProduct | 'new' | null>(null);
   const [newProductBarcode, setNewProductBarcode] = useState('');
   const [productStockMode, setProductStockMode] = useState<ProductStockMode>('physical');
+  const [productPhotoFile, setProductPhotoFile] = useState<File | null>(null);
+  const [removeProductPhoto, setRemoveProductPhoto] = useState(false);
+  const [manualProductForm, setManualProductForm] = useState(false);
+  const [manualProductPhotoFile, setManualProductPhotoFile] = useState<File | null>(null);
+  const [manualProductCondition, setManualProductCondition] = useState<SmePosListingCondition>('new');
   const [stockForm, setStockForm] = useState<SmePosProduct | null>(null);
   const [receiveForm, setReceiveForm] = useState<SmePosProduct | null>(null);
   const [stocktakeForm, setStocktakeForm] = useState<SmePosProduct | null>(null);
@@ -123,7 +141,8 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const canManageProducts = ['owner', 'manager'].includes(role);
   const canManageStock = ['owner', 'manager', 'stock_staff'].includes(role);
   const canManageCustomers = ['owner', 'manager', 'cashier'].includes(role);
-  const canArchiveCustomers = ['owner', 'manager'].includes(role);
+  const canDeleteCustomers = role === 'owner';
+  const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
   const canManageReturns = role === 'owner' || role === 'manager';
   const canViewReports = ['owner', 'manager'].includes(role);
@@ -204,7 +223,15 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   function openProductForm(value: SmePosProduct | 'new', barcode = '') {
     setProductStockMode(value === 'new' || value.trackStock ? 'physical' : 'unlimited');
     setNewProductBarcode(value === 'new' ? barcode : '');
+    setProductPhotoFile(null);
+    setRemoveProductPhoto(false);
     setProductForm(value);
+  }
+
+  function openManualProductForm() {
+    setManualProductPhotoFile(null);
+    setManualProductCondition('new');
+    setManualProductForm(true);
   }
 
   async function saveProduct(event: FormEvent<HTMLFormElement>) {
@@ -212,10 +239,12 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     if (!productForm || !requireOnline()) return;
     const form = new FormData(event.currentTarget);
     const trackStock = String(form.get('itemType') || 'physical') === 'physical';
-    setBusy(true);
-    setError('');
-    setSuccess('');
+    const existingPhotoPath = productForm === 'new' ? null : productForm.photoPath || null;
+    let uploadedPhotoPath: string | null = null;
+    setBusy(true); setError(''); setSuccess('');
     try {
+      if (productPhotoFile) uploadedPhotoPath = (await uploadSmePosItemPhoto(space.id, productPhotoFile)).photoPath;
+      const photoPath = uploadedPhotoPath || (removeProductPhoto ? null : existingPhotoPath);
       await saveSmePosProduct({
         spaceId: space.id,
         productId: productForm === 'new' ? undefined : productForm.id,
@@ -223,23 +252,56 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
         category: String(form.get('category') || ''),
         sku: String(form.get('sku') || ''),
         barcode: String(form.get('barcode') || ''),
+        photoPath,
         note: String(form.get('note') || ''),
+        condition: String(form.get('condition') || 'new') as SmePosListingCondition,
+        conditionNote: String(form.get('conditionNote') || ''),
         sellingPriceMinor: toMinorUnits(String(form.get('sellingPrice') || '')),
-        costPriceMinor: String(form.get('costPrice') || '').trim() ? toMinorUnits(String(form.get('costPrice'))) : null,
+        costPriceMinor: role === 'cashier' ? null : String(form.get('costPrice') || '').trim() ? toMinorUnits(String(form.get('costPrice'))) : null,
         trackStock,
         quantityOnHand: trackStock ? Number(form.get('quantity') || 0) : 0,
         lowStockLevel: trackStock ? Number(form.get('lowStock') || 0) : 0,
       });
-      setProductForm(null);
-      setNewProductBarcode('');
+      if (existingPhotoPath && existingPhotoPath !== photoPath) void deleteSmePosItemPhoto(existingPhotoPath).catch(() => undefined);
+      setProductForm(null); setProductPhotoFile(null); setRemoveProductPhoto(false); setNewProductBarcode('');
       setSuccess(productForm === 'new' ? 'Product added.' : 'Product updated.');
-      await load();
-      await onChanged();
+      await load(); await onChanged();
     } catch (nextError) {
+      if (uploadedPhotoPath) void deleteSmePosItemPhoto(uploadedPhotoPath).catch(() => undefined);
       setError(getErrorMessage(nextError));
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
+  }
+
+  async function registerExistingProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!manualProductForm || !requireOnline()) return;
+    const form = new FormData(event.currentTarget);
+    let uploadedPhotoPath: string | null = null;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      if (manualProductPhotoFile) uploadedPhotoPath = (await uploadSmePosItemPhoto(space.id, manualProductPhotoFile)).photoPath;
+      await registerExistingSmePosProduct({
+        spaceId: space.id,
+        name: String(form.get('name') || ''),
+        category: String(form.get('category') || ''),
+        sku: String(form.get('sku') || ''),
+        barcode: String(form.get('barcode') || ''),
+        photoPath: uploadedPhotoPath,
+        note: String(form.get('note') || ''),
+        condition: manualProductCondition,
+        conditionNote: String(form.get('conditionNote') || ''),
+        sellingPriceMinor: toMinorUnits(String(form.get('sellingPrice') || '')),
+        costPriceMinor: role === 'cashier' ? null : String(form.get('costPrice') || '').trim() ? toMinorUnits(String(form.get('costPrice'))) : null,
+        quantityOnHand: Number(form.get('quantity') || 0),
+        lowStockLevel: Number(form.get('lowStock') || 0),
+      });
+      setManualProductForm(false); setManualProductPhotoFile(null);
+      setSuccess('Existing stock registered and added to Inventory.');
+      await load(); await onChanged();
+    } catch (nextError) {
+      if (uploadedPhotoPath) void deleteSmePosItemPhoto(uploadedPhotoPath).catch(() => undefined);
+      setError(getErrorMessage(nextError));
+    } finally { setBusy(false); }
   }
 
   async function saveStock(event: FormEvent<HTMLFormElement>) {
@@ -360,9 +422,13 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     setError('');
     setSuccess('');
     try {
-      if (confirm.payload.kind === 'product') await setSmePosProductArchived(space.id, confirm.payload.id, true);
-      else await setSmePosCustomerArchived(space.id, confirm.payload.id, true);
-      setSuccess(confirm.payload.kind === 'product' ? 'Product moved to archived records.' : 'Customer moved to archived records.');
+      if (confirm.payload.kind === 'product') {
+        await setSmePosProductArchived(space.id, confirm.payload.id, true);
+        setSuccess('Product moved to archived records.');
+      } else {
+        const result = await deleteSmePosCustomer(space.id, confirm.payload.id);
+        setSuccess(result.data.preservedHistory ? 'Customer deleted. Historical sales and receipts were preserved.' : 'Customer deleted.');
+      }
       setConfirm(null);
       await load();
       await onChanged();
@@ -514,6 +580,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
           const outOfStock = product.trackStock && product.quantityOnHand < 1;
           const low = product.trackStock && product.quantityOnHand > 0 && product.quantityOnHand <= product.lowStockLevel;
           return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={product.id}>
+            {product.photoPath && <SmePosItemPhoto photoPath={product.photoPath} name={product.name} />}
             <div><span className="type-badge">{product.category || 'Product'}</span><h3>{product.name}</h3><small>{product.sku || product.displayId}</small>{product.barcode && <small>Barcode · {product.barcode}</small>}</div>
             <strong>{formatMoney(product.sellingPriceMinor, product.currency)}</strong>
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{product.trackStock ? outOfStock ? 'Out of stock' : `${product.quantityOnHand} in stock${low ? ' · Low stock' : ''}` : 'Service or unlimited item'}</p>
@@ -526,13 +593,13 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
 
       {tab === 'customers' && <div className="panel sme-pos-module-panel">
         <div className="panel-heading"><div><h3>Customers</h3><p>Optional customer details for receipts and repeat visits.</p></div>{canManageCustomers && <button className="button primary" type="button" onClick={() => setCustomerForm('new')}>Add customer</button>}</div>
-        <div className="sme-pos-customer-list">{customers.map((customer) => <div className="sme-pos-customer-row" key={customer.id}><div><strong>{customer.name}</strong><small>{[customer.phone, customer.email].filter(Boolean).join(' · ') || 'No contact details'}</small></div><span>{customer.visitCount || 0} sale{customer.visitCount === 1 ? '' : 's'}</span>{canManageCustomers && <div className="button-row"><button className="button secondary small" type="button" onClick={() => setCustomerForm(customer)}>Edit</button>{canArchiveCustomers && <button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'customer', id: customer.id }, title: 'Archive this customer?', description: 'The customer will leave the active list while old receipts and sales stay unchanged.', note: 'You can restore the customer later.', confirmLabel: 'Archive customer' })}>Archive</button>}</div>}</div>)}</div>
+        <div className="sme-pos-customer-list">{customers.map((customer) => <div className="sme-pos-customer-row" key={customer.id}><div><strong>{customer.name}</strong><small>{[customer.phone, customer.email].filter(Boolean).join(' · ') || 'No contact details'}</small></div><span>{customer.visitCount || 0} sale{customer.visitCount === 1 ? '' : 's'}</span>{canManageCustomers && <div className="button-row"><button className="button secondary small" type="button" onClick={() => setCustomerForm(customer)}>Edit</button>{canDeleteCustomers && <button className="button ghost danger small" type="button" onClick={() => setConfirm({ payload: { kind: 'customer', id: customer.id }, title: 'Delete this customer?', description: 'The customer will be removed from active and archived customer lists.', note: 'If sales or receipt history exists, BajetBN keeps those historical records but removes the customer profile from active use.', confirmLabel: 'Delete customer' })}>Delete</button>}</div>}</div>)}</div>
         {!customers.length && <div className="empty-inline">No customers yet. The register can still use Walk-in customer.</div>}
       </div>}
 
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
-          <div className="panel-heading"><div><span className="eyebrow">Register</span><h3>Choose products</h3><p>Out-of-stock physical products cannot be added.</p></div></div>
+          <div className="panel-heading"><div><span className="eyebrow">Register</span><h3>Choose products</h3><p>Out-of-stock physical products cannot be added.</p></div>{canRegisterExistingStock && <button className="button secondary" type="button" onClick={openManualProductForm}>+ Register item</button>}</div>
           <SmePosBarcodeCheckoutScanner
             itemLabel="product"
             items={products}
@@ -543,7 +610,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
           <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product, category, SKU or barcode" />
           <div className="sme-pos-checkout-product-grid">{filteredProducts.map((product) => {
             const outOfStock = product.trackStock && product.quantityOnHand < 1;
-            return <button type="button" key={product.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(product)}><strong>{product.name}</strong><span>{formatMoney(product.sellingPriceMinor, product.currency)}</span><small>{product.trackStock ? outOfStock ? 'Out of stock' : `${product.quantityOnHand} available` : 'Service or unlimited item'}</small></button>;
+            return <button type="button" key={product.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(product)}>{product.photoPath && <SmePosItemPhoto photoPath={product.photoPath} name={product.name} className="register-thumb" />}<strong>{product.name}</strong><span>{formatMoney(product.sellingPriceMinor, product.currency)}</span><small>{product.trackStock ? outOfStock ? 'Out of stock' : `${product.quantityOnHand} available` : 'Service or unlimited item'}</small></button>;
           })}</div>
           {!filteredProducts.length && <div className="empty-inline">No products found.</div>}
         </section>
@@ -571,8 +638,38 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
       </div>}
     </>}
 
+    {manualProductForm && <Modal title="Register existing stock" onClose={() => !busy && setManualProductForm(false)}>
+      <form className="form-stack" onSubmit={registerExistingProduct}>
+        <div className="notice">For items already physically in the shop. This does not create a purchase record. Barcode is optional.</div>
+        <SmePosItemPhotoField currentPhotoPath={null} file={manualProductPhotoFile} removeExisting={false} onFileChange={setManualProductPhotoFile} onRemoveExisting={() => undefined} disabled={busy} />
+        <div className="form-grid">
+          <label>Item name<input name="name" maxLength={100} required autoFocus /></label>
+          <label>Category<input name="category" maxLength={60} /></label>
+          <label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" required /></label>
+          {role !== 'cashier' && <label>Cost price (BND)<input name="costPrice" inputMode="decimal" placeholder="Optional · owner/manager only" /></label>}
+          <label>Quantity on hand<input name="quantity" type="number" min="0" max="999999" defaultValue={1} required /></label>
+          <label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={1} required /></label>
+          <label>SKU (optional)<input name="sku" maxLength={50} /></label>
+          <label>Barcode (optional)<input name="barcode" maxLength={240} autoComplete="off" /></label>
+          <label>Condition<select value={manualProductCondition} onChange={(event) => setManualProductCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>Condition details<input name="conditionNote" maxLength={120} placeholder="Optional" /></label>
+        </div>
+        <label>Note<textarea name="note" rows={2} maxLength={300} placeholder="Optional" /></label>
+        <small>Source is recorded as Existing stock / Manual registration with the staff member and time.</small>
+        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setManualProductForm(false)} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Registering…' : 'Register item'}</button></div>
+      </form>
+    </Modal>}
+
     {productForm && <Modal title={productForm === 'new' ? 'Add product' : 'Edit product'} onClose={() => !busy && setProductForm(null)}>
       <form className="form-stack" onSubmit={saveProduct}>
+        <SmePosItemPhotoField
+          currentPhotoPath={productForm === 'new' ? null : productForm.photoPath}
+          file={productPhotoFile}
+          removeExisting={removeProductPhoto}
+          onFileChange={setProductPhotoFile}
+          onRemoveExisting={setRemoveProductPhoto}
+          disabled={busy}
+        />
         <div className="form-grid">
           <label>Product name<input name="name" defaultValue={productForm === 'new' ? '' : productForm.name} maxLength={100} required /></label>
           <label>Category<input name="category" defaultValue={productForm === 'new' ? '' : productForm.category || ''} maxLength={60} placeholder="Example: Food, electronics" /></label>
@@ -587,6 +684,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
           <label className={`pos-item-type-option ${productStockMode === 'unlimited' ? 'selected' : ''}`}><input type="radio" name="itemType" value="unlimited" checked={productStockMode === 'unlimited'} onChange={() => setProductStockMode('unlimited')} /><span><strong>Service or unlimited item</strong><small>No stock quantity is reduced. Use this only for services or items that do not run out.</small></span></label>
         </fieldset>
         {productStockMode === 'physical' && <div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={productForm === 'new' ? 0 : productForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={productForm === 'new' ? 2 : productForm.lowStockLevel} required /></label></div>}
+        <div className="form-grid"><label>Condition<select name="condition" defaultValue={productForm === 'new' ? 'new' : productForm.condition || 'new'}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Condition details<input name="conditionNote" defaultValue={productForm === 'new' ? '' : productForm.conditionNote || ''} maxLength={120} placeholder="Optional" /></label></div>
         <label>Note<textarea name="note" rows={2} defaultValue={productForm === 'new' ? '' : productForm.note || ''} maxLength={300} /></label>
         <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setProductForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save product'}</button></div>
       </form>

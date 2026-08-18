@@ -36,6 +36,7 @@ export type SmePosStatus = 'draft' | 'active' | 'paused';
 export type SmePosRole = 'owner' | 'manager' | 'cashier' | 'stock_staff' | 'seller' | 'viewer';
 export type SmePosCommissionType = 'percentage' | 'fixed_per_item';
 export type SmePosListingCondition = 'new' | 'sealed' | 'open_box' | 'used' | 'other';
+export type SmePosStockSource = 'catalog' | 'existing_stock';
 
 export interface SmePosSettings {
   id: string;
@@ -80,7 +81,10 @@ export interface SmePosProduct {
   category?: string;
   sku?: string;
   barcode?: string;
+  photoPath?: string | null;
   note?: string;
+  condition?: SmePosListingCondition;
+  conditionNote?: string;
   sellingPriceMinor: number;
   costPriceMinor?: number | null;
   currency: string;
@@ -89,6 +93,9 @@ export interface SmePosProduct {
   lowStockLevel: number;
   soldQuantity?: number;
   salesRevenueMinor?: number;
+  stockSource?: SmePosStockSource;
+  registeredBy?: string;
+  registeredAt?: Timestamp | null;
   archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -114,6 +121,7 @@ export interface SmePosSeller {
   soldQuantity: number;
   currency: string;
   archivedAt?: Timestamp | null;
+  deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -130,6 +138,7 @@ export interface SmePosListing {
   category?: string;
   sku?: string;
   barcode?: string;
+  photoPath?: string | null;
   note?: string;
   condition: SmePosListingCondition;
   conditionNote?: string;
@@ -144,7 +153,11 @@ export interface SmePosListing {
   grossSalesMinor: number;
   commissionEarnedMinor: number;
   sellerEarningsMinor: number;
+  stockSource?: SmePosStockSource;
+  registeredBy?: string;
+  registeredAt?: Timestamp | null;
   archivedAt?: Timestamp | null;
+  sellerDeletedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -242,6 +255,7 @@ export interface SmePosCustomer {
   visitCount?: number;
   lastSaleAt?: Timestamp | null;
   archivedAt?: Timestamp | null;
+  deletedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
