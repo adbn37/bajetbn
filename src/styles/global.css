@@ -3242,3 +3242,92 @@ code {
 .sme-pos-print-label canvas{display:block;max-width:100%;height:auto;margin:auto}
 @media(max-width:680px){.sme-pos-label-sheet{grid-template-columns:1fr}.sme-pos-return-matches>.button{align-items:flex-start;flex-direction:column}.sme-pos-return-scanner .sme-pos-barcode-heading{align-items:stretch;flex-direction:column}}
 @media print{body.sme-pos-label-printing *{visibility:hidden}.sme-pos-label-sheet,.sme-pos-label-sheet *{visibility:visible}.sme-pos-label-sheet{position:absolute;inset:0;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:6mm;padding:0}.sme-pos-print-label{border-color:#000}}
+
+/* v1.3.0 shared theme contrast hotfix */
+:root[data-theme] label,
+:root[data-theme] .category-picker legend {
+  color: var(--text);
+}
+
+:root[data-theme] .sidebar nav a,
+:root[data-theme] .sidebar-footer > a {
+  color: var(--muted);
+}
+
+:root[data-theme] .button.primary {
+  color: var(--on-accent);
+  background: var(--accent-2);
+  box-shadow: 0 8px 20px var(--theme-glow);
+}
+
+:root[data-theme] .button.primary:hover:not(:disabled) {
+  color: var(--on-accent);
+  background: color-mix(
+    in srgb,
+    var(--accent-2) 88%,
+    var(--text)
+  );
+}
+
+:root[data-theme] .button.secondary {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+:root[data-theme] .button.secondary:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-strong);
+}
+
+:root[data-theme] .empty-state,
+:root[data-theme] .loading-panel,
+:root[data-theme] .placeholder-panel {
+  color: var(--text);
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
+
+:root[data-theme] .transaction-toolbar-expanded {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+:root[data-theme] .planning-card,
+:root[data-theme] .shared-bill-card {
+  color: var(--text);
+  background: linear-gradient(
+    145deg,
+    var(--surface-2),
+    var(--surface)
+  );
+}
+
+:root[data-theme] .summary-card.featured {
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      var(--theme-glow),
+      transparent 44%
+    ),
+    var(--surface);
+}
+
+:root[data-theme] .info-banner {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+:root[data-theme] .personal-space-preview,
+:root[data-theme] .roadmap-strip,
+:root[data-theme] .meta-row span {
+  color: var(--muted);
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
+
+:root[data-theme] .meta-row span {
+  border-style: solid;
+  border-width: 1px;
+}
