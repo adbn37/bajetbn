@@ -3356,3 +3356,16 @@ code {
   border-style: solid;
   border-width: 1px;
 }
+
+/* v1.3.5 POS existing-stock registration and item photos */
+.sme-pos-item-photo{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;border:1px solid var(--border);background:var(--surface-2)}
+.sme-pos-item-photo.register-thumb{width:100%;max-height:120px;aspect-ratio:16/9;margin-bottom:.35rem}
+.sme-pos-item-photo.form-preview{max-width:240px;max-height:190px}
+.sme-pos-photo-field{display:grid;gap:.65rem;padding:.8rem;border:1px solid var(--border);border-radius:12px;background:var(--surface-soft)}
+.sme-pos-photo-preview{min-height:110px;display:flex;align-items:center;justify-content:flex-start}
+.sme-pos-photo-placeholder{width:100%;min-height:110px;display:flex;align-items:center;justify-content:center;gap:.55rem;border:1px dashed var(--border);border-radius:10px;color:var(--muted)}
+.sme-pos-photo-placeholder span{font-size:1.35rem}
+.sme-pos-photo-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.sme-pos-photo-input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
+.sme-pos-photo-field>small{color:var(--muted)}
+@media(max-width:680px){.sme-pos-item-photo.form-preview{max-width:100%}.sme-pos-photo-actions>.button{flex:1 1 auto}}

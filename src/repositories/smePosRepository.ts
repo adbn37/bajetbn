@@ -8,6 +8,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import type {
   PaymentMethodCode,
@@ -81,7 +82,7 @@ export async function listSmePosCustomers(spaceId: string, includeArchived = fal
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'smePosCustomers'), where('spaceId', '==', spaceId)));
   const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosCustomer);
-  return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
+  return byUpdatedAt(items.filter((item) => !item.deletedAt && (includeArchived || !item.archivedAt)));
 }
 
 export async function listSmePosPaymentAccounts(spaceId: string): Promise<SmePosPaymentAccount[]> {
@@ -150,7 +151,10 @@ export async function saveSmePosProduct(input: {
   category?: string;
   sku?: string;
   barcode?: string;
+  photoPath?: string | null;
   note?: string;
+  condition?: SmePosListingCondition;
+  conditionNote?: string;
   sellingPriceMinor: number;
   costPriceMinor?: number | null;
   trackStock: boolean;
@@ -211,6 +215,53 @@ export async function setSmePosCustomerArchived(spaceId: string, customerId: str
   return call({ spaceId, customerId, archived, idempotencyKey: crypto.randomUUID() });
 }
 
+export async function deleteSmePosCustomer(spaceId: string, customerId: string): Promise<{ data: { customerId: string; preservedHistory: boolean } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'deleteSmePosCustomer');
+  return call({ spaceId, customerId, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { customerId: string; preservedHistory: boolean } }>;
+}
+
+export async function uploadSmePosItemPhoto(spaceId: string, file: File): Promise<{ photoPath: string }> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image for the item photo.');
+  if (file.size <= 0 || file.size >= 5 * 1024 * 1024) throw new Error('Item photo must be smaller than 5 MB.');
+  const { storage } = requireFirebase();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'item-photo';
+  const photoPath = `spaces/${spaceId}/sme-pos-items/${crypto.randomUUID()}-${safeName}`;
+  await uploadBytes(ref(storage, photoPath), file, { contentType: file.type });
+  return { photoPath };
+}
+
+export async function getSmePosItemPhotoUrl(photoPath: string) {
+  const { storage } = requireFirebase();
+  return getDownloadURL(ref(storage, photoPath));
+}
+
+export async function deleteSmePosItemPhoto(photoPath: string) {
+  if (!photoPath) return;
+  const { storage } = requireFirebase();
+  await deleteObject(ref(storage, photoPath));
+}
+
+export async function registerExistingSmePosProduct(input: {
+  spaceId: string;
+  name: string;
+  category?: string;
+  sku?: string;
+  barcode?: string;
+  photoPath?: string | null;
+  note?: string;
+  condition?: SmePosListingCondition;
+  conditionNote?: string;
+  sellingPriceMinor: number;
+  costPriceMinor?: number | null;
+  quantityOnHand: number;
+  lowStockLevel: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'registerExistingSmePosProduct');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
 export async function checkoutStandardPos(input: {
   spaceId: string;
   items: Array<{ productId: string; quantity: number }>;
@@ -231,14 +282,14 @@ export async function listMarketplaceSellers(spaceId: string, includeArchived = 
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'smePosSellers'), where('spaceId', '==', spaceId)));
   const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosSeller);
-  return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
+  return byUpdatedAt(items.filter((item) => !item.deletedAt && (includeArchived || !item.archivedAt)));
 }
 
 export async function listMarketplaceListings(spaceId: string, includeArchived = false): Promise<SmePosListing[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'smePosListings'), where('spaceId', '==', spaceId)));
   const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SmePosListing);
-  return byUpdatedAt(items.filter((item) => includeArchived || !item.archivedAt));
+  return byUpdatedAt(items.filter((item) => !item.sellerDeletedAt && (includeArchived || !item.archivedAt)));
 }
 
 export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
@@ -248,6 +299,9 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
   sales: SmePosSale[];
   sellerLedger: SmePosSellerLedgerEntry[];
   payouts: SmePosPayout[];
+  mySeller: SmePosSeller | null;
+  mySellerLedger: SmePosSellerLedgerEntry[];
+  mySellerPayouts: SmePosPayout[];
 }> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'getMarketplacePosWorkspace');
@@ -259,6 +313,9 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
     sales?: SmePosSale[];
     sellerLedger?: SmePosSellerLedgerEntry[];
     payouts?: SmePosPayout[];
+    mySeller?: SmePosSeller | null;
+    mySellerLedger?: SmePosSellerLedgerEntry[];
+    mySellerPayouts?: SmePosPayout[];
   };
   return {
     sellers: data.sellers || [],
@@ -267,6 +324,9 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
     sales: data.sales || [],
     sellerLedger: data.sellerLedger || [],
     payouts: data.payouts || [],
+    mySeller: data.mySeller || null,
+    mySellerLedger: data.mySellerLedger || [],
+    mySellerPayouts: data.mySellerPayouts || [],
   };
 }
 
@@ -299,6 +359,12 @@ export async function setMarketplaceSellerArchived(spaceId: string, sellerId: st
   return call({ spaceId, sellerId, archived, idempotencyKey: crypto.randomUUID() });
 }
 
+export async function deleteMarketplaceSeller(spaceId: string, sellerId: string): Promise<{ data: { sellerId: string; preservedHistory: boolean; archivedListings: number } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'deleteMarketplaceSeller');
+  return call({ spaceId, sellerId, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { sellerId: string; preservedHistory: boolean; archivedListings: number } }>;
+}
+
 export async function saveMarketplaceListing(input: {
   spaceId: string;
   listingId?: string;
@@ -307,6 +373,7 @@ export async function saveMarketplaceListing(input: {
   category?: string;
   sku?: string;
   barcode?: string;
+  photoPath?: string | null;
   note?: string;
   condition: SmePosListingCondition;
   conditionNote?: string;
@@ -319,6 +386,26 @@ export async function saveMarketplaceListing(input: {
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'saveMarketplaceListing');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function registerExistingMarketplaceListing(input: {
+  spaceId: string;
+  sellerId: string;
+  name: string;
+  category?: string;
+  sku?: string;
+  barcode?: string;
+  photoPath?: string | null;
+  note?: string;
+  condition: SmePosListingCondition;
+  conditionNote?: string;
+  sellingPriceMinor: number;
+  quantityOnHand: number;
+  lowStockLevel: number;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'registerExistingMarketplaceListing');
   return call({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
