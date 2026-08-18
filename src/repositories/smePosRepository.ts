@@ -120,7 +120,6 @@ export async function saveSmePosSetup(input: {
   receiptName: string;
   receiptFooter?: string;
   defaultPaymentAccountId?: string | null;
-  paymentAccountIds?: string[];
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'saveSmePosSetup');

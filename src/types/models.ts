@@ -754,6 +754,8 @@ export interface Account {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  spaceId?: string | null;
+  posEnabled?: boolean;
   currency: string;
   openingBalanceMinor: number;
   ledgerBalanceMinor: number;

@@ -77,19 +77,19 @@ export function SmePosSettingsPage() {
   const [shopName, setShopName] = useState('');
   const [receiptName, setReceiptName] = useState('');
   const [receiptFooter, setReceiptFooter] = useState('Thank you for shopping with us.');
-  const [paymentAccountIds, setPaymentAccountIds] = useState<string[]>([]);
   const [defaultPaymentAccountId, setDefaultPaymentAccountId] = useState('');
 
   const currentMember = members.find((item) => item.uid === user?.uid) || null;
   const isOwner = Boolean(space && user && space.ownerId === user.uid && currentMember?.role === 'owner');
-  const businessAccounts = useMemo(
-    () => accounts.filter((item) => item.classification === 'business' && item.currency === (space?.currency || 'BND')),
-    [accounts, space?.currency],
-  );
-  const selectedBusinessAccounts = useMemo(
-    () => businessAccounts.filter((item) => paymentAccountIds.includes(item.id)),
-    [businessAccounts, paymentAccountIds],
-  );
+  const eligiblePaymentAccounts = useMemo(() => {
+    const legacyIds = new Set(settings?.paymentAccountIds || []);
+    return accounts.filter((item) => item.classification === 'business'
+      && item.currency === (space?.currency || 'BND')
+      && (
+        (item.spaceId === space?.id && item.posEnabled === true)
+        || (!item.spaceId && legacyIds.has(item.id))
+      ));
+  }, [accounts, settings?.paymentAccountIds, space?.currency, space?.id]);
   const accessByUid = useMemo(() => new Map(access.map((item) => [item.uid, item])), [access]);
   const pendingPosInvitations = useMemo(
     () => invitations.filter((item) => item.status === 'pending' && item.posRole),
@@ -122,14 +122,15 @@ export function SmePosSettingsPage() {
         setShopName(nextSettings.shopName);
         setReceiptName(nextSettings.receiptName);
         setReceiptFooter(nextSettings.receiptFooter || '');
-        const nextPaymentAccountIds = Array.isArray(nextSettings.paymentAccountIds)
-          ? nextSettings.paymentAccountIds
-          : nextAccounts
-              .filter((item) => item.classification === 'business' && item.currency === nextSpace.currency)
-              .map((item) => item.id);
-        setPaymentAccountIds(nextPaymentAccountIds);
+        const legacyIds = new Set(nextSettings.paymentAccountIds || []);
+        const nextEligibleAccounts = nextAccounts.filter((item) => item.classification === 'business'
+          && item.currency === nextSpace.currency
+          && (
+            (item.spaceId === nextSpace.id && item.posEnabled === true)
+            || (!item.spaceId && legacyIds.has(item.id))
+          ));
         setDefaultPaymentAccountId(
-          nextSettings.defaultPaymentAccountId && nextPaymentAccountIds.includes(nextSettings.defaultPaymentAccountId)
+          nextSettings.defaultPaymentAccountId && nextEligibleAccounts.some((item) => item.id === nextSettings.defaultPaymentAccountId)
             ? nextSettings.defaultPaymentAccountId
             : '',
         );
@@ -139,7 +140,6 @@ export function SmePosSettingsPage() {
         setShopName(nextSpace.name);
         setReceiptName(nextSpace.name);
         setReceiptFooter('Thank you for shopping with us.');
-        setPaymentAccountIds([]);
         setDefaultPaymentAccountId('');
         setAccess([]);
       }
@@ -162,16 +162,6 @@ export function SmePosSettingsPage() {
     return false;
   }
 
-  function togglePaymentAccount(accountId: string, checked: boolean) {
-    const nextIds = checked
-      ? [...new Set([...paymentAccountIds, accountId])]
-      : paymentAccountIds.filter((item) => item !== accountId);
-    setPaymentAccountIds(nextIds);
-    if (defaultPaymentAccountId && !nextIds.includes(defaultPaymentAccountId)) {
-      setDefaultPaymentAccountId('');
-    }
-  }
-
   function askToSave(event: FormEvent) {
     event.preventDefault();
     setError('');
@@ -180,12 +170,12 @@ export function SmePosSettingsPage() {
       setError('Shop name and receipt name are required.');
       return;
     }
-    if (!paymentAccountIds.length) {
-      setError(`Choose at least one business account for ${space?.name || 'this POS'}.`);
+    if (!eligiblePaymentAccounts.length) {
+      setError(`Add or edit a business account in Accounts, assign it to ${space?.name || 'this SME'}, and enable POS payments first.`);
       return;
     }
-    if (defaultPaymentAccountId && !paymentAccountIds.includes(defaultPaymentAccountId)) {
-      setError('The default payment account must also be available at this POS.');
+    if (defaultPaymentAccountId && !eligiblePaymentAccounts.some((item) => item.id === defaultPaymentAccountId)) {
+      setError('The default payment account must belong to this SME and be enabled for POS payments.');
       return;
     }
     if (!settings || settings.mode === mode || settings.status === 'draft') {
@@ -218,7 +208,6 @@ export function SmePosSettingsPage() {
         shopName,
         receiptName,
         receiptFooter,
-        paymentAccountIds,
         defaultPaymentAccountId: defaultPaymentAccountId || null,
       });
       setConfirm(null);
@@ -329,19 +318,21 @@ export function SmePosSettingsPage() {
           <label>Receipt name<input value={receiptName} onChange={(event) => setReceiptName(event.target.value)} maxLength={100} required /><small>This appears at the top of receipts.</small></label>
           <label className="span-2">Receipt message<textarea value={receiptFooter} onChange={(event) => setReceiptFooter(event.target.value)} rows={3} maxLength={240} placeholder="Thank you for shopping with us." /></label>
           <fieldset className="span-2">
-            <legend>Accounts available at this POS</legend>
-            <small>Choose only the accounts used by {space.name}. Accounts for your other businesses will stay hidden from this checkout.</small>
+            <legend>Payment accounts</legend>
+            <small>Account ownership and POS availability are managed from Accounts by the SME owner. Managers and cashiers cannot attach another account here.</small>
             <div className="form-stack compact">
-              {businessAccounts.map((account) => <label className="checkbox-field" key={account.id}>
-                <input type="checkbox" checked={paymentAccountIds.includes(account.id)} onChange={(event) => togglePaymentAccount(account.id, event.target.checked)} />
-                <span><strong>{account.name}</strong> · {account.type.replace('_', ' ')} · {account.currency}</span>
-              </label>)}
+              {eligiblePaymentAccounts.map((account) => <div key={account.id}>
+                <strong>{account.name}</strong> · {account.type.replace('_', ' ')} · {account.currency}
+                {!account.spaceId && <small>Legacy setup · assign this account to {space.name} from Accounts.</small>}
+              </div>)}
+              {!eligiblePaymentAccounts.length && <small>No payment account is assigned to this SME yet.</small>}
             </div>
+            <Link className="text-button" to="/accounts">Manage business accounts →</Link>
           </fieldset>
-          <label className="span-2">Default payment account<select value={defaultPaymentAccountId} onChange={(event) => setDefaultPaymentAccountId(event.target.value)}><option value="">Choose during checkout</option>{selectedBusinessAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select><small>Optional. Only accounts selected above can be used.</small></label>
+          <label className="span-2">Default payment account<select value={defaultPaymentAccountId} onChange={(event) => setDefaultPaymentAccountId(event.target.value)}><option value="">Choose during checkout</option>{eligiblePaymentAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select><small>Optional. The account must belong to {space.name} and be enabled for POS payments from Accounts.</small></label>
         </div>
 
-        {!businessAccounts.length && <div className="notice">No active business account is available. Add one before staff complete checkout.</div>}
+        {!eligiblePaymentAccounts.length && <div className="notice">No POS payment account is assigned to {space.name}. Open Accounts, edit a business account, assign it to this SME, and enable POS payments.</div>}
         <div className="button-row">
           <button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : settings ? 'Save POS settings' : 'Save POS setup'}</button>
           {settings?.status === 'draft' && <button className="button secondary" type="button" disabled={busy} onClick={() => askStatus('active')}>Activate POS</button>}

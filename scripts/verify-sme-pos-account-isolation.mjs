@@ -4,37 +4,54 @@ const read = (path) => fs.readFileSync(path, 'utf8');
 const must = (text, needle, label) => {
   if (!text.includes(needle)) throw new Error(`Missing ${label}: ${needle}`);
 };
+const reject = (text, needle, label) => {
+  if (text.includes(needle)) throw new Error(`Old ${label} still present: ${needle}`);
+};
 
-const settings = read('src/features/sme-pos/SmePosSettingsPage.tsx');
-const repo = read('src/repositories/smePosRepository.ts');
+const accountsPage = read('src/features/accounts/AccountsPage.tsx');
+const accountRepo = read('src/repositories/accountRepository.ts');
+const settingsPage = read('src/features/sme-pos/SmePosSettingsPage.tsx');
+const posRepo = read('src/repositories/smePosRepository.ts');
 const models = read('src/types/models.ts');
 const functions = read('functions/src/index.ts');
 
-must(models, 'paymentAccountIds?: string[];', 'POS account allowlist model');
+must(models, 'spaceId?: string | null;', 'Account SME ownership field');
+must(models, 'posEnabled?: boolean;', 'Account POS eligibility field');
 
-must(repo, 'paymentAccountIds?: string[];', 'POS setup repository allowlist');
+must(accountRepo, 'spaceId?: string | null;', 'create/update account SME ownership payload');
+must(accountRepo, 'posEnabled?: boolean;', 'create/update account POS payload');
 
-must(settings, 'Accounts available at this POS', 'owner account selector');
-must(settings, 'Accounts for your other businesses will stay hidden from this checkout.', 'business isolation explanation');
-must(settings, 'paymentAccountIds,', 'saved account allowlist');
-must(settings, 'selectedBusinessAccounts.map', 'default account limited to selected accounts');
-must(settings, "setError(`Choose at least one business account for ${space?.name || 'this POS'}.`);", 'at least one account guard');
-must(settings, 'nextPaymentAccountIds', 'legacy account migration');
-must(settings, "item.classification === 'business' && item.currency === nextSpace.currency", 'legacy active business-account selection');
+must(accountsPage, 'Business account ownership', 'Accounts ownership guidance');
+must(accountsPage, 'Business / SME Space', 'business owner selector');
+must(accountsPage, "Use for this business's POS payments", 'POS eligibility toggle');
+must(accountsPage, 'item.type === \'sme\' && item.ownerId === user?.uid', 'owner-only SME choices');
+must(accountsPage, 'Unassigned business accounts', 'legacy migration view');
+must(accountsPage, 'Managers and cashiers cannot change this.', 'manager/cashier restriction copy');
 
-must(functions, 'configuredSmePosPaymentAccountIds', 'server allowlist reader');
-must(functions, 'requireConfiguredSmePosPaymentAccount', 'server allowlist enforcement');
-must(functions, 'paymentAccountIds: paymentAccountIds ?? currentData.paymentAccountIds ?? null', 'server allowlist persistence');
-must(functions, '&& (!allowedIds || allowedIds.includes(item.id));', 'checkout-account filtering');
-must(functions, 'This account is not available at this SME POS. Update POS Settings first.', 'cross-SME checkout rejection');
+must(settingsPage, 'Payment accounts', 'read-only POS payment account section');
+must(settingsPage, 'managed from Accounts', 'Accounts source-of-truth copy');
+must(settingsPage, 'Managers and cashiers cannot attach another account here.', 'POS restriction copy');
+must(settingsPage, 'Manage business accounts →', 'Accounts management link');
+reject(settingsPage, 'Accounts available at this POS', 'POS account checklist');
+reject(settingsPage, 'togglePaymentAccount', 'POS account toggle handler');
+
+reject(posRepo, 'paymentAccountIds?: string[];', 'client POS account allowlist mutation');
+
+must(functions, 'requireOwnedSmeSpaceForAccount', 'server owner-only account assignment');
+must(functions, "Only the SME Space owner can assign a business account to that Space.", 'server SME owner enforcement');
+must(functions, 'spaceId, posEnabled,', 'account ownership persistence');
+must(functions, 'isSmePosPaymentAccountForSpace', 'SME/POS account ownership resolver');
+must(functions, "assignedSpaceId === spaceId && account.posEnabled === true", 'strict assigned-account isolation');
+must(functions, 'Boolean(legacyIds?.includes(accountId))', 'legacy v1.3.2 fallback');
+must(functions, 'paymentAccountIds: currentData.paymentAccountIds ?? null', 'legacy allowlist preservation only');
+reject(functions, 'const hasPaymentAccountIds = Array.isArray(request.data?.paymentAccountIds);', 'POS settings allowlist mutation');
+must(functions, 'This account does not belong to this SME POS.', 'server cross-SME rejection');
 
 const enforcementCount =
-  (functions.match(/requireConfiguredSmePosPaymentAccount\(context\.settings, paymentAccountId\);/g) || []).length;
+  (functions.match(/requireSmePosPaymentAccountForSpace\(context\.settings, accountSnapshot\.data\(\) \|\| \{\}, paymentAccountId, spaceId\);/g) || []).length;
 
 if (enforcementCount !== 3) {
-  throw new Error(
-    `Expected 3 server enforcement points (Standard checkout, Marketplace checkout, seller payout); found ${enforcementCount}.`
-  );
+  throw new Error(`Expected strict account ownership enforcement at Standard checkout, Marketplace checkout, and seller payout; found ${enforcementCount}.`);
 }
 
-console.log('SME POS account isolation verifier: PASS');
+console.log('SME account ownership + POS isolation verifier: PASS');

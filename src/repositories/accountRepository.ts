@@ -17,6 +17,8 @@ export async function createAccount(input: {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  spaceId?: string | null;
+  posEnabled?: boolean;
   currency: string;
   openingBalanceMinor: number;
 }) {
@@ -32,6 +34,8 @@ export async function updateAccount(input: {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  spaceId?: string | null;
+  posEnabled?: boolean;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'updateAccountProfile');
