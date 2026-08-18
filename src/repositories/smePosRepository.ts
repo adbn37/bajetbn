@@ -149,6 +149,7 @@ export async function saveSmePosProduct(input: {
   name: string;
   category?: string;
   sku?: string;
+  barcode?: string;
   note?: string;
   sellingPriceMinor: number;
   costPriceMinor?: number | null;
@@ -172,10 +173,23 @@ export async function updateSmePosProductStock(input: {
   productId: string;
   quantityOnHand: number;
   lowStockLevel: number;
+  stocktake?: boolean;
+  note?: string;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'updateSmePosProductStock');
   return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function receiveSmePosProductStock(input: {
+  spaceId: string;
+  productId: string;
+  quantityReceived: number;
+  note?: string;
+}): Promise<{ data: { productId: string; quantityReceived: number; quantityOnHand: number } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'receiveSmePosProductStock');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { productId: string; quantityReceived: number; quantityOnHand: number } }>;
 }
 
 export async function saveSmePosCustomer(input: {
@@ -292,6 +306,7 @@ export async function saveMarketplaceListing(input: {
   name: string;
   category?: string;
   sku?: string;
+  barcode?: string;
   note?: string;
   condition: SmePosListingCondition;
   conditionNote?: string;
@@ -312,10 +327,23 @@ export async function updateMarketplaceListingStock(input: {
   listingId: string;
   quantityOnHand: number;
   lowStockLevel: number;
+  stocktake?: boolean;
+  note?: string;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'updateMarketplaceListingStock');
   return call({ ...input, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function receiveMarketplaceListingStock(input: {
+  spaceId: string;
+  listingId: string;
+  quantityReceived: number;
+  note?: string;
+}): Promise<{ data: { listingId: string; quantityReceived: number; quantityOnHand: number } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'receiveMarketplaceListingStock');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { listingId: string; quantityReceived: number; quantityOnHand: number } }>;
 }
 
 export async function setMarketplaceListingArchived(spaceId: string, listingId: string, archived: boolean) {
@@ -366,4 +394,3 @@ export async function recordMarketplaceSellerPayout(input: {
   const call = httpsCallable(functions, 'recordMarketplaceSellerPayout');
   return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; balanceAfterMinor: number } }>;
 }
-

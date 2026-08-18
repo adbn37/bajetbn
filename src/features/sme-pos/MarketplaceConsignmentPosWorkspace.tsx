@@ -2,11 +2,16 @@
 import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
+import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInventoryPanel';
+import { SmePosBarcodeCheckoutScanner } from '../../components/SmePosBarcodeCheckoutScanner';
+import { SmePosBarcodeLabelDialog } from '../../components/SmePosBarcodeLabelDialog';
+import { SmePosBarcodeReturnScanner } from '../../components/SmePosBarcodeReturnScanner';
 import {
   checkoutMarketplacePos,
   getMarketplacePosWorkspace,
   listSmePosAccess,
   listSmePosPaymentAccounts,
+  receiveMarketplaceListingStock,
   recordMarketplaceSellerPayout,
   returnSmePosSale,
   saveMarketplaceListing,
@@ -150,9 +155,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [sellerForm, setSellerForm] = useState<SmePosSeller | 'new' | null>(null);
   const [sellerCommissionType, setSellerCommissionType] = useState<SmePosCommissionType>('percentage');
   const [listingForm, setListingForm] = useState<SmePosListing | 'new' | null>(null);
+  const [newListingBarcode, setNewListingBarcode] = useState('');
   const [listingCommissionType, setListingCommissionType] = useState<SmePosCommissionType>('percentage');
   const [listingCondition, setListingCondition] = useState<SmePosListingCondition>('new');
   const [stockForm, setStockForm] = useState<SmePosListing | null>(null);
+  const [receiveForm, setReceiveForm] = useState<SmePosListing | null>(null);
+  const [stocktakeForm, setStocktakeForm] = useState<SmePosListing | null>(null);
+  const [labelItems, setLabelItems] = useState<SmePosListing[] | null>(null);
   const [customerForm, setCustomerForm] = useState<SmePosCustomer | 'new' | null>(null);
   const [receipt, setReceipt] = useState<SmePosSale | null>(null);
   const [returnForm, setReturnForm] = useState<ReturnFormState | null>(null);
@@ -212,7 +221,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
   const filteredListings = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return listings.filter((item) => !term || [item.name, item.category, item.sku, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
+    return listings.filter((item) => !term || [item.name, item.category, item.sku, item.barcode, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
   }, [listings, search]);
 
   const cartLines = useMemo(() => Object.entries(cart).map(([id, quantity]) => {
@@ -244,7 +253,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     setSellerForm(value);
   }
 
-  function openListingForm(value: SmePosListing | 'new') {
+  function openListingForm(value: SmePosListing | 'new', barcode = '') {
+    setNewListingBarcode(value === 'new' ? barcode : '');
     if (value === 'new') {
       const firstSeller = sellers[0];
       setListingCommissionType(firstSeller?.defaultCommissionType || 'percentage');
@@ -297,6 +307,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         name: String(form.get('name') || ''),
         category: String(form.get('category') || ''),
         sku: String(form.get('sku') || ''),
+        barcode: String(form.get('barcode') || ''),
         note: String(form.get('note') || ''),
         condition: String(form.get('condition') || 'new') as SmePosListingCondition,
         conditionNote: String(form.get('conditionNote') || ''),
@@ -308,6 +319,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         lowStockLevel: Number(form.get('lowStock') || 0),
       });
       setListingForm(null);
+      setNewListingBarcode('');
       setSuccess(listingForm === 'new' ? 'Seller listing added.' : 'Seller listing updated.');
       await load(); await onChanged();
     } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
@@ -327,6 +339,54 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       });
       setStockForm(null); setSuccess('Listing stock updated.');
       await load();
+    } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
+  }
+
+  async function receiveStock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!receiveForm || !requireOnline()) return;
+    const form = new FormData(event.currentTarget);
+    const quantityReceived = Math.floor(Number(form.get('quantityReceived') || 0));
+    if (quantityReceived < 1) { setError('Enter at least one received unit.'); return; }
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const result = await receiveMarketplaceListingStock({
+        spaceId: space.id,
+        listingId: receiveForm.id,
+        quantityReceived,
+        note: String(form.get('note') || ''),
+      });
+      const name = receiveForm.name;
+      setReceiveForm(null);
+      setSuccess(`Received ${quantityReceived} unit(s) of ${name}. New stock: ${result.data.quantityOnHand}.`);
+      await load();
+      await onChanged();
+    } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
+  }
+
+  async function saveStocktake(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!stocktakeForm || !requireOnline()) return;
+    const form = new FormData(event.currentTarget);
+    const countedQuantity = Math.floor(Number(form.get('countedQuantity') || 0));
+    if (countedQuantity < 0 || countedQuantity > 999999) { setError('Enter a physical count from 0 to 999999.'); return; }
+    const previousQuantity = stocktakeForm.quantityOnHand;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      await updateMarketplaceListingStock({
+        spaceId: space.id,
+        listingId: stocktakeForm.id,
+        quantityOnHand: countedQuantity,
+        lowStockLevel: stocktakeForm.lowStockLevel,
+        stocktake: true,
+        note: String(form.get('note') || ''),
+      });
+      const difference = countedQuantity - previousQuantity;
+      const name = stocktakeForm.name;
+      setStocktakeForm(null);
+      setSuccess(`Stocktake saved for ${name}. Difference: ${difference >= 0 ? '+' : ''}${difference}.`);
+      await load();
+      await onChanged();
     } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
   }
 
@@ -564,18 +624,28 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </section>}
 
       {tab === 'listings' && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>{role === 'seller' ? 'My listings' : 'Seller listings and stock'}</h3><p>Every listing or stock batch keeps its own seller, price, condition, quantity and commission.</p></div>{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}</div>
-        <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, category, condition or SKU" />
+        <div className="panel-heading"><div><h3>{role === 'seller' ? 'My listings' : 'Seller listings and stock'}</h3><p>Every listing or stock batch keeps its own seller, price, condition, quantity and commission.</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!listings.some((item) => item.barcode)} onClick={() => setLabelItems(listings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}</div></div>
+        <SmePosBarcodeInventoryPanel
+          itemLabel="listing"
+          items={listings}
+          canCreate={canManageListings && sellers.length > 0}
+          onCreate={canManageListings && sellers.length > 0 ? (barcode) => openListingForm('new', barcode) : undefined}
+          onOpen={canManageListings ? (listing) => openListingForm(listing) : undefined}
+          onReceive={canManageStock ? setReceiveForm : undefined}
+          onStocktake={canManageStock ? setStocktakeForm : undefined}
+          onPrintLabel={canManageStock ? (listing) => setLabelItems([listing]) : undefined}
+        />
+        <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, category, condition, SKU or barcode" />
         <div className="sme-pos-product-grid">{filteredListings.map((listing) => {
           const outOfStock = listing.quantityOnHand < 1;
           const low = listing.quantityOnHand > 0 && listing.quantityOnHand <= listing.lowStockLevel;
           return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={listing.id}>
-            <div><span className="type-badge">{listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small></div>
+            <div><span className="type-badge">{listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
             {role !== 'stock_staff' && <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong>}
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} in stock${low ? ' · Low stock' : ''}`}</p>
             {(role === 'owner' || role === 'manager' || role === 'seller') && <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>}
-            {canManageListings && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openListingForm(listing)}>Edit</button><button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'listing', id: listing.id }, title: 'Archive this listing?', description: 'It will leave the active register while its sales and seller balance history stay unchanged.', note: 'You can restore it from Archived Records.', confirmLabel: 'Archive listing' })}>Archive</button></div>}
-            {!canManageListings && canManageStock && <div className="button-row"><button className="button secondary small" type="button" onClick={() => setStockForm(listing)}>Update stock</button></div>}
+            {canManageListings && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openListingForm(listing)}>Edit</button><button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button>{listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'listing', id: listing.id }, title: 'Archive this listing?', description: 'It will leave the active register while its sales and seller balance history stay unchanged.', note: 'You can restore it from Archived Records.', confirmLabel: 'Archive listing' })}>Archive</button></div>}
+            {!canManageListings && canManageStock && <div className="button-row"><button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button><button className="button secondary small" type="button" onClick={() => setStockForm(listing)}>Update stock</button>{listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}</div>}
           </article>;
         })}</div>
         {!filteredListings.length && <div className="empty-inline">No active seller listings found.</div>}
@@ -590,7 +660,14 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
           <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>One sale can contain items from several sellers.</p></div></div>
-          <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, condition or SKU" autoFocus />
+          <SmePosBarcodeCheckoutScanner
+            itemLabel="listing"
+            items={listings}
+            cartQuantities={cart}
+            disabled={!canCheckout || settings.status !== 'active' || busy}
+            onAdd={addToCart}
+          />
+          <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, condition, SKU or barcode" />
           <div className="sme-pos-checkout-product-grid">{filteredListings.map((listing) => {
             const outOfStock = listing.quantityOnHand < 1;
             return <button type="button" key={listing.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(listing)}><strong>{listing.name}</strong><span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span><small>{listing.sellerName} · {conditionLabels[listing.condition]}</small><small>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} available`}</small></button>;
@@ -621,6 +698,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
         {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller money waiting</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
+        {canManageReturns && <SmePosBarcodeReturnScanner itemLabel="listing" items={listings} sales={sales} getSaleItemId={(item) => item.listingId || item.productId} onSelectSale={openReturnForm} />}
         <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My recent sales' : role === 'seller' ? 'My sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' ? 'Only the part of each sale belonging to you is shown.' : 'Open a sale to view its receipt or record a return.'}</p></div></div><div className="sme-pos-sales-list">{sales.map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || 'Walk-in customer'} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!sales.length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
         {canViewReports && <section className="panel"><div className="panel-heading"><div><h3>Recent seller payouts</h3><p>Each payout posts Money Out from the selected business account.</p></div></div><div className="sme-pos-sales-list">{payouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.sellerName}</strong><small>{payout.payoutDate} · {payout.paymentAccountName}</small></div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Balance {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!payouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>}
       </div>}
@@ -642,7 +720,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {listingForm && <Modal title={listingForm === 'new' ? 'Add seller listing' : 'Edit seller listing'} onClose={() => !busy && setListingForm(null)}><form className="form-stack" onSubmit={saveListing}>
       <label>Seller<select name="sellerId" defaultValue={listingForm === 'new' ? sellers[0]?.id || '' : listingForm.sellerId} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>
-      <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Category<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
+      <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Category<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Barcode (optional)<input name="barcode" defaultValue={listingForm === 'new' ? newListingBarcode : listingForm.barcode || ''} maxLength={240} autoComplete="off" /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
       <div className="form-grid"><label>Condition<select name="condition" value={listingCondition} onChange={(event) => setListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Condition details<input name="conditionNote" defaultValue={listingForm === 'new' ? '' : listingForm.conditionNote || ''} maxLength={120} placeholder="Optional" /></label></div>
       <fieldset className="pos-item-type-fieldset"><legend>Commission for this listing</legend><label className={`pos-item-type-option ${listingCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={listingCommissionType === 'percentage'} onChange={() => setListingCommissionType('percentage')} /><span><strong>Percentage</strong><small>Calculated after any sale discount is shared across the cart.</small></span></label><label className={`pos-item-type-option ${listingCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={listingCommissionType === 'fixed_per_item'} onChange={() => setListingCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>Must be lower than the item selling price.</small></span></label></fieldset>
       {listingCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={listingForm === 'new' ? '3' : (listingForm.commissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={listingForm === 'new' ? '0.00' : (listingForm.commissionMinor / 100).toFixed(2)} required /></label>}
@@ -651,7 +729,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setListingForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save listing'}</button></div>
     </form></Modal>}
 
+    {receiveForm && <Modal title={`Receive stock · ${receiveForm.name}`} onClose={() => !busy && setReceiveForm(null)}><form className="form-stack" onSubmit={receiveStock}><div className="notice">Current stock: <strong>{receiveForm.quantityOnHand}</strong>. Scanning did not change this number.</div><label>Quantity received<input name="quantityReceived" type="number" min="1" max={Math.max(1, 999999 - receiveForm.quantityOnHand)} defaultValue={1} required autoFocus /></label><label>Receiving note<textarea name="note" rows={2} maxLength={300} placeholder="Optional seller, delivery or reference" /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setReceiveForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Receiving…' : 'Confirm received stock'}</button></div></form></Modal>}
+
     {stockForm && <Modal title={`Update stock · ${stockForm.name}`} onClose={() => !busy && setStockForm(null)}><form className="form-stack" onSubmit={saveStock}><div className="notice">Stock staff can change only the quantity and low-stock alert. Seller, price and commission stay owner or manager controlled.</div><div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={stockForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={stockForm.lowStockLevel} required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setStockForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save stock'}</button></div></form></Modal>}
+
+    {stocktakeForm && <Modal title={`Count stock · ${stocktakeForm.name}`} onClose={() => !busy && setStocktakeForm(null)}><form className="form-stack" onSubmit={saveStocktake}><div className="notice">System quantity: <strong>{stocktakeForm.quantityOnHand}</strong>. Enter the physical count. Nothing changes until you confirm.</div><label>Physical count<input name="countedQuantity" type="number" min="0" max="999999" defaultValue={stocktakeForm.quantityOnHand} required autoFocus /></label><label>Count note<textarea name="note" rows={2} maxLength={300} placeholder="Optional seller batch, shelf, counter or reference" /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setStocktakeForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving count…' : 'Confirm physical count'}</button></div></form></Modal>}
+
+    {labelItems && <SmePosBarcodeLabelDialog itemLabel="listing" items={labelItems} shopName={settings.shopName || settings.receiptName || space.name} onClose={() => setLabelItems(null)} />}
 
     {customerForm && <Modal title={customerForm === 'new' ? 'Add customer' : 'Edit customer'} onClose={() => !busy && setCustomerForm(null)}><form className="form-stack" onSubmit={saveCustomer}><label>Customer name<input name="name" defaultValue={customerForm === 'new' ? '' : customerForm.name} maxLength={100} required /></label><div className="form-grid"><label>Phone<input name="phone" defaultValue={customerForm === 'new' ? '' : customerForm.phone || ''} maxLength={30} /></label><label>Email<input name="email" type="email" defaultValue={customerForm === 'new' ? '' : customerForm.email || ''} maxLength={120} /></label></div><label>Note<textarea name="note" rows={3} defaultValue={customerForm === 'new' ? '' : customerForm.note || ''} maxLength={300} /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setCustomerForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save customer'}</button></div></form></Modal>}
 
