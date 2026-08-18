@@ -1,4 +1,4 @@
-﻿import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
@@ -612,7 +612,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>Sellers</h3><p>Each seller keeps a separate balance and commission rule.</p></div><button className="button primary" type="button" onClick={() => openSellerForm('new')}>Add seller</button></div>
+        <div className="panel-heading"><div><h3>Sellers</h3><p>Seller profiles track stock, commission and payouts. A seller profile does not automatically give the person BajetBN login access.</p></div><button className="button primary" type="button" onClick={() => openSellerForm('new')}>Add seller profile</button></div>
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card" key={seller.id}>
           <div><span className="type-badge">Seller</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
@@ -704,14 +704,14 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </div>}
     </>}
 
-    {sellerForm && <Modal title={sellerForm === 'new' ? 'Add seller' : 'Edit seller'} onClose={() => !busy && setSellerForm(null)}><form className="form-stack" onSubmit={saveSeller}>
+    {sellerForm && <Modal title={sellerForm === 'new' ? 'Add seller profile' : 'Edit seller profile'} onClose={() => !busy && setSellerForm(null)}><form className="form-stack" onSubmit={saveSeller}>
       <label>Seller name<input name="name" defaultValue={sellerForm === 'new' ? '' : sellerForm.name} maxLength={100} required /></label>
       <div className="form-grid"><label>WhatsApp or phone<input name="phone" defaultValue={sellerForm === 'new' ? '' : sellerForm.phone || ''} maxLength={32} /></label><label>Email<input name="email" type="email" defaultValue={sellerForm === 'new' ? '' : sellerForm.email || ''} maxLength={120} /></label></div>
       <label>Link seller login<select name="linkedUid" defaultValue={sellerForm === 'new' ? '' : sellerForm.linkedUid || ''}><option value="">No login linked</option>{sellerAccess.map((item) => <option key={item.uid} value={item.uid}>{item.displayName && item.displayName !== item.uid
   ? item.displayName
   : item.email && item.email !== item.uid
     ? item.email
-    : 'Member profile unavailable'}</option>)}</select><small>First invite the person to the SME Space and assign the Seller POS role in POS Settings.</small></label>
+    : 'Member profile unavailable'}</option>)}</select><small>Seller profiles can exist without a BajetBN login. If this seller needs app access, invite them from Members and choose Seller.</small></label>
       <fieldset className="pos-item-type-fieldset"><legend>Default shop commission</legend><label className={`pos-item-type-option ${sellerCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={sellerCommissionType === 'percentage'} onChange={() => setSellerCommissionType('percentage')} /><span><strong>Percentage</strong><small>The shop keeps a percentage of the final selling amount.</small></span></label><label className={`pos-item-type-option ${sellerCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={sellerCommissionType === 'fixed_per_item'} onChange={() => setSellerCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>The shop keeps the same amount for every unit sold.</small></span></label></fieldset>
       {sellerCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={sellerForm === 'new' ? '3' : (sellerForm.defaultCommissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={sellerForm === 'new' ? '0.00' : (sellerForm.defaultCommissionMinor / 100).toFixed(2)} required /></label>}
       <label>Note<textarea name="note" rows={3} defaultValue={sellerForm === 'new' ? '' : sellerForm.note || ''} maxLength={300} /></label>
