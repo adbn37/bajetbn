@@ -11,7 +11,6 @@ import { Brand } from '../../components/Brand';
 import { ThemeChooser } from '../../components/ThemeChooser';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePreferences } from '../../contexts/PreferencesContext';
-import { updateUserAppearance } from '../../repositories/userRepository';
 import { requireFirebase } from '../../services/firebase';
 import { getErrorMessage } from '../../utils/errors';
 
@@ -75,12 +74,12 @@ export function OnboardingPage() {
     setError('');
 
     try {
-      if (saveSelectedTheme) {
-        await updateUserAppearance(
-          uid,
-          preferences.appearance,
-        );
-      } else {
+      const selectedAppearance =
+        saveSelectedTheme
+          ? preferences.appearance
+          : initialAppearance;
+
+      if (!saveSelectedTheme) {
         preferences.setAppearance(
           initialAppearance,
         );
@@ -100,6 +99,7 @@ export function OnboardingPage() {
         language,
         currency,
         timezone,
+        appearance: selectedAppearance,
       });
 
       await refreshProfile();

@@ -11,6 +11,10 @@ const onboarding = read(
   'src/features/onboarding/OnboardingPage.tsx',
 );
 
+const functions = read(
+  'functions/src/index.ts',
+);
+
 const i18n = read(
   'src/services/i18n.ts',
 );
@@ -90,9 +94,24 @@ const checks = [
   ],
   [
     onboarding.includes(
+      'appearance: selectedAppearance',
+    ),
+    'Selected theme is not sent through onboarding.',
+  ],
+  [
+    !onboarding.includes(
       'updateUserAppearance(',
     ),
-    'Theme profile save is missing.',
+    'Onboarding still writes the theme before creating the profile.',
+  ],
+  [
+    functions.includes(
+      "request.data?.appearance ?? 'dark'",
+    )
+      && functions.includes(
+        'appearance, textSize',
+      ),
+    'Onboarding does not validate and save the selected theme atomically.',
   ],
   [
     css.includes(

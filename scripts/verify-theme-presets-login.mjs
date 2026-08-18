@@ -31,6 +31,14 @@ const repository = read(
   'src/repositories/userRepository.ts',
 );
 
+const rules = read(
+  'firestore.rules',
+);
+
+const functions = read(
+  'functions/src/index.ts',
+);
+
 const css = read(
   'src/styles/global.css',
 );
@@ -74,6 +82,36 @@ const presetsExpected = [
   ['high-contrast', 'High Contrast'],
 ];
 
+const allowedAppearanceValues = [
+  ...presetsExpected.map(([value]) => value),
+  'dark',
+];
+
+function valuesFromMatch(match) {
+  return new Set(
+    match
+      ? [...match[1].matchAll(/'([^']+)'/g)]
+        .map((item) => item[1])
+      : [],
+  );
+}
+
+const rulesAppearanceMatch =
+  rules.match(
+    /request\.resource\.data\.appearance\s+in\s+\[([\s\S]*?)\]/,
+  );
+
+const functionAppearanceMatch =
+  functions.match(
+    /const appearanceOptions\s*=\s*\[([\s\S]*?)\]\s*as const;/,
+  );
+
+const rulesAppearanceValues =
+  valuesFromMatch(rulesAppearanceMatch);
+
+const functionAppearanceValues =
+  valuesFromMatch(functionAppearanceMatch);
+
 for (const [value, label] of presetsExpected) {
   expect(
     presets.includes(`value: '${value}'`),
@@ -94,6 +132,40 @@ for (const [value, label] of presetsExpected) {
     );
   }
 }
+
+expect(
+  Boolean(rulesAppearanceMatch),
+  'Firestore appearance allowlist is missing.',
+);
+
+expect(
+  Boolean(functionAppearanceMatch),
+  'Onboarding appearance allowlist is missing.',
+);
+
+for (const value of allowedAppearanceValues) {
+  expect(
+    rulesAppearanceValues.has(value),
+    `Firestore rules reject appearance: ${value}`,
+  );
+
+  expect(
+    functionAppearanceValues.has(value),
+    `Onboarding rejects appearance: ${value}`,
+  );
+}
+
+expect(
+  rulesAppearanceValues.size
+    === allowedAppearanceValues.length,
+  'Firestore appearance allowlist contains an unexpected value.',
+);
+
+expect(
+  functionAppearanceValues.size
+    === allowedAppearanceValues.length,
+  'Onboarding appearance allowlist contains an unexpected value.',
+);
 
 expect(
   chooser.includes(
