@@ -48,6 +48,7 @@ export interface SmePosSettings {
   receiptName: string;
   receiptFooter?: string;
   defaultPaymentAccountId?: string | null;
+  paymentAccountIds?: string[];
   currency: string;
   timezone: string;
   setupVersion: number;
