@@ -3165,6 +3165,9 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const email = normalizedEmail(request.data?.email);
   const role = oneOf(request.data?.role, collaborationRoles, 'member role');
+  const posRole = request.data?.posRole == null || request.data.posRole === ''
+    ? null
+    : oneOf(request.data.posRole, smePosRoles, 'POS role');
   const canUseAccounts = request.data?.canUseAccounts === true;
   const canViewBalances = request.data?.canViewBalances === true;
   const canViewLedger = request.data?.canViewLedger === true;
@@ -3173,9 +3176,18 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
   const space = await db.collection('spaces').doc(spaceId).get();
   if (!space.exists || space.data()?.archivedAt) throw new HttpsError('not-found', 'Space not found.');
   if (space.data()?.type === 'personal') throw new HttpsError('failed-precondition', 'Personal Spaces cannot have members.');
-  const existing = await db.collection('spaceInvitations').where('spaceId', '==', spaceId).where('email', '==', email).get();
+  if (posRole && space.data()?.type !== 'sme') throw new HttpsError('failed-precondition', 'POS roles are only available in an SME Space.');
+  if (posRole && space.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'Only the SME Space owner can assign a POS role during an invitation.');
+  const [existing, registeredUsers, posSettings] = await Promise.all([
+    db.collection('spaceInvitations').where('spaceId', '==', spaceId).where('email', '==', email).get(),
+    db.collection('users').where('email', '==', email).limit(1).get(),
+    posRole ? db.collection('smePosSettings').doc(spaceId).get() : Promise.resolve(null),
+  ]);
   if (existing.docs.some((item) => item.data().status === 'pending')) throw new HttpsError('already-exists', 'A pending invitation already exists for this email.');
-  const registeredUsers = await db.collection('users').where('email', '==', email).limit(1).get();
+  if (posRole && !posSettings?.exists) throw new HttpsError('failed-precondition', 'Save the POS setup before inviting a shop team member.');
+  if (posRole === 'seller' && posSettings?.data()?.mode !== 'marketplace_consignment') {
+    throw new HttpsError('failed-precondition', 'Seller access is only available in Marketplace Consignment POS.');
+  }
   const invitedUserUid = registeredUsers.empty ? '' : registeredUsers.docs[0].id;
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
   const invitationRef = db.collection('spaceInvitations').doc();
@@ -3187,11 +3199,11 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
     const result = { invitationId: invitationRef.id, token };
     transaction.create(invitationRef, {
       displayId: displayId('INV'), spaceId, spaceName: space.data()?.name || 'Shared Space', spaceType: space.data()?.type || 'custom',
-      email, role, canUseAccounts, canViewBalances, canViewLedger,
+      email, role, canUseAccounts, canViewBalances, canViewLedger, posRole,
       token, status: 'pending', invitedBy: uid, invitedByName: manager.displayName || request.auth?.token.email || 'Space owner', acceptedBy: null, declinedBy: null,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), createdAt: now, updatedAt: now,
     });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_invited', targetType: 'invitation', targetId: invitationRef.id, summary: `Invited ${email} as ${role}.`, now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_invited', targetType: 'invitation', targetId: invitationRef.id, summary: posRole ? `Invited ${email} with POS ${posRole} access.` : `Invited ${email} as ${role}.`, now });
     if (invitedUserUid) createNotification(transaction, {
       uid: invitedUserUid, spaceId, type: 'invitation_received', title: 'You have a Space invitation',
       message: `${manager.displayName || 'A Space owner'} invited you to ${space.data()?.name || 'a shared Space'}.`,
@@ -3272,16 +3284,29 @@ export const acceptSpaceInvitation = onCall({ region }, async (request) => {
   if (invitation.status !== 'pending') throw new HttpsError('failed-precondition', 'This invitation is no longer active.');
   if (invitation.expiresAt?.toDate?.().getTime() < Date.now()) throw new HttpsError('deadline-exceeded', 'This invitation has expired. Ask the Space owner for a new link.');
   const spaceId = String(invitation.spaceId);
+  const posRole = typeof invitation.posRole === 'string' && smePosRoles.includes(invitation.posRole as (typeof smePosRoles)[number])
+    ? invitation.posRole as (typeof smePosRoles)[number]
+    : null;
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
   const profileRef = db.collection('users').doc(uid);
   const spaceRef = db.collection('spaces').doc(spaceId);
+  const posSettingsRef = posRole ? db.collection('smePosSettings').doc(spaceId) : null;
+  const posAccessRef = posRole ? db.collection('smePosAccess').doc(`${spaceId}_${uid}`) : null;
   const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
-    const [command, member, profile, space] = await Promise.all([transaction.get(commandRef), transaction.get(memberRef), transaction.get(profileRef), transaction.get(spaceRef)]);
+    const [command, member, profile, space, posSettings] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(memberRef),
+      transaction.get(profileRef),
+      transaction.get(spaceRef),
+      posSettingsRef ? transaction.get(posSettingsRef) : Promise.resolve(null),
+    ]);
     if (command.exists) return command.data()?.result;
     if (!space.exists || space.data()?.archivedAt) throw new HttpsError('failed-precondition', 'This Space is unavailable.');
+    if (posRole && (!posSettings?.exists || space.data()?.type !== 'sme')) throw new HttpsError('failed-precondition', 'The POS team invitation is no longer available. Ask the owner for a new invitation.');
+    if (posRole === 'seller' && posSettings?.data()?.mode !== 'marketplace_consignment') throw new HttpsError('failed-precondition', 'Seller access is no longer available. Ask the owner for a new invitation.');
     const now = FieldValue.serverTimestamp();
-    const result = { spaceId, memberId: memberRef.id };
+    const result = { spaceId, memberId: memberRef.id, posRole };
     transaction.set(memberRef, {
       spaceId, uid, role: invitation.role as CollaborationRole, status: 'active',
       displayName: profile.data()?.fullName || authEmail, email: authEmail,
@@ -3289,7 +3314,19 @@ export const acceptSpaceInvitation = onCall({ region }, async (request) => {
       canViewLedger: invitation.canViewLedger === true, invitedBy: invitation.invitedBy, joinedAt: now, updatedAt: now,
     }, { merge: true });
     transaction.update(invitationRef, { status: 'accepted', acceptedBy: uid, updatedAt: now });
+    if (posRole && posAccessRef) transaction.set(posAccessRef, {
+      spaceId,
+      uid,
+      role: posRole,
+      status: 'active',
+      displayName: profile.data()?.fullName || authEmail,
+      email: authEmail,
+      createdBy: invitation.invitedBy,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: profile.data()?.fullName || authEmail, action: member.exists ? 'member_reactivated' : 'member_joined', targetType: 'member', targetId: uid, summary: `${profile.data()?.fullName || authEmail} joined ${space.data()?.name || 'the Space'}.`, now });
+    if (posRole) createActivity(transaction, { spaceId, actorUid: uid, actorName: profile.data()?.fullName || authEmail, action: 'pos_access_added', targetType: 'member', targetId: uid, summary: `${profile.data()?.fullName || authEmail} joined the POS team as ${posRole}.`, now });
     createNotification(transaction, { uid: String(invitation.invitedBy), spaceId, type: 'member_joined', title: 'A member joined your Space', message: `${profile.data()?.fullName || authEmail} accepted the invitation to ${space.data()?.name || 'your Space'}.`, targetPath: `/spaces/${spaceId}?tab=members`, actionLabel: 'Open members', now });
     createNotification(transaction, { uid, spaceId, type: 'space_joined', title: 'Space joined', message: `You joined ${space.data()?.name || 'the shared Space'}.`, targetPath: `/spaces/${spaceId}`, actionLabel: 'Open Space', now });
     transaction.create(commandRef, { uid, kind: 'accept_space_invitation', idempotencyKey: key, result, createdAt: now });

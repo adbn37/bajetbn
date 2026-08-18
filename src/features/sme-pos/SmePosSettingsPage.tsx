@@ -2,10 +2,15 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react
 import { Link, useParams } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { EmptyState } from '../../components/EmptyState';
+import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
+import { InviteForm } from '../collaboration/CollaborationPage';
 import { listAccounts } from '../../repositories/accountRepository';
-import { listSpaceMembers } from '../../repositories/collaborationRepository';
+import {
+  listSpaceInvitations,
+  listSpaceMembers,
+} from '../../repositories/collaborationRepository';
 import {
   getSmePosSettings,
   listSmePosAccess,
@@ -21,6 +26,7 @@ import type {
   SmePosRole,
   SmePosSettings,
   Space,
+  SpaceInvitation,
   SpaceMember,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
@@ -56,6 +62,7 @@ export function SmePosSettingsPage() {
   const { spaceId = '' } = useParams();
   const [space, setSpace] = useState<Space | null>(null);
   const [members, setMembers] = useState<SpaceMember[]>([]);
+  const [invitations, setInvitations] = useState<SpaceInvitation[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [settings, setSettings] = useState<SmePosSettings | null>(null);
   const [access, setAccess] = useState<SmePosAccess[]>([]);
@@ -64,6 +71,7 @@ export function SmePosSettingsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const [mode, setMode] = useState<SmePosMode>('standard');
   const [shopName, setShopName] = useState('');
@@ -78,21 +86,27 @@ export function SmePosSettingsPage() {
     [accounts, space?.currency],
   );
   const accessByUid = useMemo(() => new Map(access.map((item) => [item.uid, item])), [access]);
+  const pendingPosInvitations = useMemo(
+    () => invitations.filter((item) => item.status === 'pending' && item.posRole),
+    [invitations],
+  );
 
   const load = useCallback(async () => {
     if (!user || !spaceId) return;
     setLoading(true);
     setError('');
     try {
-      const [spaces, nextMembers, nextAccounts] = await Promise.all([
+      const [spaces, nextMembers, nextAccounts, nextInvitations] = await Promise.all([
         listSpaces(user.uid),
         listSpaceMembers(spaceId),
         listAccounts(user.uid),
+        listSpaceInvitations(spaceId),
       ]);
       const nextSpace = spaces.find((item) => item.id === spaceId) || null;
       setSpace(nextSpace);
       setMembers(nextMembers);
       setAccounts(nextAccounts);
+      setInvitations(nextInvitations);
       const owner = Boolean(nextSpace && nextSpace.ownerId === user.uid && nextMembers.find((item) => item.uid === user.uid)?.role === 'owner');
       if (!nextSpace || nextSpace.type !== 'sme' || !owner) return;
 
@@ -303,8 +317,8 @@ export function SmePosSettingsPage() {
     </div>
 
     {settings && <section className="panel sme-pos-access-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Shop team</span><h2>POS access</h2></div><span>{access.length} active</span></div>
-      <p>Invite staff to this SME Space first, then give each person only the POS access needed for their work.</p>
+      <div className="panel-heading"><div><span className="eyebrow">People & access</span><h2>Shop team</h2></div><div className="button-row"><span>{access.length} active</span><button className="button primary" type="button" disabled={busy || Boolean(space.archivedAt)} onClick={() => setInviteOpen(true)}>+ Invite person</button></div></div>
+      <p>This uses the same SME invitation as the Members page. Choose the person's business role once; BajetBN applies their Space membership and POS access together.</p>
       <div className="sme-pos-access-list">
         {members.filter((member) => (member.status || 'active') === 'active').map((member) => {
           const current = member.uid === space.ownerId ? 'owner' : accessByUid.get(member.uid)?.role || '';
@@ -313,10 +327,15 @@ export function SmePosSettingsPage() {
             {member.uid === space.ownerId ? <span className="type-badge">POS owner</span> : <label><span className="sr-only">POS role</span><select value={current} disabled={busy} onChange={(event) => void changeRole(member, event.target.value as Exclude<SmePosRole, 'owner'> | '')}><option value="">No POS access</option><option value="manager">Manager</option><option value="cashier">Cashier</option><option value="stock_staff">Stock staff</option>{settings.mode === 'marketplace_consignment' && <option value="seller">Seller</option>}<option value="viewer">View only</option></select></label>}
           </div>;
         })}
+        {pendingPosInvitations.map((invitation) => <div className="sme-pos-access-row" key={invitation.id}>
+          <div><strong>{invitation.email}</strong><small>Waiting for this person to join</small></div>
+          <span className="type-badge">{roleLabels[invitation.posRole!]} · Invite pending</span>
+        </div>)}
       </div>
       {settings.mode === 'standard' && <div className="notice">Seller access appears after upgrading this shop to Marketplace Consignment POS.</div>}
     </section>}
 
     {confirm && <ActionConfirmModal state={confirm} busy={busy} error={error} onClose={() => { setConfirm(null); setError(''); }} onConfirm={() => void confirmAction()} />}
+    {inviteOpen && settings && <Modal title={`Invite person to ${space.name}`} onClose={() => setInviteOpen(false)}><InviteForm space={space} canAssignPosRole defaultPosRole="cashier" onSaved={async () => { setInviteOpen(false); await load(); }} /></Modal>}
   </main>;
 }

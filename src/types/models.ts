@@ -633,6 +633,7 @@ export interface SpaceInvitation {
   canUseAccounts: boolean;
   canViewBalances: boolean;
   canViewLedger: boolean;
+  posRole?: Exclude<SmePosRole, 'owner'> | null;
   token: string;
   status: InvitationStatus;
   invitedBy: string;
