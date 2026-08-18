@@ -159,7 +159,7 @@ const checks = [
   [calendar, 'whatsappRemindersEnabled', 'Calendar WhatsApp preference'],
   [reports, 'localeForLanguage(language)', 'Report month locale'],
 
-  [functions, "appearance: 'dark', textSize: 'normal'", 'Legacy backend default remains compatible'],
+  [functions, "request.data?.appearance ?? 'dark'", 'Legacy backend fallback remains compatible'],
 ];
 
 for (const [content, marker, label] of checks) {

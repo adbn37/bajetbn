@@ -26,6 +26,11 @@ const recurringTransactionTypes = ['income', 'expense'] as const;
 const recurringTransactionFrequencies = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
 const recurringTransactionStatuses = ['active', 'paused', 'needs_attention', 'stopped', 'completed'] as const;
 const recurringTransactionActions = ['pause', 'resume', 'skip', 'stop', 'restart', 'delete'] as const;
+const appearanceOptions = [
+  'system', 'black', 'light', 'pink-white', 'black-pink',
+  'midnight-teal', 'navy-blue', 'forest-green', 'royal-purple',
+  'sand-cream', 'slate-grey', 'ocean-blue', 'high-contrast', 'dark',
+] as const;
 const smePosModes = ['standard', 'marketplace_consignment'] as const;
 const smePosStatuses = ['active', 'paused'] as const;
 const smePosRoles = ['manager', 'cashier', 'stock_staff', 'seller', 'viewer'] as const;
@@ -425,6 +430,7 @@ export const completeOnboarding = onCall({ region }, async (request) => {
   const language = oneOf(request.data?.language, ['en', 'ms'] as const, 'language');
   const currency = oneOf(request.data?.currency, ['BND'] as const, 'currency');
   const timezone = oneOf(request.data?.timezone, ['Asia/Brunei'] as const, 'timezone');
+  const appearance = oneOf(request.data?.appearance ?? 'dark', appearanceOptions, 'appearance');
   const userRef = db.collection('users').doc(uid);
 
   return db.runTransaction(async (transaction) => {
@@ -448,7 +454,7 @@ export const completeOnboarding = onCall({ region }, async (request) => {
     });
     transaction.set(userRef, {
       uid, fullName, email: request.auth?.token.email || '', language, currency, timezone,
-      appearance: 'dark', textSize: 'normal', notificationsEnabled: true,
+      appearance, textSize: 'normal', notificationsEnabled: true,
       backgroundRemindersEnabled: true, dueSoonReminders: true, lateReminders: true, goalReminders: true,
       sharedPaymentNotifications: true, whatsappRemindersEnabled: true, browserPushEnabled: false, reminderDaysBefore: 3,
       onboardingCompleted: true, personalSpaceId: spaceRef.id,

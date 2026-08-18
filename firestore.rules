@@ -189,7 +189,11 @@ service cloud.firestore {
         && request.resource.data.currency == 'BND'
         && request.resource.data.timezone == 'Asia/Brunei'
         && request.resource.data.language in ['en', 'ms']
-        && request.resource.data.appearance in ['dark', 'light', 'system']
+        && request.resource.data.appearance in [
+          'system', 'black', 'light', 'pink-white', 'black-pink',
+          'midnight-teal', 'navy-blue', 'forest-green', 'royal-purple',
+          'sand-cream', 'slate-grey', 'ocean-blue', 'high-contrast', 'dark'
+        ]
         && request.resource.data.textSize in ['normal', 'large']
         && request.resource.data.notificationsEnabled is bool
         && request.resource.data.backgroundRemindersEnabled is bool
