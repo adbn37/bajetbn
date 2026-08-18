@@ -464,6 +464,18 @@ export const completeOnboarding = onCall({ region }, async (request) => {
   });
 });
 
+async function requireOwnedSmeSpaceForAccount(spaceId: string, uid: string): Promise<DocumentData> {
+  const snapshot = await db.collection('spaces').doc(spaceId).get();
+  if (!snapshot.exists || snapshot.data()?.archivedAt) {
+    throw new HttpsError('failed-precondition', 'Choose an active SME Space for this business account.');
+  }
+  const space = snapshot.data() || {};
+  if (space.type !== 'sme' || space.ownerId !== uid) {
+    throw new HttpsError('permission-denied', 'Only the SME Space owner can assign a business account to that Space.');
+  }
+  return space;
+}
+
 export const createAccount = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const name = stringValue(request.data?.name, 'Account name');
@@ -471,11 +483,26 @@ export const createAccount = onCall({ region }, async (request) => {
   const institutionCode = optionalInstitutionCode(request.data?.institutionCode);
   const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
+  const requestedSpaceId = optionalString(request.data?.spaceId, 80) || null;
+  const requestedPosEnabled = request.data?.posEnabled === true;
   const currency = oneOf(request.data?.currency, ['BND', 'MYR', 'SGD', 'USD'] as const, 'currency');
   const openingBalanceMinor = request.data?.openingBalanceMinor;
   if (!Number.isSafeInteger(openingBalanceMinor) || Math.abs(openingBalanceMinor) > 99_999_999_999) {
     throw new HttpsError('invalid-argument', 'Opening balance must be a safe integer in minor units.');
   }
+
+  let spaceId: string | null = null;
+  let posEnabled = false;
+  if (classification === 'business') {
+    if (!requestedSpaceId) throw new HttpsError('invalid-argument', 'Choose which SME business owns this account.');
+    const space = await requireOwnedSmeSpaceForAccount(requestedSpaceId, uid);
+    if (requestedPosEnabled && space.currency !== currency) {
+      throw new HttpsError('failed-precondition', 'A POS-enabled business account must use the same currency as its SME Space.');
+    }
+    spaceId = requestedSpaceId;
+    posEnabled = requestedPosEnabled;
+  }
+
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
 
@@ -490,6 +517,7 @@ export const createAccount = onCall({ region }, async (request) => {
 
     transaction.create(accountRef, {
       displayId: displayId('ACC'), ownerId: uid, name, institution, institutionCode, type, classification,
+      spaceId, posEnabled,
       currency, openingBalanceMinor, ledgerBalanceMinor: openingBalanceMinor,
       balanceVersion: 1, archivedAt: null, closedAt: null, createdAt: now, updatedAt: now,
     });
@@ -514,12 +542,44 @@ export const updateAccountProfile = onCall({ region }, async (request) => {
   const institutionCode = optionalInstitutionCode(request.data?.institutionCode);
   const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
+  const requestedSpaceId = optionalString(request.data?.spaceId, 80) || null;
+  const requestedPosEnabled = request.data?.posEnabled === true;
   const ref = db.collection('accounts').doc(accountId);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Account not found.');
   if (snapshot.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this account.');
-  await ref.update({ name, institution, institutionCode, type, classification, updatedAt: FieldValue.serverTimestamp() });
-  return { accountId };
+
+  let spaceId: string | null = null;
+  let posEnabled = false;
+  if (classification === 'business') {
+    if (!requestedSpaceId) throw new HttpsError('invalid-argument', 'Choose which SME business owns this account.');
+    const space = await requireOwnedSmeSpaceForAccount(requestedSpaceId, uid);
+    if (requestedPosEnabled && space.currency !== snapshot.data()?.currency) {
+      throw new HttpsError('failed-precondition', 'A POS-enabled business account must use the same currency as its SME Space.');
+    }
+    spaceId = requestedSpaceId;
+    posEnabled = requestedPosEnabled;
+  }
+
+  const settingsSnapshot = await db.collection('smePosSettings').where('ownerId', '==', uid).get();
+  const batch = db.batch();
+  batch.update(ref, {
+    name,
+    institution,
+    institutionCode,
+    type,
+    classification,
+    spaceId,
+    posEnabled,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  settingsSnapshot.docs.forEach((settings) => {
+    if (settings.data()?.defaultPaymentAccountId === accountId && (!posEnabled || settings.id !== spaceId)) {
+      batch.update(settings.ref, { defaultPaymentAccountId: null, updatedAt: FieldValue.serverTimestamp() });
+    }
+  });
+  await batch.commit();
+  return { accountId, spaceId, posEnabled };
 });
 
 export const archiveAccount = onCall({ region }, async (request) => {
@@ -1206,15 +1266,6 @@ export const saveSmePosSetup = onCall({ region }, async (request) => {
   const receiptName = stringValue(request.data?.receiptName, 'Receipt name', 100);
   const receiptFooter = optionalString(request.data?.receiptFooter, 240);
   const defaultPaymentAccountId = optionalString(request.data?.defaultPaymentAccountId, 80) || null;
-  const hasPaymentAccountIds = Array.isArray(request.data?.paymentAccountIds);
-  const paymentAccountIds = hasPaymentAccountIds
-    ? [...new Set((request.data.paymentAccountIds as unknown[]).map((value) => stringValue(value, 'Payment account', 80)))]
-    : null;
-  if (paymentAccountIds && paymentAccountIds.length > 20) throw new HttpsError('invalid-argument', 'Choose no more than 20 POS payment accounts.');
-  if (paymentAccountIds && paymentAccountIds.length === 0) throw new HttpsError('invalid-argument', 'Choose at least one business account for this POS.');
-  if (paymentAccountIds && defaultPaymentAccountId && !paymentAccountIds.includes(defaultPaymentAccountId)) {
-    throw new HttpsError('invalid-argument', 'The default payment account must also be available at this POS.');
-  }
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const { space, member } = await requireSmeSpaceOwner(spaceId, uid);
   const settingsRef = db.collection('smePosSettings').doc(spaceId);
@@ -1225,20 +1276,13 @@ export const saveSmePosSetup = onCall({ region }, async (request) => {
     throw new HttpsError('failed-precondition', 'This shop has Marketplace seller or sales records. Keep Marketplace POS so the history stays correct.');
   }
 
-  if (paymentAccountIds) {
-    const paymentAccountSnapshots = await Promise.all(
-      paymentAccountIds.map((accountId) => db.collection('accounts').doc(accountId).get()),
-    );
-    paymentAccountSnapshots.forEach((accountSnapshot) => {
-      const account = assertAccount(accountSnapshot.data(), uid, 'POS payment account');
-      if (account.currency !== space.currency) throw new HttpsError('failed-precondition', 'Every POS payment account must use the SME Space currency.');
-      if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Only business accounts can be available at the POS.');
-    });
-  } else if (defaultPaymentAccountId) {
+  if (defaultPaymentAccountId) {
     const accountSnapshot = await db.collection('accounts').doc(defaultPaymentAccountId).get();
     const account = assertAccount(accountSnapshot.data(), uid, 'Default payment account');
+    const accountData = accountSnapshot.data() || {};
     if (account.currency !== space.currency) throw new HttpsError('failed-precondition', 'The payment account and SME Space must use the same currency.');
-    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for the POS.');
+    if (accountData.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for the POS.');
+    requireSmePosPaymentAccountForSpace(existing || {}, accountData, defaultPaymentAccountId, spaceId);
   }
 
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
@@ -1260,7 +1304,7 @@ export const saveSmePosSetup = onCall({ region }, async (request) => {
       receiptName,
       receiptFooter,
       defaultPaymentAccountId,
-      paymentAccountIds: paymentAccountIds ?? currentData.paymentAccountIds ?? null,
+      paymentAccountIds: currentData.paymentAccountIds ?? null,
       currency: space.currency || 'BND',
       timezone: space.timezone || 'Asia/Brunei',
       setupVersion: 1,
@@ -1470,10 +1514,18 @@ function configuredSmePosPaymentAccountIds(settings: DocumentData): string[] | n
   return null;
 }
 
-function requireConfiguredSmePosPaymentAccount(settings: DocumentData, accountId: string) {
-  const allowedIds = configuredSmePosPaymentAccountIds(settings);
-  if (allowedIds && !allowedIds.includes(accountId)) {
-    throw new HttpsError('failed-precondition', 'This account is not available at this SME POS. Update POS Settings first.');
+function isSmePosPaymentAccountForSpace(settings: DocumentData, account: DocumentData, accountId: string, spaceId: string): boolean {
+  const assignedSpaceId = typeof account.spaceId === 'string' ? account.spaceId.trim() : '';
+  if (assignedSpaceId) {
+    return assignedSpaceId === spaceId && account.posEnabled === true;
+  }
+  const legacyIds = configuredSmePosPaymentAccountIds(settings);
+  return Boolean(legacyIds?.includes(accountId));
+}
+
+function requireSmePosPaymentAccountForSpace(settings: DocumentData, account: DocumentData, accountId: string, spaceId: string) {
+  if (!isSmePosPaymentAccountForSpace(settings, account, accountId, spaceId)) {
+    throw new HttpsError('failed-precondition', 'This account does not belong to this SME POS. Assign it from Accounts and enable POS payments first.');
   }
 }
 
@@ -1482,7 +1534,6 @@ export const getSmePosPaymentAccounts = onCall({ region }, async (request) => {
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier', 'viewer']);
   const snapshot = await db.collection('accounts').where('ownerId', '==', context.settings.ownerId).get();
-  const allowedIds = configuredSmePosPaymentAccountIds(context.settings);
   const accounts = snapshot.docs
     .filter((item) => {
       const data = item.data();
@@ -1490,7 +1541,7 @@ export const getSmePosPaymentAccounts = onCall({ region }, async (request) => {
         && !data.closedAt
         && data.classification === 'business'
         && data.currency === context.settings.currency
-        && (!allowedIds || allowedIds.includes(item.id));
+        && isSmePosPaymentAccountForSpace(context.settings, data, item.id, spaceId);
     })
     .map((item) => ({ id: item.id, name: String(item.data().name || 'Business account'), currency: String(item.data().currency || 'BND'), type: String(item.data().type || 'bank') }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -1855,7 +1906,7 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
     if (command.exists) return command.data()?.result;
     const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payment account');
     if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for POS payments.');
-    requireConfiguredSmePosPaymentAccount(context.settings, paymentAccountId);
+    requireSmePosPaymentAccountForSpace(context.settings, accountSnapshot.data() || {}, paymentAccountId, spaceId);
     if (account.currency !== context.settings.currency) throw new HttpsError('failed-precondition', 'Payment account and POS currency must match.');
     if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
 
@@ -2337,7 +2388,7 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
     if (command.exists) return command.data()?.result;
     const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payment account');
     if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for POS payments.');
-    requireConfiguredSmePosPaymentAccount(context.settings, paymentAccountId);
+    requireSmePosPaymentAccountForSpace(context.settings, accountSnapshot.data() || {}, paymentAccountId, spaceId);
     if (account.currency !== context.settings.currency) throw new HttpsError('failed-precondition', 'Payment account and POS currency must match.');
     if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
 
@@ -2793,7 +2844,7 @@ export const recordMarketplaceSellerPayout = onCall({ region }, async (request) 
     if (amountMinor > currentBalance) throw new HttpsError('failed-precondition', `The maximum payout is ${(currentBalance / 100).toFixed(2)} ${sellerSnapshot.data()?.currency || 'BND'}.`);
     const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payout account');
     if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for seller payouts.');
-    requireConfiguredSmePosPaymentAccount(context.settings, paymentAccountId);
+    requireSmePosPaymentAccountForSpace(context.settings, accountSnapshot.data() || {}, paymentAccountId, spaceId);
     if (account.currency !== sellerSnapshot.data()?.currency || account.currency !== context.settings.currency) {
       throw new HttpsError('failed-precondition', 'Payout account and seller balance currencies must match.');
     }
