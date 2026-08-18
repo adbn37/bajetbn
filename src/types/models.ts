@@ -629,7 +629,7 @@ export interface SpaceInvitation {
   id: string;
   displayId: string;
   spaceId: string;
-  email: string;
+  email?: string | null;
   role: Exclude<SpaceRole, 'owner' | 'member'>;
   canUseAccounts: boolean;
   canViewBalances: boolean;
