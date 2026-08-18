@@ -48,7 +48,13 @@ import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
 const editableRoles: Array<Exclude<SpaceRole, 'owner' | 'member'>> = ['admin', 'contributor', 'payer', 'viewer'];
-const roleLabel: Record<string, string> = { owner: 'Owner', admin: 'Manager', contributor: 'Can add', payer: 'Can pay', viewer: 'View only', member: 'Member' };
+const roleLabel: Record<string, string> = { owner: 'Owner', admin: 'Manager', contributor: 'Add money records', payer: 'Record payments', viewer: 'View only', member: 'Member' };
+const roleDescription: Record<Exclude<SpaceRole, 'owner' | 'member'>, string> = {
+  admin: 'Manage members, Space settings, and shared records.',
+  contributor: 'Add and update shared money records.',
+  payer: 'Record payments assigned to them.',
+  viewer: 'View shared information without changing anything.',
+};
 const statusLabel: Record<string, string> = {
   unpaid: 'Not paid',
   submitted: 'Waiting for check',
@@ -62,7 +68,7 @@ function today() { return new Date().toISOString().slice(0, 10); }
 function inviteUrl(token: string) { return `${window.location.origin}/join?token=${encodeURIComponent(token)}`; }
 function whatsappHref(number: string, message: string) {
   const digits = number.replace(/\D/g, '');
-  return digits ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}` : '';
+  return `https://wa.me/${digits ? digits : ''}?text=${encodeURIComponent(message)}`;
 }
 function settledAmount(assignment: SharedBillAssignment) { return assignment.settledMinor || 0; }
 function outstandingAmount(assignment: SharedBillAssignment) {
@@ -348,7 +354,7 @@ export function CollaborationPage({
     </section>}
 
     {confirmDialog && <ActionConfirmModal state={confirmDialog} busy={confirmBusy} error={error} onClose={() => { setConfirmDialog(null); setError(''); }} onConfirm={() => void runConfirmedAction()} />}
-    {inviteOpen && selectedSpace && <Modal title={`Invite to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm spaceId={selectedSpace.id} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
+    {inviteOpen && selectedSpace && <Modal title={`Invite to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm spaceId={selectedSpace.id} spaceName={selectedSpace.name} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {editingMember && <Modal title="Change member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
     {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {submitting && <Modal title={`Add payment for ${submitting.commitmentName}`} onClose={() => setSubmitting(null)}><SubmitPaymentForm assignment={submitting} accounts={accounts.filter((account) => account.currency === submitting.currency)} onSaved={async () => { setSubmitting(null); await loadSpaceData(spaceId); }} /></Modal>}
@@ -365,16 +371,75 @@ function CollaborationSettings({ space, onSaved }: { space: Space; onSaved: () =
   return <section className="collaboration-settings"><div><strong>Check member payments</strong><span>{approvalMode === 'owner_approval' ? 'The Space owner or admin checks each payment before it is accepted.' : 'Member payments are accepted automatically.'}</span></div><select value={approvalMode} onChange={(event) => setApprovalMode(event.target.value as 'none' | 'owner_approval')}><option value="none">Accept automatically</option><option value="owner_approval">Owner or admin checks first</option></select><label>Head WhatsApp<input value={headWhatsapp} onChange={(event) => setHeadWhatsapp(event.target.value)} placeholder="6738XXXXXX"/><small>Used only to prepare a WhatsApp message. BajetBN does not send it automatically.</small></label><button className="button secondary" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save sharing settings'}</button>{error && <div className="notice error">{error}</div>}</section>;
 }
 
-function InviteForm({ spaceId, onSaved }: { spaceId: string; onSaved: () => Promise<void> }) {
+function InviteForm({ spaceId, spaceName, onSaved }: { spaceId: string; spaceName: string; onSaved: () => Promise<void> }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Exclude<SpaceRole, 'owner' | 'member'>>('contributor');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [canUseAccounts, setCanUseAccounts] = useState(false);
   const [canViewBalances, setCanViewBalances] = useState(false);
   const [canViewLedger, setCanViewLedger] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await createSpaceInvitation({ spaceId, email, role, canUseAccounts, canViewBalances, canViewLedger }); await onSaved(); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Email address<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Access level<select value={role} onChange={(event) => setRole(event.target.value as Exclude<SpaceRole, 'owner' | 'member'>)}>{editableRoles.map((item) => <option value={item} key={item}>{roleLabel[item]}</option>)}</select></label><div className="permission-editor"><label><input type="checkbox" checked={canUseAccounts} onChange={(event) => setCanUseAccounts(event.target.checked)}/> Can use shared Accounts</label><label><input type="checkbox" checked={canViewBalances} onChange={(event) => setCanViewBalances(event.target.checked)}/> Can view Account balances</label><label><input type="checkbox" checked={canViewLedger} onChange={(event) => setCanViewLedger(event.target.checked)}/> Can see Account activity</label></div><button className="button primary full" disabled={busy}>{busy ? 'Creating invite…' : 'Create invite'}</button></form>;
+  const chooseRole = (nextRole: Exclude<SpaceRole, 'owner' | 'member'>) => {
+    setRole(nextRole);
+    if (nextRole === 'viewer') {
+      setCanUseAccounts(false);
+      setCanViewBalances(false);
+      setCanViewLedger(false);
+    }
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const delivery = submitter?.value === 'copy' ? 'copy' : 'whatsapp';
+    const whatsappWindow = delivery === 'whatsapp' ? window.open('about:blank', '_blank') : null;
+    if (whatsappWindow) whatsappWindow.opener = null;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await createSpaceInvitation({ spaceId, email, role, canUseAccounts, canViewBalances, canViewLedger });
+      const url = inviteUrl(result.data.token);
+      if (delivery === 'whatsapp') {
+        const href = whatsappHref(whatsappNumber, `Join ${spaceName} in BajetBN as ${roleLabel[role]}: ${url}`);
+        if (whatsappWindow) whatsappWindow.location.href = href;
+        else window.open(href, '_blank', 'noopener,noreferrer');
+      } else {
+        await navigator.clipboard.writeText(url);
+      }
+      await onSaved();
+    } catch (nextError) {
+      whatsappWindow?.close();
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <form className="form-stack invite-member-form" onSubmit={submit}>
+    {error && <div className="notice error">{error}</div>}
+    <div className="info-banner"><strong>How invitations work</strong><span>The person joins using this email. Send the secure link directly through WhatsApp or copy it.</span></div>
+    <div className="form-grid">
+      <label>Email address<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="person@example.com" /><small>They must sign in to BajetBN using this email.</small></label>
+      <label>WhatsApp number <span className="optional-label">Optional</span><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} inputMode="tel" placeholder="6738XXXXXX" /><small>Leave blank to choose a WhatsApp contact later.</small></label>
+    </div>
+    <fieldset className="invite-role-fieldset">
+      <legend>What can this person do?</legend>
+      <div className="invite-role-grid">{editableRoles.map((item) => <button key={item} className={`invite-role-card ${role === item ? 'selected' : ''}`} type="button" aria-pressed={role === item} onClick={() => chooseRole(item)}><strong>{roleLabel[item]}</strong><small>{roleDescription[item]}</small></button>)}</div>
+    </fieldset>
+    <details className="invite-account-access">
+      <summary>Shared account access <span>Optional</span></summary>
+      <p>Leave these off unless this person needs information from shared Accounts.</p>
+      <div className="permission-editor">
+        <label><input type="checkbox" checked={canUseAccounts} disabled={role === 'viewer'} onChange={(event) => setCanUseAccounts(event.target.checked)}/><span><strong>Use shared accounts</strong><small>Choose a shared Account when recording money.</small></span></label>
+        <label><input type="checkbox" checked={canViewBalances} disabled={role === 'viewer'} onChange={(event) => setCanViewBalances(event.target.checked)}/><span><strong>See account balances</strong><small>See how much money is available.</small></span></label>
+        <label><input type="checkbox" checked={canViewLedger} disabled={role === 'viewer'} onChange={(event) => setCanViewLedger(event.target.checked)}/><span><strong>See account activity</strong><small>See money going in and out.</small></span></label>
+      </div>
+    </details>
+    <div className="invite-action-grid">
+      <button className="button primary" type="submit" value="whatsapp" disabled={busy}>{busy ? 'Creating invite…' : 'Create & send with WhatsApp'}</button>
+      <button className="button secondary" type="submit" value="copy" disabled={busy}>{busy ? 'Creating invite…' : 'Create & copy link'}</button>
+    </div>
+    <small className="form-help">WhatsApp will open with a ready message. You still choose the contact and press Send.</small>
+  </form>;
 }
 
 function MemberForm({ member, onSaved }: { member: SpaceMember; onSaved: () => Promise<void> }) {
