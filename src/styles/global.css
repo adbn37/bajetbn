@@ -246,6 +246,27 @@ code { padding:.15rem .35rem; border:1px solid var(--border); border-radius:6px;
 .permission-editor { display:grid; grid-template-columns:1fr; gap:.6rem; padding:.8rem; border:1px solid var(--border); border-radius:12px; background:#07111f; }
 .permission-editor label { flex-direction:row; align-items:center; font-size:.78rem; }
 .permission-editor input { width:auto; }
+.invite-member-form .info-banner { margin:0; }
+.optional-label { margin-left:.35rem; color:var(--muted); font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+.invite-role-fieldset { margin:0; padding:0; border:0; }
+.invite-role-fieldset legend { margin-bottom:.65rem; color:var(--text); font-weight:850; }
+.invite-role-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; }
+.invite-role-card { min-height:92px; padding:.85rem; display:flex; flex-direction:column; align-items:flex-start; gap:.35rem; text-align:left; color:var(--text); background:var(--surface-soft); border:1px solid var(--border); border-radius:13px; cursor:pointer; }
+.invite-role-card:hover { border-color:var(--accent-border); }
+.invite-role-card.selected { border-color:var(--accent); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent); }
+.invite-role-card strong,.invite-role-card small { display:block; }
+.invite-role-card small { color:var(--muted); line-height:1.45; }
+.invite-account-access { border:1px solid var(--border); border-radius:13px; background:var(--surface-soft); overflow:hidden; }
+.invite-account-access summary { padding:.85rem; display:flex; justify-content:space-between; gap:1rem; color:var(--text); font-weight:850; cursor:pointer; }
+.invite-account-access summary span { color:var(--muted); font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; }
+.invite-account-access>p { margin:0; padding:0 .85rem .7rem; color:var(--muted); font-size:.76rem; }
+.invite-account-access .permission-editor { border-width:1px 0 0; border-radius:0; background:transparent; }
+.invite-account-access .permission-editor label { align-items:flex-start; }
+.invite-account-access .permission-editor label>span { display:grid; gap:.18rem; }
+.invite-account-access .permission-editor small { color:var(--muted); font-weight:500; }
+.invite-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:.65rem; }
+.invite-action-grid .button { width:100%; }
+.form-help { color:var(--muted); text-align:center; line-height:1.45; }
 .shared-bill-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
 .shared-bill-card { display:flex; flex-direction:column; gap:.8rem; padding:1rem; border:1px solid var(--border); border-radius:16px; background:linear-gradient(145deg,rgba(16,29,44,.92),rgba(7,17,31,.96)); }
 .shared-bill-card.status-submitted { border-color:rgba(251,191,36,.42); }
@@ -3247,6 +3268,10 @@ code {
 :root[data-theme] label,
 :root[data-theme] .category-picker legend {
   color: var(--text);
+}
+@media (max-width:680px) {
+  .invite-role-grid,.invite-action-grid { grid-template-columns:1fr; }
+  .invite-role-card { min-height:auto; }
 }
 
 :root[data-theme] .sidebar nav a,

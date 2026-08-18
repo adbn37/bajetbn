@@ -23,6 +23,7 @@ import type {
   SpaceInvitation,
   SpaceMember,
   SpaceRole,
+  SmePosRole,
   UserNotification,
 } from '../types/models';
 
@@ -139,9 +140,13 @@ export async function createSpaceInvitation(input: {
   canUseAccounts: boolean;
   canViewBalances: boolean;
   canViewLedger: boolean;
-}) {
+  posRole?: Exclude<SmePosRole, 'owner'> | null;
+}): Promise<{ data: { invitationId: string; token: string } }> {
   const { functions } = requireFirebase();
-  return httpsCallable(functions, 'createSpaceInvitation')({ ...input, idempotencyKey: crypto.randomUUID() });
+  return httpsCallable<
+    typeof input & { idempotencyKey: string },
+    { invitationId: string; token: string }
+  >(functions, 'createSpaceInvitation')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
 export async function revokeSpaceInvitation(invitationId: string) {
