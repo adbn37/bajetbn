@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
+import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listAccounts } from '../../repositories/accountRepository';
@@ -35,7 +36,49 @@ import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund';
+type SpaceOverviewSection = 'money' | 'budgets' | 'goals' | 'bills' | 'reports' | 'calendar';
+type SpaceReportRange = 'week' | 'month' | 'year' | 'custom';
 
+function localIsoDate(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(value: Date, days: number) {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function reportWindow(range: SpaceReportRange, customFrom: string, customTo: string) {
+  const now = new Date();
+  let from = '';
+  let to = localIsoDate(now);
+
+  if (range === 'week') {
+    const dayFromMonday = (now.getDay() + 6) % 7;
+    from = localIsoDate(addDays(now, -dayFromMonday));
+  } else if (range === 'month') {
+    from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  } else if (range === 'year') {
+    from = `${now.getFullYear()}-01-01`;
+  } else {
+    from = customFrom || to;
+    to = customTo || from;
+  }
+
+  if (from > to) return { from: to, to: from };
+  return { from, to };
+}
+
+function displaySpaceDate(value?: string | null) {
+  if (!value) return 'No date';
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat('en-BN', { day: 'numeric', month: 'short', year: 'numeric' }).format(parsed);
+}
 const spaceTypeLabel: Record<SpaceType, string> = {
   personal: 'Personal',
   household: 'Household',
@@ -175,7 +218,7 @@ export function SpaceDetailsPage() {
       { id: 'members', label: 'Members' },
       ...(supportsGroupFund ? [{ id: fundTabId, label: fundTabLabel }] : []),
       { id: 'expenses', label: space.type === 'sme' ? 'Expenses' : 'Shared expenses' },
-      { id: 'balances', label: space.type === 'sme' ? 'Balances' : 'Who owes whom' },
+      ...(space.type === 'sme' ? [] : [{ id: 'balances' as SpaceDetailsTab, label: 'Who owes whom' }]),
       { id: 'bills', label: 'Shared bills' },
       { id: 'activity', label: 'Activity' },
       { id: 'settings', label: 'Space settings' },
@@ -272,8 +315,10 @@ export function SpaceDetailsPage() {
       moneyIn={moneyIn}
       moneyOut={moneyOut}
       accountsUsed={accountsUsed}
+      transactions={transactions}
       budgets={budgets}
       goals={goals}
+      commitments={commitments}
       openBills={openBills}
       memberCount={activeMembers.length}
       openSharedBillCount={openSharedBills.length + openSharedExpenses.length}
@@ -289,8 +334,10 @@ function SpaceOverview({
   moneyIn,
   moneyOut,
   accountsUsed,
+  transactions,
   budgets,
   goals,
+  commitments,
   openBills,
   memberCount,
   openSharedBillCount,
@@ -299,29 +346,119 @@ function SpaceOverview({
   moneyIn: number;
   moneyOut: number;
   accountsUsed: Account[];
+  transactions: FinancialTransaction[];
   budgets: Budget[];
   goals: SavingsGoal[];
+  commitments: Commitment[];
   openBills: Commitment[];
   memberCount: number;
   openSharedBillCount: number;
 }) {
   const shared = space.type !== 'personal';
-  const quickLinks: Array<{ to: string; icon: string; title: string; detail: string; featured?: boolean }> = [
-    { to: `/transactions?spaceId=${space.id}`, icon: '↔', title: 'Money activity', detail: 'See money in, money out, and account transfers.' },
-    { to: `/budgets?spaceId=${space.id}`, icon: '▤', title: space.type === 'trip' ? 'Trip budget' : 'Budgets', detail: 'Plan how much can be spent.' },
-    { to: `/bills?spaceId=${space.id}`, icon: '◷', title: 'Bills & instalments', detail: 'See payments and dates for this Space.' },
-    { to: `/reports?spaceId=${space.id}`, icon: '⌁', title: 'Money reports', detail: 'Understand where the money went.' },
-    { to: `/calendar?spaceId=${space.id}`, icon: '▦', title: 'Calendar', detail: 'See what is late or coming soon.' },
+  const [section, setSection] = useState<SpaceOverviewSection | null>(null);
+  const [reportRange, setReportRange] = useState<SpaceReportRange>('month');
+  const today = localIsoDate(new Date());
+  const [customFrom, setCustomFrom] = useState(`${today.slice(0, 8)}01`);
+  const [customTo, setCustomTo] = useState(today);
+
+  type QuickItem = {
+    key: string;
+    icon: string;
+    title: string;
+    detail: string;
+    featured?: boolean;
+    to?: string;
+    section?: SpaceOverviewSection;
+  };
+
+  const quickLinks: QuickItem[] = [
+    { key: 'money', section: 'money', icon: '↔', title: 'Money activity', detail: 'See only money activity saved in this Space.' },
+    { key: 'budgets', section: 'budgets', icon: '▤', title: space.type === 'trip' ? 'Trip budget' : 'Budgets', detail: 'Review budgets connected to this Space.' },
+    { key: 'bills', section: 'bills', icon: '◷', title: 'Bills & instalments', detail: 'See only bills and instalments for this Space.' },
+    { key: 'reports', section: 'reports', icon: '⌁', title: 'Money reports', detail: 'Weekly, monthly, yearly or custom dates for this Space.' },
+    { key: 'calendar', section: 'calendar', icon: '▦', title: 'Calendar', detail: 'See dates and deadlines belonging to this Space.' },
   ];
+
   if (space.type === 'sme') {
-    quickLinks.unshift({ to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Open the register and daily shop tools.', featured: true });
+    quickLinks.unshift({ key: 'pos', to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Open the register and daily shop tools.', featured: true });
   }
+
   if (space.type === 'collection') {
-    quickLinks.unshift({ to: `/spaces/${space.id}/collection`, icon: 'C', title: 'Collection inventory', detail: 'Scan, find, label, and organise collectibles.', featured: true });
+    quickLinks.unshift({ key: 'collection', to: `/spaces/${space.id}/collection`, icon: 'C', title: 'Collection inventory', detail: 'Scan, find, label, and organise collectibles.', featured: true });
   }
+
   if (space.type === 'personal' || space.type === 'goal' || space.type === 'custom') {
-    quickLinks.splice(2, 0, { to: `/goals?spaceId=${space.id}`, icon: '◇', title: 'Goals', detail: 'Track money you are saving.' });
+    quickLinks.splice(Math.min(2, quickLinks.length), 0, { key: 'goals', section: 'goals', icon: '◇', title: 'Goals', detail: 'Review savings goals connected to this Space.' });
   }
+
+  const accountName = (accountId?: string | null) => {
+    if (!accountId) return 'No account';
+    return accountsUsed.find((item) => item.id === accountId)?.name || 'Account';
+  };
+
+  const moneyRows = [...transactions].sort((a, b) => b.transactionDate.localeCompare(a.transactionDate));
+  const billRows = [...commitments].sort((a, b) =>
+    (a.nextDueDate || a.endDate || '9999-12-31').localeCompare(b.nextDueDate || b.endDate || '9999-12-31'),
+  );
+  const budgetRows = [...budgets].sort((a, b) => b.endDate.localeCompare(a.endDate));
+  const goalRows = [...goals].sort((a, b) => (a.targetDate || '9999-12-31').localeCompare(b.targetDate || '9999-12-31'));
+
+  const window = reportWindow(reportRange, customFrom, customTo);
+  const reportTransactions = transactions.filter((item) =>
+    item.status === 'posted'
+    && item.type !== 'reversal'
+    && item.transactionDate >= window.from
+    && item.transactionDate <= window.to,
+  );
+  const reportIncome = reportTransactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amountMinor, 0);
+  const reportExpense = reportTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amountMinor, 0);
+  const expenseByCategory = Array.from(reportTransactions
+    .filter((item) => item.type === 'expense')
+    .reduce((totals, item) => {
+      const key = item.category || 'Uncategorised';
+      totals.set(key, (totals.get(key) || 0) + item.amountMinor);
+      return totals;
+    }, new Map<string, number>()))
+    .sort((a, b) => b[1] - a[1]);
+
+  const calendarRows: Array<{ id: string; date: string; label: string; detail: string; kind: string }> = [
+    ...commitments
+      .filter((item) => item.status === 'active' && Boolean(item.nextDueDate || item.startDate))
+      .map((item) => ({
+        id: `bill-${item.id}`,
+        date: item.nextDueDate || item.startDate,
+        label: item.name,
+        detail: `${item.type === 'instalment' ? 'Instalment' : 'Bill'} · ${formatMoney(item.amountMinor, item.currency)}`,
+        kind: 'Payment due',
+      })),
+    ...goals
+      .filter((item) => item.status === 'active' && Boolean(item.targetDate))
+      .map((item) => ({
+        id: `goal-${item.id}`,
+        date: item.targetDate || '',
+        label: item.name,
+        detail: `Goal target · ${formatMoney(item.targetMinor, item.currency)}`,
+        kind: 'Goal',
+      })),
+    ...budgets
+      .filter((item) => Boolean(item.endDate))
+      .map((item) => ({
+        id: `budget-${item.id}`,
+        date: item.endDate,
+        label: item.name,
+        detail: `Budget period ends · ${formatMoney(item.limitMinor, item.currency)}`,
+        kind: 'Budget',
+      })),
+  ].filter((item) => Boolean(item.date)).sort((a, b) => a.date.localeCompare(b.date));
+
+  const sectionTitle: Record<SpaceOverviewSection, string> = {
+    money: 'Money activity',
+    budgets: space.type === 'trip' ? 'Trip budget' : 'Budgets',
+    goals: 'Goals',
+    bills: 'Bills & instalments',
+    reports: 'Money reports',
+    calendar: 'Calendar',
+  };
 
   return <>
     <section className="summary-grid space-overview-summary">
@@ -331,24 +468,120 @@ function SpaceOverview({
       <article className="summary-card"><span>{shared ? 'Shared items still open' : 'Bills still open'}</span><strong>{shared ? openSharedBillCount : openBills.length}</strong><small>Items that still need attention</small></article>
     </section>
 
-    {shared && <div className="info-banner"><strong>Sharing stays inside this Space</strong><span>Open Members, Shared bills or Activity above. There is no separate Sharing page.</span></div>}
+    {shared && <div className="info-banner"><strong>This Space stays focused</strong><span>Money, bills, reports and calendar opened here are limited to {space.name}.</span></div>}
 
     <section className="panel space-overview-panel">
       <div className="panel-heading"><div><span className="eyebrow">Open a section</span><h2>Manage this Space</h2></div></div>
       <div className="space-quick-grid">
-        {quickLinks.map((item) => <Link key={item.to} className={`space-quick-card ${item.featured ? 'featured' : ''}`} to={item.to}>
-          <span className="space-quick-icon">{item.icon}</span>
-          <div><strong>{item.title}</strong><small>{item.detail}</small></div>
-          <span aria-hidden="true">→</span>
-        </Link>)}
+        {quickLinks.map((item) => {
+          const content = <>
+            <span className="space-quick-icon">{item.icon}</span>
+            <div><strong>{item.title}</strong><small>{item.detail}</small></div>
+            <span aria-hidden="true">→</span>
+          </>;
+
+          return item.to
+            ? <Link key={item.key} className={`space-quick-card ${item.featured ? 'featured' : ''}`} to={item.to}>{content}</Link>
+            : <button key={item.key} type="button" className={`space-quick-card space-quick-card-button ${item.featured ? 'featured' : ''}`} onClick={() => setSection(item.section || null)}>{content}</button>;
+        })}
       </div>
     </section>
 
     <section className="space-overview-grid">
       <article className="panel compact-panel"><span className="eyebrow">Planning</span><h2>{budgets.length} budget{budgets.length === 1 ? '' : 's'}</h2><p>{goals.length} savings goal{goals.length === 1 ? '' : 's'} connected to this Space.</p></article>
-      <article className="panel compact-panel"><span className="eyebrow">Payments</span><h2>{openBills.length} bill{openBills.length === 1 ? '' : 's'} still open</h2><p>Open Bills & instalments to record or review payments.</p></article>
+      <article className="panel compact-panel"><span className="eyebrow">Payments</span><h2>{openBills.length} bill{openBills.length === 1 ? '' : 's'} still open</h2><p>Open Bills & instalments above to review only this Space.</p></article>
       <article className="panel compact-panel"><span className="eyebrow">Accounts used here</span><h2>{accountsUsed.length}</h2>{accountsUsed.length ? <p>{accountsUsed.slice(0, 3).map((item) => item.name).join(', ')}</p> : <p>Record money activity to connect an account to this Space.</p>}</article>
     </section>
+
+    {section && <Modal title={`${space.name} — ${sectionTitle[section]}`} onClose={() => setSection(null)}>
+      <div className="space-scoped-modal">
+        <div className="space-scoped-context"><strong>{space.name}</strong><span>Only records from this Space are shown.</span></div>
+
+        {section === 'money' && <>
+          <div className="space-scoped-summary">
+            <div><span>Money in</span><strong>{formatMoney(moneyIn, space.currency)}</strong></div>
+            <div><span>Money out</span><strong>{formatMoney(moneyOut, space.currency)}</strong></div>
+            <div><span>Net</span><strong>{formatMoney(moneyIn - moneyOut, space.currency)}</strong></div>
+          </div>
+          <div className="space-scoped-list">
+            {moneyRows.length ? moneyRows.map((item) => <article key={item.id} className="space-scoped-row">
+              <div>
+                <strong>{item.counterparty || item.category || (item.type === 'transfer' ? 'Transfer' : 'Money activity')}</strong>
+                <small>{displaySpaceDate(item.transactionDate)} · {accountName(item.accountId)}{item.destinationAccountId ? ` → ${accountName(item.destinationAccountId)}` : ''}</small>
+              </div>
+              <div className="space-scoped-amount">
+                <strong>{item.type === 'income' ? '+' : item.type === 'expense' ? '-' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
+                <small>{item.status === 'reversed' ? 'Reversed' : item.type}</small>
+              </div>
+            </article>) : <EmptyState title="No money activity in this Space" description="Transactions connected to this Space will appear here." />}
+          </div>
+        </>}
+
+        {section === 'budgets' && <div className="space-scoped-list">
+          {budgetRows.length ? budgetRows.map((item) => {
+            const remaining = item.limitMinor - item.spentMinor;
+            return <article key={item.id} className="space-scoped-row">
+              <div><strong>{item.name}</strong><small>{displaySpaceDate(item.startDate)} – {displaySpaceDate(item.endDate)}{item.categoryName ? ` · ${item.categoryName}` : ''}</small></div>
+              <div className="space-scoped-amount"><strong>{formatMoney(item.spentMinor, item.currency)} / {formatMoney(item.limitMinor, item.currency)}</strong><small>{formatMoney(remaining, item.currency)} remaining</small></div>
+            </article>;
+          }) : <EmptyState title="No budgets in this Space" description="Budgets connected to this Space will appear here." />}
+        </div>}
+
+        {section === 'goals' && <div className="space-scoped-list">
+          {goalRows.length ? goalRows.map((item) => <article key={item.id} className="space-scoped-row">
+            <div><strong>{item.name}</strong><small>{item.targetDate ? `Target ${displaySpaceDate(item.targetDate)}` : 'No target date'} · {item.status}</small></div>
+            <div className="space-scoped-amount"><strong>{formatMoney(item.currentMinor, item.currency)} / {formatMoney(item.targetMinor, item.currency)}</strong><small>{Math.max(0, Math.min(100, item.targetMinor > 0 ? Math.round((item.currentMinor / item.targetMinor) * 100) : 0))}%</small></div>
+          </article>) : <EmptyState title="No goals in this Space" description="Savings goals connected to this Space will appear here." />}
+        </div>}
+
+        {section === 'bills' && <div className="space-scoped-list">
+          {billRows.length ? billRows.map((item) => <article key={item.id} className="space-scoped-row">
+            <div>
+              <strong>{item.name}</strong>
+              <small>{item.payee || item.categoryName} · {item.nextDueDate ? `Due ${displaySpaceDate(item.nextDueDate)}` : item.status === 'completed' ? 'Completed' : 'No next due date'}</small>
+            </div>
+            <div className="space-scoped-amount">
+              <strong>{formatMoney(item.amountMinor, item.currency)}</strong>
+              <small>{item.type === 'instalment' ? `${formatMoney(item.amountPaidMinor, item.currency)} paid` : item.status}</small>
+            </div>
+          </article>) : <EmptyState title="No bills or instalments in this Space" description="Bills connected to this Space will appear here." />}
+        </div>}
+
+        {section === 'reports' && <>
+          <div className="space-report-controls">
+            <label>Period
+              <select value={reportRange} onChange={(event) => setReportRange(event.target.value as SpaceReportRange)}>
+                <option value="week">This week</option>
+                <option value="month">This month</option>
+                <option value="year">This year</option>
+                <option value="custom">Specific / custom dates</option>
+              </select>
+            </label>
+            {reportRange === 'custom' && <>
+              <label>From<input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /></label>
+              <label>To<input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></label>
+            </>}
+          </div>
+          <p className="space-report-period">{displaySpaceDate(window.from)} – {displaySpaceDate(window.to)}</p>
+          <div className="space-scoped-summary">
+            <div><span>Money in</span><strong>{formatMoney(reportIncome, space.currency)}</strong></div>
+            <div><span>Money out</span><strong>{formatMoney(reportExpense, space.currency)}</strong></div>
+            <div><span>Net</span><strong>{formatMoney(reportIncome - reportExpense, space.currency)}</strong></div>
+          </div>
+          <div className="space-report-breakdown">
+            <div className="panel-heading"><div><span className="eyebrow">Spending</span><h3>By category</h3></div></div>
+            {expenseByCategory.length ? expenseByCategory.map(([category, amount]) => <div key={category} className="space-report-category"><span>{category}</span><strong>{formatMoney(amount, space.currency)}</strong></div>) : <p className="muted">No spending in this period.</p>}
+          </div>
+        </>}
+
+        {section === 'calendar' && <div className="space-scoped-list">
+          {calendarRows.length ? calendarRows.map((item) => <article key={item.id} className="space-scoped-row">
+            <div><strong>{item.label}</strong><small>{item.kind} · {item.detail}</small></div>
+            <div className="space-scoped-amount"><strong>{displaySpaceDate(item.date)}</strong><small>{item.date < today ? 'Past' : item.date === today ? 'Today' : 'Upcoming'}</small></div>
+          </article>) : <EmptyState title="Nothing scheduled in this Space" description="Bill due dates, goal targets and budget dates will appear here." />}
+        </div>}
+      </div>
+    </Modal>}
   </>;
 }
 
