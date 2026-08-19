@@ -21,11 +21,13 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 
   private reload = () => {
-    window.location.reload();
+    const url = new URL(window.location.href);
+    url.searchParams.set('__bajetbn_reload', String(Date.now()));
+    window.location.replace(url.toString());
   };
 
   private goHome = () => {
-    window.location.assign('/');
+    window.location.assign(`/?__bajetbn_reload=${Date.now()}`);
   };
 
   render() {
