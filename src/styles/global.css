@@ -3519,3 +3519,67 @@ code {
     text-align: left;
   }
 }
+
+/* v1.3.8 Seller self-service + payout source */
+.marketplace-self-seller-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.marketplace-self-seller-banner > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.marketplace-self-seller-banner small {
+  color: var(--muted);
+}
+
+.marketplace-inventory-filter {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.85rem;
+}
+
+.marketplace-inventory-filter label {
+  width: min(100%, 320px);
+}
+
+.marketplace-seller-wallet-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.marketplace-seller-wallet-panel p {
+  max-width: 70ch;
+}
+
+@media (max-width: 680px) {
+  .marketplace-self-seller-banner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .marketplace-self-seller-banner .button-row {
+    width: 100%;
+  }
+
+  .marketplace-self-seller-banner .button-row .button {
+    flex: 1 1 auto;
+  }
+
+  .marketplace-inventory-filter {
+    justify-content: stretch;
+  }
+
+  .marketplace-inventory-filter label {
+    width: 100%;
+  }
+}

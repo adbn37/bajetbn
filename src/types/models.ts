@@ -224,10 +224,21 @@ export interface SmePosReturn {
   createdAt?: Timestamp;
 }
 
+export interface SmePosPayoutPayment {
+  accountId: string;
+  accountName: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  amountMinor: number;
+  transactionId: string;
+  ledgerEntryId: string;
+}
+
 export interface SmePosPayout {
   id: string;
   displayId: string;
   spaceId: string;
+  spaceName?: string;
   ownerId: string;
   sellerId: string;
   sellerName: string;
@@ -240,11 +251,18 @@ export interface SmePosPayout {
   paymentAccountName: string;
   paymentMethod?: PaymentMethodCode | null;
   paymentMethodLabel?: string | null;
+  paymentSourceLabel?: string | null;
+  paymentSourceLabels?: string[];
+  payments?: SmePosPayoutPayment[];
   payoutDate: string;
+  reference?: string;
   note?: string;
   transactionId: string;
   ledgerEntryId: string;
+  transactionIds?: string[];
+  ledgerEntryIds?: string[];
   createdBy: string;
+  createdByName?: string;
   createdAt?: Timestamp;
 }
 

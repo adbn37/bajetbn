@@ -30,7 +30,6 @@ import {
   uploadSmePosItemPhoto,
 } from '../../repositories/smePosRepository';
 import type {
-  PaymentMethodCode,
   SmePosAccess,
   SmePosCommissionType,
   SmePosCustomer,
@@ -82,22 +81,11 @@ interface MarketplaceQuickCartItem {
 interface PayoutFormState {
   seller: SmePosSeller;
   amount: string;
-  paymentAccountId: string;
-  paymentMethod: PaymentMethodCode;
-  paymentMethodLabel: string;
+  paymentRows: SmePosPaymentDraft[];
   payoutDate: string;
+  reference: string;
   note: string;
 }
-
-const paymentMethods: Array<{ code: PaymentMethodCode; label: string }> = [
-  { code: 'cash', label: 'Cash' },
-  { code: 'bank_transfer', label: 'Bank transfer' },
-  { code: 'debit_card', label: 'Debit card' },
-  { code: 'credit_card', label: 'Credit card' },
-  { code: 'e_wallet', label: 'E-wallet' },
-  { code: 'qr_payment', label: 'QR payment' },
-  { code: 'other', label: 'Other' },
-];
 
 const conditionLabels: Record<SmePosListingCondition, string> = {
   new: 'New',
@@ -130,7 +118,11 @@ function tabsForRole(role: SmePosRole, hasSellerProfile: boolean): MarketplaceTa
   else if (role === 'stock_staff') tabs = ['listings'];
   else if (role === 'seller') tabs = ['listings', 'balance', 'sales'];
   else if (role === 'viewer') tabs = ['listings', 'customers'];
-  if (hasSellerProfile && !tabs.includes('balance')) tabs.push('balance');
+  if (hasSellerProfile) {
+    if (!tabs.includes('listings')) tabs.push('listings');
+    if (!tabs.includes('balance')) tabs.push('balance');
+    if (!tabs.includes('sales')) tabs.push('sales');
+  }
   return tabs;
 }
 
@@ -157,8 +149,16 @@ function ledgerKindLabel(entry: SmePosSellerLedgerEntry) {
   return 'Seller payout';
 }
 
+function roleLabel(role: SmePosRole) {
+  if (role === 'stock_staff') return 'Stock Staff';
+  if (role === 'viewer') return 'View Only';
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
 export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onChanged }: Props) {
   const [mySeller, setMySeller] = useState<SmePosSeller | null>(null);
+  const [mySellerListings, setMySellerListings] = useState<SmePosListing[]>([]);
+  const [mySellerSales, setMySellerSales] = useState<SmePosSale[]>([]);
   const availableTabs = useMemo(() => tabsForRole(role, Boolean(mySeller)), [role, mySeller]);
   const [tab, setTab] = useState<MarketplaceTab>(() => initialTab(role));
   const [sellers, setSellers] = useState<SmePosSeller[]>([]);
@@ -185,8 +185,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [listingPhotoFile, setListingPhotoFile] = useState<File | null>(null);
   const [removeListingPhoto, setRemoveListingPhoto] = useState(false);
   const [manualListingForm, setManualListingForm] = useState(false);
+  const [manualListingSellerId, setManualListingSellerId] = useState<string | null>(null);
+  const [manualListingBarcode, setManualListingBarcode] = useState('');
   const [manualListingPhotoFile, setManualListingPhotoFile] = useState<File | null>(null);
   const [manualListingCondition, setManualListingCondition] = useState<SmePosListingCondition>('new');
+  const [inventoryScope, setInventoryScope] = useState('all');
   const [stockForm, setStockForm] = useState<SmePosListing | null>(null);
   const [receiveForm, setReceiveForm] = useState<SmePosListing | null>(null);
   const [stocktakeForm, setStocktakeForm] = useState<SmePosListing | null>(null);
@@ -212,12 +215,15 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const canManageCustomers = ['owner', 'manager', 'cashier'].includes(role);
   const canDeleteCustomers = role === 'owner';
   const canDeleteSellers = role === 'owner';
-  const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role);
+  const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role) || Boolean(mySeller);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
   const canManageReturns = role === 'owner' || role === 'manager';
   const canManagePayouts = role === 'owner' || role === 'manager';
   const canViewReports = role === 'owner' || role === 'manager';
-  const canViewSales = ['owner', 'manager', 'cashier', 'seller'].includes(role);
+  const canViewSales = ['owner', 'manager', 'cashier', 'seller'].includes(role) || Boolean(mySeller);
+  const isOwnSellerListing = (listing: SmePosListing) => Boolean(mySeller && listing.sellerId === mySeller.id);
+  const canEditListing = (listing: SmePosListing) => canManageListings || isOwnSellerListing(listing);
+  const canUpdateListingStock = (listing: SmePosListing) => canManageStock || isOwnSellerListing(listing);
 
   async function load() {
     setLoading(true);
@@ -234,6 +240,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       setSales(workspace.sales);
       setPayouts(workspace.payouts);
       setMySeller(workspace.mySeller);
+      setMySellerListings(workspace.mySellerListings);
+      setMySellerSales(workspace.mySellerSales);
       setMySellerLedger(workspace.mySellerLedger);
       setMySellerPayouts(workspace.mySellerPayouts);
       setPaymentAccounts(accounts);
@@ -252,6 +260,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     if (!availableTabs.includes(tab)) setTab(initialTab(role));
   }, [availableTabs, role, tab]);
   useEffect(() => {
+    if (mySeller && !canManageListings) setInventoryScope('mine');
+  }, [mySeller?.id, canManageListings]);
+  useEffect(() => {
     if (!settings.defaultPaymentAccountId) return;
     setPaymentRows((current) => current.map((row, index) => index === 0 && !row.accountId ? { ...row, accountId: settings.defaultPaymentAccountId || '' } : row));
   }, [settings.defaultPaymentAccountId]);
@@ -260,6 +271,16 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     const term = search.trim().toLowerCase();
     return listings.filter((item) => !term || [item.name, item.category, item.sku, item.barcode, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
   }, [listings, search]);
+
+  const inventoryListings = useMemo(() => {
+    const source = inventoryScope === 'mine'
+      ? mySellerListings
+      : inventoryScope === 'all'
+        ? listings
+        : listings.filter((item) => item.sellerId === inventoryScope);
+    const term = search.trim().toLowerCase();
+    return source.filter((item) => !term || [item.name, item.category, item.sku, item.barcode, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
+  }, [inventoryScope, listings, mySellerListings, search]);
 
   const cartLines = useMemo(() => Object.entries(cart).map(([id, quantity]) => {
     const listing = listings.find((item) => item.id === id);
@@ -308,10 +329,18 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     setListingForm(value);
   }
 
-  function openManualListingForm() {
+  function openManualListingForm(sellerId: string | null = null, barcode = '') {
+    setManualListingSellerId(sellerId);
+    setManualListingBarcode(barcode);
     setManualListingPhotoFile(null);
     setManualListingCondition('new');
     setManualListingForm(true);
+  }
+
+  function openMyInventory() {
+    if (!mySeller) return;
+    setInventoryScope('mine');
+    setTab('listings');
   }
 
   async function saveSeller(event: FormEvent<HTMLFormElement>) {
@@ -344,8 +373,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     event.preventDefault();
     if (!listingForm || !requireOnline()) return;
     const form = new FormData(event.currentTarget);
-    const commissionType = String(form.get('commissionType') || 'percentage') as SmePosCommissionType;
-    const rate = Number(form.get('commissionRate') || 0);
+    const commissionType = String(form.get('commissionType') || (listingForm === 'new' ? 'percentage' : listingForm.commissionType)) as SmePosCommissionType;
+    const rate = Number(form.get('commissionRate') || (listingForm === 'new' ? 0 : listingForm.commissionRateBps / 100));
     const existingPhotoPath = listingForm === 'new' ? null : listingForm.photoPath || null;
     let uploadedPhotoPath: string | null = null;
     setBusy(true); setError(''); setSuccess('');
@@ -404,8 +433,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         quantityOnHand: Number(form.get('quantity') || 0),
         lowStockLevel: Number(form.get('lowStock') || 0),
       });
-      setManualListingForm(false); setManualListingPhotoFile(null);
-      setSuccess('Existing seller stock registered and added to Inventory.');
+      const registeredForSelf = Boolean(mySeller && String(form.get('sellerId') || '') === mySeller.id);
+      setManualListingForm(false); setManualListingSellerId(null); setManualListingBarcode(''); setManualListingPhotoFile(null);
+      if (registeredForSelf) { setInventoryScope('mine'); setTab('listings'); }
+      setSuccess(registeredForSelf ? 'Stock added to My inventory.' : 'Existing seller stock registered and added to Inventory.');
       await load(); await onChanged();
     } catch (nextError) {
       if (uploadedPhotoPath) void deleteSmePosItemPhoto(uploadedPhotoPath).catch(() => undefined);
@@ -644,17 +675,15 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   }
 
   function openPayoutForm(seller: SmePosSeller) {
+    const amount = seller.balanceMinor > 0 ? (seller.balanceMinor / 100).toFixed(2) : '0.00';
     setPayoutForm({
       seller,
-      amount: seller.balanceMinor > 0 ? (seller.balanceMinor / 100).toFixed(2) : '0.00',
-      paymentAccountId: settings.defaultPaymentAccountId || paymentAccounts[0]?.id || '',
-      paymentMethod: 'bank_transfer',
-      paymentMethodLabel: '',
+      amount,
+      paymentRows: [createSmePosPaymentDraft(settings.defaultPaymentAccountId || paymentAccounts[0]?.id || '', seller.balanceMinor > 0 ? seller.balanceMinor : 0)],
       payoutDate: today(),
+      reference: '',
       note: '',
     });
-    setError('');
-    setSuccess('');
   }
 
   async function submitPayout(event: FormEvent<HTMLFormElement>) {
@@ -671,41 +700,38 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       setError(`Payout must be more than zero and no more than ${formatMoney(Math.max(0, payoutForm.seller.balanceMinor), payoutForm.seller.currency)}.`);
       return;
     }
-    if (!payoutForm.paymentAccountId) {
-      setError('Choose the business account used for this payout.');
+    if (payoutForm.paymentRows.some((row) => !row.accountId)) {
+      setError('Choose Paid From for every payout source.');
       return;
     }
-    setBusy(true);
-    setError('');
-    setSuccess('');
+    if (paymentDraftTotalMinor(payoutForm.paymentRows) !== amountMinor) {
+      setError('Paid From amounts must add up exactly to the seller payout amount.');
+      return;
+    }
+    setBusy(true); setError(''); setSuccess('');
     try {
       const result = await recordMarketplaceSellerPayout({
         spaceId: space.id,
         sellerId: payoutForm.seller.id,
         amountMinor,
-        paymentAccountId: payoutForm.paymentAccountId,
-        paymentMethod: payoutForm.paymentMethod,
-        paymentMethodLabel: payoutForm.paymentMethod === 'other' ? payoutForm.paymentMethodLabel : null,
+        payments: paymentDraftsToInput(payoutForm.paymentRows),
         payoutDate: payoutForm.payoutDate,
+        reference: payoutForm.reference,
         note: payoutForm.note,
       });
       const sellerName = payoutForm.seller.name;
+      const currency = payoutForm.seller.currency;
       setPayoutForm(null);
-      setSuccess(`Payout recorded for ${sellerName}. Remaining balance: ${formatMoney(result.data.balanceAfterMinor, payoutForm.seller.currency)}.`);
-      await load();
-      await onChanged();
-    } catch (nextError) {
-      setError(getErrorMessage(nextError));
-    } finally {
-      setBusy(false);
-    }
+      setSuccess(`Payout recorded for ${sellerName}. Remaining seller wallet: ${formatMoney(result.data.balanceAfterMinor, currency)}.`);
+      await load(); await onChanged();
+    } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
   }
 
   return <section className="sme-standard-pos-workspace marketplace-pos-workspace">
     <div className="pos-workspace-heading">
       <div>
         <h2>{role === 'cashier' ? 'Register' : role === 'seller' ? 'Seller area' : 'Consignment POS'}</h2>
-        <p>{role === 'seller' ? 'Your listings, sales, and balance.' : 'Sell items from multiple sellers.'}</p>
+        <p>{role === 'seller' ? 'Your stock, sales, earnings and payouts.' : 'Sell items from multiple sellers.'}</p>
       </div>
 
       {(role === 'owner' || role === 'manager') && (
@@ -726,62 +752,75 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           type="button"
           className={tab === item ? 'active' : ''}
           onClick={() => {
+            if (item === 'listings' && mySeller && !canManageListings) setInventoryScope('mine');
             setTab(item);
             setError('');
             setSuccess('');
             setSearch('');
           }}
         >
-          {item === 'sales' && role === 'cashier'
-            ? 'My recent sales'
-            : item === 'sales' && role === 'seller'
-              ? 'My sales'
-              : tabLabels[item]}
+          {item === 'listings' && mySeller && !canManageListings
+            ? 'My inventory'
+            : item === 'balance' && mySeller
+              ? 'My seller'
+              : item === 'sales' && role === 'cashier'
+                ? 'My register sales'
+                : item === 'sales' && role === 'seller'
+                  ? 'My sales'
+                  : tabLabels[item]}
         </button>
       ))}
     </div>
 
+    {mySeller && !loading && <section className="marketplace-self-seller-banner">
+      <div><span className="eyebrow">Your seller profile</span><strong>{mySeller.name}</strong><small>{role === 'seller' ? 'Seller only' : `${roleLabel(role)} + Seller`} · Seller wallet {formatMoney(Math.max(0, mySeller.balanceMinor), mySeller.currency)}</small></div>
+      <div className="button-row"><button className="button secondary" type="button" onClick={openMyInventory}>My inventory</button><button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add stock</button><button className="button ghost" type="button" onClick={() => setTab('balance')}>My seller</button></div>
+    </section>}
+
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>Sellers</h3><p>Seller profiles track stock, commission and payouts. A seller profile does not automatically give the person BajetBN login access. For Seller-only access, invite them from Members and choose Seller. If they already have another team role, link that team member to the seller profile below.</p></div><button className="button primary" type="button" onClick={() => openSellerForm('new')}>Add seller profile</button></div>
+        <div className="panel-heading"><div><h3>Sellers</h3><p>Manage each seller's stock, commission, seller wallet and payouts. A seller profile does not automatically give the person BajetBN login access. For Seller-only access, invite them from Members and choose Seller. If they already have another staff role, link that team member to the seller profile so they can manage their own stock and view their own earnings.</p></div><button className="button primary" type="button" aria-label="Add seller profile" onClick={() => openSellerForm('new')}>Add seller</button></div>
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card" key={seller.id}>
-          <div><span className="type-badge">Seller</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
+          <div><span className="type-badge">{seller.id === mySeller?.id ? `You · ${roleLabel(role)} + Seller` : 'Seller'}</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
-          <div className="marketplace-balance-row"><span>{sellerBalanceLabel(seller.balanceMinor)}</span><strong>{formatMoney(Math.abs(seller.balanceMinor), seller.currency)}</strong></div>
-          <small>{seller.soldQuantity} item(s) sold · Shop earned {formatMoney(seller.commissionEarnedMinor, seller.currency)} · Paid out {formatMoney(seller.paidOutMinor, seller.currency)}</small>
-          <div className="button-row"><button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button>{canManagePayouts && seller.balanceMinor > 0 && <button className="button primary small" type="button" onClick={() => openPayoutForm(seller)}>Record payout</button>}{canDeleteSellers && <button className="button ghost danger small" type="button" onClick={() => setConfirm({ payload: { kind: 'seller', id: seller.id }, title: 'Delete this seller?', description: 'The seller profile will be removed from active and archived seller lists.', note: seller.balanceMinor !== 0 ? 'Settle the seller balance before deletion. Active listings will be removed from the register and historical sales, commission and payouts will stay preserved.' : 'Active listings will be removed from the register. Historical sales, commission and payouts stay preserved.', confirmLabel: 'Delete seller' })}>Delete</button>}</div>
+          <div className="marketplace-balance-row"><span>Seller wallet · {sellerBalanceLabel(seller.balanceMinor)}</span><strong>{formatMoney(Math.abs(seller.balanceMinor), seller.currency)}</strong></div>
+          <small>{seller.soldQuantity} item(s) sold · Shop commission {formatMoney(seller.commissionEarnedMinor, seller.currency)} · Paid out {formatMoney(seller.paidOutMinor, seller.currency)}</small>
+          <div className="button-row">{seller.id === mySeller?.id && <button className="button secondary small" type="button" onClick={openMyInventory}>My inventory</button>}{seller.id === mySeller?.id && <button className="button primary small" type="button" onClick={() => openManualListingForm(seller.id)}>Add stock</button>}<button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button>{canManagePayouts && seller.balanceMinor > 0 && <button className="button primary small" type="button" onClick={() => openPayoutForm(seller)}>Pay seller</button>}{canDeleteSellers && <button className="button ghost danger small" type="button" onClick={() => setConfirm({ payload: { kind: 'seller', id: seller.id }, title: 'Delete this seller?', description: 'The seller profile will be removed from active and archived seller lists.', note: seller.balanceMinor !== 0 ? 'Settle the seller balance before deletion. Active listings will be removed from the register and historical sales, commission and payouts will stay preserved.' : 'Active listings will be removed from the register. Historical sales, commission and payouts stay preserved.', confirmLabel: 'Delete seller' })}>Delete</button>}</div>
         </article>)}</div>
         {!sellers.length && <div className="empty-inline">No sellers yet. Add a seller before creating a listing.</div>}
       </section>}
 
       {tab === 'listings' && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>{role === 'seller' ? 'My listings' : 'Seller listings and stock'}</h3><p>Every listing or stock batch keeps its own seller, price, condition, quantity and commission.</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!listings.some((item) => item.barcode)} onClick={() => setLabelItems(listings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}</div></div>
+        <div className="panel-heading"><div><h3>{mySeller && !canManageListings ? 'My inventory' : 'Seller listings and stock'}</h3><p>{mySeller && !canManageListings ? 'Manage your own seller stock here. All shop stock remains available from the register according to your staff role.' : 'Every listing or stock batch keeps its own seller, price, condition, quantity and commission.'}</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!inventoryListings.some((item) => item.barcode)} onClick={() => setLabelItems(inventoryListings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}{mySeller && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add my stock</button>}</div></div>
+        {(mySeller || canManageListings) && <div className="marketplace-inventory-filter"><label>Inventory view<select value={inventoryScope} onChange={(event) => setInventoryScope(event.target.value)}><option value="all">All stock</option>{mySeller && <option value="mine">My stock · {mySeller.name}</option>}{canManageListings && sellers.filter((seller) => seller.id !== mySeller?.id).map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label></div>}
         <SmePosBarcodeInventoryPanel
           itemLabel="listing"
-          items={listings}
-          canCreate={canManageListings && sellers.length > 0}
-          onCreate={canManageListings && sellers.length > 0 ? (barcode) => openListingForm('new', barcode) : undefined}
-          onOpen={canManageListings ? (listing) => openListingForm(listing) : undefined}
-          onReceive={canManageStock ? setReceiveForm : undefined}
-          onStocktake={canManageStock ? setStocktakeForm : undefined}
-          onPrintLabel={canManageStock ? (listing) => setLabelItems([listing]) : undefined}
+          items={inventoryListings}
+          canCreate={(canManageListings && sellers.length > 0) || Boolean(mySeller)}
+          onCreate={canManageListings && sellers.length > 0 ? (barcode) => openListingForm('new', barcode) : mySeller ? (barcode) => openManualListingForm(mySeller.id, barcode) : undefined}
+          onOpen={(canManageListings || mySeller) ? (listing) => { if (canEditListing(listing)) openListingForm(listing); } : undefined}
+          onReceive={(canManageStock || mySeller) ? (listing) => { if (canUpdateListingStock(listing)) setReceiveForm(listing); } : undefined}
+          onStocktake={(canManageStock || mySeller) ? (listing) => { if (canUpdateListingStock(listing)) setStocktakeForm(listing); } : undefined}
+          onPrintLabel={(canManageStock || mySeller) ? (listing) => { if (canUpdateListingStock(listing)) setLabelItems([listing]); } : undefined}
         />
         <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, category, condition, SKU or barcode" />
-        <div className="sme-pos-product-grid">{filteredListings.map((listing) => {
+        <div className="sme-pos-product-grid">{inventoryListings.map((listing) => {
           const available = availableQuantity(listing);
           const outOfStock = available < 1;
           const low = available > 0 && available <= listing.lowStockLevel;
+          const ownListing = isOwnSellerListing(listing);
+          const mayEdit = canEditListing(listing);
+          const mayStock = canUpdateListingStock(listing);
           return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={listing.id}>
             {listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} />}
-            <div><span className="type-badge">{listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
-            {role !== 'stock_staff' && <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong>}
+            <div><span className="type-badge">{ownListing ? 'My stock' : listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
+            {role !== 'stock_staff' || ownListing ? <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong> : null}
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? `${listing.reservedQuantity || 0 ? 'Fully reserved' : 'Out of stock'}` : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}${low ? ' · Low stock' : ''}`}</p>
-            {(role === 'owner' || role === 'manager' || role === 'seller') && <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>}
-            {canManageListings && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openListingForm(listing)}>Edit</button><button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button>{listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'listing', id: listing.id }, title: 'Archive this listing?', description: 'It will leave the active register while its sales and seller balance history stay unchanged.', note: 'You can restore it from Archived Records.', confirmLabel: 'Archive listing' })}>Archive</button></div>}
-            {!canManageListings && canManageStock && <div className="button-row"><button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button><button className="button secondary small" type="button" onClick={() => setStockForm(listing)}>Update stock</button>{listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}</div>}
+            {(canManageListings || ownListing || role === 'seller') && <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>}
+            {(mayEdit || mayStock) && <div className="button-row">{mayEdit && <button className="button secondary small" type="button" onClick={() => openListingForm(listing)}>Edit</button>}{mayStock && <button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button>}{mayStock && <button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button>}{mayStock && <button className="button secondary small" type="button" onClick={() => setStockForm(listing)}>Update stock</button>}{mayStock && listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}{mayEdit && <button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'listing', id: listing.id }, title: 'Archive this listing?', description: 'It will leave the active register while its sales and seller wallet history stay unchanged.', note: 'You can restore it from Archived Records if your role allows it.', confirmLabel: 'Archive listing' })}>Archive</button>}</div>}
           </article>;
         })}</div>
-        {!filteredListings.length && <div className="empty-inline">No active seller listings found.</div>}
+        {!inventoryListings.length && <div className="empty-inline">{inventoryScope === 'mine' ? 'No stock in your seller inventory yet. Use Add my stock to register your first item.' : 'No active seller listings found.'}</div>}
       </section>}
 
       {tab === 'customers' && <section className="panel sme-pos-module-panel">
@@ -792,7 +831,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
-          <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>Sell normal inventory or use Quick Add for a one-off item.</p></div><div className="button-row"><button className="button ghost" type="button" onClick={() => setQuickAddForm(true)} disabled={!sellers.length}>+ Quick Add</button>{canRegisterExistingStock && <button className="button secondary" type="button" onClick={openManualListingForm} disabled={!sellers.length}>+ Register item</button>}</div></div>
+          <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>Sell normal inventory or use Quick Add for a one-off item.</p></div><div className="button-row"><button className="button ghost" type="button" onClick={() => setQuickAddForm(true)} disabled={!sellers.length}>+ Quick Add</button>{canRegisterExistingStock && <button className="button secondary" type="button" onClick={() => openManualListingForm()} disabled={!sellers.length}>+ Register item</button>}</div></div>
           <SmePosBarcodeCheckoutScanner
             itemLabel="listing"
             items={listings.map((listing) => ({ ...listing, quantityOnHand: availableQuantity(listing) }))}
@@ -829,16 +868,18 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
 
       {tab === 'balance' && mySeller && <div className="sme-pos-sales-section">
-        <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>{sellerBalanceLabel(mySeller?.balanceMinor || 0)}</span><strong>{formatMoney(Math.abs(mySeller?.balanceMinor || 0), settings.currency)}</strong><small>Sales, returns and payouts update this balance</small></article><article className="summary-card"><span>My gross sales</span><strong>{formatMoney(mySeller?.grossSalesMinor || 0, settings.currency)}</strong><small>{mySeller?.soldQuantity || 0} item(s) currently sold</small></article><article className="summary-card"><span>Paid out</span><strong>{formatMoney(mySeller?.paidOutMinor || 0, settings.currency)}</strong><small>Recorded seller payouts</small></article></div>
-        <section className="panel"><div className="panel-heading"><div><h3>Balance activity</h3><p>Sales increase the balance. Returns and payouts reduce it.</p></div></div><div className="sme-pos-sales-list">{mySellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || entry.displayId}</strong><small>{ledgerKindLabel(entry)} · {entry.note || entry.sellerName}</small></div><strong>{entry.amountMinor >= 0 ? '+' : '-'}{formatMoney(Math.abs(entry.amountMinor), entry.currency)}</strong><small>Balance {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!mySellerLedger.length && <div className="empty-inline">No seller balance activity yet.</div>}</section>
-        {mySellerPayouts.length > 0 && <section className="panel"><div className="panel-heading"><div><h3>My payouts</h3><p>Recorded payouts for this seller profile.</p></div></div><div className="sme-pos-sales-list">{mySellerPayouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.payoutDate}</strong><small>{payout.paymentAccountName}</small></div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Balance {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div></section>}
+        <section className="panel marketplace-seller-wallet-panel"><div className="panel-heading"><div><span className="eyebrow">My seller</span><h3>{mySeller.name}</h3><p>Your Seller Wallet is the amount this shop currently owes you. It is separate from normal BajetBN bank or cash accounts.</p></div><div className="button-row"><button className="button secondary" type="button" onClick={openMyInventory}>My inventory</button><button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add stock</button></div></div></section>
+        <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Available for payout</span><strong>{formatMoney(Math.max(0, mySeller.balanceMinor), settings.currency)}</strong><small>{sellerBalanceLabel(mySeller.balanceMinor)} · updated by sales, returns and payouts</small></article><article className="summary-card"><span>My gross sales</span><strong>{formatMoney(mySeller.grossSalesMinor || 0, settings.currency)}</strong><small>{mySeller.soldQuantity || 0} item(s) sold</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(mySeller.commissionEarnedMinor || 0, settings.currency)}</strong><small>Commission kept by the shop from your sales</small></article><article className="summary-card"><span>Paid out</span><strong>{formatMoney(mySeller.paidOutMinor || 0, settings.currency)}</strong><small>Total seller payouts recorded</small></article></div>
+        <section className="panel"><div className="panel-heading"><div><h3>My sales</h3><p>Only your seller share is shown here, even when your main staff role is {roleLabel(role)}.</p></div></div><div className="sme-pos-sales-list">{mySellerSales.slice(0, 20).map((sale) => <div className="marketplace-ledger-row" key={sale.id}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.itemCount} item(s)</small></div><strong>{formatMoney(sale.totalMinor - sale.returnedMinor, sale.currency)}</strong><small>You earn {formatMoney(sale.sellerEarningsMinor || 0, sale.currency)}</small></div>)}</div>{!mySellerSales.length && <div className="empty-inline">No seller sales yet.</div>}</section>
+        <section className="panel"><div className="panel-heading"><div><h3>Seller wallet activity</h3><p>Sales increase your wallet. Returns and payouts reduce it.</p></div></div><div className="sme-pos-sales-list">{mySellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || entry.displayId}</strong><small>{ledgerKindLabel(entry)} · {entry.note || entry.sellerName}</small></div><strong>{entry.amountMinor >= 0 ? '+' : '-'}{formatMoney(Math.abs(entry.amountMinor), entry.currency)}</strong><small>Wallet {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!mySellerLedger.length && <div className="empty-inline">No seller wallet activity yet.</div>}</section>
+        <section className="panel"><div className="panel-heading"><div><h3>My payouts</h3><p>You can see where each payout came from, but not the business account balance.</p></div></div><div className="sme-pos-sales-list">{mySellerPayouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.payoutDate}</strong><small>{payout.payments?.length ? payout.payments.map((payment) => `${space.name} — ${payment.accountName}: ${formatMoney(payment.amountMinor, payout.currency)}`).join(' · ') : (payout.paymentSourceLabel || `${space.name} — ${payout.paymentAccountName}`)}</small>{payout.reference && <small>Ref {payout.reference}</small>}{payout.createdByName && <small>Processed by {payout.createdByName}</small>}</div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Wallet {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!mySellerPayouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>
       </div>}
 
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
         {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller money waiting</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
         {canManageReturns && <SmePosBarcodeReturnScanner itemLabel="listing" items={listings} sales={sales} getSaleItemId={(item) => item.listingId || item.productId} onSelectSale={openReturnForm} />}
-        <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My recent sales' : role === 'seller' ? 'My sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' ? 'Only the part of each sale belonging to you is shown.' : 'Open a sale to view its receipt or record a return.'}</p></div></div><div className="sme-pos-sales-list">{sales.map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || 'Walk-in customer'} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!sales.length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
-        {canViewReports && <section className="panel"><div className="panel-heading"><div><h3>Recent seller payouts</h3><p>Each payout posts Money Out from the selected business account.</p></div></div><div className="sme-pos-sales-list">{payouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.sellerName}</strong><small>{payout.payoutDate} · {payout.paymentAccountName}</small></div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Balance {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!payouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>}
+        <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My register sales' : role === 'seller' || (mySeller && !['owner', 'manager'].includes(role)) ? 'My seller sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? 'Only the part of each sale belonging to your seller profile is shown.' : 'Open a sale to view its receipt or record a return where permitted.'}</p></div></div><div className="sme-pos-sales-list">{(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || (mySeller ? 'Seller sale' : 'Walk-in customer')} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
+        {canViewReports && <section className="panel"><div className="panel-heading"><div><h3>Recent seller payouts</h3><p>Each payout records exactly which SME cash/bank account the money came from. Split payouts can use up to four sources.</p></div></div><div className="sme-pos-sales-list">{payouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.sellerName}</strong><small>{payout.payoutDate}</small><small>{payout.payments?.length ? payout.payments.map((payment) => `${space.name} — ${payment.accountName}: ${formatMoney(payment.amountMinor, payout.currency)}`).join(' · ') : (payout.paymentSourceLabel || `${space.name} — ${payout.paymentAccountName}`)}</small>{payout.reference && <small>Ref {payout.reference}</small>}{payout.createdByName && <small>Processed by {payout.createdByName}</small>}</div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Seller wallet {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!payouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>}
       </div>}
     </>}
 
@@ -846,11 +887,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {bookingForm && <SmePosCreateReservationModal space={space} settings={settings} sourceMode="marketplace_consignment" items={cartLines.map(({ listing, quantity }) => ({ itemId: listing.id, name: `${listing.name} · ${listing.sellerName}`, quantity, lineTotalMinor: listing.sellingPriceMinor * quantity }))} customers={customers} paymentAccounts={paymentAccounts} initialCustomerId={customerId} initialDiscountMinor={discountMinor} onClose={() => setBookingForm(false)} onSaved={async () => { setCart({}); setDiscount('0.00'); setCustomerId(''); setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]); setSuccess('Booking created and stock reserved.'); await load(); await onChanged(); }} />}
 
-    {manualListingForm && <Modal title="Register existing seller stock" onClose={() => !busy && setManualListingForm(false)}>
+    {manualListingForm && <Modal title={manualListingSellerId === mySeller?.id ? 'Add stock · My inventory' : 'Register existing seller stock'} onClose={() => { if (!busy) { setManualListingForm(false); setManualListingSellerId(null); setManualListingBarcode(''); } }}>
       <form className="form-stack" onSubmit={registerExistingListing}>
         <div className="notice">For stock already physically in the shop. No purchase record is created. The seller's default commission is applied automatically. Barcode is optional.</div>
         <SmePosItemPhotoField currentPhotoPath={null} file={manualListingPhotoFile} removeExisting={false} onFileChange={setManualListingPhotoFile} onRemoveExisting={() => undefined} disabled={busy} />
-        <label>Seller<select name="sellerId" defaultValue={sellers[0]?.id || ''} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>
+        {manualListingSellerId ? <label>Seller<input value={sellers.find((seller) => seller.id === manualListingSellerId)?.name || mySeller?.name || 'My seller'} readOnly /><input type="hidden" name="sellerId" value={manualListingSellerId} /></label> : <label>Seller<select name="sellerId" defaultValue={mySeller?.id || sellers[0]?.id || ''} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>}
         <div className="form-grid">
           <label>Item name<input name="name" maxLength={100} required autoFocus /></label>
           <label>Category<input name="category" maxLength={60} /></label>
@@ -858,13 +899,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           <label>Quantity on hand<input name="quantity" type="number" min="0" max="999999" defaultValue={1} required /></label>
           <label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={1} required /></label>
           <label>SKU (optional)<input name="sku" maxLength={50} /></label>
-          <label>Barcode (optional)<input name="barcode" maxLength={240} autoComplete="off" /></label>
+          <label>Barcode (optional)<input name="barcode" maxLength={240} autoComplete="off" defaultValue={manualListingBarcode} /></label>
           <label>Condition<select value={manualListingCondition} onChange={(event) => setManualListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>Condition details<input name="conditionNote" maxLength={120} placeholder="Optional" /></label>
         </div>
         <label>Note<textarea name="note" rows={2} maxLength={300} placeholder="Optional" /></label>
         <small>Source is recorded as Existing stock / Manual registration with the staff member and time.</small>
-        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setManualListingForm(false)} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Registering…' : 'Register item'}</button></div>
+        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => { setManualListingForm(false); setManualListingSellerId(null); setManualListingBarcode(''); }} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Registering…' : manualListingSellerId === mySeller?.id ? 'Add to my inventory' : 'Register item'}</button></div>
       </form>
     </Modal>}
 
@@ -884,11 +925,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {listingForm && <Modal title={listingForm === 'new' ? 'Add seller listing' : 'Edit seller listing'} onClose={() => !busy && setListingForm(null)}><form className="form-stack" onSubmit={saveListing}>
       <SmePosItemPhotoField currentPhotoPath={listingForm === 'new' ? null : listingForm.photoPath} file={listingPhotoFile} removeExisting={removeListingPhoto} onFileChange={setListingPhotoFile} onRemoveExisting={setRemoveListingPhoto} disabled={busy} />
-      <label>Seller<select name="sellerId" defaultValue={listingForm === 'new' ? sellers[0]?.id || '' : listingForm.sellerId} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>
+      {listingForm !== 'new' && !canManageListings ? <label>Seller<input value={listingForm.sellerName} readOnly /><input type="hidden" name="sellerId" value={listingForm.sellerId} /></label> : <label>Seller<select name="sellerId" defaultValue={listingForm === 'new' ? sellers[0]?.id || '' : listingForm.sellerId} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>}
       <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Category<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Barcode (optional)<input name="barcode" defaultValue={listingForm === 'new' ? newListingBarcode : listingForm.barcode || ''} maxLength={240} autoComplete="off" /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
       <div className="form-grid"><label>Condition<select name="condition" value={listingCondition} onChange={(event) => setListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Condition details<input name="conditionNote" defaultValue={listingForm === 'new' ? '' : listingForm.conditionNote || ''} maxLength={120} placeholder="Optional" /></label></div>
-      <fieldset className="pos-item-type-fieldset"><legend>Commission for this listing</legend><label className={`pos-item-type-option ${listingCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={listingCommissionType === 'percentage'} onChange={() => setListingCommissionType('percentage')} /><span><strong>Percentage</strong><small>Calculated after any sale discount is shared across the cart.</small></span></label><label className={`pos-item-type-option ${listingCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={listingCommissionType === 'fixed_per_item'} onChange={() => setListingCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>Must be lower than the item selling price.</small></span></label></fieldset>
-      {listingCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={listingForm === 'new' ? '3' : (listingForm.commissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={listingForm === 'new' ? '0.00' : (listingForm.commissionMinor / 100).toFixed(2)} required /></label>}
+      {canManageListings ? <><fieldset className="pos-item-type-fieldset"><legend>Commission for this listing</legend><label className={`pos-item-type-option ${listingCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={listingCommissionType === 'percentage'} onChange={() => setListingCommissionType('percentage')} /><span><strong>Percentage</strong><small>Calculated after any sale discount is shared across the cart.</small></span></label><label className={`pos-item-type-option ${listingCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={listingCommissionType === 'fixed_per_item'} onChange={() => setListingCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>Must be lower than the item selling price.</small></span></label></fieldset>{listingCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={listingForm === 'new' ? '3' : (listingForm.commissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={listingForm === 'new' ? '0.00' : (listingForm.commissionMinor / 100).toFixed(2)} required /></label>}</> : listingForm !== 'new' ? <div className="notice">Shop commission is controlled by the owner or manager: <strong>{commissionCopy(listingForm.commissionType, listingForm.commissionRateBps, listingForm.commissionMinor, listingForm.currency)}</strong>.</div> : null}
       <div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={listingForm === 'new' ? 0 : listingForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={listingForm === 'new' ? 1 : listingForm.lowStockLevel} required /></label></div>
       <label>Note<textarea name="note" rows={3} defaultValue={listingForm === 'new' ? '' : listingForm.note || ''} maxLength={300} /></label>
       <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setListingForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save listing'}</button></div>
@@ -896,7 +936,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {receiveForm && <Modal title={`Receive stock · ${receiveForm.name}`} onClose={() => !busy && setReceiveForm(null)}><form className="form-stack" onSubmit={receiveStock}><div className="notice">Current stock: <strong>{receiveForm.quantityOnHand}</strong>. Scanning did not change this number.</div><label>Quantity received<input name="quantityReceived" type="number" min="1" max={Math.max(1, 999999 - receiveForm.quantityOnHand)} defaultValue={1} required autoFocus /></label><label>Receiving note<textarea name="note" rows={2} maxLength={300} placeholder="Optional seller, delivery or reference" /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setReceiveForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Receiving…' : 'Confirm received stock'}</button></div></form></Modal>}
 
-    {stockForm && <Modal title={`Update stock · ${stockForm.name}`} onClose={() => !busy && setStockForm(null)}><form className="form-stack" onSubmit={saveStock}><div className="notice">Stock staff can change only the quantity and low-stock alert. Seller, price and commission stay owner or manager controlled.</div><div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={stockForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={stockForm.lowStockLevel} required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setStockForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save stock'}</button></div></form></Modal>}
+    {stockForm && <Modal title={`Update stock · ${stockForm.name}`} onClose={() => !busy && setStockForm(null)}><form className="form-stack" onSubmit={saveStock}><div className="notice">You can update quantity and the low-stock alert here. Seller ownership and shop commission stay protected.</div><div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={stockForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={stockForm.lowStockLevel} required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setStockForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save stock'}</button></div></form></Modal>}
 
     {stocktakeForm && <Modal title={`Count stock · ${stocktakeForm.name}`} onClose={() => !busy && setStocktakeForm(null)}><form className="form-stack" onSubmit={saveStocktake}><div className="notice">System quantity: <strong>{stocktakeForm.quantityOnHand}</strong>. Enter the physical count. Nothing changes until you confirm.</div><label>Physical count<input name="countedQuantity" type="number" min="0" max="999999" defaultValue={stocktakeForm.quantityOnHand} required autoFocus /></label><label>Count note<textarea name="note" rows={2} maxLength={300} placeholder="Optional seller batch, shelf, counter or reference" /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setStocktakeForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving count…' : 'Confirm physical count'}</button></div></form></Modal>}
 
@@ -955,14 +995,14 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </form>
     </Modal>}
 
-    {payoutForm && <Modal title={`Record payout · ${payoutForm.seller.name}`} onClose={() => !busy && setPayoutForm(null)}>
+    {payoutForm && <Modal title={`Pay seller · ${payoutForm.seller.name}`} onClose={() => !busy && setPayoutForm(null)}>
       <form className="form-stack" onSubmit={submitPayout}>
-        <div className="notice">Available seller balance: {formatMoney(Math.max(0, payoutForm.seller.balanceMinor), payoutForm.seller.currency)}. The payout posts as Money Out and creates permanent payout and seller-balance history.</div>
-        <label>Payout amount (BND)<input inputMode="decimal" value={payoutForm.amount} onChange={(event) => setPayoutForm((current) => current ? { ...current, amount: event.target.value } : current)} required /></label>
-        <label>Paid from<select value={payoutForm.paymentAccountId} onChange={(event) => setPayoutForm((current) => current ? { ...current, paymentAccountId: event.target.value } : current)} required><option value="">Choose business account</option>{paymentAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.currency}</option>)}</select></label>
-        <div className="form-grid"><label>Payment method<select value={payoutForm.paymentMethod} onChange={(event) => setPayoutForm((current) => current ? { ...current, paymentMethod: event.target.value as PaymentMethodCode } : current)}>{paymentMethods.map((method) => <option value={method.code} key={method.code}>{method.label}</option>)}</select></label><label>Payout date<input type="date" value={payoutForm.payoutDate} onChange={(event) => setPayoutForm((current) => current ? { ...current, payoutDate: event.target.value } : current)} required /></label></div>
-        {payoutForm.paymentMethod === 'other' && <label>Other payment method<input value={payoutForm.paymentMethodLabel} onChange={(event) => setPayoutForm((current) => current ? { ...current, paymentMethodLabel: event.target.value } : current)} required /></label>}
-        <label>Note<textarea rows={3} value={payoutForm.note} onChange={(event) => setPayoutForm((current) => current ? { ...current, note: event.target.value } : current)} maxLength={500} placeholder="Optional reference or note" /></label>
+        <div className="notice">Seller Wallet available: {formatMoney(Math.max(0, payoutForm.seller.balanceMinor), payoutForm.seller.currency)}. Paid From is mandatory. BajetBN records each source as Money Out and keeps permanent seller payout history.</div>
+        <label>Payout amount (BND)<input inputMode="decimal" value={payoutForm.amount} onChange={(event) => { const amount = event.target.value; setPayoutForm((current) => { if (!current) return current; let minor = 0; try { minor = toMinorUnits(amount || '0'); } catch { minor = 0; } return { ...current, amount, paymentRows: current.paymentRows.length === 1 ? [{ ...current.paymentRows[0], amount: (minor / 100).toFixed(2) }] : current.paymentRows }; }); }} required /></label>
+        <div><span className="eyebrow">Paid From</span><SmePosPaymentSplitEditor accounts={paymentAccounts.map((account) => ({ ...account, name: `${space.name} — ${account.name}` }))} currency={settings.currency} totalMinor={(() => { try { return toMinorUnits(payoutForm.amount || '0'); } catch { return 0; } })()} rows={payoutForm.paymentRows} onChange={(paymentRows) => setPayoutForm((current) => current ? { ...current, paymentRows } : current)} disabled={busy} label="Paid From" accountLabel="Paid from" /></div>
+        <div className="form-grid"><label>Payout date<input type="date" value={payoutForm.payoutDate} onChange={(event) => setPayoutForm((current) => current ? { ...current, payoutDate: event.target.value } : current)} required /></label><label>Reference<input value={payoutForm.reference} onChange={(event) => setPayoutForm((current) => current ? { ...current, reference: event.target.value } : current)} maxLength={120} placeholder="Transfer/reference no. (optional)" /></label></div>
+        <label>Note<textarea rows={3} value={payoutForm.note} onChange={(event) => setPayoutForm((current) => current ? { ...current, note: event.target.value } : current)} maxLength={500} placeholder="Optional note" /></label>
+        <small>The seller can see the source account name(s), payout amount, reference and processor, but not the business account balance.</small>
         <div className="modal-actions"><button className="button secondary" type="button" onClick={() => setPayoutForm(null)} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Recording payout…' : 'Confirm seller payout'}</button></div>
       </form>
     </Modal>}
