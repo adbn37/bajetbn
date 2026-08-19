@@ -11,6 +11,15 @@ export async function listAllBudgets(uid: string): Promise<Budget[]> {
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 }
 
+export async function listBudgetsForSpace(spaceId: string): Promise<Budget[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'budgets'), where('spaceId', '==', spaceId)));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as Budget)
+    .filter((item) => !item.archivedAt)
+    .sort((a, b) => b.startDate.localeCompare(a.startDate));
+}
+
 export async function createBudget(input: {
   name: string;
   spaceId: string;
