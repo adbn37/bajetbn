@@ -37,6 +37,7 @@ export type SmePosRole = 'owner' | 'manager' | 'cashier' | 'stock_staff' | 'sell
 export type SmePosCommissionType = 'percentage' | 'fixed_per_item';
 export type SmePosListingCondition = 'new' | 'sealed' | 'open_box' | 'used' | 'other';
 export type SmePosStockSource = 'catalog' | 'existing_stock';
+export type SmePosReservationStatus = 'reserved' | 'partially_paid' | 'paid' | 'completed' | 'cancelled';
 
 export interface SmePosSettings {
   id: string;
@@ -90,6 +91,7 @@ export interface SmePosProduct {
   currency: string;
   trackStock: boolean;
   quantityOnHand: number;
+  reservedQuantity?: number;
   lowStockLevel: number;
   soldQuantity?: number;
   salesRevenueMinor?: number;
@@ -148,6 +150,7 @@ export interface SmePosListing {
   commissionRateBps: number;
   commissionMinor: number;
   quantityOnHand: number;
+  reservedQuantity?: number;
   lowStockLevel: number;
   soldQuantity: number;
   grossSalesMinor: number;
@@ -214,6 +217,9 @@ export interface SmePosReturn {
   reason?: string;
   transactionId: string;
   ledgerEntryId: string;
+  payments?: SmePosRefundPayment[];
+  transactionIds?: string[];
+  ledgerEntryIds?: string[];
   createdBy: string;
   createdAt?: Timestamp;
 }
@@ -267,6 +273,78 @@ export interface SmePosPaymentAccount {
   type: AccountType;
 }
 
+export interface SmePosSalePayment {
+  accountId: string;
+  accountName: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  amountMinor: number;
+  returnedMinor: number;
+  transactionId: string;
+  ledgerEntryId: string;
+}
+
+export interface SmePosRefundPayment {
+  accountId: string;
+  accountName: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  amountMinor: number;
+  transactionId: string;
+  ledgerEntryId: string;
+}
+
+export interface SmePosReservationItem {
+  itemId: string;
+  productName: string;
+  sku?: string;
+  barcode?: string;
+  quantity: number;
+  unitPriceMinor: number;
+  unitCostMinor: number;
+  lineTotalMinor: number;
+  sellerId?: string;
+  sellerName?: string;
+  sellerUid?: string | null;
+  condition?: SmePosListingCondition;
+  commissionType?: SmePosCommissionType;
+  commissionRateBps?: number;
+  commissionMinor?: number;
+}
+
+export interface SmePosReservation {
+  id: string;
+  displayId: string;
+  reservationNumber: string;
+  spaceId: string;
+  ownerId: string;
+  createdBy: string;
+  createdByName?: string;
+  sourceMode: SmePosMode;
+  status: SmePosReservationStatus;
+  customerId: string;
+  customerName: string;
+  customerPhone?: string;
+  items: SmePosReservationItem[];
+  itemCount: number;
+  subtotalMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  depositMinor: number;
+  remainingMinor: number;
+  payments: SmePosSalePayment[];
+  currency: string;
+  reservationDate: string;
+  dueDate?: string | null;
+  note?: string;
+  saleId?: string | null;
+  receiptNumber?: string | null;
+  completedAt?: Timestamp | null;
+  cancelledAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface SmePosSaleItem {
   productId: string;
   productName: string;
@@ -278,6 +356,7 @@ export interface SmePosSaleItem {
   lineTotalMinor: number;
   lineCostMinor: number;
   returnedQuantity: number;
+  quickAdd?: boolean;
   returnedMinor?: number;
   commissionReturnedMinor?: number;
   sellerEarningReturnedMinor?: number;
@@ -311,6 +390,7 @@ export interface SmePosSale {
   paymentAccountName: string;
   paymentMethod?: PaymentMethodCode | null;
   paymentMethodLabel?: string | null;
+  payments?: SmePosSalePayment[];
   items: SmePosSaleItem[];
   itemCount: number;
   subtotalMinor: number;
@@ -329,6 +409,9 @@ export interface SmePosSale {
   note?: string;
   transactionId: string;
   ledgerEntryId: string;
+  transactionIds?: string[];
+  ledgerEntryIds?: string[];
+  reservationId?: string | null;
   receiptName: string;
   receiptFooter?: string;
   createdAt?: Timestamp;

@@ -1508,8 +1508,8 @@ function assertUniqueSmePosBarcode(
 }
 
 function parseSmePosCheckoutItems(value: unknown): Array<{ productId: string; quantity: number }> {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 50) {
-    throw new HttpsError('invalid-argument', 'Checkout must contain between 1 and 50 product lines.');
+  if (!Array.isArray(value) || value.length > 50) {
+    throw new HttpsError('invalid-argument', 'Checkout can contain up to 50 product lines.');
   }
   const seen = new Set<string>();
   return value.map((row) => {
@@ -1519,6 +1519,200 @@ function parseSmePosCheckoutItems(value: unknown): Array<{ productId: string; qu
     if (seen.has(productId)) throw new HttpsError('invalid-argument', 'The same product appears more than once.');
     seen.add(productId);
     return { productId, quantity: integerBetween(item.quantity, 'Quantity', 1, 9_999) };
+  });
+}
+
+interface SmePosPaymentRequestRow {
+  accountId: string;
+  paymentMethod: PaymentMethodCode | null;
+  paymentMethodLabel: string | null;
+  amountMinor: number;
+}
+
+interface SmePosPostedPayment extends SmePosPaymentRequestRow {
+  accountName: string;
+  returnedMinor: number;
+  transactionId: string;
+  ledgerEntryId: string;
+}
+
+function parseSmePosPaymentRows(data: DocumentData, totalMinor: number, allowZero = false): SmePosPaymentRequestRow[] {
+  const raw = data.payments;
+  let rows: SmePosPaymentRequestRow[] = [];
+  if (Array.isArray(raw) && raw.length) {
+    if (raw.length > 4) throw new HttpsError('invalid-argument', 'A sale can use up to four split payments.');
+    rows = raw.map((value: unknown) => {
+      if (!value || typeof value !== 'object') throw new HttpsError('invalid-argument', 'Invalid split payment.');
+      const row = value as DocumentData;
+      const accountId = stringValue(row.accountId, 'Payment account', 80);
+      const payment = paymentMethodValues({ paymentMethod: row.paymentMethod, paymentMethodLabel: row.paymentMethodLabel });
+      return {
+        accountId,
+        paymentMethod: payment.paymentMethod,
+        paymentMethodLabel: payment.paymentMethodLabel,
+        amountMinor: positiveMoney(row.amountMinor),
+      };
+    });
+  } else if (data.paymentAccountId) {
+    const payment = paymentMethodValues(data);
+    rows = [{
+      accountId: stringValue(data.paymentAccountId, 'Payment account', 80),
+      paymentMethod: payment.paymentMethod,
+      paymentMethodLabel: payment.paymentMethodLabel,
+      amountMinor: totalMinor,
+    }];
+  }
+  if (!rows.length) {
+    if (allowZero && totalMinor === 0) return [];
+    throw new HttpsError('invalid-argument', 'Choose where the payment was received.');
+  }
+  const entered = rows.reduce((sum, row) => sum + row.amountMinor, 0);
+  if (!Number.isSafeInteger(entered)) throw new HttpsError('out-of-range', 'Payment total is too large.');
+  if (entered !== totalMinor) throw new HttpsError('invalid-argument', `Split payments must add up exactly to ${(totalMinor / 100).toFixed(2)}.`);
+  return rows;
+}
+
+function parseStandardQuickItems(value: unknown): Array<{ clientId: string; name: string; quantity: number; unitPriceMinor: number }> {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 20) throw new HttpsError('invalid-argument', 'Quick Add can contain up to 20 lines.');
+  const seen = new Set<string>();
+  return value.map((raw) => {
+    if (!raw || typeof raw !== 'object') throw new HttpsError('invalid-argument', 'Invalid Quick Add item.');
+    const row = raw as DocumentData;
+    const clientId = stringValue(row.clientId, 'Quick Add line ID', 80);
+    if (seen.has(clientId)) throw new HttpsError('invalid-argument', 'The same Quick Add item appears more than once.');
+    seen.add(clientId);
+    return {
+      clientId,
+      name: stringValue(row.name, 'Quick Add item name', 100),
+      quantity: integerBetween(row.quantity, 'Quick Add quantity', 1, 9_999),
+      unitPriceMinor: positiveMoney(row.unitPriceMinor),
+    };
+  });
+}
+
+function parseMarketplaceQuickItems(value: unknown): Array<{ clientId: string; sellerId: string; name: string; quantity: number; unitPriceMinor: number; condition: string }> {
+  return parseStandardQuickItems(value).map((base, index) => {
+    const row = (value as DocumentData[])[index] || {};
+    return {
+      ...base,
+      sellerId: stringValue(row.sellerId, 'Quick Add seller', 80),
+      condition: oneOf(row.condition || 'other', smePosListingConditions, 'Quick Add condition'),
+    };
+  });
+}
+
+function parseSmePosPartialPaymentRows(value: unknown, maximumMinor: number, field = 'Deposit'): SmePosPaymentRequestRow[] {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 4) throw new HttpsError('invalid-argument', `${field} can use up to four split payments.`);
+  const rows = value.map((raw) => {
+    if (!raw || typeof raw !== 'object') throw new HttpsError('invalid-argument', `Invalid ${field.toLowerCase()} payment.`);
+    const row = raw as DocumentData;
+    const payment = paymentMethodValues({ paymentMethod: row.paymentMethod, paymentMethodLabel: row.paymentMethodLabel });
+    return {
+      accountId: stringValue(row.accountId, `${field} account`, 80),
+      paymentMethod: payment.paymentMethod,
+      paymentMethodLabel: payment.paymentMethodLabel,
+      amountMinor: positiveMoney(row.amountMinor),
+    };
+  });
+  const total = rows.reduce((sum, row) => sum + row.amountMinor, 0);
+  if (!Number.isSafeInteger(total)) throw new HttpsError('out-of-range', `${field} amount is too large.`);
+  if (total > maximumMinor) throw new HttpsError('invalid-argument', `${field} cannot exceed ${(maximumMinor / 100).toFixed(2)}.`);
+  return rows;
+}
+
+function parseSmePosReservationItems(value: unknown): Array<{ itemId: string; quantity: number }> {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 50) throw new HttpsError('invalid-argument', 'A booking must contain between 1 and 50 item lines.');
+  const seen = new Set<string>();
+  return value.map((raw) => {
+    if (!raw || typeof raw !== 'object') throw new HttpsError('invalid-argument', 'Invalid booking item.');
+    const row = raw as DocumentData;
+    const itemId = stringValue(row.itemId, 'Booking item ID', 80);
+    if (seen.has(itemId)) throw new HttpsError('invalid-argument', 'The same item appears more than once in the booking.');
+    seen.add(itemId);
+    return { itemId, quantity: integerBetween(row.quantity, 'Booking quantity', 1, 9_999) };
+  });
+}
+
+async function postSmePosPayments(input: {
+  transaction: Transaction;
+  rows: SmePosPaymentRequestRow[];
+  settings: DocumentData;
+  spaceId: string;
+  uid: string;
+  idempotencyKey: string;
+  now: FieldValue;
+  transactionDate: string;
+  direction: 'in' | 'out';
+  entryType: string;
+  counterparty: string;
+  note: string;
+  categoryId: 'income-sales' | 'expense-other';
+  extra?: DocumentData;
+}): Promise<SmePosPostedPayment[]> {
+  if (!input.rows.length) return [];
+  const uniqueAccountIds = [...new Set(input.rows.map((row) => row.accountId))];
+  const accountRefs = uniqueAccountIds.map((id) => db.collection('accounts').doc(id));
+  const accountSnapshots = await Promise.all(accountRefs.map((ref) => input.transaction.get(ref)));
+  const accountById = new Map(accountSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+  const totalsByAccount = new Map<string, number>();
+
+  input.rows.forEach((row) => {
+    const snapshot = accountById.get(row.accountId);
+    if (!snapshot) throw new HttpsError('not-found', 'Payment account not found.');
+    const account = assertAccount(snapshot.data(), String(input.settings.ownerId), 'Payment account');
+    if (snapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for POS payments.');
+    requireSmePosPaymentAccountForSpace(input.settings, snapshot.data() || {}, row.accountId, input.spaceId);
+    if (account.currency !== input.settings.currency) throw new HttpsError('failed-precondition', 'Payment account and POS currency must match.');
+    totalsByAccount.set(row.accountId, (totalsByAccount.get(row.accountId) || 0) + row.amountMinor);
+  });
+
+  totalsByAccount.forEach((amountMinor, accountId) => {
+    const snapshot = accountById.get(accountId)!;
+    const account = assertAccount(snapshot.data(), String(input.settings.ownerId), 'Payment account');
+    const delta = accountEffect(account.type, input.direction, amountMinor);
+    updateAccountBalance(input.transaction, snapshot.ref, account, delta);
+  });
+
+  const category = systemCategories.get(input.categoryId);
+  if (!category) throw new HttpsError('internal', 'POS payment category is unavailable.');
+
+  return input.rows.map((row, index) => {
+    const snapshot = accountById.get(row.accountId)!;
+    const account = assertAccount(snapshot.data(), String(input.settings.ownerId), 'Payment account');
+    const financialRef = db.collection('transactions').doc();
+    const delta = accountEffect(account.type, input.direction, row.amountMinor);
+    const ledgerEntryId = createLedgerEntry(input.transaction, {
+      accountId: row.accountId,
+      ownerId: String(input.settings.ownerId),
+      spaceId: input.spaceId,
+      transactionId: financialRef.id,
+      entryType: input.entryType,
+      amountMinor: delta,
+      currency: account.currency,
+      idempotencyKey: `${input.idempotencyKey}:${index}`,
+      now: input.now,
+    });
+    input.transaction.create(financialRef, {
+      displayId: displayId('TXN'), ownerId: input.settings.ownerId, createdBy: input.uid,
+      type: input.direction === 'in' ? 'income' : 'expense', status: 'posted', spaceId: input.spaceId,
+      accountId: row.accountId, destinationAccountId: null, amountMinor: row.amountMinor, currency: account.currency,
+      category: category.name, categoryId: category.id, categoryIcon: category.icon, categoryColor: category.color,
+      categoryScope: 'business', categoryIsSystem: true, counterparty: input.counterparty, note: input.note,
+      paymentMethod: row.paymentMethod, paymentMethodLabel: row.paymentMethodLabel, transactionDate: input.transactionDate,
+      reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
+      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null,
+      recurringTemplateId: null, recurringRunId: null, recurringScheduledDate: null,
+      ...(input.extra || {}), createdAt: input.now, postedAt: input.now, updatedAt: input.now,
+    });
+    return {
+      ...row,
+      accountName: String(snapshot.data()?.name || 'Business account'),
+      returnedMinor: 0,
+      transactionId: financialRef.id,
+      ledgerEntryId,
+    };
   });
 }
 
@@ -1597,6 +1791,7 @@ export const getSmePosStaffWorkspace = onCall({ region }, async (request) => {
         currency: String(row.currency || context.settings.currency || 'BND'),
         trackStock: row.trackStock !== false,
         quantityOnHand: row.trackStock === false ? 0 : smePosQuantity(row.quantityOnHand, 'Product stock'),
+        reservedQuantity: row.trackStock === false ? 0 : smePosQuantity(row.reservedQuantity || 0, 'Reserved product stock'),
         lowStockLevel: row.trackStock === false ? 0 : smePosQuantity(row.lowStockLevel, 'Low stock alert'),
         soldQuantity: 0,
         salesRevenueMinor: 0,
@@ -1652,6 +1847,7 @@ export const getSmePosStaffWorkspace = onCall({ region }, async (request) => {
           lineTotalMinor: nonNegativeMoney(line.lineTotalMinor || 0),
           lineCostMinor: 0,
           returnedQuantity: integerBetween(line.returnedQuantity || 0, 'Returned quantity', 0, 9_999),
+          quickAdd: line.quickAdd === true,
         };
       }) : [];
       return {
@@ -1670,6 +1866,16 @@ export const getSmePosStaffWorkspace = onCall({ region }, async (request) => {
         paymentAccountName: String(row.paymentAccountName || 'Business account'),
         paymentMethod: row.paymentMethod || null,
         paymentMethodLabel: row.paymentMethodLabel || null,
+        payments: Array.isArray(row.payments) ? row.payments.map((payment: DocumentData) => ({
+          accountId: '',
+          accountName: String(payment.accountName || 'Business account'),
+          paymentMethod: payment.paymentMethod || null,
+          paymentMethodLabel: payment.paymentMethodLabel || null,
+          amountMinor: nonNegativeMoney(payment.amountMinor || 0),
+          returnedMinor: nonNegativeMoney(payment.returnedMinor || 0),
+          transactionId: '',
+          ledgerEntryId: '',
+        })) : undefined,
         items,
         itemCount: integerBetween(row.itemCount || 0, 'Item count', 0, 999_999),
         subtotalMinor: nonNegativeMoney(row.subtotalMinor || 0),
@@ -1725,6 +1931,9 @@ export const saveSmePosProduct = onCall({ region }, async (request) => {
       throw new HttpsError('permission-denied', 'This product belongs to another shop.');
     }
     if (existing.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Restore this product before editing it.');
+    const reservedQuantity = smePosQuantity(existing.data()?.reservedQuantity || 0, 'Reserved quantity');
+    if (existing.exists && trackStock && quantityOnHand < reservedQuantity) throw new HttpsError('failed-precondition', `Available quantity cannot be lower than ${reservedQuantity} unit(s) currently reserved in bookings.`);
+    if (existing.exists && !trackStock && reservedQuantity > 0) throw new HttpsError('failed-precondition', 'Complete or cancel active bookings before changing this product to unlimited stock.');
     assertUniqueSmePosBarcode(spaceProducts.docs, productRef.id, barcodeKey, 'POS product');
     const now = FieldValue.serverTimestamp();
     const payload = {
@@ -1745,6 +1954,7 @@ export const saveSmePosProduct = onCall({ region }, async (request) => {
       currency: context.settings.currency || context.space.currency || 'BND',
       trackStock,
       quantityOnHand: trackStock ? quantityOnHand : 0,
+      reservedQuantity: trackStock ? reservedQuantity : 0,
       lowStockLevel: trackStock ? lowStockLevel : 0,
       soldQuantity: Number(existing.data()?.soldQuantity || 0),
       salesRevenueMinor: Number(existing.data()?.salesRevenueMinor || 0),
@@ -1812,6 +2022,7 @@ export const registerExistingSmePosProduct = onCall({ region }, async (request) 
       currency: context.settings.currency || context.space.currency || 'BND',
       trackStock: true,
       quantityOnHand,
+      reservedQuantity: 0,
       lowStockLevel,
       soldQuantity: 0,
       salesRevenueMinor: 0,
@@ -1857,6 +2068,8 @@ export const updateSmePosProductStock = onCall({ region }, async (request) => {
       throw new HttpsError('not-found', 'Active product not found.');
     }
     if (product.data()?.trackStock === false) throw new HttpsError('failed-precondition', 'This service or unlimited item does not use stock quantity.');
+    const reservedQuantity = smePosQuantity(product.data()?.reservedQuantity || 0, 'Reserved quantity');
+    if (quantityOnHand < reservedQuantity) throw new HttpsError('failed-precondition', `Stock cannot be counted below ${reservedQuantity} unit(s) currently reserved in bookings.`);
     const previousQuantity = smePosQuantity(product.data()?.quantityOnHand, 'Current quantity');
     const difference = quantityOnHand - previousQuantity;
     const now = FieldValue.serverTimestamp();
@@ -1928,6 +2141,7 @@ export const setSmePosProductArchived = onCall({ region }, async (request) => {
     const [command, product] = await Promise.all([transaction.get(commandRef), transaction.get(productRef)]);
     if (command.exists) return command.data()?.result;
     if (!product.exists || product.data()?.spaceId !== spaceId || product.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('not-found', 'Product not found.');
+    if (archived && Number(product.data()?.reservedQuantity || 0) > 0) throw new HttpsError('failed-precondition', 'This product has active booked quantity. Complete or cancel the booking before archiving it.');
     const now = FieldValue.serverTimestamp();
     transaction.update(productRef, { archivedAt: archived ? now : null, updatedAt: now });
     const result = { productId, archived };
@@ -1976,6 +2190,11 @@ export const setSmePosCustomerArchived = onCall({ region }, async (request) => {
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
   const customerRef = db.collection('smePosCustomers').doc(customerId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  if (archived) {
+    const reservationsSnapshot = await db.collection('smePosReservations').where('spaceId', '==', spaceId).get();
+    const hasActiveBooking = reservationsSnapshot.docs.some((item) => item.data().customerId === customerId && !['completed', 'cancelled'].includes(String(item.data().status || '')));
+    if (hasActiveBooking) throw new HttpsError('failed-precondition', 'This customer has an active booking. Complete or cancel it before archiving the customer.');
+  }
   return db.runTransaction(async (transaction) => {
     const [command, customer] = await Promise.all([transaction.get(commandRef), transaction.get(customerRef)]);
     if (command.exists) return command.data()?.result;
@@ -1998,8 +2217,13 @@ export const deleteSmePosCustomer = onCall({ region }, async (request) => {
 
   const customerRef = db.collection('smePosCustomers').doc(customerId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
-  const salesSnapshot = await db.collection('smePosSales').where('spaceId', '==', spaceId).get();
+  const [salesSnapshot, reservationsSnapshot] = await Promise.all([
+    db.collection('smePosSales').where('spaceId', '==', spaceId).get(),
+    db.collection('smePosReservations').where('spaceId', '==', spaceId).get(),
+  ]);
   const hasSaleHistory = salesSnapshot.docs.some((item) => item.data().customerId === customerId);
+  const hasActiveBooking = reservationsSnapshot.docs.some((item) => item.data().customerId === customerId && !['completed', 'cancelled'].includes(String(item.data().status || '')));
+  if (hasActiveBooking) throw new HttpsError('failed-precondition', 'This customer has an active booking. Complete or cancel it before deleting the customer.');
 
   return db.runTransaction(async (transaction) => {
     const [command, customer] = await Promise.all([
@@ -2047,10 +2271,11 @@ export const deleteSmePosCustomer = onCall({ region }, async (request) => {
 export const checkoutStandardPos = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
-  const requestedItems = parseSmePosCheckoutItems(request.data?.items);
+  const requestedItems = parseSmePosCheckoutItems(request.data?.items || []);
+  const quickItems = parseStandardQuickItems(request.data?.quickItems);
+  if (!requestedItems.length && !quickItems.length) throw new HttpsError('invalid-argument', 'Add at least one product or Quick Add item to checkout.');
+  if (requestedItems.length + quickItems.length > 50) throw new HttpsError('invalid-argument', 'Checkout can contain up to 50 lines.');
   const customerId = optionalString(request.data?.customerId, 80) || null;
-  const paymentAccountId = stringValue(request.data?.paymentAccountId, 'Payment account', 80);
-  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const discountMinor = nonNegativeMoney(request.data?.discountMinor ?? 0);
   const saleDate = localDate(request.data?.saleDate, 'Sale date');
   const note = optionalString(request.data?.note, 500);
@@ -2058,27 +2283,21 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
   if (context.settings.status !== 'active') throw new HttpsError('failed-precondition', 'Activate the POS before completing checkout.');
   const productRefs = requestedItems.map((item) => db.collection('smePosProducts').doc(item.productId));
-  const accountRef = db.collection('accounts').doc(paymentAccountId);
   const customerRef = customerId ? db.collection('smePosCustomers').doc(customerId) : null;
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   const saleRef = db.collection('smePosSales').doc();
-  const financialRef = db.collection('transactions').doc();
 
   return db.runTransaction(async (transaction) => {
-    const [command, accountSnapshot, customerSnapshot, productSnapshots] = await Promise.all([
-      transaction.get(commandRef), transaction.get(accountRef), customerRef ? transaction.get(customerRef) : Promise.resolve(null), Promise.all(productRefs.map((ref) => transaction.get(ref))),
+    const [command, customerSnapshot, productSnapshots] = await Promise.all([
+      transaction.get(commandRef), customerRef ? transaction.get(customerRef) : Promise.resolve(null), Promise.all(productRefs.map((ref) => transaction.get(ref))),
     ]);
     if (command.exists) return command.data()?.result;
-    const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payment account');
-    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for POS payments.');
-    requireSmePosPaymentAccountForSpace(context.settings, accountSnapshot.data() || {}, paymentAccountId, spaceId);
-    if (account.currency !== context.settings.currency) throw new HttpsError('failed-precondition', 'Payment account and POS currency must match.');
-    if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
+    if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt || customerSnapshot.data()?.deletedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
 
     let subtotalMinor = 0;
     let costMinor = 0;
     let itemCount = 0;
-    const saleItems = productSnapshots.map((snapshot, index) => {
+    const saleItems: DocumentData[] = productSnapshots.map((snapshot, index) => {
       if (!snapshot.exists) throw new HttpsError('not-found', 'One of the products was not found.');
       const product = snapshot.data() || {};
       const requestItem = requestedItems[index];
@@ -2087,33 +2306,44 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
       const unitCostMinor = product.costPriceMinor == null ? 0 : nonNegativeMoney(product.costPriceMinor);
       const quantity = requestItem.quantity;
       if (product.trackStock !== false) {
-        const available = smePosQuantity(product.quantityOnHand, 'Product stock');
-        if (available < 1) throw new HttpsError('failed-precondition', `${product.name || 'A product'} is out of stock.`);
-        if (available < quantity) throw new HttpsError('failed-precondition', `${product.name || 'A product'} only has ${available} available.`);
+        const onHand = smePosQuantity(product.quantityOnHand, 'Product stock');
+        const reserved = smePosQuantity(product.reservedQuantity || 0, 'Reserved product stock');
+        const available = Math.max(0, onHand - reserved);
+        if (available < 1) throw new HttpsError('failed-precondition', `${product.name || 'A product'} is out of stock or fully reserved.`);
+        if (available < quantity) throw new HttpsError('failed-precondition', `${product.name || 'A product'} only has ${available} available after reservations.`);
       }
       const lineTotalMinor = unitPriceMinor * quantity;
       const lineCostMinor = unitCostMinor * quantity;
       if (!Number.isSafeInteger(lineTotalMinor) || !Number.isSafeInteger(lineCostMinor)) throw new HttpsError('out-of-range', 'Sale amount is too large.');
       subtotalMinor += lineTotalMinor; costMinor += lineCostMinor; itemCount += quantity;
-      return { productId: snapshot.id, productName: String(product.name || 'Product'), sku: String(product.sku || ''), barcode: String(product.barcode || ''), quantity, unitPriceMinor, unitCostMinor, lineTotalMinor, lineCostMinor, returnedQuantity: 0 };
+      return { productId: snapshot.id, productName: String(product.name || 'Product'), sku: String(product.sku || ''), barcode: String(product.barcode || ''), quantity, unitPriceMinor, unitCostMinor, lineTotalMinor, lineCostMinor, returnedQuantity: 0, quickAdd: false };
     });
+
+    quickItems.forEach((item, index) => {
+      const lineTotalMinor = item.unitPriceMinor * item.quantity;
+      if (!Number.isSafeInteger(lineTotalMinor)) throw new HttpsError('out-of-range', 'Quick Add amount is too large.');
+      subtotalMinor += lineTotalMinor;
+      itemCount += item.quantity;
+      saleItems.push({
+        productId: `quick-${saleRef.id}-${index}`,
+        productName: item.name,
+        sku: '', barcode: '', quantity: item.quantity, unitPriceMinor: item.unitPriceMinor, unitCostMinor: 0,
+        lineTotalMinor, lineCostMinor: 0, returnedQuantity: 0, quickAdd: true,
+      });
+    });
+
     if (discountMinor >= subtotalMinor) throw new HttpsError('invalid-argument', 'Discount must be less than the subtotal.');
     const totalMinor = subtotalMinor - discountMinor;
     const profitMinor = totalMinor - costMinor;
+    const paymentRows = parseSmePosPaymentRows(request.data || {}, totalMinor);
     const now = FieldValue.serverTimestamp();
-    const delta = accountEffect(account.type, 'in', totalMinor);
-    updateAccountBalance(transaction, accountRef, account, delta);
-    const ledgerEntryId = createLedgerEntry(transaction, { accountId: paymentAccountId, ownerId: String(context.settings.ownerId), spaceId, transactionId: financialRef.id, entryType: 'sme_pos_sale', amountMinor: delta, currency: account.currency, idempotencyKey: key, now });
-    const salesCategory = systemCategories.get('income-sales');
-    if (!salesCategory) throw new HttpsError('internal', 'Sales category is unavailable.');
-    transaction.create(financialRef, {
-      displayId: displayId('TXN'), ownerId: context.settings.ownerId, createdBy: uid, type: 'income', status: 'posted', spaceId, accountId: paymentAccountId, destinationAccountId: null,
-      amountMinor: totalMinor, currency: account.currency, category: salesCategory.name, categoryId: salesCategory.id, categoryIcon: salesCategory.icon, categoryColor: salesCategory.color,
-      categoryScope: 'business', categoryIsSystem: true, counterparty: customerSnapshot?.data()?.name || 'POS customer', note: note || `POS sale ${saleRef.id}`,
-      paymentMethod, paymentMethodLabel, transactionDate: saleDate, reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
-      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null, recurringTemplateId: null, recurringRunId: null, recurringScheduledDate: null,
-      createdAt: now, postedAt: now, updatedAt: now,
+    const payments = await postSmePosPayments({
+      transaction, rows: paymentRows, settings: context.settings, spaceId, uid, idempotencyKey: key, now,
+      transactionDate: saleDate, direction: 'in', entryType: 'sme_pos_sale',
+      counterparty: customerSnapshot?.data()?.name || 'POS customer', note: note || `POS sale ${saleRef.id}`, categoryId: 'income-sales',
+      extra: { posSaleId: saleRef.id },
     });
+
     productSnapshots.forEach((snapshot, index) => {
       const product = snapshot.data() || {};
       const quantity = requestedItems[index].quantity;
@@ -2126,23 +2356,26 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
     });
     if (customerRef && customerSnapshot) transaction.update(customerRef, { totalSpentMinor: Number(customerSnapshot.data()?.totalSpentMinor || 0) + totalMinor, visitCount: Number(customerSnapshot.data()?.visitCount || 0) + 1, lastSaleAt: now, updatedAt: now });
     const receiptNumber = displayId('RCP');
+    const firstPayment = payments[0];
     transaction.create(saleRef, {
       displayId: displayId('SAL'), receiptNumber, spaceId, ownerId: context.settings.ownerId, createdBy: uid, status: 'completed', returnStatus: 'not_returned', sourceMode: context.settings.mode,
-      customerId, customerName: customerSnapshot?.data()?.name || null, paymentAccountId, paymentAccountName: accountSnapshot.data()?.name || 'Business account', paymentMethod, paymentMethodLabel,
-      items: saleItems, itemCount, subtotalMinor, discountMinor, totalMinor, costMinor, profitMinor, returnedMinor: 0, currency: account.currency, saleDate, note,
-      transactionId: financialRef.id, ledgerEntryId, receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '',
+      customerId, customerName: customerSnapshot?.data()?.name || null,
+      paymentAccountId: firstPayment.accountId, paymentAccountName: firstPayment.accountName, paymentMethod: firstPayment.paymentMethod, paymentMethodLabel: firstPayment.paymentMethodLabel,
+      payments, items: saleItems, itemCount, subtotalMinor, discountMinor, totalMinor, costMinor, profitMinor, returnedMinor: 0, currency: context.settings.currency, saleDate, note,
+      transactionId: firstPayment.transactionId, ledgerEntryId: firstPayment.ledgerEntryId, transactionIds: payments.map((item) => item.transactionId), ledgerEntryIds: payments.map((item) => item.ledgerEntryId), reservationId: null,
+      receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '',
       createdAt: now, updatedAt: now,
     });
-    const result = { saleId: saleRef.id, receiptNumber, transactionId: financialRef.id };
+    const result = { saleId: saleRef.id, receiptNumber, transactionId: firstPayment.transactionId, transactionIds: payments.map((item) => item.transactionId) };
     transaction.create(commandRef, { uid, kind: 'checkout_standard_pos', idempotencyKey: key, result, createdAt: now });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed POS sale ${receiptNumber} for ${totalMinor / 100} ${account.currency}.`, now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed POS sale ${receiptNumber} for ${totalMinor / 100} ${context.settings.currency}${quickItems.length ? ` with ${quickItems.length} Quick Add line(s)` : ''}.`, now });
     return result;
   });
 });
 
 function parseMarketplaceCheckoutItems(value: unknown): Array<{ listingId: string; quantity: number }> {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 50) {
-    throw new HttpsError('invalid-argument', 'Checkout must contain between 1 and 50 listing lines.');
+  if (!Array.isArray(value) || value.length > 50) {
+    throw new HttpsError('invalid-argument', 'Checkout can contain up to 50 listing lines.');
   }
   const seen = new Set<string>();
   return value.map((row) => {
@@ -2274,7 +2507,19 @@ export const getMarketplacePosWorkspace = onCall({ region }, async (request) => 
     sales = (saleSnapshot?.docs || [])
       .map((item): DocumentData => ({ id: item.id, ...item.data() }))
       .filter((item) => item.sourceMode === 'marketplace_consignment' && item.createdBy === uid)
-      .map((item) => ({ ...item, costMinor: 0, profitMinor: 0, marketplaceCommissionMinor: 0, sellerEarningsMinor: 0 }));
+      .map((item) => ({
+        ...item,
+        items: Array.isArray(item.items) ? item.items.map((line: DocumentData) => ({
+          ...line,
+          unitCostMinor: 0, lineCostMinor: 0, commissionType: undefined, commissionRateBps: undefined, commissionMinor: 0, sellerEarningMinor: 0,
+          commissionReturnedMinor: 0, sellerEarningReturnedMinor: 0,
+        })) : [],
+        payments: Array.isArray(item.payments) ? item.payments.map((payment: DocumentData) => ({
+          ...payment, accountId: '', transactionId: '', ledgerEntryId: '',
+        })) : undefined,
+        transactionId: '', ledgerEntryId: '', transactionIds: [], ledgerEntryIds: [],
+        costMinor: 0, profitMinor: 0, marketplaceCommissionMinor: 0, sellerEarningsMinor: 0,
+      }));
   } else if (context.role === 'stock_staff') {
     listings = allListings.map((item) => ({
       ...item,
@@ -2435,18 +2680,22 @@ export const deleteMarketplaceSeller = onCall({ region }, async (request) => {
 
   const sellerRef = db.collection('smePosSellers').doc(sellerId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
-  const [sellerSnapshot, listingsSnapshot, salesSnapshot, ledgerSnapshot, payoutSnapshot] = await Promise.all([
+  const [sellerSnapshot, listingsSnapshot, salesSnapshot, ledgerSnapshot, payoutSnapshot, reservationsSnapshot] = await Promise.all([
     sellerRef.get(),
     db.collection('smePosListings').where('spaceId', '==', spaceId).get(),
     db.collection('smePosSales').where('spaceId', '==', spaceId).get(),
     db.collection('smePosSellerLedger').where('sellerId', '==', sellerId).get(),
     db.collection('smePosPayouts').where('sellerId', '==', sellerId).get(),
+    db.collection('smePosReservations').where('spaceId', '==', spaceId).get(),
   ]);
 
   if (!sellerSnapshot.exists || sellerSnapshot.data()?.spaceId !== spaceId) throw new HttpsError('not-found', 'Seller not found.');
   if (Number(sellerSnapshot.data()?.balanceMinor || 0) !== 0) {
     throw new HttpsError('failed-precondition', 'Settle this seller’s balance before deleting the seller profile.');
   }
+  const hasActiveBooking = reservationsSnapshot.docs.some((item) => !['completed', 'cancelled'].includes(String(item.data().status || ''))
+    && Array.isArray(item.data().items) && item.data().items.some((line: DocumentData) => line?.sellerId === sellerId));
+  if (hasActiveBooking) throw new HttpsError('failed-precondition', 'This seller has items in an active booking. Complete or cancel the booking before deleting the seller profile.');
 
   const sellerListings = listingsSnapshot.docs.filter((item) => item.data().sellerId === sellerId);
   if (sellerListings.length > 450) throw new HttpsError('failed-precondition', 'This seller has too many listing records to delete safely at once. Contact the owner support workflow.');
@@ -2541,9 +2790,12 @@ export const saveMarketplaceListing = onCall({ region }, async (request) => {
     ]);
     if (command.exists) return command.data()?.result;
     if (listingId && (!current.exists || current.data()?.spaceId !== spaceId)) throw new HttpsError('not-found', 'Listing not found.');
-    if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.archivedAt) throw new HttpsError('failed-precondition', 'Choose an active seller.');
+    if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.archivedAt || seller.data()?.deletedAt) throw new HttpsError('failed-precondition', 'Choose an active seller.');
     assertUniqueSmePosBarcode(spaceListings.docs, listingRef.id, barcodeKey, 'Marketplace listing');
     const existing = current.data() || {};
+    const reservedQuantity = smePosQuantity(existing.reservedQuantity || 0, 'Reserved quantity');
+    if (current.exists && quantityOnHand < reservedQuantity) throw new HttpsError('failed-precondition', `Available quantity cannot be lower than ${reservedQuantity} unit(s) currently reserved in bookings.`);
+    if (current.exists && reservedQuantity > 0 && existing.sellerId && existing.sellerId !== sellerId) throw new HttpsError('failed-precondition', 'This listing has active booked quantity. Complete or cancel the booking before changing its seller.');
     const now = FieldValue.serverTimestamp();
     transaction.set(listingRef, {
       displayId: existing.displayId || displayId('LST'), spaceId, ownerId: context.settings.ownerId,
@@ -2552,7 +2804,7 @@ export const saveMarketplaceListing = onCall({ region }, async (request) => {
       photoPath: photoPathProvided ? photoPath : (existing.photoPath || null),
       note, condition, conditionNote, sellingPriceMinor, currency: context.settings.currency || 'BND',
       commissionType: commission.commissionType, commissionRateBps: commission.commissionRateBps, commissionMinor: commission.commissionMinor,
-      quantityOnHand, lowStockLevel,
+      quantityOnHand, reservedQuantity, lowStockLevel,
       soldQuantity: Number(existing.soldQuantity || 0), grossSalesMinor: Number(existing.grossSalesMinor || 0),
       commissionEarnedMinor: Number(existing.commissionEarnedMinor || 0), sellerEarningsMinor: Number(existing.sellerEarningsMinor || 0),
       stockSource: existing.stockSource || 'catalog',
@@ -2631,6 +2883,7 @@ export const registerExistingMarketplaceListing = onCall({ region }, async (requ
       commissionRateBps: commission.commissionRateBps,
       commissionMinor: commission.commissionMinor,
       quantityOnHand,
+      reservedQuantity: 0,
       lowStockLevel,
       soldQuantity: 0,
       grossSalesMinor: 0,
@@ -2677,6 +2930,8 @@ export const updateMarketplaceListingStock = onCall({ region }, async (request) 
     const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
     if (command.exists) return command.data()?.result;
     if (!listing.exists || listing.data()?.spaceId !== spaceId || listing.data()?.archivedAt) throw new HttpsError('not-found', 'Active listing not found.');
+    const reservedQuantity = smePosQuantity(listing.data()?.reservedQuantity || 0, 'Reserved quantity');
+    if (quantityOnHand < reservedQuantity) throw new HttpsError('failed-precondition', `Stock cannot be counted below ${reservedQuantity} unit(s) currently reserved in bookings.`);
     const previousQuantity = smePosQuantity(listing.data()?.quantityOnHand, 'Current quantity');
     const difference = quantityOnHand - previousQuantity;
     const now = FieldValue.serverTimestamp();
@@ -2747,6 +3002,7 @@ export const setMarketplaceListingArchived = onCall({ region }, async (request) 
     const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
     if (command.exists) return command.data()?.result;
     if (!listing.exists || listing.data()?.spaceId !== spaceId) throw new HttpsError('not-found', 'Listing not found.');
+    if (archived && Number(listing.data()?.reservedQuantity || 0) > 0) throw new HttpsError('failed-precondition', 'This listing has active booked quantity. Complete or cancel the booking before archiving it.');
     if (!archived) {
       if (listing.data()?.sellerDeletedAt) throw new HttpsError('failed-precondition', 'This listing was removed when its seller profile was deleted.');
       const seller = await transaction.get(db.collection('smePosSellers').doc(String(listing.data()?.sellerId || '')));
@@ -2765,10 +3021,11 @@ export const setMarketplaceListingArchived = onCall({ region }, async (request) 
 export const checkoutMarketplacePos = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
-  const requestedItems = parseMarketplaceCheckoutItems(request.data?.items);
+  const requestedItems = parseMarketplaceCheckoutItems(request.data?.items || []);
+  const quickItems = parseMarketplaceQuickItems(request.data?.quickItems);
+  if (!requestedItems.length && !quickItems.length) throw new HttpsError('invalid-argument', 'Add at least one listing or Quick Add item to checkout.');
+  if (requestedItems.length + quickItems.length > 50) throw new HttpsError('invalid-argument', 'Checkout can contain up to 50 lines.');
   const customerId = optionalString(request.data?.customerId, 80) || null;
-  const paymentAccountId = stringValue(request.data?.paymentAccountId, 'Payment account', 80);
-  const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const discountMinor = nonNegativeMoney(request.data?.discountMinor ?? 0);
   const saleDate = localDate(request.data?.saleDate, 'Sale date');
   const note = optionalString(request.data?.note, 500);
@@ -2778,47 +3035,71 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
   if (context.settings.status !== 'active') throw new HttpsError('failed-precondition', 'Activate the POS before completing checkout.');
 
   const listingRefs = requestedItems.map((item) => db.collection('smePosListings').doc(item.listingId));
-  const accountRef = db.collection('accounts').doc(paymentAccountId);
   const customerRef = customerId ? db.collection('smePosCustomers').doc(customerId) : null;
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   const saleRef = db.collection('smePosSales').doc();
-  const financialRef = db.collection('transactions').doc();
 
   return db.runTransaction(async (transaction) => {
-    const [command, accountSnapshot, customerSnapshot, listingSnapshots] = await Promise.all([
-      transaction.get(commandRef), transaction.get(accountRef), customerRef ? transaction.get(customerRef) : Promise.resolve(null), Promise.all(listingRefs.map((ref) => transaction.get(ref))),
+    const [command, customerSnapshot, listingSnapshots] = await Promise.all([
+      transaction.get(commandRef), customerRef ? transaction.get(customerRef) : Promise.resolve(null), Promise.all(listingRefs.map((ref) => transaction.get(ref))),
     ]);
     if (command.exists) return command.data()?.result;
-    const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Payment account');
-    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'Choose a business account for POS payments.');
-    requireSmePosPaymentAccountForSpace(context.settings, accountSnapshot.data() || {}, paymentAccountId, spaceId);
-    if (account.currency !== context.settings.currency) throw new HttpsError('failed-precondition', 'Payment account and POS currency must match.');
-    if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
+    if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt || customerSnapshot.data()?.deletedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
 
-    const prepared = listingSnapshots.map((snapshot, index) => {
+    const prepared: Array<{ snapshot: DocumentReference | null; listing: DocumentData; quantity: number; unitPriceMinor: number; lineSubtotalMinor: number; quickAdd: boolean }> = listingSnapshots.map((snapshot, index) => {
       if (!snapshot.exists) throw new HttpsError('not-found', 'One of the seller listings was not found.');
       const listing = snapshot.data() || {};
       const requested = requestedItems[index];
-      if (listing.spaceId !== spaceId || listing.ownerId !== context.settings.ownerId || listing.archivedAt) throw new HttpsError('failed-precondition', 'One of the seller listings is unavailable.');
-      const available = smePosQuantity(listing.quantityOnHand, 'Listing stock');
-      if (available < 1) throw new HttpsError('failed-precondition', `${listing.name || 'A listing'} is out of stock.`);
-      if (available < requested.quantity) throw new HttpsError('failed-precondition', `${listing.name || 'A listing'} only has ${available} available.`);
+      if (listing.spaceId !== spaceId || listing.ownerId !== context.settings.ownerId || listing.archivedAt || listing.sellerDeletedAt) throw new HttpsError('failed-precondition', 'One of the seller listings is unavailable.');
+      const onHand = smePosQuantity(listing.quantityOnHand, 'Listing stock');
+      const reserved = smePosQuantity(listing.reservedQuantity || 0, 'Reserved listing stock');
+      const available = Math.max(0, onHand - reserved);
+      if (available < 1) throw new HttpsError('failed-precondition', `${listing.name || 'A listing'} is out of stock or fully reserved.`);
+      if (available < requested.quantity) throw new HttpsError('failed-precondition', `${listing.name || 'A listing'} only has ${available} available after reservations.`);
       const unitPriceMinor = positiveMoney(listing.sellingPriceMinor);
       const lineSubtotalMinor = unitPriceMinor * requested.quantity;
       if (!Number.isSafeInteger(lineSubtotalMinor)) throw new HttpsError('out-of-range', 'Sale amount is too large.');
-      return { snapshot, listing, requested, unitPriceMinor, lineSubtotalMinor };
+      return { snapshot: snapshot.ref, listing, quantity: requested.quantity, unitPriceMinor, lineSubtotalMinor, quickAdd: false };
     });
-    const subtotalMinor = prepared.reduce((sum, item) => sum + item.lineSubtotalMinor, 0);
-    if (discountMinor >= subtotalMinor) throw new HttpsError('invalid-argument', 'Discount must be less than the subtotal.');
 
-    const sellerIds = [...new Set(prepared.map((item) => String(item.listing.sellerId || '')))];
+    const sellerIds = [...new Set([
+      ...prepared.map((item) => String(item.listing.sellerId || '')),
+      ...quickItems.map((item) => item.sellerId),
+    ])];
     if (sellerIds.some((id) => !id)) throw new HttpsError('failed-precondition', 'A listing is missing its seller.');
     const sellerRefs = sellerIds.map((sellerId) => db.collection('smePosSellers').doc(sellerId));
     const sellerSnapshots = await Promise.all(sellerRefs.map((ref) => transaction.get(ref)));
     const sellerById = new Map(sellerSnapshots.map((snapshot) => [snapshot.id, snapshot]));
     sellerSnapshots.forEach((snapshot) => {
-      if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'One of the sellers is unavailable.');
+      if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.archivedAt || snapshot.data()?.deletedAt) throw new HttpsError('failed-precondition', 'One of the sellers is unavailable.');
     });
+
+    quickItems.forEach((item) => {
+      const seller = sellerById.get(item.sellerId)!;
+      const sellerData = seller.data() || {};
+      const lineSubtotalMinor = item.unitPriceMinor * item.quantity;
+      if (!Number.isSafeInteger(lineSubtotalMinor)) throw new HttpsError('out-of-range', 'Quick Add amount is too large.');
+      prepared.push({
+        snapshot: null,
+        listing: {
+          sellerId: item.sellerId,
+          sellerName: sellerData.name || 'Seller',
+          sellerUid: sellerData.linkedUid || null,
+          name: item.name,
+          sku: '', barcode: '', condition: item.condition,
+          commissionType: sellerData.defaultCommissionType || 'percentage',
+          commissionRateBps: sellerData.defaultCommissionRateBps || 0,
+          commissionMinor: sellerData.defaultCommissionMinor || 0,
+        },
+        quantity: item.quantity,
+        unitPriceMinor: item.unitPriceMinor,
+        lineSubtotalMinor,
+        quickAdd: true,
+      });
+    });
+
+    const subtotalMinor = prepared.reduce((sum, item) => sum + item.lineSubtotalMinor, 0);
+    if (discountMinor >= subtotalMinor) throw new HttpsError('invalid-argument', 'Discount must be less than the subtotal.');
 
     let remainingDiscount = discountMinor;
     let marketplaceCommissionMinor = 0;
@@ -2826,9 +3107,7 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
     let itemCount = 0;
     const sellerTotals = new Map<string, { gross: number; commission: number; earnings: number; quantity: number }>();
     const saleItems = prepared.map((item, index) => {
-      const discountShareMinor = index === prepared.length - 1
-        ? remainingDiscount
-        : Math.floor(discountMinor * item.lineSubtotalMinor / subtotalMinor);
+      const discountShareMinor = index === prepared.length - 1 ? remainingDiscount : Math.floor(discountMinor * item.lineSubtotalMinor / subtotalMinor);
       remainingDiscount -= discountShareMinor;
       const netLineMinor = item.lineSubtotalMinor - discountShareMinor;
       const commissionType = oneOf(item.listing.commissionType, smePosCommissionTypes, 'listing commission type');
@@ -2836,52 +3115,50 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
       const fixedCommissionMinor = commissionType === 'fixed_per_item' ? nonNegativeMoney(item.listing.commissionMinor ?? 0) : 0;
       const commissionMinor = commissionType === 'percentage'
         ? Math.floor(netLineMinor * commissionRateBps / 10_000)
-        : Math.min(netLineMinor, fixedCommissionMinor * item.requested.quantity);
+        : Math.min(netLineMinor, fixedCommissionMinor * item.quantity);
       const sellerEarningMinor = netLineMinor - commissionMinor;
       marketplaceCommissionMinor += commissionMinor;
       sellerEarningsMinor += sellerEarningMinor;
-      itemCount += item.requested.quantity;
+      itemCount += item.quantity;
       const sellerId = String(item.listing.sellerId);
       const aggregate = sellerTotals.get(sellerId) || { gross: 0, commission: 0, earnings: 0, quantity: 0 };
       aggregate.gross += netLineMinor;
       aggregate.commission += commissionMinor;
       aggregate.earnings += sellerEarningMinor;
-      aggregate.quantity += item.requested.quantity;
+      aggregate.quantity += item.quantity;
       sellerTotals.set(sellerId, aggregate);
+      const lineId = item.quickAdd ? `quick-${saleRef.id}-${index}` : String(item.snapshot!.id);
       return {
-        productId: item.snapshot.id, listingId: item.snapshot.id, productName: String(item.listing.name || 'Item'), sku: String(item.listing.sku || ''), barcode: String(item.listing.barcode || ''),
+        productId: lineId,
+        listingId: item.quickAdd ? null : lineId,
+        productName: String(item.listing.name || 'Item'), sku: String(item.listing.sku || ''), barcode: String(item.listing.barcode || ''),
         sellerId, sellerName: String(item.listing.sellerName || sellerById.get(sellerId)?.data()?.name || 'Seller'), sellerUid: item.listing.sellerUid || sellerById.get(sellerId)?.data()?.linkedUid || null,
-        condition: oneOf(item.listing.condition, smePosListingConditions, 'item condition'), quantity: item.requested.quantity,
-        unitPriceMinor: item.unitPriceMinor, unitCostMinor: Math.floor(sellerEarningMinor / item.requested.quantity),
+        condition: oneOf(item.listing.condition, smePosListingConditions, 'item condition'), quantity: item.quantity,
+        unitPriceMinor: item.unitPriceMinor, unitCostMinor: Math.floor(sellerEarningMinor / item.quantity),
         lineTotalMinor: item.lineSubtotalMinor, lineCostMinor: sellerEarningMinor, discountShareMinor, netLineMinor, commissionMinor, sellerEarningMinor,
-        returnedQuantity: 0, returnedMinor: 0, commissionReturnedMinor: 0, sellerEarningReturnedMinor: 0,
+        returnedQuantity: 0, returnedMinor: 0, commissionReturnedMinor: 0, sellerEarningReturnedMinor: 0, quickAdd: item.quickAdd,
       };
     });
     const totalMinor = subtotalMinor - discountMinor;
     if (marketplaceCommissionMinor + sellerEarningsMinor !== totalMinor) throw new HttpsError('internal', 'Marketplace sale split did not balance.');
-
+    const paymentRows = parseSmePosPaymentRows(request.data || {}, totalMinor);
     const now = FieldValue.serverTimestamp();
-    const delta = accountEffect(account.type, 'in', totalMinor);
-    updateAccountBalance(transaction, accountRef, account, delta);
-    const ledgerEntryId = createLedgerEntry(transaction, { accountId: paymentAccountId, ownerId: String(context.settings.ownerId), spaceId, transactionId: financialRef.id, entryType: 'marketplace_pos_sale', amountMinor: delta, currency: account.currency, idempotencyKey: key, now });
-    const salesCategory = systemCategories.get('income-sales');
-    if (!salesCategory) throw new HttpsError('internal', 'Sales category is unavailable.');
-    transaction.create(financialRef, {
-      displayId: displayId('TXN'), ownerId: context.settings.ownerId, createdBy: uid, type: 'income', status: 'posted', spaceId, accountId: paymentAccountId, destinationAccountId: null,
-      amountMinor: totalMinor, currency: account.currency, category: salesCategory.name, categoryId: salesCategory.id, categoryIcon: salesCategory.icon, categoryColor: salesCategory.color,
-      categoryScope: 'business', categoryIsSystem: true, counterparty: customerSnapshot?.data()?.name || 'Marketplace POS customer', note: note || `Marketplace POS sale ${saleRef.id}`,
-      paymentMethod, paymentMethodLabel, transactionDate: saleDate, reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
-      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null, recurringTemplateId: null, recurringRunId: null, recurringScheduledDate: null,
-      createdAt: now, postedAt: now, updatedAt: now,
+    const payments = await postSmePosPayments({
+      transaction, rows: paymentRows, settings: context.settings, spaceId, uid, idempotencyKey: key, now,
+      transactionDate: saleDate, direction: 'in', entryType: 'marketplace_pos_sale',
+      counterparty: customerSnapshot?.data()?.name || 'Marketplace POS customer', note: note || `Marketplace POS sale ${saleRef.id}`, categoryId: 'income-sales',
+      extra: { posSaleId: saleRef.id },
     });
 
     prepared.forEach((item, index) => {
-      transaction.update(item.snapshot.ref, {
-        quantityOnHand: Number(item.listing.quantityOnHand || 0) - item.requested.quantity,
-        soldQuantity: Number(item.listing.soldQuantity || 0) + item.requested.quantity,
-        grossSalesMinor: Number(item.listing.grossSalesMinor || 0) + saleItems[index].netLineMinor,
-        commissionEarnedMinor: Number(item.listing.commissionEarnedMinor || 0) + saleItems[index].commissionMinor,
-        sellerEarningsMinor: Number(item.listing.sellerEarningsMinor || 0) + saleItems[index].sellerEarningMinor,
+      if (!item.snapshot) return;
+      const saleItem = saleItems[index];
+      transaction.update(item.snapshot, {
+        quantityOnHand: Number(item.listing.quantityOnHand || 0) - item.quantity,
+        soldQuantity: Number(item.listing.soldQuantity || 0) + item.quantity,
+        grossSalesMinor: Number(item.listing.grossSalesMinor || 0) + saleItem.netLineMinor,
+        commissionEarnedMinor: Number(item.listing.commissionEarnedMinor || 0) + saleItem.commissionMinor,
+        sellerEarningsMinor: Number(item.listing.sellerEarningsMinor || 0) + saleItem.sellerEarningMinor,
         updatedAt: now,
       });
     });
@@ -2904,23 +3181,26 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
       transaction.create(sellerLedgerRef, {
         displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId,
         sellerName: snapshot.data()?.name || 'Seller', sellerUid: snapshot.data()?.linkedUid || null,
-        kind: 'sale_earning', amountMinor: totals.earnings, balanceAfterMinor: nextBalance, currency: account.currency,
+        kind: 'sale_earning', amountMinor: totals.earnings, balanceAfterMinor: nextBalance, currency: context.settings.currency,
         saleId: saleRef.id, receiptNumber, payoutId: null, note: `${totals.quantity} item(s) sold`, createdAt: now,
       });
     });
 
     if (customerRef && customerSnapshot) transaction.update(customerRef, { totalSpentMinor: Number(customerSnapshot.data()?.totalSpentMinor || 0) + totalMinor, visitCount: Number(customerSnapshot.data()?.visitCount || 0) + 1, lastSaleAt: now, updatedAt: now });
+    const firstPayment = payments[0];
     transaction.create(saleRef, {
       displayId: displayId('SAL'), receiptNumber, spaceId, ownerId: context.settings.ownerId, createdBy: uid, status: 'completed', returnStatus: 'not_returned', sourceMode: 'marketplace_consignment',
-      customerId, customerName: customerSnapshot?.data()?.name || null, paymentAccountId, paymentAccountName: accountSnapshot.data()?.name || 'Business account', paymentMethod, paymentMethodLabel,
+      customerId, customerName: customerSnapshot?.data()?.name || null,
+      paymentAccountId: firstPayment.accountId, paymentAccountName: firstPayment.accountName, paymentMethod: firstPayment.paymentMethod, paymentMethodLabel: firstPayment.paymentMethodLabel, payments,
       items: saleItems, itemCount, subtotalMinor, discountMinor, totalMinor, costMinor: sellerEarningsMinor, profitMinor: marketplaceCommissionMinor,
-      marketplaceCommissionMinor, sellerEarningsMinor, sellerCount: sellerTotals.size, returnedMinor: 0, currency: account.currency, saleDate, note,
-      transactionId: financialRef.id, ledgerEntryId, receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '',
+      marketplaceCommissionMinor, sellerEarningsMinor, sellerCount: sellerTotals.size, returnedMinor: 0, currency: context.settings.currency, saleDate, note,
+      transactionId: firstPayment.transactionId, ledgerEntryId: firstPayment.ledgerEntryId, transactionIds: payments.map((item) => item.transactionId), ledgerEntryIds: payments.map((item) => item.ledgerEntryId), reservationId: null,
+      receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '',
       createdAt: now, updatedAt: now,
     });
-    const result = { saleId: saleRef.id, receiptNumber, transactionId: financialRef.id };
+    const result = { saleId: saleRef.id, receiptNumber, transactionId: firstPayment.transactionId, transactionIds: payments.map((item) => item.transactionId) };
     transaction.create(commandRef, { uid, kind: 'checkout_marketplace_pos', idempotencyKey: key, result, createdAt: now });
-    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'marketplace_pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed Marketplace sale ${receiptNumber} for ${totalMinor / 100} ${account.currency} across ${sellerTotals.size} seller(s).`, now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'marketplace_pos_sale_completed', targetType: 'sme_pos_sale', targetId: saleRef.id, summary: `Completed Marketplace sale ${receiptNumber} for ${totalMinor / 100} ${context.settings.currency} across ${sellerTotals.size} seller(s)${quickItems.length ? ` with ${quickItems.length} Quick Add line(s)` : ''}.`, now });
     return result;
   });
 });
@@ -2963,6 +3243,393 @@ function smePosNetLineTotals(items: DocumentData[], discountMinor: number): numb
   });
 }
 
+export const listSmePosReservations = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const includeClosedRequested = request.data?.includeClosed === true;
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  const snapshot = await db.collection('smePosReservations').where('spaceId', '==', spaceId).get();
+  const includeClosed = includeClosedRequested && ['owner', 'manager'].includes(context.role);
+  let rows = snapshot.docs
+    .map((doc): DocumentData => ({ id: doc.id, ...doc.data() }))
+    .filter((row) => includeClosed || !['completed', 'cancelled'].includes(String(row.status || '')))
+    .sort((a, b) => marketplaceSortValue(b) - marketplaceSortValue(a));
+  if (context.role === 'cashier') {
+    rows = rows.map((row) => ({
+      ...row,
+      items: Array.isArray(row.items) ? row.items.map((item: DocumentData) => ({
+        ...item,
+        unitCostMinor: 0,
+        commissionType: undefined,
+        commissionRateBps: undefined,
+        commissionMinor: undefined,
+      })) : [],
+      payments: Array.isArray(row.payments) ? row.payments.map((payment: DocumentData) => ({
+        ...payment,
+        transactionId: '',
+        ledgerEntryId: '',
+      })) : [],
+    }));
+  }
+  return { reservations: rows };
+});
+
+export const createSmePosReservation = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const sourceMode = oneOf(request.data?.sourceMode, smePosModes, 'POS mode');
+  const requestedItems = parseSmePosReservationItems(request.data?.items);
+  const customerId = stringValue(request.data?.customerId, 'Customer', 80);
+  const discountMinor = nonNegativeMoney(request.data?.discountMinor || 0);
+  const reservationDate = localDate(request.data?.reservationDate, 'Booking date');
+  const dueDate = request.data?.dueDate ? localDate(request.data.dueDate, 'Due date') : null;
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  if (context.settings.mode !== sourceMode) throw new HttpsError('failed-precondition', 'This booking does not match the current POS mode.');
+  if (context.settings.status !== 'active') throw new HttpsError('failed-precondition', 'Activate the POS before creating a booking.');
+
+  const customerRef = db.collection('smePosCustomers').doc(customerId);
+  const itemRefs = requestedItems.map((item) => sourceMode === 'marketplace_consignment'
+    ? db.collection('smePosListings').doc(item.itemId)
+    : db.collection('smePosProducts').doc(item.itemId));
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const reservationRef = db.collection('smePosReservations').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const [command, customerSnapshot, itemSnapshots] = await Promise.all([
+      transaction.get(commandRef), transaction.get(customerRef), Promise.all(itemRefs.map((ref) => transaction.get(ref))),
+    ]);
+    if (command.exists) return command.data()?.result;
+    if (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt || customerSnapshot.data()?.deletedAt) throw new HttpsError('failed-precondition', 'Choose an active saved customer for the booking.');
+
+    const sellerIds = sourceMode === 'marketplace_consignment'
+      ? [...new Set(itemSnapshots.map((snapshot) => String(snapshot.data()?.sellerId || '')).filter(Boolean))]
+      : [];
+    const sellerSnapshots = sourceMode === 'marketplace_consignment'
+      ? await Promise.all(sellerIds.map((sellerId) => transaction.get(db.collection('smePosSellers').doc(sellerId))))
+      : [];
+    const sellerById = new Map(sellerSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+    sellerSnapshots.forEach((snapshot) => {
+      if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.archivedAt || snapshot.data()?.deletedAt) throw new HttpsError('failed-precondition', 'A seller linked to this booking is unavailable.');
+    });
+
+    let subtotalMinor = 0;
+    let itemCount = 0;
+    const reservationItems = itemSnapshots.map((snapshot, index) => {
+      if (!snapshot.exists) throw new HttpsError('not-found', 'One of the booking items was not found.');
+      const item = snapshot.data() || {};
+      const requested = requestedItems[index];
+      if (item.spaceId !== spaceId || item.ownerId !== context.settings.ownerId || item.archivedAt || item.sellerDeletedAt) throw new HttpsError('failed-precondition', 'One of the booking items is unavailable.');
+      const onHand = item.trackStock === false ? 999_999 : smePosQuantity(item.quantityOnHand, 'Item stock');
+      const reserved = smePosQuantity(item.reservedQuantity || 0, 'Reserved stock');
+      const available = item.trackStock === false ? 999_999 : Math.max(0, onHand - reserved);
+      if (available < requested.quantity) throw new HttpsError('failed-precondition', `${item.name || 'An item'} only has ${available} available after existing bookings.`);
+      const unitPriceMinor = positiveMoney(item.sellingPriceMinor);
+      const lineTotalMinor = unitPriceMinor * requested.quantity;
+      if (!Number.isSafeInteger(lineTotalMinor)) throw new HttpsError('out-of-range', 'Booking amount is too large.');
+      subtotalMinor += lineTotalMinor;
+      itemCount += requested.quantity;
+      const sellerId = sourceMode === 'marketplace_consignment' ? stringValue(item.sellerId, 'Seller ID', 80) : undefined;
+      const seller = sellerId ? sellerById.get(sellerId) : null;
+      return {
+        itemId: snapshot.id,
+        productName: String(item.name || 'Item'), sku: String(item.sku || ''), barcode: String(item.barcode || ''),
+        quantity: requested.quantity, unitPriceMinor,
+        unitCostMinor: sourceMode === 'marketplace_consignment' ? 0 : (item.costPriceMinor == null ? 0 : nonNegativeMoney(item.costPriceMinor)),
+        lineTotalMinor,
+        sellerId, sellerName: sellerId ? String(item.sellerName || seller?.data()?.name || 'Seller') : undefined,
+        sellerUid: sellerId ? (item.sellerUid || seller?.data()?.linkedUid || null) : undefined,
+        condition: sourceMode === 'marketplace_consignment' ? oneOf(item.condition, smePosListingConditions, 'Item condition') : undefined,
+        commissionType: sourceMode === 'marketplace_consignment' ? oneOf(item.commissionType, smePosCommissionTypes, 'Commission type') : undefined,
+        commissionRateBps: sourceMode === 'marketplace_consignment' ? integerBetween(item.commissionRateBps || 0, 'Commission percentage', 0, 10_000) : undefined,
+        commissionMinor: sourceMode === 'marketplace_consignment' ? nonNegativeMoney(item.commissionMinor || 0) : undefined,
+      };
+    });
+    if (discountMinor >= subtotalMinor) throw new HttpsError('invalid-argument', 'Booking discount must be less than the subtotal.');
+    const totalMinor = subtotalMinor - discountMinor;
+    const depositRows = parseSmePosPartialPaymentRows(request.data?.depositPayments, totalMinor, 'Deposit');
+    const depositMinor = depositRows.reduce((sum, row) => sum + row.amountMinor, 0);
+    const remainingMinor = totalMinor - depositMinor;
+    const now = FieldValue.serverTimestamp();
+    const payments = await postSmePosPayments({
+      transaction, rows: depositRows, settings: context.settings, spaceId, uid, idempotencyKey: `${key}:deposit`, now,
+      transactionDate: reservationDate, direction: 'in', entryType: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_reservation_deposit' : 'sme_pos_reservation_deposit',
+      counterparty: String(customerSnapshot.data()?.name || 'POS customer'), note: note || `Deposit for booking ${reservationRef.id}`, categoryId: 'income-sales',
+      extra: { posReservationId: reservationRef.id },
+    });
+
+    itemSnapshots.forEach((snapshot, index) => {
+      const item = snapshot.data() || {};
+      if (item.trackStock === false) return;
+      transaction.update(snapshot.ref, { reservedQuantity: Number(item.reservedQuantity || 0) + requestedItems[index].quantity, updatedAt: now });
+    });
+    const status = remainingMinor === 0 ? 'paid' : depositMinor > 0 ? 'partially_paid' : 'reserved';
+    const reservationNumber = displayId('RSV');
+    transaction.create(reservationRef, {
+      displayId: displayId('RSB'), reservationNumber, spaceId, ownerId: context.settings.ownerId, createdBy: uid,
+      createdByName: context.member.displayName || context.member.email || '', sourceMode, status,
+      customerId, customerName: customerSnapshot.data()?.name || 'Customer', customerPhone: customerSnapshot.data()?.phone || '',
+      items: reservationItems, itemCount, subtotalMinor, discountMinor, totalMinor, depositMinor, remainingMinor, payments,
+      currency: context.settings.currency, reservationDate, dueDate, note, saleId: null, receiptNumber: null, completedAt: null, cancelledAt: null,
+      createdAt: now, updatedAt: now,
+    });
+    const result = { reservationId: reservationRef.id, reservationNumber, remainingMinor };
+    transaction.create(commandRef, { uid, kind: 'create_sme_pos_reservation', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'sme_pos_reservation_created', targetType: 'sme_pos_reservation', targetId: reservationRef.id, summary: `Created booking ${reservationNumber} for ${totalMinor / 100} ${context.settings.currency}${depositMinor ? ` with ${depositMinor / 100} deposit` : ''}.`, now });
+    return result;
+  });
+});
+
+export const addSmePosReservationDeposit = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const reservationId = stringValue(request.data?.reservationId, 'Booking ID', 80);
+  const paymentDate = localDate(request.data?.paymentDate, 'Payment date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  const reservationRef = db.collection('smePosReservations').doc(reservationId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, snapshot] = await Promise.all([transaction.get(commandRef), transaction.get(reservationRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('not-found', 'Booking not found.');
+    const reservation = snapshot.data() || {};
+    if (['completed', 'cancelled'].includes(String(reservation.status || ''))) throw new HttpsError('failed-precondition', 'This booking is already closed.');
+    const remainingBefore = positiveMoney(reservation.remainingMinor);
+    const rows = parseSmePosPartialPaymentRows(request.data?.payments, remainingBefore, 'Deposit');
+    if (!rows.length) throw new HttpsError('invalid-argument', 'Enter at least one deposit payment.');
+    const addedMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
+    const now = FieldValue.serverTimestamp();
+    const posted = await postSmePosPayments({
+      transaction, rows, settings: context.settings, spaceId, uid, idempotencyKey: `${key}:deposit`, now,
+      transactionDate: paymentDate, direction: 'in', entryType: reservation.sourceMode === 'marketplace_consignment' ? 'marketplace_pos_reservation_deposit' : 'sme_pos_reservation_deposit',
+      counterparty: String(reservation.customerName || 'POS customer'), note: note || `Additional deposit for ${reservation.reservationNumber || reservationId}`, categoryId: 'income-sales',
+      extra: { posReservationId: reservationId },
+    });
+    const depositMinor = nonNegativeMoney(reservation.depositMinor || 0) + addedMinor;
+    const remainingMinor = nonNegativeMoney(reservation.totalMinor || 0) - depositMinor;
+    transaction.update(reservationRef, { depositMinor, remainingMinor, status: remainingMinor === 0 ? 'paid' : 'partially_paid', payments: [...(Array.isArray(reservation.payments) ? reservation.payments : []), ...posted], updatedAt: now });
+    const result = { reservationId, depositMinor, remainingMinor };
+    transaction.create(commandRef, { uid, kind: 'add_sme_pos_reservation_deposit', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'sme_pos_reservation_deposit_added', targetType: 'sme_pos_reservation', targetId: reservationId, summary: `Added ${addedMinor / 100} ${context.settings.currency} deposit to ${reservation.reservationNumber || reservationId}.`, now });
+    return result;
+  });
+});
+
+export const completeSmePosReservation = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const reservationId = stringValue(request.data?.reservationId, 'Booking ID', 80);
+  const saleDate = localDate(request.data?.saleDate, 'Sale date');
+  const note = optionalString(request.data?.note, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  if (context.settings.status !== 'active') throw new HttpsError('failed-precondition', 'Activate the POS before completing a booking.');
+  const reservationRef = db.collection('smePosReservations').doc(reservationId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const saleRef = db.collection('smePosSales').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const [command, reservationSnapshot] = await Promise.all([transaction.get(commandRef), transaction.get(reservationRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!reservationSnapshot.exists || reservationSnapshot.data()?.spaceId !== spaceId || reservationSnapshot.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('not-found', 'Booking not found.');
+    const reservation = reservationSnapshot.data() || {};
+    if (['completed', 'cancelled'].includes(String(reservation.status || ''))) throw new HttpsError('failed-precondition', 'This booking is already closed.');
+    const sourceMode = oneOf(reservation.sourceMode, smePosModes, 'Booking POS mode');
+    if (sourceMode !== context.settings.mode) throw new HttpsError('failed-precondition', 'The booking belongs to another POS mode.');
+    const reservationItems = Array.isArray(reservation.items) ? reservation.items : [];
+    if (!reservationItems.length) throw new HttpsError('failed-precondition', 'This booking has no items.');
+    const itemRefs = reservationItems.map((item: DocumentData) => sourceMode === 'marketplace_consignment'
+      ? db.collection('smePosListings').doc(stringValue(item.itemId, 'Booking item', 80))
+      : db.collection('smePosProducts').doc(stringValue(item.itemId, 'Booking item', 80)));
+    const customerRef = db.collection('smePosCustomers').doc(stringValue(reservation.customerId, 'Customer', 80));
+    const [itemSnapshots, customerSnapshot] = await Promise.all([Promise.all(itemRefs.map((ref) => transaction.get(ref))), transaction.get(customerRef)]);
+    if (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId) throw new HttpsError('failed-precondition', 'The booking customer record is unavailable.');
+    const sellerIds = sourceMode === 'marketplace_consignment' ? [...new Set(reservationItems.map((item: DocumentData) => String(item.sellerId || '')).filter(Boolean))] : [];
+    const sellerSnapshots = sourceMode === 'marketplace_consignment' ? await Promise.all(sellerIds.map((sellerId) => transaction.get(db.collection('smePosSellers').doc(sellerId)))) : [];
+    const sellerById = new Map(sellerSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+    sellerSnapshots.forEach((snapshot) => {
+      if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.deletedAt) throw new HttpsError('failed-precondition', 'A seller linked to this booking is unavailable.');
+    });
+    itemSnapshots.forEach((snapshot, index) => {
+      if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('failed-precondition', 'A reserved item record is unavailable.');
+      const item = snapshot.data() || {};
+      const quantity = integerBetween(reservationItems[index].quantity, 'Reserved quantity', 1, 9_999);
+      if (item.trackStock !== false) {
+        if (smePosQuantity(item.reservedQuantity || 0, 'Reserved stock') < quantity || smePosQuantity(item.quantityOnHand, 'Stock on hand') < quantity) throw new HttpsError('failed-precondition', `${reservationItems[index].productName || 'A reserved item'} no longer has the reserved stock available.`);
+      }
+    });
+
+    const remainingMinor = nonNegativeMoney(reservation.remainingMinor || 0);
+    const paymentRows = parseSmePosPaymentRows({ payments: request.data?.payments }, remainingMinor, true);
+    const now = FieldValue.serverTimestamp();
+    const completionPayments = await postSmePosPayments({
+      transaction, rows: paymentRows, settings: context.settings, spaceId, uid, idempotencyKey: `${key}:balance`, now,
+      transactionDate: saleDate, direction: 'in', entryType: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_sale_balance' : 'sme_pos_sale_balance',
+      counterparty: String(reservation.customerName || 'POS customer'), note: note || `Balance for booking ${reservation.reservationNumber || reservationId}`, categoryId: 'income-sales',
+      extra: { posReservationId: reservationId, posSaleId: saleRef.id },
+    });
+    const priorPayments = Array.isArray(reservation.payments) ? reservation.payments : [];
+    const allPayments = [...priorPayments, ...completionPayments];
+    if (!allPayments.length) throw new HttpsError('failed-precondition', 'Booking payment history is missing.');
+    const totalMinor = nonNegativeMoney(reservation.totalMinor || 0);
+    if (allPayments.reduce((sum: number, row: DocumentData) => sum + nonNegativeMoney(row.amountMinor || 0), 0) !== totalMinor) throw new HttpsError('failed-precondition', 'Booking payments do not balance to the booking total.');
+
+    let costMinor = 0;
+    let marketplaceCommissionMinor = 0;
+    let sellerEarningsMinor = 0;
+    const sellerTotals = new Map<string, { gross: number; commission: number; earnings: number; quantity: number }>();
+    let remainingDiscount = nonNegativeMoney(reservation.discountMinor || 0);
+    const subtotalMinor = nonNegativeMoney(reservation.subtotalMinor || 0);
+    const saleItems = reservationItems.map((item: DocumentData, index: number) => {
+      const quantity = integerBetween(item.quantity, 'Reserved quantity', 1, 9_999);
+      const lineTotalMinor = nonNegativeMoney(item.lineTotalMinor || 0);
+      const discountShareMinor = index === reservationItems.length - 1 ? remainingDiscount : Math.floor(nonNegativeMoney(reservation.discountMinor || 0) * lineTotalMinor / subtotalMinor);
+      remainingDiscount -= discountShareMinor;
+      const netLineMinor = lineTotalMinor - discountShareMinor;
+      if (sourceMode === 'marketplace_consignment') {
+        const commissionType = oneOf(item.commissionType, smePosCommissionTypes, 'Commission type');
+        const commission = commissionType === 'percentage'
+          ? Math.floor(netLineMinor * integerBetween(item.commissionRateBps || 0, 'Commission percentage', 0, 10_000) / 10_000)
+          : Math.min(netLineMinor, nonNegativeMoney(item.commissionMinor || 0) * quantity);
+        const earnings = netLineMinor - commission;
+        marketplaceCommissionMinor += commission;
+        sellerEarningsMinor += earnings;
+        const sellerId = stringValue(item.sellerId, 'Seller ID', 80);
+        const aggregate = sellerTotals.get(sellerId) || { gross: 0, commission: 0, earnings: 0, quantity: 0 };
+        aggregate.gross += netLineMinor; aggregate.commission += commission; aggregate.earnings += earnings; aggregate.quantity += quantity; sellerTotals.set(sellerId, aggregate);
+        return { productId: item.itemId, listingId: item.itemId, productName: item.productName, sku: item.sku || '', barcode: item.barcode || '', sellerId, sellerName: item.sellerName || sellerById.get(sellerId)?.data()?.name || 'Seller', sellerUid: item.sellerUid || sellerById.get(sellerId)?.data()?.linkedUid || null, condition: item.condition || 'other', quantity, unitPriceMinor: item.unitPriceMinor, unitCostMinor: Math.floor(earnings / quantity), lineTotalMinor, lineCostMinor: earnings, discountShareMinor, netLineMinor, commissionMinor: commission, sellerEarningMinor: earnings, returnedQuantity: 0, returnedMinor: 0, commissionReturnedMinor: 0, sellerEarningReturnedMinor: 0, quickAdd: false };
+      }
+      const lineCostMinor = nonNegativeMoney(item.unitCostMinor || 0) * quantity;
+      costMinor += lineCostMinor;
+      return { productId: item.itemId, productName: item.productName, sku: item.sku || '', barcode: item.barcode || '', quantity, unitPriceMinor: item.unitPriceMinor, unitCostMinor: item.unitCostMinor || 0, lineTotalMinor, lineCostMinor, returnedQuantity: 0, quickAdd: false };
+    });
+    if (sourceMode === 'marketplace_consignment' && marketplaceCommissionMinor + sellerEarningsMinor !== totalMinor) throw new HttpsError('internal', 'Marketplace booking split did not balance.');
+    const profitMinor = sourceMode === 'marketplace_consignment' ? marketplaceCommissionMinor : totalMinor - costMinor;
+
+    itemSnapshots.forEach((snapshot, index) => {
+      const item = snapshot.data() || {};
+      const quantity = integerBetween(reservationItems[index].quantity, 'Reserved quantity', 1, 9_999);
+      if (sourceMode === 'marketplace_consignment') {
+        const saleItem = saleItems[index];
+        const netLineMinor = nonNegativeMoney(saleItem.netLineMinor);
+        const commissionMinor = nonNegativeMoney(saleItem.commissionMinor);
+        const sellerEarningMinor = nonNegativeMoney(saleItem.sellerEarningMinor);
+        if (commissionMinor + sellerEarningMinor !== netLineMinor) throw new HttpsError('internal', 'Marketplace booking sale split did not balance.');
+        transaction.update(snapshot.ref, {
+          quantityOnHand: Number(item.quantityOnHand || 0) - quantity,
+          reservedQuantity: Math.max(0, Number(item.reservedQuantity || 0) - quantity),
+          soldQuantity: Number(item.soldQuantity || 0) + quantity,
+          grossSalesMinor: Number(item.grossSalesMinor || 0) + netLineMinor,
+          commissionEarnedMinor: Number(item.commissionEarnedMinor || 0) + commissionMinor,
+          sellerEarningsMinor: Number(item.sellerEarningsMinor || 0) + sellerEarningMinor,
+          updatedAt: now,
+        });
+      } else {
+        transaction.update(snapshot.ref, {
+          quantityOnHand: item.trackStock === false ? 0 : Number(item.quantityOnHand || 0) - quantity,
+          reservedQuantity: item.trackStock === false ? 0 : Math.max(0, Number(item.reservedQuantity || 0) - quantity),
+          soldQuantity: Number(item.soldQuantity || 0) + quantity,
+          salesRevenueMinor: Number(item.salesRevenueMinor || 0) + nonNegativeMoney(reservationItems[index].lineTotalMinor || 0),
+          updatedAt: now,
+        });
+      }
+    });
+
+    const receiptNumber = displayId('RCP');
+    sellerTotals.forEach((totals, sellerId) => {
+      const snapshot = sellerById.get(sellerId)!;
+      const currentBalance = signedMoney(snapshot.data()?.balanceMinor || 0, 'Seller balance');
+      const nextBalance = currentBalance + totals.earnings;
+      transaction.update(snapshot.ref, { grossSalesMinor: Number(snapshot.data()?.grossSalesMinor || 0) + totals.gross, commissionEarnedMinor: Number(snapshot.data()?.commissionEarnedMinor || 0) + totals.commission, balanceMinor: nextBalance, soldQuantity: Number(snapshot.data()?.soldQuantity || 0) + totals.quantity, updatedAt: now });
+      const ledgerRef = db.collection('smePosSellerLedger').doc();
+      transaction.create(ledgerRef, { displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId, sellerName: snapshot.data()?.name || 'Seller', sellerUid: snapshot.data()?.linkedUid || null, kind: 'sale_earning', amountMinor: totals.earnings, balanceAfterMinor: nextBalance, currency: context.settings.currency, saleId: saleRef.id, receiptNumber, payoutId: null, note: `Booking completed · ${totals.quantity} item(s) sold`, createdAt: now });
+    });
+
+    transaction.update(customerRef, { totalSpentMinor: Number(customerSnapshot.data()?.totalSpentMinor || 0) + totalMinor, visitCount: Number(customerSnapshot.data()?.visitCount || 0) + 1, lastSaleAt: now, updatedAt: now });
+    const firstPayment = allPayments[0] as DocumentData;
+    transaction.create(saleRef, {
+      displayId: displayId('SAL'), receiptNumber, spaceId, ownerId: context.settings.ownerId, createdBy: uid, status: 'completed', returnStatus: 'not_returned', sourceMode,
+      customerId: reservation.customerId, customerName: reservation.customerName,
+      paymentAccountId: firstPayment.accountId, paymentAccountName: firstPayment.accountName, paymentMethod: firstPayment.paymentMethod || null, paymentMethodLabel: firstPayment.paymentMethodLabel || null,
+      payments: allPayments, items: saleItems, itemCount: reservation.itemCount, subtotalMinor, discountMinor: reservation.discountMinor || 0, totalMinor,
+      costMinor: sourceMode === 'marketplace_consignment' ? sellerEarningsMinor : costMinor, profitMinor,
+      marketplaceCommissionMinor: sourceMode === 'marketplace_consignment' ? marketplaceCommissionMinor : null,
+      sellerEarningsMinor: sourceMode === 'marketplace_consignment' ? sellerEarningsMinor : null,
+      sellerCount: sourceMode === 'marketplace_consignment' ? sellerTotals.size : null,
+      returnedMinor: 0, currency: context.settings.currency, saleDate, note: note || reservation.note || '',
+      transactionId: firstPayment.transactionId, ledgerEntryId: firstPayment.ledgerEntryId,
+      transactionIds: allPayments.map((row: DocumentData) => row.transactionId).filter(Boolean), ledgerEntryIds: allPayments.map((row: DocumentData) => row.ledgerEntryId).filter(Boolean), reservationId,
+      receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '', createdAt: now, updatedAt: now,
+    });
+    transaction.update(reservationRef, { status: 'completed', remainingMinor: 0, payments: allPayments, saleId: saleRef.id, receiptNumber, completedAt: now, updatedAt: now });
+    const result = { reservationId, saleId: saleRef.id, receiptNumber, transactionId: String(firstPayment.transactionId || '') };
+    transaction.create(commandRef, { uid, kind: 'complete_sme_pos_reservation', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'sme_pos_reservation_completed', targetType: 'sme_pos_reservation', targetId: reservationId, summary: `Completed booking ${reservation.reservationNumber || reservationId} as receipt ${receiptNumber}.`, now });
+    return result;
+  });
+});
+
+export const cancelSmePosReservation = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const reservationId = stringValue(request.data?.reservationId, 'Booking ID', 80);
+  const cancelDate = localDate(request.data?.cancelDate, 'Cancellation date');
+  const reason = optionalString(request.data?.reason, 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  const reservationRef = db.collection('smePosReservations').doc(reservationId);
+  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  return db.runTransaction(async (transaction) => {
+    const [command, snapshot] = await Promise.all([transaction.get(commandRef), transaction.get(reservationRef)]);
+    if (command.exists) return command.data()?.result;
+    if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('not-found', 'Booking not found.');
+    const reservation = snapshot.data() || {};
+    if (['completed', 'cancelled'].includes(String(reservation.status || ''))) throw new HttpsError('failed-precondition', 'This booking is already closed.');
+    const sourceMode = oneOf(reservation.sourceMode, smePosModes, 'Booking POS mode');
+    const items = Array.isArray(reservation.items) ? reservation.items : [];
+    const itemRefs = items.map((item: DocumentData) => sourceMode === 'marketplace_consignment'
+      ? db.collection('smePosListings').doc(stringValue(item.itemId, 'Booking item', 80))
+      : db.collection('smePosProducts').doc(stringValue(item.itemId, 'Booking item', 80)));
+    const itemSnapshots = await Promise.all(itemRefs.map((ref) => transaction.get(ref)));
+    itemSnapshots.forEach((itemSnapshot, index) => {
+      if (!itemSnapshot.exists || itemSnapshot.data()?.spaceId !== spaceId) throw new HttpsError('failed-precondition', 'A reserved item record is unavailable.');
+      const item = itemSnapshot.data() || {};
+      if (item.trackStock === false) return;
+      const quantity = integerBetween(items[index].quantity, 'Reserved quantity', 1, 9_999);
+      if (Number(item.reservedQuantity || 0) < quantity) throw new HttpsError('failed-precondition', 'Reserved stock no longer matches this booking.');
+    });
+    const originalPayments = Array.isArray(reservation.payments) ? reservation.payments : [];
+    const refundRows: SmePosPaymentRequestRow[] = originalPayments.map((row: DocumentData) => ({
+      accountId: stringValue(row.accountId, 'Deposit account', 80),
+      paymentMethod: row.paymentMethod ? oneOf(row.paymentMethod, paymentMethodCodes, 'Payment method') : null,
+      paymentMethodLabel: optionalString(row.paymentMethodLabel, 80) || null,
+      amountMinor: Math.max(0, nonNegativeMoney(row.amountMinor || 0) - nonNegativeMoney(row.returnedMinor || 0)),
+    })).filter((row: SmePosPaymentRequestRow) => row.amountMinor > 0);
+    const refundedMinor = refundRows.reduce((sum, row) => sum + row.amountMinor, 0);
+    const now = FieldValue.serverTimestamp();
+    const refundPayments = await postSmePosPayments({
+      transaction, rows: refundRows, settings: context.settings, spaceId, uid, idempotencyKey: `${key}:refund`, now,
+      transactionDate: cancelDate, direction: 'out', entryType: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_reservation_refund' : 'sme_pos_reservation_refund',
+      counterparty: String(reservation.customerName || 'POS customer'), note: reason || `Cancelled booking ${reservation.reservationNumber || reservationId}`, categoryId: 'expense-other', extra: { posReservationId: reservationId },
+    });
+    itemSnapshots.forEach((itemSnapshot, index) => {
+      const item = itemSnapshot.data() || {};
+      if (item.trackStock === false) return;
+      transaction.update(itemSnapshot.ref, { reservedQuantity: Math.max(0, Number(item.reservedQuantity || 0) - Number(items[index].quantity || 0)), updatedAt: now });
+    });
+    const updatedPayments = originalPayments.map((row: DocumentData) => ({ ...row, returnedMinor: nonNegativeMoney(row.amountMinor || 0) }));
+    transaction.update(reservationRef, { status: 'cancelled', remainingMinor: 0, payments: updatedPayments, cancellationRefunds: refundPayments, cancelledAt: now, updatedAt: now });
+    const result = { reservationId, refundedMinor };
+    transaction.create(commandRef, { uid, kind: 'cancel_sme_pos_reservation', idempotencyKey: key, result, createdAt: now });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'sme_pos_reservation_cancelled', targetType: 'sme_pos_reservation', targetId: reservationId, summary: `Cancelled booking ${reservation.reservationNumber || reservationId}${refundedMinor ? ` and refunded ${refundedMinor / 100} ${context.settings.currency}` : ''}.`, now });
+    return result;
+  });
+});
+
+
 export const returnSmePosSale = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
@@ -2975,7 +3642,6 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   const saleRef = db.collection('smePosSales').doc(saleId);
   const returnRef = db.collection('smePosReturns').doc();
-  const financialRef = db.collection('transactions').doc();
 
   return db.runTransaction(async (transaction) => {
     const [command, saleSnapshot] = await Promise.all([transaction.get(commandRef), transaction.get(saleRef)]);
@@ -2993,8 +3659,8 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
       if (!lineIndexes.has(requested.itemId)) throw new HttpsError('invalid-argument', 'One selected item is not part of this sale.');
     });
 
-    const accountRef = db.collection('accounts').doc(stringValue(sale.paymentAccountId, 'Original payment account', 80));
-    const itemRefs = requestedItems.map((requested) => sourceMode === 'marketplace_consignment'
+    const realRequested = requestedItems.filter((requested) => !items[lineIndexes.get(requested.itemId)!]?.quickAdd);
+    const itemRefs = realRequested.map((requested) => sourceMode === 'marketplace_consignment'
       ? db.collection('smePosListings').doc(requested.itemId)
       : db.collection('smePosProducts').doc(requested.itemId));
     const sellerIds = sourceMode === 'marketplace_consignment'
@@ -3002,15 +3668,12 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
       : [];
     const sellerRefs = sellerIds.map((sellerId) => db.collection('smePosSellers').doc(sellerId));
     const customerRef = sale.customerId ? db.collection('smePosCustomers').doc(String(sale.customerId)) : null;
-    const [accountSnapshot, itemSnapshots, sellerSnapshots, customerSnapshot] = await Promise.all([
-      transaction.get(accountRef),
+    const [itemSnapshots, sellerSnapshots, customerSnapshot] = await Promise.all([
       Promise.all(itemRefs.map((ref) => transaction.get(ref))),
       Promise.all(sellerRefs.map((ref) => transaction.get(ref))),
       customerRef ? transaction.get(customerRef) : Promise.resolve(null),
     ]);
-    const account = assertAccount(accountSnapshot.data(), String(context.settings.ownerId), 'Original payment account');
-    if (accountSnapshot.data()?.classification !== 'business') throw new HttpsError('failed-precondition', 'The original POS account is not a business account.');
-    if (account.currency !== sale.currency) throw new HttpsError('failed-precondition', 'The original payment account currency no longer matches this sale.');
+    const itemSnapshotById = new Map(itemSnapshots.map((snapshot) => [snapshot.id, snapshot]));
     const sellerById = new Map(sellerSnapshots.map((snapshot) => [snapshot.id, snapshot]));
     const netLineTotals = smePosNetLineTotals(items, nonNegativeMoney(sale.discountMinor || 0));
 
@@ -3022,14 +3685,12 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
     const sellerAdjustments = new Map<string, { gross: number; commission: number; earnings: number; quantity: number; name: string; uid: string | null }>();
     const returnItems: DocumentData[] = [];
 
-    requestedItems.forEach((requested, requestedIndex) => {
+    requestedItems.forEach((requested) => {
       const lineIndex = lineIndexes.get(requested.itemId)!;
       const line = items[lineIndex];
       const totalQuantity = integerBetween(line.quantity, 'Sold quantity', 1, 9_999);
       const previousReturned = integerBetween(line.returnedQuantity || 0, 'Returned quantity', 0, totalQuantity);
-      if (requested.quantity > totalQuantity - previousReturned) {
-        throw new HttpsError('failed-precondition', `${line.productName || 'This item'} only has ${totalQuantity - previousReturned} returnable.`);
-      }
+      if (requested.quantity > totalQuantity - previousReturned) throw new HttpsError('failed-precondition', `${line.productName || 'This item'} only has ${totalQuantity - previousReturned} returnable.`);
       const nextReturned = previousReturned + requested.quantity;
       const lineNetMinor = netLineTotals[lineIndex];
       const previousRefundMinor = cumulativeShare(lineNetMinor, totalQuantity, previousReturned);
@@ -3037,8 +3698,9 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
       const lineRefundMinor = nextRefundMinor - previousRefundMinor;
       if (lineRefundMinor <= 0) throw new HttpsError('failed-precondition', 'The selected return amount is invalid.');
 
-      const itemSnapshot = itemSnapshots[requestedIndex];
-      if (!itemSnapshot.exists || itemSnapshot.data()?.spaceId !== spaceId || itemSnapshot.data()?.ownerId !== context.settings.ownerId) {
+      const quickAdd = line.quickAdd === true;
+      const itemSnapshot = quickAdd ? null : itemSnapshotById.get(requested.itemId);
+      if (!quickAdd && (!itemSnapshot?.exists || itemSnapshot.data()?.spaceId !== spaceId || itemSnapshot.data()?.ownerId !== context.settings.ownerId)) {
         throw new HttpsError('failed-precondition', 'A returned item record is unavailable.');
       }
 
@@ -3052,20 +3714,14 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
         lineSellerEarningReversedMinor = lineRefundMinor - lineCommissionReversedMinor;
         const sellerId = stringValue(line.sellerId, 'Seller ID', 80);
         const sellerSnapshot = sellerById.get(sellerId);
-        if (!sellerSnapshot?.exists || sellerSnapshot.data()?.spaceId !== spaceId || sellerSnapshot.data()?.ownerId !== context.settings.ownerId) {
-          throw new HttpsError('failed-precondition', 'The seller balance record is unavailable.');
-        }
-        const current = sellerAdjustments.get(sellerId) || {
-          gross: 0, commission: 0, earnings: 0, quantity: 0,
-          name: String(sellerSnapshot.data()?.name || line.sellerName || 'Seller'),
-          uid: sellerSnapshot.data()?.linkedUid || line.sellerUid || null,
-        };
+        if (!sellerSnapshot?.exists || sellerSnapshot.data()?.spaceId !== spaceId || sellerSnapshot.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('failed-precondition', 'The seller balance record is unavailable.');
+        const current = sellerAdjustments.get(sellerId) || { gross: 0, commission: 0, earnings: 0, quantity: 0, name: String(sellerSnapshot.data()?.name || line.sellerName || 'Seller'), uid: sellerSnapshot.data()?.linkedUid || line.sellerUid || null };
         current.gross += lineRefundMinor;
         current.commission += lineCommissionReversedMinor;
         current.earnings += lineSellerEarningReversedMinor;
         current.quantity += requested.quantity;
         sellerAdjustments.set(sellerId, current);
-        transaction.update(itemSnapshot.ref, {
+        if (itemSnapshot) transaction.update(itemSnapshot.ref, {
           quantityOnHand: Number(itemSnapshot.data()?.quantityOnHand || 0) + requested.quantity,
           soldQuantity: Math.max(0, Number(itemSnapshot.data()?.soldQuantity || 0) - requested.quantity),
           grossSalesMinor: Math.max(0, Number(itemSnapshot.data()?.grossSalesMinor || 0) - lineRefundMinor),
@@ -3079,17 +3735,19 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
         const nextCost = cumulativeShare(lineCostMinor, totalQuantity, nextReturned);
         const lineCostReversedMinor = nextCost - previousCost;
         costReversedMinor += lineCostReversedMinor;
-        const lineGrossMinor = nonNegativeMoney(line.lineTotalMinor || 0);
-        const previousGross = cumulativeShare(lineGrossMinor, totalQuantity, previousReturned);
-        const nextGross = cumulativeShare(lineGrossMinor, totalQuantity, nextReturned);
-        const lineGrossReversedMinor = nextGross - previousGross;
-        const product = itemSnapshot.data() || {};
-        transaction.update(itemSnapshot.ref, {
-          quantityOnHand: product.trackStock === false ? 0 : Number(product.quantityOnHand || 0) + requested.quantity,
-          soldQuantity: Math.max(0, Number(product.soldQuantity || 0) - requested.quantity),
-          salesRevenueMinor: Math.max(0, Number(product.salesRevenueMinor || 0) - lineGrossReversedMinor),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        if (itemSnapshot) {
+          const lineGrossMinor = nonNegativeMoney(line.lineTotalMinor || 0);
+          const previousGross = cumulativeShare(lineGrossMinor, totalQuantity, previousReturned);
+          const nextGross = cumulativeShare(lineGrossMinor, totalQuantity, nextReturned);
+          const lineGrossReversedMinor = nextGross - previousGross;
+          const product = itemSnapshot.data() || {};
+          transaction.update(itemSnapshot.ref, {
+            quantityOnHand: product.trackStock === false ? 0 : Number(product.quantityOnHand || 0) + requested.quantity,
+            soldQuantity: Math.max(0, Number(product.soldQuantity || 0) - requested.quantity),
+            salesRevenueMinor: Math.max(0, Number(product.salesRevenueMinor || 0) - lineGrossReversedMinor),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
       }
 
       items[lineIndex] = {
@@ -3105,14 +3763,11 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
       returnedItemCount += requested.quantity;
       returnItems.push({
         productId: String(line.productId || requested.itemId),
-        listingId: sourceMode === 'marketplace_consignment' ? String(line.listingId || requested.itemId) : null,
-        productName: String(line.productName || 'Item'),
-        sellerId: sourceMode === 'marketplace_consignment' ? String(line.sellerId || '') : null,
+        listingId: sourceMode === 'marketplace_consignment' ? (line.listingId ? String(line.listingId) : null) : null,
+        productName: String(line.productName || 'Item'), sellerId: sourceMode === 'marketplace_consignment' ? String(line.sellerId || '') : null,
         sellerName: sourceMode === 'marketplace_consignment' ? String(line.sellerName || '') : null,
-        quantity: requested.quantity,
-        refundMinor: lineRefundMinor,
-        commissionReversedMinor: lineCommissionReversedMinor,
-        sellerEarningReversedMinor: lineSellerEarningReversedMinor,
+        quantity: requested.quantity, refundMinor: lineRefundMinor, commissionReversedMinor: lineCommissionReversedMinor, sellerEarningReversedMinor: lineSellerEarningReversedMinor,
+        quickAdd,
       });
     });
 
@@ -3121,33 +3776,40 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
     if (nextReturnedMinor > nonNegativeMoney(sale.totalMinor || 0)) throw new HttpsError('failed-precondition', 'The return would exceed the original sale total.');
     const fullyReturned = items.every((line) => Number(line.returnedQuantity || 0) >= Number(line.quantity || 0));
     const now = FieldValue.serverTimestamp();
-    const accountDelta = accountEffect(account.type, 'out', refundMinor);
-    updateAccountBalance(transaction, accountRef, account, accountDelta);
-    const ledgerEntryId = createLedgerEntry(transaction, {
-      accountId: accountRef.id,
-      ownerId: String(context.settings.ownerId),
-      spaceId,
-      transactionId: financialRef.id,
-      entryType: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_refund' : 'sme_pos_refund',
-      amountMinor: accountDelta,
-      currency: account.currency,
-      idempotencyKey: key,
-      now,
+
+    const originalPayments: DocumentData[] = Array.isArray(sale.payments) && sale.payments.length
+      ? sale.payments.map((row: unknown) => ({ ...((row || {}) as DocumentData) }))
+      : [{
+        accountId: stringValue(sale.paymentAccountId, 'Original payment account', 80),
+        accountName: String(sale.paymentAccountName || 'Business account'), paymentMethod: sale.paymentMethod || null, paymentMethodLabel: sale.paymentMethodLabel || null,
+        amountMinor: nonNegativeMoney(sale.totalMinor || 0), returnedMinor: currentReturnedMinor,
+        transactionId: String(sale.transactionId || ''), ledgerEntryId: String(sale.ledgerEntryId || ''),
+      }];
+    let refundRemaining = refundMinor;
+    const allocations = new Map<number, number>();
+    originalPayments.forEach((row, index) => {
+      if (refundRemaining <= 0) return;
+      const capacity = Math.max(0, nonNegativeMoney(row.amountMinor || 0) - nonNegativeMoney(row.returnedMinor || 0));
+      const amount = Math.min(capacity, refundRemaining);
+      if (amount > 0) { allocations.set(index, amount); refundRemaining -= amount; }
     });
-    const refundCategory = systemCategories.get('expense-other');
-    if (!refundCategory) throw new HttpsError('internal', 'Refund category is unavailable.');
-    transaction.create(financialRef, {
-      displayId: displayId('TXN'), ownerId: context.settings.ownerId, createdBy: uid, type: 'expense', status: 'posted',
-      spaceId, accountId: accountRef.id, destinationAccountId: null, amountMinor: refundMinor, currency: account.currency,
-      category: refundCategory.name, categoryId: refundCategory.id, categoryIcon: refundCategory.icon, categoryColor: refundCategory.color,
-      categoryScope: 'business', categoryIsSystem: true, counterparty: sale.customerName || 'POS customer',
-      note: reason || `Refund for POS receipt ${sale.receiptNumber || saleId}`,
-      paymentMethod: sale.paymentMethod || null, paymentMethodLabel: sale.paymentMethodLabel || null, transactionDate: returnDate,
-      reversalOf: null, reversedBy: null, budgetIds: [], commitmentId: null, commitmentPaymentId: null,
-      sharedBillAssignmentId: null, sharedBillPaymentId: null, paymentProofPath: null, recurringTemplateId: null,
-      recurringRunId: null, recurringScheduledDate: null, posSaleId: saleId, posReturnId: returnRef.id,
-      createdAt: now, postedAt: now, updatedAt: now,
+    if (refundRemaining !== 0) throw new HttpsError('failed-precondition', 'Original split payments do not have enough refundable balance.');
+    const refundRows: SmePosPaymentRequestRow[] = [...allocations.entries()].map(([index, amountMinor]) => ({
+      accountId: stringValue(originalPayments[index].accountId, 'Original payment account', 80),
+      paymentMethod: originalPayments[index].paymentMethod ? oneOf(originalPayments[index].paymentMethod, paymentMethodCodes, 'Payment method') : null,
+      paymentMethodLabel: optionalString(originalPayments[index].paymentMethodLabel, 80) || null,
+      amountMinor,
+    }));
+    const refundPayments = await postSmePosPayments({
+      transaction, rows: refundRows, settings: context.settings, spaceId, uid, idempotencyKey: `${key}:refund`, now,
+      transactionDate: returnDate, direction: 'out', entryType: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_refund' : 'sme_pos_refund',
+      counterparty: sale.customerName || 'POS customer', note: reason || `Refund for POS receipt ${sale.receiptNumber || saleId}`, categoryId: 'expense-other',
+      extra: { posSaleId: saleId, posReturnId: returnRef.id },
     });
+    const updatedPayments = originalPayments.map((row, index) => ({
+      ...row,
+      returnedMinor: nonNegativeMoney(row.returnedMinor || 0) + (allocations.get(index) || 0),
+    }));
 
     sellerAdjustments.forEach((adjustment, sellerId) => {
       const sellerSnapshot = sellerById.get(sellerId)!;
@@ -3156,26 +3818,17 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
       transaction.update(sellerSnapshot.ref, {
         grossSalesMinor: Math.max(0, Number(sellerSnapshot.data()?.grossSalesMinor || 0) - adjustment.gross),
         commissionEarnedMinor: Math.max(0, Number(sellerSnapshot.data()?.commissionEarnedMinor || 0) - adjustment.commission),
-        balanceMinor: nextBalance,
-        soldQuantity: Math.max(0, Number(sellerSnapshot.data()?.soldQuantity || 0) - adjustment.quantity),
-        updatedAt: now,
+        balanceMinor: nextBalance, soldQuantity: Math.max(0, Number(sellerSnapshot.data()?.soldQuantity || 0) - adjustment.quantity), updatedAt: now,
       });
       const ledgerRef = db.collection('smePosSellerLedger').doc();
       transaction.create(ledgerRef, {
-        displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId,
-        sellerName: adjustment.name, sellerUid: adjustment.uid, kind: 'return_adjustment',
-        amountMinor: -adjustment.earnings, balanceAfterMinor: nextBalance, currency: account.currency,
-        saleId, receiptNumber: sale.receiptNumber || null, payoutId: null, returnId: returnRef.id,
-        note: `Return adjustment for ${adjustment.quantity} item(s)`, createdAt: now,
+        displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId, sellerName: adjustment.name, sellerUid: adjustment.uid,
+        kind: 'return_adjustment', amountMinor: -adjustment.earnings, balanceAfterMinor: nextBalance, currency: String(sale.currency || context.settings.currency),
+        saleId, receiptNumber: sale.receiptNumber || null, payoutId: null, returnId: returnRef.id, note: `Return adjustment for ${adjustment.quantity} item(s)`, createdAt: now,
       });
     });
 
-    if (customerRef && customerSnapshot?.exists && customerSnapshot.data()?.spaceId === spaceId) {
-      transaction.update(customerRef, {
-        totalSpentMinor: Math.max(0, Number(customerSnapshot.data()?.totalSpentMinor || 0) - refundMinor),
-        updatedAt: now,
-      });
-    }
+    if (customerRef && customerSnapshot?.exists && customerSnapshot.data()?.spaceId === spaceId) transaction.update(customerRef, { totalSpentMinor: Math.max(0, Number(customerSnapshot.data()?.totalSpentMinor || 0) - refundMinor), updatedAt: now });
 
     const remainingProfitMinor = sourceMode === 'marketplace_consignment'
       ? Math.max(0, nonNegativeMoney(sale.marketplaceCommissionMinor || sale.profitMinor || 0) - commissionReversedMinor)
@@ -3184,37 +3837,28 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
       ? Math.max(0, nonNegativeMoney(sale.sellerEarningsMinor || sale.costMinor || 0) - sellerEarningReversedMinor)
       : nonNegativeMoney(sale.costMinor || 0) - costReversedMinor;
     transaction.update(saleRef, {
-      items,
-      status: fullyReturned ? 'refunded' : 'partially_returned',
-      returnStatus: fullyReturned ? 'full' : 'partial',
-      returnedMinor: nextReturnedMinor,
-      returnIds: FieldValue.arrayUnion(returnRef.id),
-      lastReturnDate: returnDate,
-      costMinor: Math.max(0, remainingSellerEarningsMinor),
-      profitMinor: remainingProfitMinor,
+      items, payments: updatedPayments, status: fullyReturned ? 'refunded' : 'partially_returned', returnStatus: fullyReturned ? 'full' : 'partial',
+      returnedMinor: nextReturnedMinor, returnIds: FieldValue.arrayUnion(returnRef.id), lastReturnDate: returnDate,
+      costMinor: Math.max(0, remainingSellerEarningsMinor), profitMinor: remainingProfitMinor,
       marketplaceCommissionMinor: sourceMode === 'marketplace_consignment' ? remainingProfitMinor : sale.marketplaceCommissionMinor || null,
       sellerEarningsMinor: sourceMode === 'marketplace_consignment' ? Math.max(0, remainingSellerEarningsMinor) : sale.sellerEarningsMinor || null,
       updatedAt: now,
     });
+    const firstRefund = refundPayments[0];
     transaction.create(returnRef, {
-      displayId: displayId('RET'), spaceId, ownerId: context.settings.ownerId, saleId,
-      receiptNumber: String(sale.receiptNumber || saleId), sourceMode, status: 'posted', items: returnItems,
+      displayId: displayId('RET'), spaceId, ownerId: context.settings.ownerId, saleId, receiptNumber: String(sale.receiptNumber || saleId), sourceMode, status: 'posted', items: returnItems,
       itemCount: returnedItemCount, refundMinor, commissionReversedMinor, sellerEarningReversedMinor,
-      paymentAccountId: accountRef.id, paymentAccountName: accountSnapshot.data()?.name || sale.paymentAccountName || 'Business account',
-      currency: account.currency, returnDate, reason, transactionId: financialRef.id, ledgerEntryId, createdBy: uid, createdAt: now,
+      paymentAccountId: firstRefund.accountId, paymentAccountName: firstRefund.accountName, currency: String(sale.currency || context.settings.currency), returnDate, reason,
+      transactionId: firstRefund.transactionId, ledgerEntryId: firstRefund.ledgerEntryId, payments: refundPayments, transactionIds: refundPayments.map((row) => row.transactionId), ledgerEntryIds: refundPayments.map((row) => row.ledgerEntryId),
+      createdBy: uid, createdAt: now,
     });
-    const result = { returnId: returnRef.id, saleId, refundMinor, transactionId: financialRef.id };
+    const result = { returnId: returnRef.id, saleId, refundMinor, transactionId: firstRefund.transactionId, transactionIds: refundPayments.map((row) => row.transactionId) };
     transaction.create(commandRef, { uid, kind: 'return_sme_pos_sale', idempotencyKey: key, result, createdAt: now });
-    createActivity(transaction, {
-      spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email,
-      action: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_sale_returned' : 'pos_sale_returned',
-      targetType: 'sme_pos_sale', targetId: saleId,
-      summary: `Returned ${returnedItemCount} item(s) from ${sale.receiptNumber || saleId} and refunded ${refundMinor / 100} ${account.currency}.`,
-      now,
-    });
+    createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: sourceMode === 'marketplace_consignment' ? 'marketplace_pos_sale_returned' : 'pos_sale_returned', targetType: 'sme_pos_sale', targetId: saleId, summary: `Returned ${returnedItemCount} item(s) from ${sale.receiptNumber || saleId} and refunded ${refundMinor / 100} ${sale.currency || context.settings.currency} across ${refundPayments.length} payment source(s).`, now });
     return result;
   });
 });
+
 
 export const recordMarketplaceSellerPayout = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
@@ -5120,6 +5764,7 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('smePosListings').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('smePosSales').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('smePosPayouts').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('smePosReservations').where('spaceId', '==', spaceId)),
     ]);
     if (hasOtherMembers || posSettings.exists || checks.some(Boolean) || !recurringInSpace.empty) {
       throw new HttpsError('failed-precondition', 'This Space has members or saved history. Archive it instead.');
@@ -6842,7 +7487,7 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
     'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
     'userNotifications', 'reminderHistory', 'recurringTransactionTemplates', 'recurringTransactionRuns',
     'transactionAttachments', 'collectionItems', 'collectionItemMovements', 'smePosAccess', 'smePosProducts', 'smePosCustomers',
-    'smePosSellers', 'smePosListings', 'smePosSales', 'smePosPayouts',
+    'smePosSellers', 'smePosListings', 'smePosSales', 'smePosReturns', 'smePosSellerLedger', 'smePosPayouts', 'smePosReservations', 'smePosCommands',
   ];
   for (const collectionName of collections) {
     const rows = await documentsWhere(collectionName, 'spaceId', spaceId);

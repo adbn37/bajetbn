@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const read = (path) => fs.readFileSync(path, 'utf8');
+const read = (path) => fs.readFileSync(path, 'utf8').replace(/\r\n?/g, '\n');
 const must = (text, needle, label) => {
   if (!text.includes(needle)) throw new Error(`Missing ${label}: ${needle}`);
 };
@@ -47,11 +47,26 @@ must(functions, 'paymentAccountIds: currentData.paymentAccountIds ?? null', 'leg
 reject(functions, 'const hasPaymentAccountIds = Array.isArray(request.data?.paymentAccountIds);', 'POS settings allowlist mutation');
 must(functions, 'This account does not belong to this SME POS.', 'server cross-SME rejection');
 
-const enforcementCount =
-  (functions.match(/requireSmePosPaymentAccountForSpace\(context\.settings, accountSnapshot\.data\(\) \|\| \{\}, paymentAccountId, spaceId\);/g) || []).length;
+must(functions, 'async function postSmePosPayments', 'central POS payment posting helper');
+must(functions, 'requireSmePosPaymentAccountForSpace(input.settings, snapshot.data() || {}, row.accountId, input.spaceId);', 'central split-payment account isolation');
 
-if (enforcementCount !== 3) {
-  throw new Error(`Expected strict account ownership enforcement at Standard checkout, Marketplace checkout, and seller payout; found ${enforcementCount}.`);
+const standardStart = functions.indexOf('export const checkoutStandardPos');
+const marketplaceStart = functions.indexOf('export const checkoutMarketplacePos');
+const reservationsStart = functions.indexOf('export const listSmePosReservations');
+const payoutStart = functions.indexOf('export const recordMarketplaceSellerPayout');
+
+if ([standardStart, marketplaceStart, reservationsStart, payoutStart].some((value) => value < 0)) {
+  throw new Error('Expected POS checkout/payout functions are missing.');
 }
+
+const standardCheckout = functions.slice(standardStart, marketplaceStart);
+const marketplaceCheckout = functions.slice(marketplaceStart, reservationsStart);
+const sellerPayout = functions.slice(payoutStart);
+
+must(standardCheckout, 'const payments = await postSmePosPayments({', 'Standard checkout central payment posting');
+must(standardCheckout, 'settings: context.settings, spaceId', 'Standard checkout account-isolation context');
+must(marketplaceCheckout, 'const payments = await postSmePosPayments({', 'Marketplace checkout central payment posting');
+must(marketplaceCheckout, 'settings: context.settings, spaceId', 'Marketplace checkout account-isolation context');
+must(sellerPayout, 'requireSmePosPaymentAccountForSpace(context.settings, accountSnapshot.data() || {}, paymentAccountId, spaceId);', 'seller payout account isolation');
 
 console.log('SME account ownership + POS isolation verifier: PASS');
