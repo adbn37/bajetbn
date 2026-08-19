@@ -7,6 +7,8 @@ import { SmePosBarcodeCheckoutScanner } from '../../components/SmePosBarcodeChec
 import { SmePosBarcodeLabelDialog } from '../../components/SmePosBarcodeLabelDialog';
 import { SmePosBarcodeReturnScanner } from '../../components/SmePosBarcodeReturnScanner';
 import { SmePosItemPhoto, SmePosItemPhotoField } from '../../components/SmePosItemPhoto';
+import { SmePosPaymentSplitEditor, createSmePosPaymentDraft, paymentDraftTotalMinor, paymentDraftsToInput, type SmePosPaymentDraft } from '../../components/SmePosPaymentSplitEditor';
+import { SmePosCreateReservationModal, SmePosReservationsPanel } from '../../components/SmePosReservations';
 import {
   checkoutMarketplacePos,
   deleteMarketplaceSeller,
@@ -15,6 +17,7 @@ import {
   getMarketplacePosWorkspace,
   listSmePosAccess,
   listSmePosPaymentAccounts,
+  listSmePosReservations,
   receiveMarketplaceListingStock,
   registerExistingMarketplaceListing,
   recordMarketplaceSellerPayout,
@@ -35,6 +38,7 @@ import type {
   SmePosListingCondition,
   SmePosPaymentAccount,
   SmePosPayout,
+  SmePosReservation,
   SmePosRole,
   SmePosSale,
   SmePosSeller,
@@ -52,7 +56,7 @@ interface Props {
   onChanged: () => Promise<void> | void;
 }
 
-type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'sales' | 'balance';
+type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'bookings' | 'sales' | 'balance';
 type ConfirmPayload =
   | { kind: 'seller'; id: string }
   | { kind: 'listing'; id: string }
@@ -63,6 +67,16 @@ interface ReturnFormState {
   quantities: Record<string, number>;
   returnDate: string;
   reason: string;
+}
+
+interface MarketplaceQuickCartItem {
+  clientId: string;
+  sellerId: string;
+  sellerName: string;
+  name: string;
+  quantity: number;
+  unitPriceMinor: number;
+  condition: SmePosListingCondition;
 }
 
 interface PayoutFormState {
@@ -98,6 +112,7 @@ const tabLabels: Record<MarketplaceTab, string> = {
   sellers: 'Sellers',
   listings: 'Inventory',
   customers: 'Customers',
+  bookings: 'Bookings',
   sales: 'Sales',
   balance: 'My balance',
 };
@@ -110,8 +125,8 @@ function today() {
 
 function tabsForRole(role: SmePosRole, hasSellerProfile: boolean): MarketplaceTab[] {
   let tabs: MarketplaceTab[] = [];
-  if (role === 'owner' || role === 'manager') tabs = ['register', 'sellers', 'listings', 'customers', 'sales'];
-  else if (role === 'cashier') tabs = ['register', 'customers', 'sales'];
+  if (role === 'owner' || role === 'manager') tabs = ['register', 'sellers', 'listings', 'customers', 'bookings', 'sales'];
+  else if (role === 'cashier') tabs = ['register', 'customers', 'bookings', 'sales'];
   else if (role === 'stock_staff') tabs = ['listings'];
   else if (role === 'seller') tabs = ['listings', 'balance', 'sales'];
   else if (role === 'viewer') tabs = ['listings', 'customers'];
@@ -150,6 +165,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [listings, setListings] = useState<SmePosListing[]>([]);
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
   const [sales, setSales] = useState<SmePosSale[]>([]);
+  const [reservations, setReservations] = useState<SmePosReservation[]>([]);
   const [payouts, setPayouts] = useState<SmePosPayout[]>([]);
   const [mySellerLedger, setMySellerLedger] = useState<SmePosSellerLedgerEntry[]>([]);
   const [mySellerPayouts, setMySellerPayouts] = useState<SmePosPayout[]>([]);
@@ -181,10 +197,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [payoutForm, setPayoutForm] = useState<PayoutFormState | null>(null);
   const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [quickItems, setQuickItems] = useState<MarketplaceQuickCartItem[]>([]);
+  const [quickAddForm, setQuickAddForm] = useState(false);
+  const [bookingForm, setBookingForm] = useState(false);
   const [customerId, setCustomerId] = useState('');
-  const [paymentAccountId, setPaymentAccountId] = useState(settings.defaultPaymentAccountId || '');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>('cash');
-  const [paymentMethodLabel, setPaymentMethodLabel] = useState('');
+  const [paymentRows, setPaymentRows] = useState<SmePosPaymentDraft[]>([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
   const [discount, setDiscount] = useState('0.00');
   const [saleDate, setSaleDate] = useState(today());
   const [checkoutNote, setCheckoutNote] = useState('');
@@ -221,6 +238,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       setMySellerPayouts(workspace.mySellerPayouts);
       setPaymentAccounts(accounts);
       setSellerAccess(access.filter((item) => item.status === 'active'));
+      if (canCheckout) setReservations(await listSmePosReservations(space.id));
+      else setReservations([]);
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -233,8 +252,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     if (!availableTabs.includes(tab)) setTab(initialTab(role));
   }, [availableTabs, role, tab]);
   useEffect(() => {
-    if (!paymentAccountId && settings.defaultPaymentAccountId) setPaymentAccountId(settings.defaultPaymentAccountId);
-  }, [paymentAccountId, settings.defaultPaymentAccountId]);
+    if (!settings.defaultPaymentAccountId) return;
+    setPaymentRows((current) => current.map((row, index) => index === 0 && !row.accountId ? { ...row, accountId: settings.defaultPaymentAccountId || '' } : row));
+  }, [settings.defaultPaymentAccountId]);
 
   const filteredListings = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -246,17 +266,21 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     return listing ? { listing, quantity } : null;
   }).filter((item): item is { listing: SmePosListing; quantity: number } => Boolean(item)), [cart, listings]);
 
-  const subtotalMinor = cartLines.reduce((sum, item) => sum + item.listing.sellingPriceMinor * item.quantity, 0);
+  const quickSubtotalMinor = quickItems.reduce((sum, item) => sum + item.unitPriceMinor * item.quantity, 0);
+  const subtotalMinor = cartLines.reduce((sum, item) => sum + item.listing.sellingPriceMinor * item.quantity, 0) + quickSubtotalMinor;
   let discountMinor = 0;
   try { discountMinor = Math.max(0, toMinorUnits(discount || '0')); } catch { discountMinor = 0; }
   const totalMinor = Math.max(0, subtotalMinor - discountMinor);
+  useEffect(() => {
+    setPaymentRows((current) => current.length === 1 ? [{ ...current[0], amount: (totalMinor / 100).toFixed(2) }] : current);
+  }, [totalMinor]);
   const monthPrefix = today().slice(0, 7);
   const activeSales = sales.filter((item) => item.status !== 'refunded');
   const todayGross = activeSales.filter((item) => item.saleDate === today()).reduce((sum, item) => sum + item.totalMinor - item.returnedMinor, 0);
   const monthGross = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + item.totalMinor - item.returnedMinor, 0);
   const monthCommission = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + (item.marketplaceCommissionMinor || item.profitMinor), 0);
   const sellerMoneyWaiting = sellers.reduce((sum, item) => sum + item.balanceMinor, 0);
-  const lowStock = listings.filter((item) => item.quantityOnHand <= item.lowStockLevel).length;
+  const lowStock = listings.filter((item) => Math.max(0, item.quantityOnHand - (item.reservedQuantity || 0)) <= item.lowStockLevel).length;
 
   function requireOnline() {
     if (navigator.onLine) return true;
@@ -491,42 +515,79 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
   }
 
+  function availableQuantity(listing: SmePosListing) {
+    return Math.max(0, listing.quantityOnHand - (listing.reservedQuantity || 0));
+  }
+
   function addToCart(listing: SmePosListing) {
-    if (listing.quantityOnHand < 1) return;
+    const available = availableQuantity(listing);
+    if (available < 1) return;
     setCart((current) => {
-      const next = Math.min((current[listing.id] || 0) + 1, listing.quantityOnHand);
+      const next = Math.min((current[listing.id] || 0) + 1, available);
       return { ...current, [listing.id]: next };
     });
   }
 
   function changeQuantity(listing: SmePosListing, quantity: number) {
+    const available = availableQuantity(listing);
     setCart((current) => {
       const next = { ...current };
       if (!Number.isFinite(quantity) || quantity < 1) delete next[listing.id];
-      else next[listing.id] = Math.min(Math.floor(quantity), listing.quantityOnHand);
+      else next[listing.id] = Math.min(Math.floor(quantity), available);
       return next;
     });
+  }
+
+  function addQuickItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const sellerId = String(form.get('sellerId') || '');
+    const seller = sellers.find((item) => item.id === sellerId);
+    if (!seller) { setError('Choose a seller for this Quick Add item.'); return; }
+    let priceMinor = 0;
+    try { priceMinor = toMinorUnits(String(form.get('price') || '')); } catch { setError('Enter a valid selling price.'); return; }
+    const quantity = Math.max(1, Math.floor(Number(form.get('quantity') || 1)));
+    const name = String(form.get('name') || '').trim();
+    if (!name || priceMinor <= 0) { setError('Enter an item name and selling price above zero.'); return; }
+    setQuickItems((current) => [...current, {
+      clientId: crypto.randomUUID(),
+      sellerId,
+      sellerName: seller.name,
+      name,
+      quantity,
+      unitPriceMinor: priceMinor,
+      condition: String(form.get('condition') || 'new') as SmePosListingCondition,
+    }]);
+    setQuickAddForm(false);
+    setError('');
+  }
+
+  function changeQuickQuantity(clientId: string, quantity: number) {
+    setQuickItems((current) => current
+      .map((item) => item.clientId === clientId ? { ...item, quantity: Math.max(0, Math.floor(quantity || 0)) } : item)
+      .filter((item) => item.quantity > 0));
   }
 
   async function completeCheckout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canCheckout || !requireOnline()) return;
-    if (!cartLines.length) { setError('Add at least one seller listing to the cart.'); return; }
-    if (!paymentAccountId) { setError('Choose where the payment was received.'); return; }
+    if (!cartLines.length && !quickItems.length) { setError('Add at least one seller listing or Quick Add item to the sale.'); return; }
+    if (paymentRows.some((row) => !row.accountId)) { setError('Choose an account for each payment.'); return; }
+    if (paymentDraftTotalMinor(paymentRows) !== totalMinor) { setError('Split payments must add up exactly to the sale total.'); return; }
     setBusy(true); setError(''); setSuccess('');
     try {
       const result = await checkoutMarketplacePos({
         spaceId: space.id,
         items: cartLines.map((item) => ({ listingId: item.listing.id, quantity: item.quantity })),
+        quickItems: quickItems.map((item) => ({ clientId: item.clientId, sellerId: item.sellerId, name: item.name, quantity: item.quantity, unitPriceMinor: item.unitPriceMinor, condition: item.condition })),
         customerId: customerId || null,
-        paymentAccountId,
-        paymentMethod,
-        paymentMethodLabel: paymentMethod === 'other' ? paymentMethodLabel : null,
+        payments: paymentDraftsToInput(paymentRows),
         discountMinor,
         saleDate,
         note: checkoutNote,
       });
-      setCart({}); setDiscount('0.00'); setCheckoutNote(''); setCustomerId('');
+      setCart({}); setQuickItems([]); setDiscount('0.00'); setCheckoutNote(''); setCustomerId('');
+      setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
       setSuccess(`Sale completed. Receipt ${result.data.receiptNumber}. Seller balances were updated.`);
       await load(); await onChanged();
       const nextWorkspace = await getMarketplacePosWorkspace(space.id);
@@ -707,13 +768,14 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         />
         <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, category, condition, SKU or barcode" />
         <div className="sme-pos-product-grid">{filteredListings.map((listing) => {
-          const outOfStock = listing.quantityOnHand < 1;
-          const low = listing.quantityOnHand > 0 && listing.quantityOnHand <= listing.lowStockLevel;
+          const available = availableQuantity(listing);
+          const outOfStock = available < 1;
+          const low = available > 0 && available <= listing.lowStockLevel;
           return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={listing.id}>
             {listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} />}
             <div><span className="type-badge">{listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
             {role !== 'stock_staff' && <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong>}
-            <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} in stock${low ? ' · Low stock' : ''}`}</p>
+            <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? `${listing.reservedQuantity || 0 ? 'Fully reserved' : 'Out of stock'}` : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}${low ? ' · Low stock' : ''}`}</p>
             {(role === 'owner' || role === 'manager' || role === 'seller') && <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>}
             {canManageListings && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openListingForm(listing)}>Edit</button><button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button>{listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'listing', id: listing.id }, title: 'Archive this listing?', description: 'It will leave the active register while its sales and seller balance history stay unchanged.', note: 'You can restore it from Archived Records.', confirmLabel: 'Archive listing' })}>Archive</button></div>}
             {!canManageListings && canManageStock && <div className="button-row"><button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button><button className="button secondary small" type="button" onClick={() => setStockForm(listing)}>Update stock</button>{listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}</div>}
@@ -730,37 +792,41 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
-          <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>One sale can contain items from several sellers.</p></div>{canRegisterExistingStock && <button className="button secondary" type="button" onClick={openManualListingForm} disabled={!sellers.length}>+ Register item</button>}</div>
+          <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>Sell normal inventory or use Quick Add for a one-off item.</p></div><div className="button-row"><button className="button ghost" type="button" onClick={() => setQuickAddForm(true)} disabled={!sellers.length}>+ Quick Add</button>{canRegisterExistingStock && <button className="button secondary" type="button" onClick={openManualListingForm} disabled={!sellers.length}>+ Register item</button>}</div></div>
           <SmePosBarcodeCheckoutScanner
             itemLabel="listing"
-            items={listings}
+            items={listings.map((listing) => ({ ...listing, quantityOnHand: availableQuantity(listing) }))}
             cartQuantities={cart}
             disabled={!canCheckout || settings.status !== 'active' || busy}
             onAdd={addToCart}
           />
           <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, condition, SKU or barcode" />
           <div className="sme-pos-checkout-product-grid">{filteredListings.map((listing) => {
-            const outOfStock = listing.quantityOnHand < 1;
-            return <button type="button" key={listing.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(listing)}>{listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} className="register-thumb" />}<strong>{listing.name}</strong><span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span><small>{listing.sellerName} · {conditionLabels[listing.condition]}</small><small>{outOfStock ? 'Out of stock' : `${listing.quantityOnHand} available`}</small></button>;
+            const available = availableQuantity(listing);
+            const outOfStock = available < 1;
+            return <button type="button" key={listing.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(listing)}>{listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} className="register-thumb" />}<strong>{listing.name}</strong><span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span><small>{listing.sellerName} · {conditionLabels[listing.condition]}</small><small>{outOfStock ? (listing.reservedQuantity ? 'Reserved / unavailable' : 'Out of stock') : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}`}</small></button>;
           })}</div>
           {!filteredListings.length && <div className="empty-inline">No seller listings found.</div>}
         </section>
         <section className="panel sme-pos-cart">
-          <div className="panel-heading"><div><span className="eyebrow">Current sale</span><h3>Cart</h3><p>{cartLines.reduce((sum, item) => sum + item.quantity, 0)} item(s) · {new Set(cartLines.map((item) => item.listing.sellerId)).size} seller(s)</p></div>{cartLines.length > 0 && <button className="button ghost small" type="button" onClick={() => setCart({})}>Clear cart</button>}</div>
-          <div className="sme-pos-cart-lines">{cartLines.map(({ listing, quantity }) => <div key={listing.id}><div><strong>{listing.name}</strong><small>{listing.sellerName} · {formatMoney(listing.sellingPriceMinor, listing.currency)} each</small></div><input type="number" min="0" max={listing.quantityOnHand} value={quantity} onChange={(event) => changeQuantity(listing, Number(event.target.value))} aria-label={`${listing.name} quantity`} /><strong>{formatMoney(listing.sellingPriceMinor * quantity, listing.currency)}</strong></div>)}</div>
-          {!cartLines.length && <div className="empty-inline">Tap a listing to begin the sale.</div>}
+          <div className="panel-heading"><div><span className="eyebrow">Current sale</span><h3>Cart</h3><p>{cartLines.reduce((sum, item) => sum + item.quantity, 0) + quickItems.reduce((sum, item) => sum + item.quantity, 0)} item(s) · {new Set([...cartLines.map((item) => item.listing.sellerId), ...quickItems.map((item) => item.sellerId)]).size} seller(s)</p></div>{(cartLines.length > 0 || quickItems.length > 0) && <button className="button ghost small" type="button" onClick={() => { setCart({}); setQuickItems([]); }}>Clear cart</button>}</div>
+          <div className="sme-pos-cart-lines">{cartLines.map(({ listing, quantity }) => <div key={listing.id}><div><strong>{listing.name}</strong><small>{listing.sellerName} · {formatMoney(listing.sellingPriceMinor, listing.currency)} each</small></div><input type="number" min="0" max={availableQuantity(listing)} value={quantity} onChange={(event) => changeQuantity(listing, Number(event.target.value))} aria-label={`${listing.name} quantity`} /><strong>{formatMoney(listing.sellingPriceMinor * quantity, listing.currency)}</strong></div>)}{quickItems.map((item) => <div key={item.clientId}><div><strong>{item.name}</strong><small>{item.sellerName} · Quick Add · this sale only</small></div><input type="number" min="0" max="9999" value={item.quantity} onChange={(event) => changeQuickQuantity(item.clientId, Number(event.target.value))} aria-label={`${item.name} quantity`} /><strong>{formatMoney(item.unitPriceMinor * item.quantity, settings.currency)}</strong></div>)}</div>
+          {!cartLines.length && !quickItems.length && <div className="empty-inline">Tap a listing or use Quick Add to begin the sale.</div>}
           <div className="form-stack compact">
             <label>Customer<select value={customerId} onChange={(event) => setCustomerId(event.target.value)}><option value="">Walk-in customer</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label>Payment received in<select value={paymentAccountId} onChange={(event) => setPaymentAccountId(event.target.value)} required><option value="">Choose account</option>{paymentAccounts.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.currency}</option>)}</select></label>
-            <div className="form-grid"><label>Payment method<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethodCode)}>{paymentMethods.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Sale date<input type="date" value={saleDate} onChange={(event) => setSaleDate(event.target.value)} /></label></div>
-            {paymentMethod === 'other' && <label>Other payment method<input value={paymentMethodLabel} onChange={(event) => setPaymentMethodLabel(event.target.value)} required /></label>}
-            <label>Discount (BND)<input inputMode="decimal" value={discount} onChange={(event) => setDiscount(event.target.value)} /></label>
+            <SmePosPaymentSplitEditor accounts={paymentAccounts} currency={settings.currency} totalMinor={totalMinor} rows={paymentRows} onChange={setPaymentRows} disabled={busy} />
+            <div className="form-grid"><label>Sale date<input type="date" value={saleDate} onChange={(event) => setSaleDate(event.target.value)} /></label><label>Discount (BND)<input inputMode="decimal" value={discount} onChange={(event) => setDiscount(event.target.value)} /></label></div>
             <label>Note<textarea rows={2} value={checkoutNote} onChange={(event) => setCheckoutNote(event.target.value)} placeholder="Optional" /></label>
           </div>
           <div className="sme-pos-totals"><span>Subtotal <strong>{formatMoney(subtotalMinor, settings.currency)}</strong></span><span>Discount <strong>-{formatMoney(discountMinor, settings.currency)}</strong></span><span className="total">Customer pays <strong>{formatMoney(totalMinor, settings.currency)}</strong></span></div>
-          <button className="button primary pos-complete-sale" type="submit" disabled={busy || !canCheckout || settings.status !== 'active' || !cartLines.length}>{busy ? 'Completing sale…' : settings.status !== 'active' ? 'POS is not active' : `Complete sale · ${formatMoney(totalMinor, settings.currency)}`}</button>
+          <div className="pos-checkout-actions">{cartLines.length > 0 && <button className="button secondary" type="button" disabled={busy || quickItems.length > 0 || !customerId} onClick={() => setBookingForm(true)}>Reserve / take deposit</button>}<button className="button primary pos-complete-sale" type="submit" disabled={busy || !canCheckout || settings.status !== 'active' || (!cartLines.length && !quickItems.length)}>{busy ? 'Completing sale…' : settings.status !== 'active' ? 'POS is not active' : `Complete sale · ${formatMoney(totalMinor, settings.currency)}`}</button></div>
+          {quickItems.length > 0 && <small>Quick Add items are sale-only and cannot be reserved. Remove them to create a booking.</small>}
+          {cartLines.length > 0 && !customerId && <small>Choose a saved customer to reserve this cart.</small>}
         </section>
       </form>}
+
+      {tab === 'bookings' && canCheckout && <SmePosReservationsPanel space={space} settings={settings} role={role} reservations={reservations} paymentAccounts={paymentAccounts} onRefresh={async () => { await load(); await onChanged(); }} />}
+
 
       {tab === 'balance' && mySeller && <div className="sme-pos-sales-section">
         <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>{sellerBalanceLabel(mySeller?.balanceMinor || 0)}</span><strong>{formatMoney(Math.abs(mySeller?.balanceMinor || 0), settings.currency)}</strong><small>Sales, returns and payouts update this balance</small></article><article className="summary-card"><span>My gross sales</span><strong>{formatMoney(mySeller?.grossSalesMinor || 0, settings.currency)}</strong><small>{mySeller?.soldQuantity || 0} item(s) currently sold</small></article><article className="summary-card"><span>Paid out</span><strong>{formatMoney(mySeller?.paidOutMinor || 0, settings.currency)}</strong><small>Recorded seller payouts</small></article></div>
@@ -775,6 +841,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         {canViewReports && <section className="panel"><div className="panel-heading"><div><h3>Recent seller payouts</h3><p>Each payout posts Money Out from the selected business account.</p></div></div><div className="sme-pos-sales-list">{payouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.sellerName}</strong><small>{payout.payoutDate} · {payout.paymentAccountName}</small></div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Balance {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!payouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>}
       </div>}
     </>}
+
+    {quickAddForm && <Modal title="Quick Add · this sale only" onClose={() => setQuickAddForm(false)}><form className="form-stack" onSubmit={addQuickItem}><div className="notice">Use this for a one-off sale. It is not saved in Inventory. The selected seller's default commission is applied automatically.</div><label>Seller<select name="sellerId" defaultValue={mySeller?.id || sellers[0]?.id || ''} required><option value="">Choose seller</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label><div className="form-grid"><label>Item name<input name="name" maxLength={100} required autoFocus /></label><label>Condition<select name="condition" defaultValue="new">{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Selling price (BND)<input name="price" inputMode="decimal" required /></label><label>Quantity<input name="quantity" type="number" min="1" max="9999" defaultValue="1" required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setQuickAddForm(false)}>Cancel</button><button className="button primary" type="submit">Add to sale</button></div></form></Modal>}
+
+    {bookingForm && <SmePosCreateReservationModal space={space} settings={settings} sourceMode="marketplace_consignment" items={cartLines.map(({ listing, quantity }) => ({ itemId: listing.id, name: `${listing.name} · ${listing.sellerName}`, quantity, lineTotalMinor: listing.sellingPriceMinor * quantity }))} customers={customers} paymentAccounts={paymentAccounts} initialCustomerId={customerId} initialDiscountMinor={discountMinor} onClose={() => setBookingForm(false)} onSaved={async () => { setCart({}); setDiscount('0.00'); setCustomerId(''); setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]); setSuccess('Booking created and stock reserved.'); await load(); await onChanged(); }} />}
 
     {manualListingForm && <Modal title="Register existing seller stock" onClose={() => !busy && setManualListingForm(false)}>
       <form className="form-stack" onSubmit={registerExistingListing}>
@@ -847,7 +917,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           <span>Net sale <strong>{formatMoney(receipt.totalMinor - receipt.returnedMinor, receipt.currency)}</strong></span>
         </div>
         <p>{receipt.receiptFooter}</p>
-        {receipt.paymentAccountName && <small>Paid into {receipt.paymentAccountName}</small>}
+        {receipt.payments?.length ? <div className="sme-pos-receipt-payments">{receipt.payments.map((payment, index) => <small key={`${payment.accountId}-${index}`}>{payment.paymentMethodLabel || payment.paymentMethod} · {payment.accountName} · {formatMoney(payment.amountMinor, receipt.currency)}</small>)}</div> : receipt.paymentAccountName && <small>Paid into {receipt.paymentAccountName}</small>}
       </div>
       <div className="modal-actions">
         <button className="button secondary" type="button" onClick={() => window.print()}>Print</button>
@@ -858,7 +928,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {returnForm && <Modal title={`Return items · ${returnForm.sale.receiptNumber}`} onClose={() => !busy && setReturnForm(null)}>
       <form className="form-stack" onSubmit={submitReturn}>
-        <div className="notice">The customer refund posts as Money Out from the original shop account. Seller balances, commission, listing stock and reports are adjusted together.</div>
+        <div className="notice">The customer refund posts as Money Out across the original payment account(s). Seller balances, commission and reports are adjusted together. Quick Add lines do not create or restore inventory stock.</div>
         <div className="sme-pos-cart-lines">
           {returnForm.sale.items.map((item) => {
             const itemId = item.listingId || item.productId;

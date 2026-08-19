@@ -21,6 +21,7 @@ import type {
   SmePosPaymentAccount,
   SmePosPayout,
   SmePosProduct,
+  SmePosReservation,
   SmePosRole,
   SmePosSeller,
   SmePosSellerLedgerEntry,
@@ -262,17 +263,93 @@ export async function registerExistingSmePosProduct(input: {
   return call({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
+export interface SmePosPaymentInput {
+  accountId: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  amountMinor: number;
+}
+
+export interface StandardPosQuickItemInput {
+  clientId: string;
+  name: string;
+  quantity: number;
+  unitPriceMinor: number;
+}
+
+export interface MarketplaceQuickItemInput extends StandardPosQuickItemInput {
+  sellerId: string;
+  condition?: SmePosListingCondition;
+}
+
+export async function listSmePosReservations(spaceId: string, includeClosed = false): Promise<SmePosReservation[]> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'listSmePosReservations');
+  const result = await call({ spaceId, includeClosed });
+  return ((result.data as { reservations?: SmePosReservation[] })?.reservations || []);
+}
+
+export async function createSmePosReservation(input: {
+  spaceId: string;
+  sourceMode: SmePosMode;
+  items: Array<{ itemId: string; quantity: number }>;
+  customerId: string;
+  discountMinor: number;
+  reservationDate: string;
+  dueDate?: string | null;
+  depositPayments?: SmePosPaymentInput[];
+  note?: string;
+}): Promise<{ data: { reservationId: string; reservationNumber: string; remainingMinor: number } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'createSmePosReservation');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { reservationId: string; reservationNumber: string; remainingMinor: number } }>;
+}
+
+export async function addSmePosReservationDeposit(input: {
+  spaceId: string;
+  reservationId: string;
+  payments: SmePosPaymentInput[];
+  paymentDate: string;
+  note?: string;
+}): Promise<{ data: { reservationId: string; depositMinor: number; remainingMinor: number } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'addSmePosReservationDeposit');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { reservationId: string; depositMinor: number; remainingMinor: number } }>;
+}
+
+export async function completeSmePosReservation(input: {
+  spaceId: string;
+  reservationId: string;
+  payments: SmePosPaymentInput[];
+  saleDate: string;
+  note?: string;
+}): Promise<{ data: { reservationId: string; saleId: string; receiptNumber: string; transactionId: string } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'completeSmePosReservation');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { reservationId: string; saleId: string; receiptNumber: string; transactionId: string } }>;
+}
+
+export async function cancelSmePosReservation(input: {
+  spaceId: string;
+  reservationId: string;
+  cancelDate: string;
+  reason?: string;
+}): Promise<{ data: { reservationId: string; refundedMinor: number } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'cancelSmePosReservation');
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { reservationId: string; refundedMinor: number } }>;
+}
+
 export async function checkoutStandardPos(input: {
   spaceId: string;
   items: Array<{ productId: string; quantity: number }>;
+  quickItems?: StandardPosQuickItemInput[];
   customerId?: string | null;
-  paymentAccountId: string;
-  paymentMethod?: PaymentMethodCode | null;
-  paymentMethodLabel?: string | null;
+  payments: SmePosPaymentInput[];
   discountMinor: number;
   saleDate: string;
   note?: string;
-}): Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }> {
+}): Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string; transactionIds?: string[] } }> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'checkoutStandardPos');
   return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }>;
@@ -442,14 +519,13 @@ export async function setMarketplaceListingArchived(spaceId: string, listingId: 
 export async function checkoutMarketplacePos(input: {
   spaceId: string;
   items: Array<{ listingId: string; quantity: number }>;
+  quickItems?: MarketplaceQuickItemInput[];
   customerId?: string | null;
-  paymentAccountId: string;
-  paymentMethod?: PaymentMethodCode | null;
-  paymentMethodLabel?: string | null;
+  payments: SmePosPaymentInput[];
   discountMinor: number;
   saleDate: string;
   note?: string;
-}): Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }> {
+}): Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string; transactionIds?: string[] } }> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'checkoutMarketplacePos');
   return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { saleId: string; receiptNumber: string; transactionId: string } }>;
