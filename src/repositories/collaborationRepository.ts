@@ -87,6 +87,21 @@ export async function listSpaceActivities(spaceId: string): Promise<SpaceActivit
     .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0));
 }
 
+export function subscribeSpaceActivities(
+  spaceId: string,
+  onItems: (items: SpaceActivity[]) => void,
+  onError?: (error: Error) => void,
+) {
+  const { db } = requireFirebase();
+  return onSnapshot(
+    query(collection(db, 'spaceActivities'), where('spaceId', '==', spaceId)),
+    (snapshot) => onItems(snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }) as SpaceActivity)
+      .sort((a, b) => Number(b.createdAt?.toMillis?.() || 0) - Number(a.createdAt?.toMillis?.() || 0))),
+    (error) => onError?.(error),
+  );
+}
+
 export async function listUserNotifications(uid: string): Promise<UserNotification[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'userNotifications'), where('uid', '==', uid)));

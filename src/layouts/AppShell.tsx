@@ -1,29 +1,34 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
-import { subscribeUserNotifications } from '../repositories/collaborationRepository';
+import { subscribeSpaceActivities, subscribeUserNotifications } from '../repositories/collaborationRepository';
 import { listenForForegroundPush } from '../repositories/notificationRepository';
 import { listSpaces } from '../repositories/spaceRepository';
 import type { Space } from '../types/models';
+import { SidebarCustomizer } from '../components/SidebarCustomizer';
+import {
+  PERSONALISATION_EVENT,
+  applyPersonalisation,
+  defaultPersonalisation,
+  loadPersonalisation,
+  navigationIcon,
+  orderedNavigation,
+  savePersonalisation,
+  type PersonalisationSettings,
+} from '../services/personalisation';
 
-const navigation = [
-  ['/', 'Overview', '⌂'],
-  ['/spaces', 'Spaces', '◫'],
-  ['/accounts', 'Accounts', '◉'],
-  ['/transactions', 'Money activity', '↔'],
-  ['/recurring', 'Recurring money', '↻'],
-  ['/budgets', 'Budgets', '▤'],
-  ['/goals', 'Goals', '◇'],
-  ['/bills', 'Bills & instalments', '◷'],
-  ['/calendar', 'Calendar', '▦'],
-  ['/search', 'Search', '⌕'],
-  ['/offline-sync', 'Offline & sync', '⇅'],
-  ['/reports', 'Money reports', '⌁'],
-];
+interface ActivityToast {
+  id: string;
+  spaceId: string;
+  spaceName: string;
+  actorName: string;
+  summary: string;
+  targetPath: string;
+}
 
 function NotificationBellIcon() {
   return (
@@ -55,6 +60,9 @@ export function AppShell() {
   const [posPickerOpen, setPosPickerOpen] = useState(false);
   const [posPickerLoading, setPosPickerLoading] = useState(false);
   const [posPickerError, setPosPickerError] = useState('');
+  const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
+  const [menuCustomizerOpen, setMenuCustomizerOpen] = useState(false);
+  const [activityToast, setActivityToast] = useState<ActivityToast | null>(null);
   const { profile, user, logOut } = useAuth();
   const { pendingCount, needsAttentionCount, syncing } = useOfflineSync();
   const navigate = useNavigate();
@@ -62,6 +70,34 @@ export function AppShell() {
 
   const currentPosMatch = location.pathname.match(/^\/spaces\/([^/]+)\/pos(?:\/|$)/);
   const currentPosPath = currentPosMatch ? `/spaces/${currentPosMatch[1]}/pos` : '';
+  const visibleNavigation = useMemo(() => orderedNavigation(personalisation), [personalisation]);
+
+  function updatePersonalisation(next: PersonalisationSettings) {
+    if (!user) return;
+    setPersonalisation(savePersonalisation(user.uid, next));
+  }
+
+  useEffect(() => {
+    if (!user) {
+      const defaults = defaultPersonalisation();
+      setPersonalisation(defaults);
+      applyPersonalisation(defaults);
+      return;
+    }
+
+    const initial = loadPersonalisation(user.uid);
+    setPersonalisation(initial);
+    applyPersonalisation(initial);
+
+    const handlePersonalisation = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid: string; settings: PersonalisationSettings }>).detail;
+      if (!detail || detail.uid !== user.uid) return;
+      setPersonalisation(detail.settings);
+      applyPersonalisation(detail.settings);
+    };
+    window.addEventListener(PERSONALISATION_EVENT, handlePersonalisation);
+    return () => window.removeEventListener(PERSONALISATION_EVENT, handlePersonalisation);
+  }, [user]);
 
   useEffect(() => {
     if (location.pathname === '/search') setSearchText(new URLSearchParams(location.search).get('q') || '');
@@ -78,6 +114,63 @@ export function AppShell() {
       () => setUnreadNotifications(0),
     );
   }, [user]);
+  useEffect(() => {
+    if (!user) {
+      setActivityToast(null);
+      return;
+    }
+
+    let active = true;
+    const stops: Array<() => void> = [];
+
+    void listSpaces(user.uid).then((spaces) => {
+      if (!active) return;
+      spaces.filter((space) => !space.archivedAt).forEach((space) => {
+        let initialized = false;
+        const known = new Set<string>();
+        const stop = subscribeSpaceActivities(
+          space.id,
+          (items) => {
+            if (!initialized) {
+              items.forEach((item) => known.add(item.id));
+              initialized = true;
+              return;
+            }
+
+            const fresh = items.filter((item) => !known.has(item.id));
+            items.forEach((item) => known.add(item.id));
+            const newest = fresh.find((item) => item.actorUid !== user.uid);
+            if (!newest) return;
+
+            const opensPos = newest.action.includes('pos')
+              || newest.action.includes('marketplace')
+              || String(newest.targetType || '').toLowerCase().includes('pos');
+            setActivityToast({
+              id: newest.id,
+              spaceId: space.id,
+              spaceName: space.name,
+              actorName: newest.actorName || 'A Space member',
+              summary: newest.summary || newest.action.replaceAll('_', ' '),
+              targetPath: opensPos ? `/spaces/${space.id}/pos` : `/spaces/${space.id}?tab=activity`,
+            });
+          },
+          () => undefined,
+        );
+        stops.push(stop);
+      });
+    }).catch(() => undefined);
+
+    return () => {
+      active = false;
+      stops.forEach((stop) => stop());
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!activityToast) return;
+    const timer = window.setTimeout(() => setActivityToast(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [activityToast]);
 
   useEffect(() => {
     if (!profile?.browserPushEnabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -154,15 +247,19 @@ export function AppShell() {
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label="Close menu">×</button>
         </div>
         <nav>
-          {navigation.map(([path, label, icon]) => (
-            <NavLink key={path} to={path} end={path === '/'} onClick={() => setMobileOpen(false)}>
-              <span className="nav-icon">{icon}</span>
-              <span className="nav-label">{label}</span>
-              {path === '/offline-sync' && (pendingCount + needsAttentionCount > 0 || syncing) && <span className={`nav-count ${needsAttentionCount > 0 ? 'attention' : ''}`}>{syncing ? '…' : pendingCount + needsAttentionCount}</span>}
+          {visibleNavigation.map((item) => (
+            <NavLink key={item.path} to={item.path} end={item.path === '/'} onClick={() => setMobileOpen(false)}>
+              <span className="nav-icon">{navigationIcon(personalisation.iconPack, item.id, item.icon)}</span>
+              <span className="nav-label">{item.label}</span>
+              {item.path === '/offline-sync' && (pendingCount + needsAttentionCount > 0 || syncing) && <span className={`nav-count ${needsAttentionCount > 0 ? 'attention' : ''}`}>{syncing ? '…' : pendingCount + needsAttentionCount}</span>}
             </NavLink>
           ))}
         </nav>
         <div className="sidebar-footer">
+          <button type="button" className="sidebar-customize-button" onClick={() => setMenuCustomizerOpen(true)}>
+            <span className="nav-icon">{navigationIcon(personalisation.iconPack, 'spaces', '☷')}</span>
+            <span className="nav-label">Customize menu</span>
+          </button>
           <NavLink to="/settings" onClick={() => setMobileOpen(false)}>
             <span className="nav-icon">⚙</span>
             <span className="nav-label">Settings</span>
@@ -189,6 +286,25 @@ export function AppShell() {
           <span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span>
         </div>
         <ConnectivityBanner />
+        {activityToast && (
+          <button
+            type="button"
+            className="space-activity-live-toast"
+            onClick={() => {
+              const target = activityToast.targetPath;
+              setActivityToast(null);
+              navigate(target);
+            }}
+          >
+            <span className="space-activity-live-toast-icon">●</span>
+            <span className="space-activity-live-toast-copy">
+              <strong>{activityToast.actorName} · {activityToast.spaceName}</strong>
+              <span>{activityToast.summary}</span>
+              <small>Just updated · Tap to view details</small>
+            </span>
+            <span className="space-activity-live-toast-arrow" aria-hidden="true">→</span>
+          </button>
+        )}
         <Outlet />
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
@@ -245,6 +361,14 @@ export function AppShell() {
             <small>More</small>
           </button>
         </nav>
+
+        {menuCustomizerOpen && (
+          <SidebarCustomizer
+            settings={personalisation}
+            onChange={updatePersonalisation}
+            onClose={() => setMenuCustomizerOpen(false)}
+          />
+        )}
 
         {posPickerOpen && (
           <Modal

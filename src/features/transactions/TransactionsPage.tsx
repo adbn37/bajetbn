@@ -153,6 +153,12 @@ export function TransactionsPage() {
     () => [...DEFAULT_TRANSACTION_CATEGORIES, ...customCategories.filter((item) => !item.archivedAt)],
     [customCategories],
   );
+  async function refreshCategories(): Promise<TransactionCategory[]> {
+    if (!user) return allCategories;
+    const nextCustomCategories = await listAllCustomCategories(user.uid);
+    setCustomCategories(nextCustomCategories);
+    return [...DEFAULT_TRANSACTION_CATEGORIES, ...nextCustomCategories.filter((item) => !item.archivedAt)];
+  }
   const categoryMap = useMemo(() => new Map(allCategories.map((category) => [category.id, category])), [allCategories]);
   const accountMap = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
   const activeAccounts = useMemo(() => accounts.filter((account) => !account.archivedAt && !account.closedAt), [accounts]);
@@ -327,6 +333,7 @@ export function TransactionsPage() {
         accounts={activeAccounts}
         spaces={spaces}
         categories={allCategories}
+        onCategoriesChanged={refreshCategories}
         timezone={profile.timezone}
         online={online}
         onClose={() => setShowForm(false)}
@@ -378,12 +385,27 @@ function CategoryBadge({ category }: { category: TransactionCategory }) {
   return <span className="category-badge"><span className={`category-icon small category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span></span>;
 }
 
-export function MoneyActivityModal({ accounts, spaces, categories, timezone, online, onClose, onSubmit, onComplete }: {
+export function MoneyActivityModal({
+  accounts,
+  spaces,
+  categories,
+  timezone,
+  online,
+  initialType,
+  lockedSpaceId,
+  onCategoriesChanged,
+  onClose,
+  onSubmit,
+  onComplete,
+}: {
   accounts: Account[];
   spaces: Space[];
   categories: TransactionCategory[];
   timezone: string;
   online: boolean;
+  initialType?: Exclude<PrimaryType, 'transfer'>;
+  lockedSpaceId?: string;
+  onCategoriesChanged?: () => Promise<TransactionCategory[]>;
   onClose: () => void;
   onSubmit: (values: TransactionInput) => Promise<PostTransactionOutcome>;
   onComplete: (message: string, refresh: boolean) => Promise<void>;
@@ -392,9 +414,14 @@ export function MoneyActivityModal({ accounts, spaces, categories, timezone, onl
   const maxAttachmentSizeBytes = 10 * 1024 * 1024;
   const chooseFilesRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const [type, setType] = useState<PrimaryType>('expense');
-  const [spaceId, setSpaceId] = useState(spaces[0]?.id || '');
+  const [type, setType] = useState<PrimaryType>(initialType || 'expense');
+  const initialSpaceId = lockedSpaceId && spaces.some((space) => space.id === lockedSpaceId)
+    ? lockedSpaceId
+    : spaces[0]?.id || '';
+  const [spaceId, setSpaceId] = useState(initialSpaceId);
   const selectedSpace = spaces.find((space) => space.id === spaceId);
+  const [localCategories, setLocalCategories] = useState<TransactionCategory[]>(categories);
+  const [showCategoryEditor, setShowCategoryEditor] = useState(false);
   const compatibleAccounts = accounts.filter((account) => !selectedSpace || account.currency === selectedSpace.currency);
   const [accountId, setAccountId] = useState(compatibleAccounts[0]?.id || accounts[0]?.id || '');
   const [destinationAccountId, setDestinationAccountId] = useState('');
@@ -417,9 +444,12 @@ export function MoneyActivityModal({ accounts, spaces, categories, timezone, onl
   const [attachmentError, setAttachmentError] = useState('');
 
   const scope = spaceScope(selectedSpace);
-  const categoryOptions = categories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
+  const categoryOptions = localCategories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
 
+  useEffect(() => {
+    setLocalCategories(categories);
+  }, [categories]);
   useEffect(() => {
     const nextAccounts = accounts.filter((account) => !selectedSpace || account.currency === selectedSpace.currency);
     if (!nextAccounts.some((account) => account.id === accountId)) setAccountId(nextAccounts[0]?.id || '');
@@ -627,22 +657,27 @@ export function MoneyActivityModal({ accounts, spaces, categories, timezone, onl
       : pendingFiles.length > 0 ? `Save and attach ${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'}`
         : 'Save money activity';
 
+  const typeOptions: PrimaryType[] = lockedSpaceId
+    ? ['expense', 'income']
+    : ['expense', 'income', 'transfer'];
   return <Modal title="Add money activity" onClose={closeForm}><form className="transaction-form" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
     {!online && <div className="notice warning compact-notice"><strong>Saving offline</strong><span>This money activity will stay on this device and sync safely when internet returns.</span></div>}
     <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
-      {(['expense', 'income', 'transfer'] as const).map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
+      {typeOptions.map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
     </div>
 
     <div className="form-grid">
       <label>Date<input required type="date" value={transactionDate} onChange={(event) => setTransactionDate(event.target.value)} /></label>
-      <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} · {space.type === 'sme' ? 'SME' : 'Personal'} · {space.currency}</option>)}</select></label>
+      {lockedSpaceId
+        ? <div className="locked-space-field"><span>Space</span><strong>{selectedSpace?.name || 'This Space'}</strong><small>Locked to this Space</small></div>
+        : <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} · {space.type === 'sme' ? 'SME' : 'Personal'} · {space.currency}</option>)}</select></label>}
       <label className={type === 'transfer' ? '' : 'span-2'}>{type === 'income' ? 'Money goes into' : type === 'expense' ? 'Money comes from' : 'Move from account'}<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
       {type === 'transfer' && <label>Move to account<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Choose account</option>{destinationOptions.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>}
       <label className="span-2 amount-field">Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})<input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
     </div>
 
-    {type !== 'transfer' && <fieldset className="category-picker"><legend>Category</legend><div className="category-option-grid">
+    {type !== 'transfer' && <fieldset className="category-picker"><legend className="category-picker-legend"><span>Category</span>{onCategoriesChanged && <button type="button" className="text-button" onClick={() => setShowCategoryEditor(true)}>+ Add category</button>}</legend><div className="category-option-grid">
       {categoryOptions.map((category) => <button type="button" key={category.id} className={`category-option ${categoryId === category.id ? 'selected' : ''}`} onClick={() => setCategoryId(category.id)}>
         <span className={`category-icon category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span>{!category.isSystem && <small>Custom</small>}
       </button>)}
@@ -684,7 +719,24 @@ export function MoneyActivityModal({ accounts, spaces, categories, timezone, onl
 
     {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
     <div className="modal-actions"><button type="button" className="button secondary" disabled={busy} onClick={closeForm}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{saveLabel}</button></div>
-  </form></Modal>;
+  </form>
+  {showCategoryEditor && type !== 'transfer' && <CategoryEditor
+    category={null}
+    defaultKind={type === 'income' ? 'income' : 'expense'}
+    defaultScope={scope}
+    onClose={() => setShowCategoryEditor(false)}
+    onSaved={async (savedName) => {
+      const nextCategories = onCategoriesChanged ? await onCategoriesChanged() : localCategories;
+      setLocalCategories(nextCategories);
+      const created = nextCategories.find((category) =>
+        !category.archivedAt
+        && category.name.trim().toLowerCase() === (savedName || '').trim().toLowerCase()
+        && categoryApplies(category, type, scope));
+      if (created) setCategoryId(created.id);
+      setShowCategoryEditor(false);
+    }}
+  />}
+  </Modal>;
 }
 
 function TransactionDetails({ item, source, destination, space, category, online, receiptsOnly = false, onClose, onReverse, onAttachmentsChanged }: {
@@ -866,14 +918,16 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
   </Modal>;
 }
 
-function CategoryEditor({ category, onClose, onSaved }: {
+function CategoryEditor({ category, defaultKind, defaultScope, onClose, onSaved }: {
   category: TransactionCategory | null;
+  defaultKind?: CategoryKind;
+  defaultScope?: CategoryScope;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (savedName?: string) => Promise<void>;
 }) {
   const [name, setName] = useState(category?.name || '');
-  const [kind, setKind] = useState<CategoryKind>(category?.kind || 'expense');
-  const [scope, setScope] = useState<CategoryScope>(category?.scope || 'both');
+  const [kind, setKind] = useState<CategoryKind>(category?.kind || defaultKind || 'expense');
+  const [scope, setScope] = useState<CategoryScope>(category?.scope || defaultScope || 'both');
   const [icon, setIcon] = useState(category?.icon || 'dots');
   const [color, setColor] = useState(category?.color || 'teal');
   const [busy, setBusy] = useState(false);
@@ -888,7 +942,7 @@ function CategoryEditor({ category, onClose, onSaved }: {
       if (!name.trim()) throw new Error('Category name is required.');
       if (category) await updateCategory({ categoryId: category.id, name, kind, scope, icon, color });
       else await createCategory({ name, kind, scope, icon, color });
-      await onSaved();
+      await onSaved(name.trim());
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {

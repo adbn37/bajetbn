@@ -72,6 +72,18 @@ export async function listTransactions(uid: string): Promise<FinancialTransactio
     });
 }
 
+export async function listTransactionsForSpace(spaceId: string): Promise<FinancialTransaction[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(collection(db, 'transactions'), where('spaceId', '==', spaceId)));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as FinancialTransaction)
+    .sort((a, b) => {
+      const dateCompare = b.transactionDate.localeCompare(a.transactionDate);
+      if (dateCompare !== 0) return dateCompare;
+      return (b.postedAt?.toMillis() || 0) - (a.postedAt?.toMillis() || 0);
+    });
+}
+
 export async function postTransaction(input: {
   type: 'income' | 'expense' | 'transfer';
   accountId: string;

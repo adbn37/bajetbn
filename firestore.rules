@@ -134,6 +134,11 @@ service cloud.firestore {
         );
     }
 
+    function isSmeSpace(spaceId) {
+      return exists(/databases/$(database)/documents/spaces/$(spaceId))
+        && get(/databases/$(database)/documents/spaces/$(spaceId)).data.type == 'sme';
+    }
+
     function posAccessId(spaceId, uid) {
       return spaceId + '_' + uid;
     }
@@ -384,7 +389,10 @@ service cloud.firestore {
     }
 
     match /transactions/{transactionId} {
-      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow read: if signedIn() && (
+        resource.data.ownerId == request.auth.uid
+        || isPosManager(resource.data.spaceId)
+      );
       allow create, update, delete: if false; // Posted and reversed only by trusted Cloud Functions.
     }
 
@@ -404,7 +412,10 @@ service cloud.firestore {
     }
 
     match /budgets/{budgetId} {
-      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow read: if signedIn() && (
+        resource.data.ownerId == request.auth.uid
+        || isPosManager(resource.data.spaceId)
+      );
       allow create, update, delete: if false;
     }
 
@@ -419,7 +430,11 @@ service cloud.firestore {
     }
 
     match /commitments/{commitmentId} {
-      allow read: if signedIn() && (resource.data.ownerId == request.auth.uid || isSpaceMember(resource.data.spaceId));
+      allow read: if signedIn() && (
+        resource.data.ownerId == request.auth.uid
+        || isPosManager(resource.data.spaceId)
+        || (!isSmeSpace(resource.data.spaceId) && isSpaceMember(resource.data.spaceId))
+      );
       allow create, update, delete: if false;
     }
 

@@ -6,17 +6,18 @@ import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listAccounts } from '../../repositories/accountRepository';
-import { listBudgets } from '../../repositories/budgetRepository';
-import { listCommitments } from '../../repositories/commitmentRepository';
+import { listBudgets, listBudgetsForSpace } from '../../repositories/budgetRepository';
+import { listCommitments, listCommitmentsForSpace } from '../../repositories/commitmentRepository';
 import {
   listSharedBillAssignments,
   listSpaceMembers,
 } from '../../repositories/collaborationRepository';
 import { listGoals } from '../../repositories/goalRepository';
 import { listSharedExpenses } from '../../repositories/sharedExpenseRepository';
+import { getMySmePosAccess } from '../../repositories/smePosRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
-import { listTransactions } from '../../repositories/transactionRepository';
+import { listTransactions, listTransactionsForSpace } from '../../repositories/transactionRepository';
 import type {
   Account,
   Budget,
@@ -28,12 +29,14 @@ import type {
   Space,
   SpaceMember,
   SpaceType,
+  SmePosRole,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
+import { SpaceActionHub } from './SpaceActionHub';
 
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund';
 type SpaceOverviewSection = 'money' | 'budgets' | 'goals' | 'bills' | 'reports' | 'calendar';
@@ -120,6 +123,7 @@ export function SpaceDetailsPage() {
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [sharedBills, setSharedBills] = useState<SharedBillAssignment[]>([]);
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
+  const [smePosRole, setSmePosRole] = useState<SmePosRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -136,13 +140,46 @@ export function SpaceDetailsPage() {
       setSpace(nextSpace);
       if (!nextSpace) return;
 
-      const [nextAccounts, nextTransactions, nextBudgets, nextGoals, nextCommitments] = await Promise.all([
+      const nextPosAccess = nextSpace.type === 'sme'
+        ? await getMySmePosAccess(spaceId, user.uid)
+        : null;
+      const nextSmePosRole: SmePosRole | null = nextSpace.type === 'sme'
+        ? nextSpace.ownerId === user.uid
+          ? 'owner'
+          : nextPosAccess?.status === 'active'
+            ? nextPosAccess.role
+            : null
+        : null;
+      setSmePosRole(nextSmePosRole);
+
+      const canReadSmeFinancials = nextSpace.type !== 'sme'
+        || nextSpace.ownerId === user.uid
+        || nextSmePosRole === 'owner'
+        || nextSmePosRole === 'manager';
+
+      const [nextAccounts, nextGoals] = await Promise.all([
         listAccounts(user.uid),
-        listTransactions(user.uid),
-        listBudgets(user.uid),
         listGoals(user.uid),
-        listCommitments(user.uid),
       ]);
+      let nextTransactions: FinancialTransaction[] = [];
+      let nextBudgets: Budget[] = [];
+      let nextCommitments: Commitment[] = [];
+
+      if (nextSpace.type === 'sme' && nextSpace.ownerId !== user.uid) {
+        if (canReadSmeFinancials) {
+          [nextTransactions, nextBudgets, nextCommitments] = await Promise.all([
+            listTransactionsForSpace(spaceId),
+            listBudgetsForSpace(spaceId),
+            listCommitmentsForSpace(spaceId),
+          ]);
+        }
+      } else {
+        [nextTransactions, nextBudgets, nextCommitments] = await Promise.all([
+          listTransactions(user.uid),
+          listBudgets(user.uid),
+          listCommitments(user.uid),
+        ]);
+      }
 
       setAccounts(nextAccounts);
       setTransactions(nextTransactions.filter((item) => item.spaceId === spaceId));
@@ -193,6 +230,11 @@ export function SpaceDetailsPage() {
   const openSharedExpenses = sharedExpenses.filter((item) => item.status !== 'paid');
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
   const currentMember = members.find((item) => item.uid === user?.uid);
+  const canViewSmeFinancials = !space
+    || space.type !== 'sme'
+    || space.ownerId === user?.uid
+    || smePosRole === 'owner'
+    || smePosRole === 'manager';
 
   function chooseTab(tab: SpaceDetailsTab) {
     setSearchParams(tab === 'overview' ? {} : { tab });
@@ -212,14 +254,20 @@ export function SpaceDetailsPage() {
   const fundTabId: SpaceDetailsTab = space.type === 'trip' ? 'trip_money' : 'group_fund';
   const fundTabLabel = space.type === 'trip' ? 'Trip money' : space.type === 'household' ? 'Household fund' : 'Group fund';
 
+  const sharedFinanceTabs: Array<{ id: SpaceDetailsTab; label: string }> =
+    space.type === 'sme' && !canViewSmeFinancials
+      ? []
+      : [
+        ...(supportsGroupFund ? [{ id: fundTabId, label: fundTabLabel }] : []),
+        { id: 'expenses', label: space.type === 'sme' ? 'Expenses' : 'Shared expenses' },
+        ...(space.type === 'sme' ? [] : [{ id: 'balances' as SpaceDetailsTab, label: 'Who owes whom' }]),
+        { id: 'bills', label: 'Shared bills' },
+      ];
   const tabs: Array<{ id: SpaceDetailsTab; label: string }> = shared
     ? [
       { id: 'overview', label: 'Overview' },
       { id: 'members', label: 'Members' },
-      ...(supportsGroupFund ? [{ id: fundTabId, label: fundTabLabel }] : []),
-      { id: 'expenses', label: space.type === 'sme' ? 'Expenses' : 'Shared expenses' },
-      ...(space.type === 'sme' ? [] : [{ id: 'balances' as SpaceDetailsTab, label: 'Who owes whom' }]),
-      { id: 'bills', label: 'Shared bills' },
+      ...sharedFinanceTabs,
       { id: 'activity', label: 'Activity' },
       { id: 'settings', label: 'Space settings' },
     ]
@@ -304,6 +352,16 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
+    {activeTab === 'overview' && (
+      <SpaceActionHub
+        space={space}
+        members={members}
+        currentMember={currentMember || null}
+        supportsGroupFund={supportsGroupFund}
+        fundLabel={fundTabLabel}
+        onRefresh={load}
+      />
+    )}
     <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
       {space.type === 'sme' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/pos`}>Point of sale</Link>}
@@ -322,6 +380,8 @@ export function SpaceDetailsPage() {
       openBills={openBills}
       memberCount={activeMembers.length}
       openSharedBillCount={openSharedBills.length + openSharedExpenses.length}
+      canViewFinancials={canViewSmeFinancials}
+      smePosRole={smePosRole}
     /> : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
       <CollaborationPage embedded spaceIdOverride={space.id} activeTab={activeTab as CollaborationTab} onSpaceUpdated={load} />
       {activeTab === 'settings' && currentMember?.role === 'owner' && <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />}
@@ -341,6 +401,8 @@ function SpaceOverview({
   openBills,
   memberCount,
   openSharedBillCount,
+  canViewFinancials,
+  smePosRole,
 }: {
   space: Space;
   moneyIn: number;
@@ -353,6 +415,8 @@ function SpaceOverview({
   openBills: Commitment[];
   memberCount: number;
   openSharedBillCount: number;
+  canViewFinancials: boolean;
+  smePosRole: SmePosRole | null;
 }) {
   const shared = space.type !== 'personal';
   const [section, setSection] = useState<SpaceOverviewSection | null>(null);
@@ -371,13 +435,13 @@ function SpaceOverview({
     section?: SpaceOverviewSection;
   };
 
-  const quickLinks: QuickItem[] = [
+  const quickLinks: QuickItem[] = canViewFinancials ? [
     { key: 'money', section: 'money', icon: '↔', title: 'Money activity', detail: 'See only money activity saved in this Space.' },
     { key: 'budgets', section: 'budgets', icon: '▤', title: space.type === 'trip' ? 'Trip budget' : 'Budgets', detail: 'Review budgets connected to this Space.' },
     { key: 'bills', section: 'bills', icon: '◷', title: 'Bills & instalments', detail: 'See only bills and instalments for this Space.' },
     { key: 'reports', section: 'reports', icon: '⌁', title: 'Money reports', detail: 'Weekly, monthly, yearly or custom dates for this Space.' },
     { key: 'calendar', section: 'calendar', icon: '▦', title: 'Calendar', detail: 'See dates and deadlines belonging to this Space.' },
-  ];
+  ] : [];
 
   if (space.type === 'sme') {
     quickLinks.unshift({ key: 'pos', to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Open the register and daily shop tools.', featured: true });
@@ -460,15 +524,40 @@ function SpaceOverview({
     calendar: 'Calendar',
   };
 
+  const smeRoleLabel = smePosRole === 'manager'
+    ? 'Manager'
+    : smePosRole === 'cashier'
+      ? 'Cashier'
+      : smePosRole === 'stock_staff'
+        ? 'Stock Staff'
+        : smePosRole === 'seller'
+          ? 'Seller'
+          : smePosRole === 'viewer'
+            ? 'View Only'
+            : smePosRole === 'owner'
+              ? 'Owner'
+              : 'Staff';
+
   return <>
-    <section className="summary-grid space-overview-summary">
+    {space.type === 'sme' && !canViewFinancials ? (
+      <>
+        <section className="sme-finance-private">
+          <article className="summary-card featured"><span>Your role</span><strong>{smeRoleLabel}</strong><small>SME operational access</small></article>
+          <article className="summary-card"><span>Members</span><strong>{memberCount}</strong><small>Active people in this Space</small></article>
+          <article className="summary-card"><span>Daily workspace</span><strong>POS</strong><small>Sales and shop tools stay available</small></article>
+        </section>
+        <div className="notice sme-finance-private-note"><strong>Financial management is private</strong><span>Money activity, budgets, bills and money reports are shown to the Owner and Manager by default.</span></div>
+      </>
+    ) : (
+      <section className="summary-grid space-overview-summary">
       <article className="summary-card featured"><span>Money in</span><strong>{formatMoney(moneyIn, space.currency)}</strong><small>Saved in this Space</small></article>
       <article className="summary-card"><span>Money out</span><strong>{formatMoney(moneyOut, space.currency)}</strong><small>Saved spending in this Space</small></article>
       <article className="summary-card"><span>{shared ? 'Members' : 'Accounts used'}</span><strong>{shared ? memberCount : accountsUsed.length}</strong><small>{shared ? 'Active people in this Space' : 'Accounts connected through money activity'}</small></article>
       <article className="summary-card"><span>{shared ? 'Shared items still open' : 'Bills still open'}</span><strong>{shared ? openSharedBillCount : openBills.length}</strong><small>Items that still need attention</small></article>
-    </section>
+      </section>
+    )}
 
-    {shared && <div className="info-banner"><strong>This Space stays focused</strong><span>Money, bills, reports and calendar opened here are limited to {space.name}.</span></div>}
+    {shared && canViewFinancials && <div className="info-banner"><strong>This Space stays focused</strong><span>Money, bills, reports and calendar opened here are limited to {space.name}.</span></div>}
 
     <section className="panel space-overview-panel">
       <div className="panel-heading"><div><span className="eyebrow">Open a section</span><h2>Manage this Space</h2></div></div>
@@ -487,13 +576,15 @@ function SpaceOverview({
       </div>
     </section>
 
-    <section className="space-overview-grid">
-      <article className="panel compact-panel"><span className="eyebrow">Planning</span><h2>{budgets.length} budget{budgets.length === 1 ? '' : 's'}</h2><p>{goals.length} savings goal{goals.length === 1 ? '' : 's'} connected to this Space.</p></article>
-      <article className="panel compact-panel"><span className="eyebrow">Payments</span><h2>{openBills.length} bill{openBills.length === 1 ? '' : 's'} still open</h2><p>Open Bills & instalments above to review only this Space.</p></article>
-      <article className="panel compact-panel"><span className="eyebrow">Accounts used here</span><h2>{accountsUsed.length}</h2>{accountsUsed.length ? <p>{accountsUsed.slice(0, 3).map((item) => item.name).join(', ')}</p> : <p>Record money activity to connect an account to this Space.</p>}</article>
-    </section>
+    {canViewFinancials && (
+      <section className="space-overview-grid">
+        <article className="panel compact-panel"><span className="eyebrow">Planning</span><h2>{budgets.length} budget{budgets.length === 1 ? '' : 's'}</h2><p>{goals.length} savings goal{goals.length === 1 ? '' : 's'} connected to this Space.</p></article>
+        <article className="panel compact-panel"><span className="eyebrow">Payments</span><h2>{openBills.length} bill{openBills.length === 1 ? '' : 's'} still open</h2><p>Open Bills & instalments above to review only this Space.</p></article>
+        <article className="panel compact-panel"><span className="eyebrow">Accounts used here</span><h2>{accountsUsed.length}</h2>{accountsUsed.length ? <p>{accountsUsed.slice(0, 3).map((item) => item.name).join(', ')}</p> : <p>Record money activity to connect an account to this Space.</p>}</article>
+      </section>
+    )}
 
-    {section && <Modal title={`${space.name} — ${sectionTitle[section]}`} onClose={() => setSection(null)}>
+    {section && canViewFinancials && <Modal title={`${space.name} — ${sectionTitle[section]}`} onClose={() => setSection(null)}>
       <div className="space-scoped-modal">
         <div className="space-scoped-context"><strong>{space.name}</strong><span>Only records from this Space are shown.</span></div>
 
