@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
+import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
 import { Modal } from '../../components/Modal';
 import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInventoryPanel';
 import { SmePosBarcodeCheckoutScanner } from '../../components/SmePosBarcodeCheckoutScanner';
@@ -186,7 +187,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [removeListingPhoto, setRemoveListingPhoto] = useState(false);
   const [manualListingForm, setManualListingForm] = useState(false);
   const [manualListingSellerId, setManualListingSellerId] = useState<string | null>(null);
+  const [manualListingSelectedSellerId, setManualListingSelectedSellerId] = useState('');
   const [manualListingBarcode, setManualListingBarcode] = useState('');
+  const [manualListingPrefill, setManualListingPrefill] = useState<SmePosListing | null>(null);
+  const [manualListingLookupNotice, setManualListingLookupNotice] = useState('');
   const [manualListingPhotoFile, setManualListingPhotoFile] = useState<File | null>(null);
   const [manualListingCondition, setManualListingCondition] = useState<SmePosListingCondition>('new');
   const [inventoryScope, setInventoryScope] = useState('all');
@@ -329,12 +333,61 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     setListingForm(value);
   }
 
-  function openManualListingForm(sellerId: string | null = null, barcode = '') {
-    setManualListingSellerId(sellerId);
+  function lookupManualListingBarcode(rawBarcode: string, sellerId = manualListingSelectedSellerId) {
+    const barcode = rawBarcode.trim();
     setManualListingBarcode(barcode);
+    setManualListingPhotoFile(null);
+    if (!barcode) {
+      setManualListingPrefill(null);
+      setManualListingLookupNotice('');
+      setManualListingCondition('new');
+      return;
+    }
+
+    const normalized = barcode.toLowerCase();
+    const matches = listings.filter((item) => item.barcode?.trim().toLowerCase() === normalized);
+    const sameSellerMatch = matches.find((item) => item.sellerId === sellerId) || null;
+    const referenceMatch = sameSellerMatch || matches[0] || null;
+    setManualListingPrefill(referenceMatch);
+
+    if (sameSellerMatch) {
+      setManualListingCondition(sameSellerMatch.condition);
+      setManualListingLookupNotice(`Existing item found for ${sameSellerMatch.sellerName}. Details filled automatically. Enter the quantity arriving now; BajetBN will add it to this existing stock instead of creating a duplicate.`);
+      return;
+    }
+
+    setManualListingCondition('new');
+    if (referenceMatch) {
+      const selectedSellerName = sellers.find((seller) => seller.id === sellerId)?.name || 'the selected seller';
+      setManualListingLookupNotice(`This barcode already exists for ${referenceMatch.sellerName}. Name, category and SKU were copied as a starting point. ${selectedSellerName} keeps a separate seller listing with its own price, condition and commission.`);
+      return;
+    }
+
+    setManualListingLookupNotice('Barcode not found in this shop. The barcode is filled in; enter the item details to register new seller stock.');
+  }
+
+  function openManualListingForm(sellerId: string | null = null, barcode = '') {
+    const selectedSellerId = sellerId || mySeller?.id || sellers[0]?.id || '';
+    setManualListingSellerId(sellerId);
+    setManualListingSelectedSellerId(selectedSellerId);
+    setManualListingBarcode('');
+    setManualListingPrefill(null);
+    setManualListingLookupNotice('');
     setManualListingPhotoFile(null);
     setManualListingCondition('new');
     setManualListingForm(true);
+    if (barcode) lookupManualListingBarcode(barcode, selectedSellerId);
+  }
+
+  function closeManualListingForm() {
+    setManualListingForm(false);
+    setManualListingSellerId(null);
+    setManualListingSelectedSellerId('');
+    setManualListingBarcode('');
+    setManualListingPrefill(null);
+    setManualListingLookupNotice('');
+    setManualListingPhotoFile(null);
+    setManualListingCondition('new');
   }
 
   function openMyInventory() {
@@ -414,17 +467,40 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     event.preventDefault();
     if (!manualListingForm || !requireOnline()) return;
     const form = new FormData(event.currentTarget);
+    const sellerId = String(form.get('sellerId') || '');
+    const barcode = String(form.get('barcode') || '').trim();
+    const normalizedBarcode = barcode.toLowerCase();
+    const existingListing = normalizedBarcode
+      ? listings.find((item) => item.sellerId === sellerId && item.barcode?.trim().toLowerCase() === normalizedBarcode) || null
+      : null;
     let uploadedPhotoPath: string | null = null;
     setBusy(true); setError(''); setSuccess('');
     try {
+      if (existingListing) {
+        const quantityReceived = Math.floor(Number(form.get('quantity') || 0));
+        if (quantityReceived < 1) throw new Error('Enter at least one unit to add to the existing stock.');
+        const result = await receiveMarketplaceListingStock({
+          spaceId: space.id,
+          listingId: existingListing.id,
+          quantityReceived,
+          note: String(form.get('note') || '') || 'Added from Register item barcode lookup',
+        });
+        const registeredForSelf = Boolean(mySeller && sellerId === mySeller.id);
+        closeManualListingForm();
+        if (registeredForSelf) { setInventoryScope('mine'); setTab('listings'); }
+        setSuccess(`Existing item found by barcode. Added ${quantityReceived} unit(s) of ${existingListing.name}. New stock: ${result.data.quantityOnHand}.`);
+        await load(); await onChanged();
+        return;
+      }
+
       if (manualListingPhotoFile) uploadedPhotoPath = (await uploadSmePosItemPhoto(space.id, manualListingPhotoFile)).photoPath;
       await registerExistingMarketplaceListing({
         spaceId: space.id,
-        sellerId: String(form.get('sellerId') || ''),
+        sellerId,
         name: String(form.get('name') || ''),
         category: String(form.get('category') || ''),
         sku: String(form.get('sku') || ''),
-        barcode: String(form.get('barcode') || ''),
+        barcode,
         photoPath: uploadedPhotoPath,
         note: String(form.get('note') || ''),
         condition: manualListingCondition,
@@ -433,8 +509,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         quantityOnHand: Number(form.get('quantity') || 0),
         lowStockLevel: Number(form.get('lowStock') || 0),
       });
-      const registeredForSelf = Boolean(mySeller && String(form.get('sellerId') || '') === mySeller.id);
-      setManualListingForm(false); setManualListingSellerId(null); setManualListingBarcode(''); setManualListingPhotoFile(null);
+      const registeredForSelf = Boolean(mySeller && sellerId === mySeller.id);
+      closeManualListingForm();
       if (registeredForSelf) { setInventoryScope('mine'); setTab('listings'); }
       setSuccess(registeredForSelf ? 'Stock added to My inventory.' : 'Existing seller stock registered and added to Inventory.');
       await load(); await onChanged();
@@ -727,6 +803,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
   }
 
+  const normalizedManualListingBarcode = manualListingBarcode.trim().toLowerCase();
+  const manualListingExistingMatch = manualListingPrefill
+    && manualListingPrefill.sellerId === manualListingSelectedSellerId
+    && manualListingPrefill.barcode?.trim().toLowerCase() === normalizedManualListingBarcode
+    ? manualListingPrefill
+    : null;
+
   return <section className="sme-standard-pos-workspace marketplace-pos-workspace">
     <div className="pos-workspace-heading">
       <div>
@@ -887,25 +970,36 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {bookingForm && <SmePosCreateReservationModal space={space} settings={settings} sourceMode="marketplace_consignment" items={cartLines.map(({ listing, quantity }) => ({ itemId: listing.id, name: `${listing.name} · ${listing.sellerName}`, quantity, lineTotalMinor: listing.sellingPriceMinor * quantity }))} customers={customers} paymentAccounts={paymentAccounts} initialCustomerId={customerId} initialDiscountMinor={discountMinor} onClose={() => setBookingForm(false)} onSaved={async () => { setCart({}); setDiscount('0.00'); setCustomerId(''); setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]); setSuccess('Booking created and stock reserved.'); await load(); await onChanged(); }} />}
 
-    {manualListingForm && <Modal title={manualListingSellerId === mySeller?.id ? 'Add stock · My inventory' : 'Register existing seller stock'} onClose={() => { if (!busy) { setManualListingForm(false); setManualListingSellerId(null); setManualListingBarcode(''); } }}>
-      <form className="form-stack" onSubmit={registerExistingListing}>
-        <div className="notice">For stock already physically in the shop. No purchase record is created. The seller's default commission is applied automatically. Barcode is optional.</div>
-        <SmePosItemPhotoField currentPhotoPath={null} file={manualListingPhotoFile} removeExisting={false} onFileChange={setManualListingPhotoFile} onRemoveExisting={() => undefined} disabled={busy} />
-        {manualListingSellerId ? <label>Seller<input value={sellers.find((seller) => seller.id === manualListingSellerId)?.name || mySeller?.name || 'My Seller Profile'} readOnly /><input type="hidden" name="sellerId" value={manualListingSellerId} /></label> : <label>Seller<select name="sellerId" defaultValue={mySeller?.id || sellers[0]?.id || ''} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>}
-        <div className="form-grid">
-          <label>Item name<input name="name" maxLength={100} required autoFocus /></label>
-          <label>Category<input name="category" maxLength={60} /></label>
-          <label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" required /></label>
-          <label>Quantity on hand<input name="quantity" type="number" min="0" max="999999" defaultValue={1} required /></label>
-          <label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={1} required /></label>
-          <label>SKU (optional)<input name="sku" maxLength={50} /></label>
-          <label>Barcode (optional)<input name="barcode" maxLength={240} autoComplete="off" defaultValue={manualListingBarcode} /></label>
-          <label>Condition<select value={manualListingCondition} onChange={(event) => setManualListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label>Condition details<input name="conditionNote" maxLength={120} placeholder="Optional" /></label>
+    {manualListingForm && <Modal title={manualListingSellerId === mySeller?.id ? 'Add stock · My inventory' : 'Register existing seller stock'} onClose={() => { if (!busy) closeManualListingForm(); }}>
+      <form key={`${manualListingSelectedSellerId}:${manualListingPrefill?.id || 'new'}:${manualListingExistingMatch ? 'existing' : 'copy'}`} className="form-stack" onSubmit={registerExistingListing}>
+        <div className="notice">For stock already physically in the shop. No purchase record is created. Scan the barcode first and BajetBN will check existing seller stock before creating a new listing.</div>
+        {manualListingSellerId ? <label>Seller<input value={sellers.find((seller) => seller.id === manualListingSellerId)?.name || mySeller?.name || 'My Seller Profile'} readOnly /><input type="hidden" name="sellerId" value={manualListingSelectedSellerId} /></label> : <label>Seller<select name="sellerId" value={manualListingSelectedSellerId} onChange={(event) => { const nextSellerId = event.target.value; setManualListingSelectedSellerId(nextSellerId); if (manualListingBarcode.trim()) lookupManualListingBarcode(manualListingBarcode, nextSellerId); else { setManualListingPrefill(null); setManualListingLookupNotice(''); setManualListingCondition('new'); } }} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>}
+        <div className="form-stack">
+          <div><strong>Scan or enter barcode</strong><br /><small>Use the phone camera, a USB barcode scanner, or type the code. Existing stock for the selected seller will be recognised automatically.</small></div>
+          <BarcodeCameraScanner startLabel="Scan barcode" disabled={busy} onDetected={(barcode) => lookupManualListingBarcode(barcode, manualListingSelectedSellerId)} onError={setError} />
+          <div className="form-grid">
+            <label>Barcode (optional)<input name="barcode" maxLength={240} autoComplete="off" autoFocus value={manualListingBarcode} onChange={(event) => { setManualListingBarcode(event.target.value); setManualListingPrefill(null); setManualListingLookupNotice(''); setManualListingCondition('new'); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); lookupManualListingBarcode(manualListingBarcode, manualListingSelectedSellerId); } }} placeholder="Scan or enter barcode" /></label>
+            <div className="button-row"><button className="button secondary" type="button" disabled={busy || !manualListingBarcode.trim()} onClick={() => lookupManualListingBarcode(manualListingBarcode, manualListingSelectedSellerId)}>Find item</button></div>
+          </div>
+          {manualListingLookupNotice && <div className="notice">{manualListingLookupNotice}</div>}
         </div>
-        <label>Note<textarea name="note" rows={2} maxLength={300} placeholder="Optional" /></label>
-        <small>Source is recorded as Existing stock / Manual registration with the staff member and time.</small>
-        <div className="modal-actions"><button className="button secondary" type="button" onClick={() => { setManualListingForm(false); setManualListingSellerId(null); setManualListingBarcode(''); }} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Registering…' : manualListingSellerId === mySeller?.id ? 'Add to my inventory' : 'Register item'}</button></div>
+        {manualListingExistingMatch ? <div className="form-stack">
+          {manualListingExistingMatch.photoPath && <SmePosItemPhoto photoPath={manualListingExistingMatch.photoPath} name={manualListingExistingMatch.name} />}
+          <small>Existing item photo, seller, price, condition and commission stay unchanged. This action only adds the quantity entered below.</small>
+        </div> : <SmePosItemPhotoField currentPhotoPath={null} file={manualListingPhotoFile} removeExisting={false} onFileChange={setManualListingPhotoFile} onRemoveExisting={() => undefined} disabled={busy} />}
+        <div className="form-grid">
+          <label>Item name<input name="name" defaultValue={manualListingPrefill?.name || ''} maxLength={100} required readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <label>Category<input name="category" defaultValue={manualListingPrefill?.category || ''} maxLength={60} readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={manualListingExistingMatch ? (manualListingExistingMatch.sellingPriceMinor / 100).toFixed(2) : ''} required readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <label>{manualListingExistingMatch ? 'Quantity to add' : 'Quantity on hand'}<input name="quantity" type="number" min={manualListingExistingMatch ? 1 : 0} max="999999" defaultValue={1} required /></label>
+          <label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={manualListingExistingMatch?.lowStockLevel ?? 1} required readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <label>SKU (optional)<input name="sku" defaultValue={manualListingPrefill?.sku || ''} maxLength={50} readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <label>Condition<select value={manualListingCondition} onChange={(event) => setManualListingCondition(event.target.value as SmePosListingCondition)} disabled={Boolean(manualListingExistingMatch)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>Condition details<input name="conditionNote" defaultValue={manualListingExistingMatch?.conditionNote || ''} maxLength={120} placeholder="Optional" readOnly={Boolean(manualListingExistingMatch)} /></label>
+        </div>
+        <label>Note<textarea name="note" rows={2} maxLength={300} placeholder={manualListingExistingMatch ? 'Optional receiving note' : 'Optional'} /></label>
+        <small>{manualListingExistingMatch ? 'Existing listing found by seller + barcode. Saving records a stock receipt and does not create a duplicate listing.' : 'New stock is recorded as Existing stock / Manual registration with the staff member and time.'}</small>
+        <div className="modal-actions"><button className="button secondary" type="button" onClick={closeManualListingForm} disabled={busy}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Registering…' : manualListingExistingMatch ? 'Add stock to existing item' : manualListingSellerId === mySeller?.id ? 'Add to my inventory' : 'Register item'}</button></div>
       </form>
     </Modal>}
 
