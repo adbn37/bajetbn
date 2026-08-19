@@ -255,14 +255,12 @@ export function SpaceDetailsPage() {
   const fundTabLabel = space.type === 'trip' ? 'Trip money' : space.type === 'household' ? 'Household fund' : 'Group fund';
 
   const sharedFinanceTabs: Array<{ id: SpaceDetailsTab; label: string }> =
-    space.type === 'sme' && !canViewSmeFinancials
-      ? []
-      : [
-        ...(supportsGroupFund ? [{ id: fundTabId, label: fundTabLabel }] : []),
-        { id: 'expenses', label: space.type === 'sme' ? 'Expenses' : 'Shared expenses' },
-        ...(space.type === 'sme' ? [] : [{ id: 'balances' as SpaceDetailsTab, label: 'Who owes whom' }]),
+    space.type === 'sme' && canViewSmeFinancials
+      ? [
+        { id: 'expenses', label: 'Expenses' },
         { id: 'bills', label: 'Shared bills' },
-      ];
+      ]
+      : [];
   const tabs: Array<{ id: SpaceDetailsTab; label: string }> = shared
     ? [
       { id: 'overview', label: 'Overview' },

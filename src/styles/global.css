@@ -3673,3 +3673,53 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
   .menu-customizer-actions { grid-column:1/-1; justify-content:flex-end; border-top:1px solid var(--border); padding-top:.35rem; }
   .space-activity-live-toast { top:calc(4.25rem + env(safe-area-inset-top)); right:.65rem; width:calc(100vw - 1.3rem); }
 }
+
+/* v1.4.1 Space UX hotfix */
+/* Modal children must never dictate a desktop-sized width. */
+.space-tool-modal {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+.space-tool-modal > *,
+.space-tool-modal .panel,
+.space-tool-modal .summary-grid,
+.space-tool-modal .shared-expense-grid,
+.space-tool-modal .trip-money-panel,
+.space-tool-modal .shared-expense-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+.space-tool-modal .summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.space-tool-modal .summary-card {
+  min-width: 0;
+}
+.space-tool-modal .info-banner,
+.space-tool-modal .space-scoped-context {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.space-tool-modal .info-banner {
+  align-items: flex-start;
+  flex-direction: column;
+}
+.space-tool-modal .space-scoped-context {
+  grid-template-columns: minmax(0, 1fr);
+}
+.space-tool-modal input,
+.space-tool-modal select,
+.space-tool-modal textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .space-tool-modal .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

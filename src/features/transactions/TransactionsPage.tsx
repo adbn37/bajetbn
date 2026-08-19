@@ -410,6 +410,7 @@ export function MoneyActivityModal({
   onSubmit: (values: TransactionInput) => Promise<PostTransactionOutcome>;
   onComplete: (message: string, refresh: boolean) => Promise<void>;
 }) {
+  const { user } = useAuth();
   const maxAttachmentFiles = 5;
   const maxAttachmentSizeBytes = 10 * 1024 * 1024;
   const chooseFilesRef = useRef<HTMLInputElement>(null);
@@ -677,7 +678,7 @@ export function MoneyActivityModal({
       <label className="span-2 amount-field">Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})<input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
     </div>
 
-    {type !== 'transfer' && <fieldset className="category-picker"><legend className="category-picker-legend"><span>Category</span>{onCategoriesChanged && <button type="button" className="text-button" onClick={() => setShowCategoryEditor(true)}>+ Add category</button>}</legend><div className="category-option-grid">
+    {type !== 'transfer' && <fieldset className="category-picker"><legend className="category-picker-legend"><span>Category</span><button type="button" className="text-button" onClick={() => setShowCategoryEditor(true)}>+ Add category</button></legend><div className="category-option-grid">
       {categoryOptions.map((category) => <button type="button" key={category.id} className={`category-option ${categoryId === category.id ? 'selected' : ''}`} onClick={() => setCategoryId(category.id)}>
         <span className={`category-icon category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span>{!category.isSystem && <small>Custom</small>}
       </button>)}
@@ -726,7 +727,14 @@ export function MoneyActivityModal({
     defaultScope={scope}
     onClose={() => setShowCategoryEditor(false)}
     onSaved={async (savedName) => {
-      const nextCategories = onCategoriesChanged ? await onCategoriesChanged() : localCategories;
+      const nextCategories = onCategoriesChanged
+        ? await onCategoriesChanged()
+        : user
+          ? [
+              ...DEFAULT_TRANSACTION_CATEGORIES,
+              ...(await listAllCustomCategories(user.uid)).filter((item) => !item.archivedAt),
+            ]
+          : localCategories;
       setLocalCategories(nextCategories);
       const created = nextCategories.find((category) =>
         !category.archivedAt
