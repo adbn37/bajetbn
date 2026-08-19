@@ -1897,7 +1897,7 @@ export const getSmePosStaffWorkspace = onCall({ region }, async (request) => {
   return { products, customers, sales };
 });
 
-export const saveSmePosProduct = onCall({ region }, async (request) => {
+export const saveSmePosProduct = onCall({ region, cpu: 'gcf_gen1', concurrency: 1 }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const productId = optionalString(request.data?.productId, 80) || null;
@@ -2049,7 +2049,7 @@ export const registerExistingSmePosProduct = onCall({ region }, async (request) 
   });
 });
 
-export const updateSmePosProductStock = onCall({ region }, async (request) => {
+export const updateSmePosProductStock = onCall({ region, cpu: 'gcf_gen1', concurrency: 1 }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const productId = stringValue(request.data?.productId, 'Product ID', 80);
@@ -2758,7 +2758,7 @@ export const deleteMarketplaceSeller = onCall({ region }, async (request) => {
   });
 });
 
-export const saveMarketplaceListing = onCall({ region }, async (request) => {
+export const saveMarketplaceListing = onCall({ region, cpu: 'gcf_gen1', concurrency: 1 }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const listingId = optionalString(request.data?.listingId, 80) || null;
