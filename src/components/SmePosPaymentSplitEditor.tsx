@@ -54,9 +54,10 @@ interface Props {
   disabled?: boolean;
   label?: string;
   allowZeroTotal?: boolean;
+  accountLabel?: string;
 }
 
-export function SmePosPaymentSplitEditor({ accounts, currency, totalMinor, rows, onChange, disabled = false, label = 'Payment', allowZeroTotal = false }: Props) {
+export function SmePosPaymentSplitEditor({ accounts, currency, totalMinor, rows, onChange, disabled = false, label = 'Payment', allowZeroTotal = false, accountLabel = 'Received in' }: Props) {
   const paidMinor = paymentDraftTotalMinor(rows);
   const remainingMinor = totalMinor - paidMinor;
 
@@ -78,7 +79,7 @@ export function SmePosPaymentSplitEditor({ accounts, currency, totalMinor, rows,
     <div className="panel-heading compact"><div><strong>{label}</strong><small>Use one account, or split the total across multiple payment accounts.</small></div>{rows.length < 4 && <button className="button ghost small" type="button" disabled={disabled} onClick={addSplit}>+ Split payment</button>}</div>
     <div className="sme-pos-payment-rows">
       {rows.map((row, index) => <div className="sme-pos-payment-row" key={row.id}>
-        <label>Received in<select value={row.accountId} disabled={disabled} onChange={(event) => update(row.id, { accountId: event.target.value })} required={!allowZeroTotal || totalMinor > 0}><option value="">Choose account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select></label>
+        <label>{accountLabel}<select value={row.accountId} disabled={disabled} onChange={(event) => update(row.id, { accountId: event.target.value })} required={!allowZeroTotal || totalMinor > 0}><option value="">Choose account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select></label>
         <label>Method<select value={row.paymentMethod} disabled={disabled} onChange={(event) => update(row.id, { paymentMethod: event.target.value as PaymentMethodCode })}>{paymentMethods.map((method) => <option key={method.code} value={method.code}>{method.label}</option>)}</select></label>
         <label>Amount ({currency})<input inputMode="decimal" value={row.amount} disabled={disabled} onChange={(event) => update(row.id, { amount: event.target.value })} required={!allowZeroTotal || totalMinor > 0} /></label>
         {row.paymentMethod === 'other' && <label className="span-2">Other payment method<input value={row.paymentMethodLabel} disabled={disabled} onChange={(event) => update(row.id, { paymentMethodLabel: event.target.value })} required /></label>}

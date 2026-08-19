@@ -43,6 +43,11 @@ for (const token of [
   'FieldValue.arrayUnion(returnRef.id)',
   "transaction.create(returnRef",
   "transaction.create(payoutRef",
+  "const paymentRows = parseSmePosPaymentRows(request.data || {}, amountMinor);",
+  "const postedPayments = await postSmePosPayments({",
+  "categoryId: 'expense-supplier'",
+  "paymentSourceLabels: sourceLabels",
+  "createdByName: context.member.displayName",
   "transaction.create(commandRef, { uid, kind: 'return_sme_pos_sale'",
   "transaction.create(commandRef, { uid, kind: 'record_marketplace_seller_payout'",
 ]) need('functions/src/index.ts', token);
@@ -54,10 +59,12 @@ for (const token of [
 
 for (const token of [
   'Return items',
-  'Record payout',
+  'Pay seller',
+  'Paid From',
   'Confirm seller payout',
   'Recent seller payouts',
   'Seller owes shop',
+  'Split payouts can use up to four sources.',
 ]) need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', token);
 
 for (const token of [

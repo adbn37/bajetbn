@@ -377,6 +377,8 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
   sellerLedger: SmePosSellerLedgerEntry[];
   payouts: SmePosPayout[];
   mySeller: SmePosSeller | null;
+  mySellerListings: SmePosListing[];
+  mySellerSales: SmePosSale[];
   mySellerLedger: SmePosSellerLedgerEntry[];
   mySellerPayouts: SmePosPayout[];
 }> {
@@ -391,6 +393,8 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
     sellerLedger?: SmePosSellerLedgerEntry[];
     payouts?: SmePosPayout[];
     mySeller?: SmePosSeller | null;
+    mySellerListings?: SmePosListing[];
+    mySellerSales?: SmePosSale[];
     mySellerLedger?: SmePosSellerLedgerEntry[];
     mySellerPayouts?: SmePosPayout[];
   };
@@ -402,6 +406,8 @@ export async function getMarketplacePosWorkspace(spaceId: string): Promise<{
     sellerLedger: data.sellerLedger || [],
     payouts: data.payouts || [],
     mySeller: data.mySeller || null,
+    mySellerListings: data.mySellerListings || [],
+    mySellerSales: data.mySellerSales || [],
     mySellerLedger: data.mySellerLedger || [],
     mySellerPayouts: data.mySellerPayouts || [],
   };
@@ -547,13 +553,17 @@ export async function recordMarketplaceSellerPayout(input: {
   spaceId: string;
   sellerId: string;
   amountMinor: number;
-  paymentAccountId: string;
-  paymentMethod?: PaymentMethodCode | null;
-  paymentMethodLabel?: string | null;
+  payments: Array<{
+    accountId: string;
+    amountMinor: number;
+    paymentMethod?: PaymentMethodCode | null;
+    paymentMethodLabel?: string | null;
+  }>;
   payoutDate: string;
+  reference?: string;
   note?: string;
-}): Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; balanceAfterMinor: number } }> {
+}): Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; transactionIds?: string[]; balanceAfterMinor: number } }> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'recordMarketplaceSellerPayout');
-  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; balanceAfterMinor: number } }>;
+  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; transactionIds?: string[]; balanceAfterMinor: number } }>;
 }

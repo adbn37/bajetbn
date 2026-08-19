@@ -67,6 +67,8 @@ must(standardCheckout, 'const payments = await postSmePosPayments({', 'Standard 
 must(standardCheckout, 'settings: context.settings, spaceId', 'Standard checkout account-isolation context');
 must(marketplaceCheckout, 'const payments = await postSmePosPayments({', 'Marketplace checkout central payment posting');
 must(marketplaceCheckout, 'settings: context.settings, spaceId', 'Marketplace checkout account-isolation context');
-must(sellerPayout, 'requireSmePosPaymentAccountForSpace(context.settings, accountSnapshot.data() || {}, paymentAccountId, spaceId);', 'seller payout account isolation');
+must(sellerPayout, 'const paymentRows = parseSmePosPaymentRows(request.data || {}, amountMinor);', 'seller payout split-payment parsing');
+must(sellerPayout, 'const postedPayments = await postSmePosPayments({', 'seller payout central payment posting');
+must(sellerPayout, 'settings: context.settings, spaceId', 'seller payout account-isolation context');
 
 console.log('SME account ownership + POS isolation verifier: PASS');
