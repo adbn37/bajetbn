@@ -369,6 +369,11 @@ export function SpaceDetailsPage() {
         commitments={commitments}
         sharedBills={sharedBills}
         sharedExpenses={sharedExpenses}
+        currentMember={currentMember || null}
+        canManage={
+          currentMember?.role === 'owner'
+          || currentMember?.role === 'admin'
+        }
         onOpenTab={chooseTab}
       />
     )}

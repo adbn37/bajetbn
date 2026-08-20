@@ -4137,3 +4137,73 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     width: 100%;
   }
 }
+/* Household v2 Slice 2 - responsibilities */
+.household-responsibilities {
+  display: grid;
+  gap: .6rem;
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.household-responsibilities-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .75rem;
+}
+
+.household-responsibilities-heading h3 {
+  margin: 0;
+}
+
+.household-responsibility-list {
+  display: grid;
+  gap: .5rem;
+}
+
+.household-responsibility-card,
+.household-review-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .75rem;
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.household-responsibility-card > div,
+.household-review-card > div {
+  display: grid;
+  gap: .25rem;
+  min-width: 0;
+}
+
+.household-responsibility-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .7rem;
+  font-size: .8rem;
+}
+
+.household-responsibility-meta span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 580px) {
+  .household-responsibilities {
+    padding: .65rem;
+  }
+
+  .household-responsibilities-heading,
+  .household-responsibility-card,
+  .household-review-card {
+    display: grid;
+  }
+
+  .household-responsibility-card .button,
+  .household-review-card .button {
+    width: 100%;
+  }
+}

@@ -32,6 +32,8 @@ export function HouseholdCommandCentre({
   commitments,
   sharedBills,
   sharedExpenses,
+  currentMember,
+  canManage,
   onOpenTab,
 }: {
   space: Space;
@@ -39,6 +41,8 @@ export function HouseholdCommandCentre({
   commitments: Commitment[];
   sharedBills: SharedBillAssignment[];
   sharedExpenses: SharedExpense[];
+  currentMember: SpaceMember | null;
+  canManage: boolean;
   onOpenTab: (tab: HouseholdTab) => void;
 }) {
   const [fund, setFund] = useState<SpaceFund | null>(null);
@@ -86,6 +90,67 @@ export function HouseholdCommandCentre({
     (item) => item.status !== 'paid',
   );
 
+  const assignmentOutstanding = (assignment: SharedBillAssignment) =>
+    Math.max(
+      0,
+      Number(assignment.assignedMinor || 0)
+        - Number(assignment.settledMinor || 0),
+    );
+
+  const assignmentStatusLabel = (status: string) => {
+    if (status === 'paid') return 'Paid';
+    if (status === 'submitted') return 'Waiting for review';
+    if (status === 'partially_paid') return 'Partly paid';
+    if (status === 'rejected') return 'Needs correction';
+    return status.split('_').join(' ');
+  };
+
+  const assignmentDueLabel = (assignment: SharedBillAssignment) => {
+    if (!assignment.dueDate) return 'No due date';
+    if (assignment.dueDate < today) return `Overdue · ${assignment.dueDate}`;
+    if (assignment.dueDate === today) return 'Due today';
+    if (assignment.dueDate <= soon) return `Due soon · ${assignment.dueDate}`;
+    return `Due ${assignment.dueDate}`;
+  };
+
+  const myAssignments = currentMember
+    ? sharedBills.filter(
+        (assignment) => assignment.memberUid === currentMember.uid,
+      )
+    : [];
+
+  const myOpenAssignments = myAssignments
+    .filter(
+      (assignment) =>
+        assignment.status !== 'paid'
+        && assignmentOutstanding(assignment) > 0,
+    )
+    .sort((a, b) =>
+      (a.dueDate || '9999-12-31').localeCompare(
+        b.dueDate || '9999-12-31',
+      ),
+    );
+
+  const myOverdueAssignments = myOpenAssignments.filter(
+    (assignment) =>
+      Boolean(assignment.dueDate && assignment.dueDate < today),
+  );
+
+  const myDueSoonAssignments = myOpenAssignments.filter(
+    (assignment) =>
+      Boolean(
+        assignment.dueDate
+          && assignment.dueDate >= today
+          && assignment.dueDate <= soon,
+      ),
+  );
+
+  const pendingReviewCount = canManage
+    ? sharedBills.filter(
+        (assignment) => assignment.status === 'submitted',
+      ).length
+    : 0;
+
   const dueCommitments = activeCommitments.filter((item) => {
     const dueDate = item.nextDueDate || item.startDate;
     return Boolean(dueDate && dueDate <= soon);
@@ -122,7 +187,8 @@ export function HouseholdCommandCentre({
     + (fund && !activeHolder ? 1 : 0)
     + (dueCommitments.length ? 1 : 0)
     + (dueSharedBills.length ? 1 : 0)
-    + (openSharedExpenses.length ? 1 : 0);
+    + (openSharedExpenses.length ? 1 : 0)
+    + (pendingReviewCount ? 1 : 0);
 
   return (
     <section className="household-command-centre">
@@ -241,6 +307,103 @@ export function HouseholdCommandCentre({
         </article>
       </div>
 
+      <section className="household-responsibilities">
+        <div className="household-responsibilities-heading">
+          <div>
+            <span className="eyebrow">Shared bills</span>
+            <h3>My household responsibilities</h3>
+          </div>
+
+          <small>
+            {myOverdueAssignments.length > 0
+              ? `${myOverdueAssignments.length} overdue`
+              : myDueSoonAssignments.length > 0
+                ? `${myDueSoonAssignments.length} due within 7 days`
+                : 'Your assigned household bills appear here.'}
+          </small>
+        </div>
+
+        {!currentMember ? (
+          <div className="notice">
+            Your Household membership could not be identified.
+          </div>
+        ) : myOpenAssignments.length === 0 ? (
+          <div className="notice">
+            <strong>No household payment is waiting from you.</strong>{' '}
+            New Shared Bill assignments will appear here automatically.
+          </div>
+        ) : (
+          <div className="household-responsibility-list">
+            {myOpenAssignments.slice(0, 4).map((assignment) => (
+              <article
+                className="household-responsibility-card"
+                key={assignment.id}
+              >
+                <div>
+                  <strong>{assignment.commitmentName}</strong>
+
+                  <div className="household-responsibility-meta">
+                    <span>
+                      {assignmentStatusLabel(String(assignment.status))}
+                    </span>
+
+                    <span>{assignmentDueLabel(assignment)}</span>
+
+                    <span>
+                      {formatMoney(
+                        assignmentOutstanding(assignment),
+                        assignment.currency || space.currency,
+                      )}{' '}
+                      remaining
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  onClick={() => onOpenTab('bills')}
+                >
+                  Open payment &amp; proof
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {myOpenAssignments.length > 4 && (
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => onOpenTab('bills')}
+          >
+            View all {myOpenAssignments.length} responsibilities
+          </button>
+        )}
+
+        {canManage && pendingReviewCount > 0 && (
+          <article className="household-review-card">
+            <div>
+              <span className="eyebrow">Manager attention</span>
+              <strong>
+                {pendingReviewCount} payment
+                {pendingReviewCount === 1 ? '' : 's'} waiting for review
+              </strong>
+              <small>
+                Check the submitted amount and proof before accepting it.
+              </small>
+            </div>
+
+            <button
+              type="button"
+              className="button secondary compact"
+              onClick={() => onOpenTab('bills')}
+            >
+              Review payments
+            </button>
+          </article>
+        )}
+      </section>
       <section className="household-needs-attention">
         <div className="household-needs-attention-heading">
           <div>
@@ -310,6 +473,28 @@ export function HouseholdCommandCentre({
                     this Household Space.
                   </small>
                 </div>
+              </article>
+            )}
+
+            {canManage && pendingReviewCount > 0 && (
+              <article className="household-attention-item">
+                <div>
+                  <strong>
+                    {pendingReviewCount} household payment
+                    {pendingReviewCount === 1 ? '' : 's'} waiting for review
+                  </strong>
+                  <small>
+                    Open Shared Bills to check the member submission and proof.
+                  </small>
+                </div>
+
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  onClick={() => onOpenTab('bills')}
+                >
+                  Review payments
+                </button>
               </article>
             )}
 
