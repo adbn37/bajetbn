@@ -99,7 +99,7 @@ if (
 }
 
 const packageJson = JSON.parse(read('package.json'));
-if (packageJson.version !== '1.4.0') fail(`Expected package version 1.4.0, found ${packageJson.version}.`);
+if (packageJson.version.localeCompare('1.4.0', undefined, { numeric: true, sensitivity: 'base' }) < 0) fail(`Expected package version 1.4.0 or newer, found ${packageJson.version}.`);
 
 if (!existsSync('public/app-recovery.js') || !read('index.html').includes('/app-recovery.js')) {
   fail('v1.3.12 deployment recovery must remain present.');

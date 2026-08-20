@@ -602,7 +602,7 @@ function SpaceOverview({
                 <strong>{item.type === 'income' ? '+' : item.type === 'expense' ? '-' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
                 <small>{item.status === 'reversed' ? 'Reversed' : item.type}</small>
               </div>
-            </article>) : <EmptyState title="No money activity in this Space" description="Transactions connected to this Space will appear here." />}
+            </article>) : <EmptyState title="No money activity in this Space" description="Use the actions above to record the first money activity for this Space." />}
           </div>
         </>}
 
@@ -613,14 +613,14 @@ function SpaceOverview({
               <div><strong>{item.name}</strong><small>{displaySpaceDate(item.startDate)} – {displaySpaceDate(item.endDate)}{item.categoryName ? ` · ${item.categoryName}` : ''}</small></div>
               <div className="space-scoped-amount"><strong>{formatMoney(item.spentMinor, item.currency)} / {formatMoney(item.limitMinor, item.currency)}</strong><small>{formatMoney(remaining, item.currency)} remaining</small></div>
             </article>;
-          }) : <EmptyState title="No budgets in this Space" description="Budgets connected to this Space will appear here." />}
+          }) : <EmptyState title="No budgets in this Space" description="Create a Budget for this Space to start planning its spending." />}
         </div>}
 
         {section === 'goals' && <div className="space-scoped-list">
           {goalRows.length ? goalRows.map((item) => <article key={item.id} className="space-scoped-row">
             <div><strong>{item.name}</strong><small>{item.targetDate ? `Target ${displaySpaceDate(item.targetDate)}` : 'No target date'} · {item.status}</small></div>
             <div className="space-scoped-amount"><strong>{formatMoney(item.currentMinor, item.currency)} / {formatMoney(item.targetMinor, item.currency)}</strong><small>{Math.max(0, Math.min(100, item.targetMinor > 0 ? Math.round((item.currentMinor / item.targetMinor) * 100) : 0))}%</small></div>
-          </article>) : <EmptyState title="No goals in this Space" description="Savings goals connected to this Space will appear here." />}
+          </article>) : <EmptyState title="No goals in this Space" description="Create a goal for this Space to start tracking progress." />}
         </div>}
 
         {section === 'bills' && <div className="space-scoped-list">
@@ -633,7 +633,7 @@ function SpaceOverview({
               <strong>{formatMoney(item.amountMinor, item.currency)}</strong>
               <small>{item.type === 'instalment' ? `${formatMoney(item.amountPaidMinor, item.currency)} paid` : item.status}</small>
             </div>
-          </article>) : <EmptyState title="No bills or instalments in this Space" description="Bills connected to this Space will appear here." />}
+          </article>) : <EmptyState title="No bills or instalments in this Space" description="Add a bill or instalment for this Space to start tracking what is due." />}
         </div>}
 
         {section === 'reports' && <>
@@ -667,7 +667,7 @@ function SpaceOverview({
           {calendarRows.length ? calendarRows.map((item) => <article key={item.id} className="space-scoped-row">
             <div><strong>{item.label}</strong><small>{item.kind} · {item.detail}</small></div>
             <div className="space-scoped-amount"><strong>{displaySpaceDate(item.date)}</strong><small>{item.date < today ? 'Past' : item.date === today ? 'Today' : 'Upcoming'}</small></div>
-          </article>) : <EmptyState title="Nothing scheduled in this Space" description="Bill due dates, goal targets and budget dates will appear here." />}
+          </article>) : <EmptyState title="Nothing scheduled in this Space" description="Add a bill, Budget period, or goal target to give this Space something to schedule." />}
         </div>}
       </div>
     </Modal>}

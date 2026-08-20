@@ -3723,3 +3723,38 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     grid-template-columns: 1fr;
   }
 }
+
+/* Spaces foundation - primary action hierarchy */
+.space-action-button.primary-action {
+  order: -1;
+  grid-column: 1 / -1;
+  min-height: 94px;
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 16%, var(--surface-2)),
+      var(--surface-2)
+    );
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .10);
+}
+
+.space-action-button.primary-action strong {
+  font-size: .96rem;
+}
+
+.space-action-button.primary-action small {
+  display: block;
+  max-width: 620px;
+}
+
+@media (max-width: 680px) {
+  .space-action-button.primary-action {
+    grid-column: 1 / -1;
+    min-height: 78px;
+  }
+
+  .space-action-button.primary-action small {
+    display: block;
+  }
+}

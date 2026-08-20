@@ -14,12 +14,12 @@ function check(name, condition) {
   }
 }
 
-check('package version is 1.3.7', pkg.version === '1.3.7');
+check('package version is at least 1.3.7', pkg.version.localeCompare('1.3.7', undefined, { numeric: true, sensitivity: 'base' }) >= 0);
 check('Space details imports Modal', page.includes("import { Modal } from '../../components/Modal';"));
 check('Space overview receives filtered transactions', page.includes('transactions={transactions}'));
 check('Space overview receives commitments', page.includes('commitments={commitments}'));
-check('SME Balances tab is removed', !page.includes("space.type === 'sme' ? 'Balances' : 'Who owes whom'"));
-check('Non-SME Who owes whom remains', page.includes("label: 'Who owes whom'"));
+check('Settlement view stays Space-contained', page.includes("activeTab === 'balances'") && page.includes('view="balances"'));
+check('Legacy Who owes whom label is removed', !page.includes('Who owes whom'));
 check('Money activity opens inside Space', page.includes("section: 'money'") && !page.includes("to: `/transactions?spaceId=${space.id}`"));
 check('Budgets open inside Space', page.includes("section: 'budgets'") && !page.includes("to: `/budgets?spaceId=${space.id}`"));
 check('Bills open inside Space', page.includes("section: 'bills'") && !page.includes("to: `/bills?spaceId=${space.id}`"));

@@ -6,6 +6,7 @@ import { listAccounts } from '../../repositories/accountRepository';
 import { listAllCustomCategories } from '../../repositories/categoryRepository';
 import { postTransaction } from '../../repositories/transactionRepository';
 import type { Account, Space, SpaceMember, TransactionCategory } from '../../types/models';
+import { getSpaceHomeExperience } from './spaceExperience';
 import { DEFAULT_TRANSACTION_CATEGORIES } from '../categories/defaultCategories';
 import { CollaborationPage } from '../collaboration/CollaborationPage';
 import { MoneyActivityModal } from '../transactions/TransactionsPage';
@@ -73,10 +74,12 @@ export function SpaceActionHub({
 
   const shared = space.type !== 'personal';
   const canManage = currentMember?.role === 'owner' || currentMember?.role === 'admin';
+  const experience = getSpaceHomeExperience(space, currentMember);
+  const isPrimary = (action: SpaceTool | 'expense' | 'income') => experience.primary === action;
   const toolTitle: Record<SpaceTool, string> = {
     fund: fundLabel,
     expenses: 'Shared expenses',
-    balances: 'Who owes whom',
+    balances: 'Settlements',
     bills: 'Shared bills',
   };
 
@@ -87,33 +90,33 @@ export function SpaceActionHub({
           <div>
             <span className="eyebrow">Quick Space actions</span>
             <h2>Stay inside {space.name}</h2>
-            <p>New activity is automatically saved to this Space. Shared tools open here without sending you to a global page.</p>
+            <p>{experience.context}</p>
           </div>
         </div>
         {feedback && <div className="notice success compact-notice">{feedback}</div>}
         {error && <div className="notice warning compact-notice">{error}</div>}
         <div className="space-action-buttons">
-          <button type="button" className="space-action-button expense" onClick={() => setMoneyType('expense')}>
-            <span>−</span><div><strong>+ Expense</strong><small>Add money out to this Space</small></div>
+          <button type="button" className={`space-action-button expense ${isPrimary('expense') ? 'primary-action' : ''}`} onClick={() => setMoneyType('expense')}>
+            <span>−</span><div><strong>{isPrimary('expense') ? experience.label : '+ Expense'}</strong><small>{isPrimary('expense') ? experience.detail : 'Add money out to this Space'}</small></div>
           </button>
-          <button type="button" className="space-action-button income" onClick={() => setMoneyType('income')}>
+          <button type="button" className={`space-action-button income ${isPrimary('income') ? 'primary-action' : ''}`} onClick={() => setMoneyType('income')}>
             <span>+</span><div><strong>+ Income</strong><small>Add money in to this Space</small></div>
           </button>
           {shared && supportsGroupFund && (
-            <button type="button" className="space-action-button" onClick={() => setTool('fund')}>
+            <button type="button" className={`space-action-button ${isPrimary('fund') ? 'primary-action' : ''}`} onClick={() => setTool('fund')}>
               <span>◉</span><div><strong>{fundLabel}</strong><small>Contribute and manage the shared fund</small></div>
             </button>
           )}
           {shared && (
             <>
-              <button type="button" className="space-action-button" onClick={() => setTool('expenses')}>
-                <span>↔</span><div><strong>Shared expenses</strong><small>Add, split and review expenses</small></div>
+              <button type="button" className={`space-action-button ${isPrimary('expenses') ? 'primary-action' : ''}`} onClick={() => setTool('expenses')}>
+                <span>↔</span><div><strong>{isPrimary('expenses') ? experience.label : 'Shared expenses'}</strong><small>{isPrimary('expenses') ? experience.detail : 'Add, split and review expenses'}</small></div>
               </button>
-              <button type="button" className="space-action-button" onClick={() => setTool('balances')}>
-                <span>⇄</span><div><strong>Who owes whom</strong><small>See balances and settle up</small></div>
+              <button type="button" className={`space-action-button ${isPrimary('balances') ? 'primary-action' : ''}`} onClick={() => setTool('balances')}>
+                <span>⇄</span><div><strong>Settlements</strong><small>See balances and settle up</small></div>
               </button>
-              <button type="button" className="space-action-button" onClick={() => setTool('bills')}>
-                <span>◷</span><div><strong>Shared bills</strong><small>Assign, pay and review shared bills</small></div>
+              <button type="button" className={`space-action-button ${isPrimary('bills') ? 'primary-action' : ''}`} onClick={() => setTool('bills')}>
+                <span>◷</span><div><strong>{isPrimary('bills') ? experience.label : 'Shared bills'}</strong><small>{isPrimary('bills') ? experience.detail : 'Assign, pay and review shared bills'}</small></div>
               </button>
             </>
           )}

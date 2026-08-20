@@ -32,13 +32,13 @@ need(financeBlock, "space.type === 'sme' && canViewSmeFinancials", 'SME finance-
 need(financeBlock, "{ id: 'expenses', label: 'Expenses' }", 'SME Expenses tab missing.');
 need(financeBlock, "{ id: 'bills', label: 'Shared bills' }", 'SME Shared bills tab missing.');
 if (financeBlock.includes('supportsGroupFund')) fail('Fund tab remains duplicated beside Quick Space Actions.');
-if (financeBlock.includes("'balances'")) fail('Who owes whom tab remains duplicated beside Quick Space Actions.');
+if (financeBlock.includes("'balances'")) fail('Settlements tab remains duplicated beside Quick Space Actions.');
 if (financeBlock.includes("label: 'Shared expenses'")) fail('Shared expenses tab remains duplicated beside Quick Space Actions.');
 need(details, "if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity'))", 'Hidden tool deep-link support changed.');
 
 const hub = read('src/features/spaces/SpaceActionHub.tsx');
 need(hub, "if (space.type === 'sme') return null;", 'SME Quick Space Action boundary changed.');
-for (const token of ['Shared expenses', 'Who owes whom', 'Shared bills']) {
+for (const token of ['Shared expenses', 'Settlements', 'Shared bills']) {
   need(hub, token, `Quick Space Action missing: ${token}`);
 }
 

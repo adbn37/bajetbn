@@ -12,7 +12,7 @@ const checks = [
   ['equal split option', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Split equally')],
   ['custom split option', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Enter different amounts')],
   ['percentage split option', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Split by percentage')],
-  ['who owes whom', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Who owes whom')],
+  ['settlements view', read('src/features/spaces/SharedExpensesPanel.tsx').includes('<h2>Settlements</h2>')],
   ['partial member payment', read('src/features/spaces/SharedExpensesPanel.tsx').includes('You can pay part of it')],
   ['payment proof', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Proof of payment')],
   ['approval function', read('functions/src/index.ts').includes('export const reviewSharedExpensePayment')],
@@ -22,7 +22,7 @@ const checks = [
   ['trip contribution function', read('functions/src/index.ts').includes('export const recordTripMoneyContribution')],
   ['trip reversal function', read('functions/src/index.ts').includes('export const reverseTripMoneyContribution')],
   ['space tab expenses', read('src/features/spaces/SpaceDetailsPage.tsx').includes("{ id: 'expenses', label:") && read('src/features/spaces/SpaceDetailsPage.tsx').includes("activeTab === 'expenses'") && read('src/features/spaces/SpaceDetailsPage.tsx').includes('view="expenses"') && read('src/features/spaces/SpaceActionHub.tsx').includes('Shared expenses')],
-  ['space balances access', read('src/features/spaces/SpaceDetailsPage.tsx').includes("activeTab === 'balances'") && read('src/features/spaces/SpaceDetailsPage.tsx').includes('view="balances"') && read('src/features/spaces/SpaceActionHub.tsx').includes("setTool('balances')") && read('src/features/spaces/SpaceActionHub.tsx').includes('Who owes whom')],
+  ['space settlements access', read('src/features/spaces/SpaceDetailsPage.tsx').includes("activeTab === 'balances'") && read('src/features/spaces/SpaceDetailsPage.tsx').includes('view="balances"') && read('src/features/spaces/SpaceActionHub.tsx').includes("setTool('balances')") && read('src/features/spaces/SpaceActionHub.tsx').includes('Settlements')],
   ['trip money tab', read('src/features/spaces/SpaceDetailsPage.tsx').includes("space.type === 'trip' ? 'Trip money'")],
   ['firestore expense rules', read('firestore.rules').includes('match /sharedExpenses/{expenseId}')],
   ['firestore share rules', read('firestore.rules').includes('match /sharedExpenseShares/{shareId}')],
@@ -54,4 +54,4 @@ const percentage = [Math.floor(1001 * 2500 / 10000), Math.floor(1001 * 2500 / 10
 percentage.push(1001 - percentage.reduce((sum, value) => sum + value, 0));
 if (percentage.reduce((sum, value) => sum + value, 0) !== 1001) throw new Error('Percentage split calculation failed.');
 
-console.log(`Shared expenses, balances and Trip money checks passed (${checks.length} structural checks plus split calculations).`);
+console.log(`Shared expenses, settlements and Trip money checks passed (${checks.length} structural checks plus split calculations).`);
