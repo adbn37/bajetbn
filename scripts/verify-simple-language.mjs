@@ -36,7 +36,7 @@ const required = [
   'Finish old payment',
   'Confirm payment',
   'Money activity',
-  'Account activity',
+  'View activity',
   'Amount left before payment',
   'Full instalment total (BND)',
   'Undo payment',

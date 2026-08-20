@@ -14,7 +14,16 @@ const need = (file, token) => {
 
 const pkg = JSON.parse(read('package.json'));
 const release = JSON.parse(read('release.json'));
-if (pkg.version !== '1.3.0' || release.version !== '1.3.0') fail('SME barcode inventory requires version 1.3.0.');
+const versionAtLeast = (version, minimum) => {
+  const actual = String(version || '').split('-')[0].split('.').map((value) => Number(value) || 0);
+  const required = String(minimum).split('.').map((value) => Number(value) || 0);
+  for (let index = 0; index < 3; index += 1) {
+    if ((actual[index] || 0) > (required[index] || 0)) return true;
+    if ((actual[index] || 0) < (required[index] || 0)) return false;
+  }
+  return true;
+};
+if (!versionAtLeast(pkg.version, '1.3.0') || !versionAtLeast(release.version, '1.3.0')) fail('SME barcode inventory requires version 1.3.0 or later.');
 checks += 1;
 
 for (const token of [

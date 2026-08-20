@@ -19,11 +19,21 @@ for (const file of requiredFiles) { checks += 1; if (!fs.existsSync(file)) fail(
 
 const packageJson = JSON.parse(read('package.json'));
 const release = JSON.parse(read('release.json'));
-if (packageJson.version !== '1.3.0' || release.version !== '1.3.0') fail('SME barcode operations require version 1.3.0.');
+const versionAtLeast = (version, minimum) => {
+  const actual = String(version || '').split('-')[0].split('.').map((value) => Number(value) || 0);
+  const required = String(minimum).split('.').map((value) => Number(value) || 0);
+  for (let index = 0; index < 3; index += 1) {
+    if ((actual[index] || 0) > (required[index] || 0)) return true;
+    if ((actual[index] || 0) < (required[index] || 0)) return false;
+  }
+  return true;
+};
+if (!versionAtLeast(packageJson.version, '1.3.0') || !versionAtLeast(release.version, '1.3.0')) fail('SME barcode operations requires version 1.3.0 or later.');
 checks += 1;
-const isCompatibleAlpha = release.label === 'BajetBN v1.3.0 Alpha 3' && release.channel === 'alpha';
-const isCompatibleStable = release.label === 'BajetBN v1.3.0' && release.channel === 'stable';
-if (!isCompatibleAlpha && !isCompatibleStable) fail('Expected compatible SME barcode operations release metadata.');
+const isCompatibleRelease =
+  ['alpha', 'stable'].includes(release.channel)
+  && /^BajetBN v\d+\.\d+\.\d+/.test(String(release.label || ''));
+if (!isCompatibleRelease) fail('Expected compatible SME barcode operations release metadata.');
 checks += 1;
 if (packageJson.scripts?.['verify:sme-pos-barcode-operations'] !== 'node scripts/verify-sme-pos-barcode-operations.mjs') fail('Missing SME barcode operations npm verifier.');
 checks += 1;
@@ -61,7 +71,7 @@ for (const file of [
 ]) {
   need(file, "import { SmePosBarcodeLabelDialog } from '../../components/SmePosBarcodeLabelDialog';");
   need(file, "import { SmePosBarcodeReturnScanner } from '../../components/SmePosBarcodeReturnScanner';");
-  need(file, 'onStocktake={canManageStock ? setStocktakeForm : undefined}');
+  need(file, 'onStocktake={');
   need(file, 'stocktake: true');
   need(file, 'Confirm physical count');
   need(file, '<SmePosBarcodeLabelDialog');

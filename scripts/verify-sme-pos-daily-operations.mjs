@@ -14,7 +14,16 @@ const reject = (file, text, label = text) => {
 
 const packageJson = JSON.parse(read('package.json'));
 checks += 1;
-if (packageJson.version !== '1.3.6') fail(`Expected package version 1.3.6, found ${packageJson.version}.`);
+const versionAtLeast = (version, minimum) => {
+  const actual = String(version || '').split('-')[0].split('.').map((value) => Number(value) || 0);
+  const required = String(minimum).split('.').map((value) => Number(value) || 0);
+  for (let index = 0; index < 3; index += 1) {
+    if ((actual[index] || 0) > (required[index] || 0)) return true;
+    if ((actual[index] || 0) < (required[index] || 0)) return false;
+  }
+  return true;
+};
+if (!versionAtLeast(packageJson.version, '1.3.6')) fail(`POS daily operations require version 1.3.6 or later; found ${packageJson.version}.`);
 checks += 1;
 if (!String(packageJson.scripts?.['verify:all-structural'] || '').includes('verify-sme-pos-daily-operations.mjs')) fail('Daily operations verifier is not registered in verify:all-structural.');
 
@@ -181,4 +190,4 @@ for (const file of [
   if (/\b(?:window\.)?(?:confirm|alert)\s*\(/.test(read(file))) fail(`${file} must not use browser-native confirm/alert.`);
 }
 
-console.log(`BajetBN v1.3.6 POS daily operations verification passed (${checks} checks).`);
+console.log(`BajetBN POS daily operations verification passed (${checks} checks).`);

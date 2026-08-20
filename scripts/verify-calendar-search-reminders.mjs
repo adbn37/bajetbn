@@ -5,12 +5,14 @@ const requiredFiles = [
   'src/features/calendar/CalendarPage.tsx',
   'src/features/search/SearchPage.tsx',
   'src/repositories/reminderRepository.ts',
+  'src/services/personalisation.ts',
   'CALENDAR_SEARCH_REMINDERS_ALPHA.md',
 ];
 for (const file of requiredFiles) assert.equal(fs.existsSync(file), true, `${file} is missing`);
 
 const app = fs.readFileSync('src/app/App.tsx', 'utf8');
 const shell = fs.readFileSync('src/layouts/AppShell.tsx', 'utf8');
+const personalisation = fs.readFileSync('src/services/personalisation.ts', 'utf8');
 const calendar = fs.readFileSync('src/features/calendar/CalendarPage.tsx', 'utf8');
 const search = fs.readFileSync('src/features/search/SearchPage.tsx', 'utf8');
 const repository = fs.readFileSync('src/repositories/reminderRepository.ts', 'utf8');
@@ -24,8 +26,8 @@ const checks = [
   [app, "import('../features/search/SearchPage')", 'Search page import'],
   [app, '<Route path="calendar" element={<CalendarPage />} />', 'Calendar route'],
   [app, '<Route path="search" element={<SearchPage />} />', 'Search route'],
-  [shell, "['/calendar', 'Calendar', '▦']", 'Calendar navigation'],
-  [shell, "['/search', 'Search', '⌕']", 'Search navigation'],
+[personalisation, "{ id: 'calendar', path: '/calendar', label: 'Calendar'", 'Calendar navigation'],
+[personalisation, "{ id: 'search', path: '/search', label: 'Search'", 'Search navigation'],
   [shell, 'Search BajetBN', 'Top search box'],
   [calendar, 'Calendar & reminders', 'Simple calendar title'],
   [calendar, 'Due today', 'Today section'],

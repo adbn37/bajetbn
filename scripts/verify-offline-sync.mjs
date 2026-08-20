@@ -33,7 +33,7 @@ const checks = [
   ['src/features/transactions/TransactionsPage.tsx', "outcome.mode === 'queued'", 'queued result handling'],
   ['src/app/App.tsx', '<OfflineSyncProvider>', 'offline provider'],
   ['src/app/App.tsx', 'path="offline-sync"', 'offline route'],
-  ['src/layouts/AppShell.tsx', "'/offline-sync', 'Offline & sync'", 'offline navigation'],
+  ['src/services/personalisation.ts', "id: 'offline-sync', path: '/offline-sync', label: 'Offline & sync'", 'offline navigation'],
   ['src/services/i18n.ts', "'Offline & sync': 'Luar talian & segerak'", 'Malay navigation wording'],
   ['OFFLINE_SYNC_ALPHA.md', 'duplicate-protection key', 'offline sync documentation'],
   ['STAGING_TEST_CHECKLIST.md', 'v0.11.11 Offline Sync', 'staging test matrix'],

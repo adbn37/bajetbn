@@ -64,7 +64,7 @@ includes('src/app/App.tsx', [
   'RecurringTransactionsPage',
   'StoppedRecurringTransactionsPage',
 ]);
-includes('src/layouts/AppShell.tsx', ["['/recurring', 'Recurring money', '↻']"]);
+includes('src/services/personalisation.ts', ["{ id: 'recurring', path: '/recurring', label: 'Recurring money', icon: '↻' }"]);
 includes('src/features/transactions/TransactionsPage.tsx', [
   'to="/recurring"',
   'recurringTemplateId',

@@ -56,7 +56,9 @@ for (const text of [
   'is out of stock',
   'only has ${available} available',
   "entryType: 'sme_pos_sale'",
-  "categoryId: salesCategory.id",
+  "const category = systemCategories.get(input.categoryId)",
+  "categoryId: 'income-sales'",
+  "categoryId: category.id",
   "returnStatus: 'not_returned'",
 ]) need('functions/src/index.ts', text);
 
@@ -71,7 +73,7 @@ need('STAGING_TEST_CHECKLIST.md', 'Standard POS Alpha 2');
 const workspace = read('src/features/sme-pos/StandardPosWorkspace.tsx');
 if (workspace.includes('Track stock quantity')) fail('Alpha 2 must use the explicit physical versus unlimited item choice instead of the old stock checkbox.');
 if (!workspace.includes("const canViewReports = ['owner', 'manager'].includes(role)")) fail('Profit reports must remain owner/manager only.');
-if (!workspace.includes("if (role === 'cashier') return ['register', 'customers', 'sales']")) fail('Cashier navigation must be limited to Register, Customers and My recent sales.');
+if (!workspace.includes("if (role === 'cashier') return ['register', 'customers', 'bookings', 'sales']")) fail('Cashier navigation must be limited to Register, Customers, Bookings and My recent sales.');
 
 const settingsPage = read('src/features/sme-pos/SmePosSettingsPage.tsx');
 if (!settingsPage.includes('Only the SME Space owner can change shop settings and staff POS roles.')) fail('POS settings must be owner-only.');

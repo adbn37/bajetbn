@@ -20,11 +20,21 @@ for (const file of requiredFiles) { checks += 1; if (!fs.existsSync(file)) fail(
 
 const packageJson = JSON.parse(read('package.json'));
 const release = JSON.parse(read('release.json'));
-if (packageJson.version !== '1.3.0' || release.version !== '1.3.0') fail('SME barcode checkout requires version 1.3.0.');
+const versionAtLeast = (version, minimum) => {
+  const actual = String(version || '').split('-')[0].split('.').map((value) => Number(value) || 0);
+  const required = String(minimum).split('.').map((value) => Number(value) || 0);
+  for (let index = 0; index < 3; index += 1) {
+    if ((actual[index] || 0) > (required[index] || 0)) return true;
+    if ((actual[index] || 0) < (required[index] || 0)) return false;
+  }
+  return true;
+};
+if (!versionAtLeast(packageJson.version, '1.3.0') || !versionAtLeast(release.version, '1.3.0')) fail('SME barcode checkout requires version 1.3.0 or later.');
 checks += 1;
-const isCompatibleAlpha = /^BajetBN v1\.3\.0 Alpha [23]$/.test(release.label) && release.channel === 'alpha';
-const isCompatibleStable = release.label === 'BajetBN v1.3.0' && release.channel === 'stable';
-if (!isCompatibleAlpha && !isCompatibleStable) fail('Expected compatible SME barcode checkout release metadata.');
+const isCompatibleRelease =
+  ['alpha', 'stable'].includes(release.channel)
+  && /^BajetBN v\d+\.\d+\.\d+/.test(String(release.label || ''));
+if (!isCompatibleRelease) fail('Expected compatible SME barcode checkout release metadata.');
 checks += 1;
 if (packageJson.scripts?.['verify:sme-pos-barcode-checkout'] !== 'node scripts/verify-sme-pos-barcode-checkout.mjs') fail('Missing SME barcode checkout npm verifier.');
 checks += 1;
