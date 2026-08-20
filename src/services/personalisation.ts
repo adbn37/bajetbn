@@ -48,6 +48,29 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
 ];
 
 const ALL_NAVIGATION_IDS = NAVIGATION_ITEMS.map((item) => item.id);
+
+export const RECOMMENDED_NAVIGATION_ORDER: NavigationId[] = [
+  'overview',
+  'spaces',
+  'transactions',
+  'accounts',
+  'budgets',
+  'bills',
+  'search',
+  'recurring',
+  'goals',
+  'calendar',
+  'reports',
+  'offline-sync',
+];
+
+export const RECOMMENDED_HIDDEN_NAVIGATION: NavigationId[] = [
+  'recurring',
+  'goals',
+  'calendar',
+  'reports',
+  'offline-sync',
+];
 const ICON_PACKS: IconPack[] = ['classic', 'rounded', 'minimal', 'retro'];
 const SURFACE_STYLES: SurfaceStyle[] = ['solid', 'soft', 'glass'];
 const WALLPAPER_STYLES: WallpaperStyle[] = ['none', 'dots', 'grid', 'waves', 'stars'];
@@ -105,8 +128,8 @@ export function defaultPersonalisation(): PersonalisationSettings {
     iconPack: 'classic',
     surfaceStyle: 'solid',
     wallpaperStyle: 'none',
-    navigationOrder: [...ALL_NAVIGATION_IDS],
-    hiddenNavigation: [],
+    navigationOrder: [...RECOMMENDED_NAVIGATION_ORDER],
+    hiddenNavigation: [...RECOMMENDED_HIDDEN_NAVIGATION],
     pinnedNavigation: [],
   };
 }
@@ -120,13 +143,19 @@ function validNavigationIds(value: unknown): NavigationId[] {
 
 export function sanitizePersonalisation(value: Partial<PersonalisationSettings> | null | undefined): PersonalisationSettings {
   const defaults = defaultPersonalisation();
-  const order = validNavigationIds(value?.navigationOrder);
+  const orderSource = Array.isArray(value?.navigationOrder)
+    ? value.navigationOrder
+    : defaults.navigationOrder;
+  const order = validNavigationIds(orderSource);
   ALL_NAVIGATION_IDS.forEach((id) => {
     if (!order.includes(id)) order.push(id);
   });
 
   const protectedIds = new Set(NAVIGATION_ITEMS.filter((item) => item.protected).map((item) => item.id));
-  const hidden = validNavigationIds(value?.hiddenNavigation).filter((id) => !protectedIds.has(id));
+  const hiddenSource = Array.isArray(value?.hiddenNavigation)
+    ? value.hiddenNavigation
+    : defaults.hiddenNavigation;
+  const hidden = validNavigationIds(hiddenSource).filter((id) => !protectedIds.has(id));
   const pinned = validNavigationIds(value?.pinnedNavigation).filter((id) => !hidden.includes(id));
 
   return {

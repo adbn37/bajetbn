@@ -78,7 +78,7 @@ export function SidebarCustomizer({
       <div className="menu-customizer">
         <div className="notice compact-notice">
           <strong>Your menu, your order</strong>
-          <span>Drag on desktop or use the arrows on mobile. Overview and Spaces always stay available.</span>
+          <span>Drag on desktop or use the arrows on mobile. Overview and Spaces always stay available. Reset menu restores the recommended simple layout.</span>
         </div>
         <div className="menu-customizer-list">
           {ordered.map((item, index) => {
