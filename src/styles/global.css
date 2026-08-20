@@ -3853,3 +3853,54 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     font-size: .52rem;
   }
 }
+/* Trip v2 Slice 1 - command centre */
+.trip-command-centre {
+  display: grid;
+  gap: .85rem;
+}
+
+.trip-command-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.trip-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.trip-command-guidance {
+  display: grid;
+  gap: .5rem;
+}
+
+@media (max-width: 900px) {
+  .trip-command-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .trip-command-centre {
+    gap: .65rem;
+  }
+
+  .trip-command-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .45rem;
+  }
+
+  .trip-command-summary .summary-card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .trip-command-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trip-command-actions .button {
+    width: 100%;
+    min-width: 0;
+  }
+}

@@ -37,6 +37,7 @@ import { CollaborationPage, type CollaborationTab } from '../collaboration/Colla
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { SpaceActionHub } from './SpaceActionHub';
+import { TripCommandCentre } from './TripCommandCentre';
 
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund';
 type SpaceOverviewSection = 'money' | 'budgets' | 'goals' | 'bills' | 'reports' | 'calendar';
@@ -366,6 +367,15 @@ export function SpaceDetailsPage() {
       {space.type === 'collection' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/collection`}>Collection</Link>}
     </nav>
 
+    {activeTab === 'overview' && space.type === 'trip' && (
+      <TripCommandCentre
+        space={space}
+        budgets={budgets}
+        members={members}
+        sharedExpenses={sharedExpenses}
+        onOpenTab={(tab) => chooseTab(tab)}
+      />
+    )}
     {activeTab === 'overview' ? <SpaceOverview
       space={space}
       moneyIn={moneyIn}
