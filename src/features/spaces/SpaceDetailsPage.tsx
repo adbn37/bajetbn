@@ -372,6 +372,7 @@ export function SpaceDetailsPage() {
         space={space}
         budgets={budgets}
         members={members}
+        currentMember={currentMember}
         sharedExpenses={sharedExpenses}
         onOpenTab={(tab) => chooseTab(tab)}
       />

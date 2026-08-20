@@ -5797,6 +5797,9 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('sharedExpensePayments').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceFundContributions').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceInvitations').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('tripItineraryItems').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('tripTasks').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('tripBookings').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItemMovements').where('spaceId', '==', spaceId)),
@@ -6244,6 +6247,581 @@ function writeSharedExpensePayment(input: {
   return allocations;
 }
 
+function optionalTripPlanningText(
+  value: unknown,
+  label: string,
+  maxLength = 500,
+): string | null {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  if (text.length > maxLength) {
+    throw new HttpsError('invalid-argument', `${label} is too long.`);
+  }
+  return text;
+}
+
+function optionalTripPlanningAmount(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) {
+    throw new HttpsError('invalid-argument', 'Booking amount is invalid.');
+  }
+  return amount;
+}
+
+async function requireTripSpaceMember(spaceId: string, uid: string) {
+  const [spaceSnapshot, member] = await Promise.all([
+    db.collection('spaces').doc(spaceId).get(),
+    requireActiveSpaceMember(spaceId, uid),
+  ]);
+
+  if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) {
+    throw new HttpsError('not-found', 'Trip Space was not found.');
+  }
+
+  const space = spaceSnapshot.data() || {};
+
+  if (space.type !== 'trip') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Trip planning is only available inside a Trip Space.',
+    );
+  }
+
+  return { space, member };
+}
+
+function canManageTripPlanning(member: DocumentData): boolean {
+  return ['owner', 'admin', 'contributor'].includes(String(member.role || ''));
+}
+
+async function requireTripPlanner(spaceId: string, uid: string) {
+  const context = await requireTripSpaceMember(spaceId, uid);
+
+  if (!canManageTripPlanning(context.member)) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the Trip owner, admin or contributor can change Trip planning.',
+    );
+  }
+
+  return context;
+}
+
+export const saveTripItineraryItem = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const itemId = optionalTripPlanningText(request.data?.itemId, 'Itinerary item ID', 80);
+  const title = stringValue(request.data?.title, 'Itinerary title', 120);
+  const category = stringValue(request.data?.category, 'Itinerary category', 20);
+  const date = stringValue(request.data?.date, 'Itinerary date', 10);
+  const time = optionalTripPlanningText(request.data?.time, 'Itinerary time', 10);
+  const location = optionalTripPlanningText(request.data?.location, 'Location', 160);
+  const reference = optionalTripPlanningText(request.data?.reference, 'Booking reference', 100);
+  const note = optionalTripPlanningText(request.data?.note, 'Note', 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  if (!['flight', 'hotel', 'transport', 'activity', 'food', 'other'].includes(category)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid Itinerary category.');
+  }
+
+  const actor = await requireTripPlanner(spaceId, uid);
+  const ref = itemId
+    ? db.collection('tripItineraryItems').doc(itemId)
+    : db.collection('tripItineraryItems').doc();
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+
+    const existing = itemId ? await transaction.get(ref) : null;
+
+    if (itemId && !existing?.exists) {
+      throw new HttpsError('not-found', 'Itinerary item was not found.');
+    }
+
+    if (existing?.exists && String(existing.data()?.spaceId || '') !== spaceId) {
+      throw new HttpsError('permission-denied', 'Itinerary item belongs to another Space.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    const data = {
+      spaceId,
+      title,
+      category,
+      date,
+      time,
+      location,
+      reference,
+      note,
+      updatedAt: now,
+    };
+
+    if (existing?.exists) {
+      transaction.update(ref, data);
+    } else {
+      transaction.create(ref, {
+        displayId: displayId('ITI'),
+        ...data,
+        createdBy: uid,
+        archivedAt: null,
+        createdAt: now,
+      });
+    }
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: actor.member.displayName,
+      action: existing?.exists ? 'trip_itinerary_updated' : 'trip_itinerary_created',
+      targetType: 'trip_itinerary',
+      targetId: ref.id,
+      summary: `${existing?.exists ? 'Updated' : 'Added'} ${title} in the Trip Itinerary.`,
+      now,
+    });
+
+    const result = { itemId: ref.id };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'save_trip_itinerary_item',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
+export const archiveTripItineraryItem = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const itemId = stringValue(request.data?.itemId, 'Itinerary item ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const actor = await requireTripPlanner(spaceId, uid);
+
+  const ref = db.collection('tripItineraryItems').doc(itemId);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+
+    const snapshot = await transaction.get(ref);
+
+    if (!snapshot.exists || String(snapshot.data()?.spaceId || '') !== spaceId) {
+      throw new HttpsError('not-found', 'Itinerary item was not found.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, { archivedAt: now, updatedAt: now });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: actor.member.displayName,
+      action: 'trip_itinerary_archived',
+      targetType: 'trip_itinerary',
+      targetId: itemId,
+      summary: `Archived ${snapshot.data()?.title || 'an Itinerary item'}.`,
+      now,
+    });
+
+    const result = { itemId, archived: true };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'archive_trip_itinerary_item',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
+export const saveTripTask = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const taskId = optionalTripPlanningText(request.data?.taskId, 'Task ID', 80);
+  const title = stringValue(request.data?.title, 'Task title', 120);
+  const assigneeUid = optionalTripPlanningText(request.data?.assigneeUid, 'Assignee ID', 128);
+  const dueDate = optionalTripPlanningText(request.data?.dueDate, 'Due date', 10);
+  const note = optionalTripPlanningText(request.data?.note, 'Note', 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  const actor = await requireTripPlanner(spaceId, uid);
+  const assignee = assigneeUid
+    ? await requireActiveSpaceMember(spaceId, assigneeUid)
+    : null;
+
+  const ref = taskId
+    ? db.collection('tripTasks').doc(taskId)
+    : db.collection('tripTasks').doc();
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+
+    const existing = taskId ? await transaction.get(ref) : null;
+
+    if (taskId && !existing?.exists) {
+      throw new HttpsError('not-found', 'Trip Task was not found.');
+    }
+
+    if (existing?.exists && String(existing.data()?.spaceId || '') !== spaceId) {
+      throw new HttpsError('permission-denied', 'Trip Task belongs to another Space.');
+    }
+
+    const previousAssigneeUid = String(existing?.data()?.assigneeUid || '');
+    const now = FieldValue.serverTimestamp();
+
+    const data = {
+      spaceId,
+      title,
+      assigneeUid,
+      assigneeName: assignee?.displayName || null,
+      assigneeEmail: assignee?.email || null,
+      dueDate,
+      note,
+      updatedAt: now,
+    };
+
+    if (existing?.exists) {
+      transaction.update(ref, data);
+    } else {
+      transaction.create(ref, {
+        displayId: displayId('TSK'),
+        ...data,
+        status: 'open',
+        createdBy: uid,
+        completedBy: null,
+        completedAt: null,
+        archivedAt: null,
+        createdAt: now,
+      });
+    }
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: actor.member.displayName,
+      action: existing?.exists ? 'trip_task_updated' : 'trip_task_created',
+      targetType: 'trip_task',
+      targetId: ref.id,
+      summary: `${existing?.exists ? 'Updated' : 'Added'} Trip Task: ${title}.`,
+      now,
+    });
+
+    if (
+      assigneeUid &&
+      assigneeUid !== uid &&
+      assigneeUid !== previousAssigneeUid
+    ) {
+      createNotification(transaction, {
+        uid: assigneeUid,
+        spaceId,
+        type: 'trip_task_assigned',
+        title: 'A Trip Task was assigned to you',
+        message: dueDate ? `${title} is due on ${dueDate}.` : title,
+        targetPath: `/spaces/${spaceId}?tab=overview#trip-planning`,
+        actionLabel: 'Open Trip Tasks',
+        now,
+      });
+    }
+
+    const result = { taskId: ref.id };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'save_trip_task',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
+export const setTripTaskStatus = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const taskId = stringValue(request.data?.taskId, 'Task ID', 80);
+  const status = stringValue(request.data?.status, 'Task status', 20);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  if (!['open', 'completed'].includes(status)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid Task status.');
+  }
+
+  const actor = await requireTripSpaceMember(spaceId, uid);
+  const ref = db.collection('tripTasks').doc(taskId);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+
+    const snapshot = await transaction.get(ref);
+
+    if (!snapshot.exists || String(snapshot.data()?.spaceId || '') !== spaceId) {
+      throw new HttpsError('not-found', 'Trip Task was not found.');
+    }
+
+    const task = snapshot.data() || {};
+
+    if (
+      !canManageTripPlanning(actor.member) &&
+      String(task.assigneeUid || '') !== uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the assignee or a Trip planner can change this Task.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    transaction.update(ref, {
+      status,
+      completedBy: status === 'completed' ? uid : null,
+      completedAt: status === 'completed' ? now : null,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: actor.member.displayName,
+      action: status === 'completed' ? 'trip_task_completed' : 'trip_task_reopened',
+      targetType: 'trip_task',
+      targetId: taskId,
+      summary: `${status === 'completed' ? 'Completed' : 'Reopened'} Trip Task: ${task.title || 'Task'}.`,
+      now,
+    });
+
+    if (
+      status === 'completed' &&
+      task.createdBy &&
+      String(task.createdBy) !== uid
+    ) {
+      createNotification(transaction, {
+        uid: String(task.createdBy),
+        spaceId,
+        type: 'trip_task_completed',
+        title: 'Trip Task completed',
+        message: `${task.title || 'A Trip Task'} was completed.`,
+        targetPath: `/spaces/${spaceId}?tab=overview#trip-planning`,
+        actionLabel: 'Open Trip Tasks',
+        now,
+      });
+    }
+
+    const result = { taskId, status };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'set_trip_task_status',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
+export const archiveTripTask = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const taskId = stringValue(request.data?.taskId, 'Task ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const actor = await requireTripPlanner(spaceId, uid);
+
+  const ref = db.collection('tripTasks').doc(taskId);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+
+    const snapshot = await transaction.get(ref);
+
+    if (!snapshot.exists || String(snapshot.data()?.spaceId || '') !== spaceId) {
+      throw new HttpsError('not-found', 'Trip Task was not found.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, { archivedAt: now, updatedAt: now });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: actor.member.displayName,
+      action: 'trip_task_archived',
+      targetType: 'trip_task',
+      targetId: taskId,
+      summary: `Archived Trip Task: ${snapshot.data()?.title || 'Task'}.`,
+      now,
+    });
+
+    const result = { taskId, archived: true };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'archive_trip_task',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
+export const saveTripBooking = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const bookingId = optionalTripPlanningText(request.data?.bookingId, 'Booking ID', 80);
+  const title = stringValue(request.data?.title, 'Booking title', 120);
+  const bookingType = stringValue(request.data?.bookingType, 'Booking type', 20);
+  const provider = optionalTripPlanningText(request.data?.provider, 'Provider', 120);
+  const reference = optionalTripPlanningText(request.data?.reference, 'Booking reference', 100);
+  const date = stringValue(request.data?.date, 'Booking date', 10);
+  const time = optionalTripPlanningText(request.data?.time, 'Booking time', 10);
+  const location = optionalTripPlanningText(request.data?.location, 'Location', 160);
+  const amountMinor = optionalTripPlanningAmount(request.data?.amountMinor);
+  const note = optionalTripPlanningText(request.data?.note, 'Note', 500);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  if (!['flight', 'hotel', 'transport', 'activity', 'event', 'other'].includes(bookingType)) {
+    throw new HttpsError('invalid-argument', 'Choose a valid Booking type.');
+  }
+
+  const actor = await requireTripPlanner(spaceId, uid);
+  const currency =
+    optionalTripPlanningText(request.data?.currency, 'Currency', 10) ||
+    String(actor.space.currency || 'BND');
+
+  const ref = bookingId
+    ? db.collection('tripBookings').doc(bookingId)
+    : db.collection('tripBookings').doc();
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+
+    const existing = bookingId ? await transaction.get(ref) : null;
+
+    if (bookingId && !existing?.exists) {
+      throw new HttpsError('not-found', 'Trip Booking was not found.');
+    }
+
+    if (existing?.exists && String(existing.data()?.spaceId || '') !== spaceId) {
+      throw new HttpsError('permission-denied', 'Trip Booking belongs to another Space.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    const data = {
+      spaceId,
+      title,
+      bookingType,
+      provider,
+      reference,
+      date,
+      time,
+      location,
+      amountMinor,
+      currency,
+      note,
+      updatedAt: now,
+    };
+
+    if (existing?.exists) {
+      transaction.update(ref, data);
+    } else {
+      transaction.create(ref, {
+        displayId: displayId('TBK'),
+        ...data,
+        createdBy: uid,
+        archivedAt: null,
+        createdAt: now,
+      });
+    }
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: actor.member.displayName,
+      action: existing?.exists ? 'trip_booking_updated' : 'trip_booking_created',
+      targetType: 'trip_booking',
+      targetId: ref.id,
+      summary: `${existing?.exists ? 'Updated' : 'Saved'} Trip Booking: ${title}.`,
+      now,
+    });
+
+    const result = { bookingId: ref.id };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'save_trip_booking',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
+export const archiveTripBooking = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const bookingId = stringValue(request.data?.bookingId, 'Booking ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+  const actor = await requireTripPlanner(spaceId, uid);
+
+  const ref = db.collection('tripBookings').doc(bookingId);
+  const commandRef = db.collection('collaborationCommands').doc(commandId(uid, key));
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+    if (command.exists) return command.data()?.result;
+
+    const snapshot = await transaction.get(ref);
+
+    if (!snapshot.exists || String(snapshot.data()?.spaceId || '') !== spaceId) {
+      throw new HttpsError('not-found', 'Trip Booking was not found.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, { archivedAt: now, updatedAt: now });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName: actor.member.displayName,
+      action: 'trip_booking_archived',
+      targetType: 'trip_booking',
+      targetId: bookingId,
+      summary: `Archived Trip Booking: ${snapshot.data()?.title || 'Booking'}.`,
+      now,
+    });
+
+    const result = { bookingId, archived: true };
+    transaction.create(commandRef, {
+      uid,
+      kind: 'archive_trip_booking',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
 export const createSharedExpense = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
@@ -7525,7 +8103,7 @@ async function queueSharedBillAssignmentAnonymization(input: {
 async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proofPaths: Set<string>) {
   const collections = [
     'transactions', 'budgets', 'goals', 'commitments', 'sharedBillAssignments', 'sharedBillPayments',
-    'sharedBillPaymentReversals', 'spaceActivities', 'sharedExpenses', 'sharedExpenseShares',
+    'sharedBillPaymentReversals', 'spaceActivities', 'tripItineraryItems', 'tripTasks', 'tripBookings', 'sharedExpenses', 'sharedExpenseShares',
     'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
     'userNotifications', 'reminderHistory', 'recurringTransactionTemplates', 'recurringTransactionRuns',
     'transactionAttachments', 'collectionItems', 'collectionItemMovements', 'smePosAccess', 'smePosProducts', 'smePosCustomers',
@@ -7747,6 +8325,11 @@ async function finalizeAccountDeletion(uid: string) {
     await queueFieldAnonymization({ plan, collectionName: 'sharedBillPaymentReversals', field: 'memberUid', uid, updates: () => ({ memberUid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedBillPaymentReversals', field: 'reversedBy', uid, updates: () => ({ reversedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
 
+    await queueFieldAnonymization({ plan, collectionName: 'tripItineraryItems', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'tripBookings', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'assigneeUid', uid, updates: () => ({ assigneeUid: anonymousId, assigneeName: deletedMemberName, assigneeEmail: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'completedBy', uid, updates: () => ({ completedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'actorUid', uid, updates: () => ({ actorUid: anonymousId, actorName: deletedMemberName, summary: 'Activity retained after a member deleted their account.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'targetId', uid, updates: () => ({ targetId: anonymousId, summary: 'Member-related activity retained after account deletion.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, paidByName: deletedMemberName, paidByEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });

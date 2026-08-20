@@ -3904,3 +3904,125 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     min-width: 0;
   }
 }
+/* Trip v2 Slice 2 - planning */
+.trip-planning-panel {
+  display: grid;
+  gap: .8rem;
+  scroll-margin-top: 5rem;
+}
+
+.trip-planning-grid {
+  display: grid;
+  gap: .8rem;
+}
+
+.trip-planning-section {
+  display: grid;
+  gap: .65rem;
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.trip-planning-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.trip-planning-heading h3 {
+  margin: 0;
+}
+
+.trip-planning-create {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: .65rem;
+}
+
+.trip-planning-create > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.trip-planning-form {
+  display: grid;
+  gap: .65rem;
+  margin-top: .75rem;
+}
+
+.trip-planning-form-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .55rem;
+}
+
+.trip-planning-list {
+  display: grid;
+  gap: .55rem;
+}
+
+.trip-planning-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.trip-planning-card > div:first-child {
+  display: grid;
+  gap: .2rem;
+  min-width: 0;
+}
+
+.trip-planning-card strong,
+.trip-planning-card small,
+.trip-planning-card p {
+  overflow-wrap: anywhere;
+}
+
+.trip-planning-card p {
+  margin: .25rem 0 0;
+}
+
+.trip-planning-card.completed {
+  opacity: .7;
+}
+
+.trip-planning-card.completed strong {
+  text-decoration: line-through;
+}
+
+.trip-planning-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .4rem;
+}
+
+@media (max-width: 680px) {
+  .trip-planning-section {
+    padding: .65rem;
+  }
+
+  .trip-planning-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .trip-planning-card {
+    display: grid;
+  }
+
+  .trip-planning-card-actions {
+    justify-content: stretch;
+  }
+
+  .trip-planning-card-actions .button,
+  .trip-planning-card > .button {
+    width: 100%;
+  }
+}

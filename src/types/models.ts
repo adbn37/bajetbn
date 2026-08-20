@@ -740,6 +740,79 @@ export interface SpaceMember {
   updatedAt?: Timestamp;
 }
 
+export type TripItineraryCategory =
+  | 'flight'
+  | 'hotel'
+  | 'transport'
+  | 'activity'
+  | 'food'
+  | 'other';
+
+export type TripTaskStatus = 'open' | 'completed';
+
+export type TripBookingType =
+  | 'flight'
+  | 'hotel'
+  | 'transport'
+  | 'activity'
+  | 'event'
+  | 'other';
+
+export interface TripItineraryItem {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  category: TripItineraryCategory;
+  date: string;
+  time?: string | null;
+  location?: string | null;
+  reference?: string | null;
+  note?: string | null;
+  createdBy: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface TripTask {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  assigneeUid?: string | null;
+  assigneeName?: string | null;
+  assigneeEmail?: string | null;
+  dueDate?: string | null;
+  status: TripTaskStatus;
+  note?: string | null;
+  createdBy: string;
+  completedBy?: string | null;
+  completedAt?: Timestamp | null;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface TripBooking {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  bookingType: TripBookingType;
+  provider?: string | null;
+  reference?: string | null;
+  date: string;
+  time?: string | null;
+  location?: string | null;
+  amountMinor?: number | null;
+  currency?: string | null;
+  note?: string | null;
+  createdBy: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
 export interface SpaceInvitation {
   id: string;
   displayId: string;

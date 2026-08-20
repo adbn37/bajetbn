@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSpaceFund } from '../../repositories/sharedExpenseRepository';
+import { TripPlanningPanel } from './TripPlanningPanel';
 import type {
   Budget,
   SharedExpense,
@@ -17,12 +18,14 @@ export function TripCommandCentre({
   budgets,
   members,
   sharedExpenses,
+  currentMember,
   onOpenTab,
 }: {
   space: Space;
   budgets: Budget[];
   members: SpaceMember[];
   sharedExpenses: SharedExpense[];
+  currentMember?: SpaceMember | null;
   onOpenTab: (tab: TripTab) => void;
 }) {
   const [fund, setFund] = useState<SpaceFund | null>(null);
@@ -241,6 +244,11 @@ export function TripCommandCentre({
           </div>
         )}
       </div>
+      <TripPlanningPanel
+        space={space}
+        members={members}
+        currentMember={currentMember}
+      />
     </section>
   );
 }
