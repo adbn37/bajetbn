@@ -103,4 +103,54 @@ requireValue(
   'Calendar empty state must explain the next useful action.',
 );
 
-console.log(`Spaces foundation Slice 1 checks passed (${checks} structural checks).`);
+requireValue(
+  experience.includes('roleLabel:'),
+  'Space home experience must expose the current role label.',
+);
+
+requireValue(
+  experience.includes('accessSummary:'),
+  'Space home experience must explain the current role access.',
+);
+
+requireValue(
+  experience.includes('heading:'),
+  'Space home experience must provide role-aware home headings.',
+);
+
+requireValue(
+  experience.includes("role === 'owner'"),
+  'Owners need a distinct Space-home experience.',
+);
+
+requireValue(
+  experience.includes("role === 'admin'"),
+  'Managers need a distinct Space-home experience.',
+);
+
+requireValue(
+  actionHub.includes('space-home-access'),
+  'Space home must show a compact role/access summary.',
+);
+
+requireValue(
+  actionHub.includes('data-secondary-label="More Space tools"'),
+  'Secondary Space capabilities must be visually grouped.',
+);
+
+requireValue(
+  styles.includes('.space-home-access'),
+  'Role-aware Space access needs dedicated compact styling.',
+);
+
+requireValue(
+  styles.includes('.space-action-buttons::before'),
+  'Secondary Space tools need a visible group heading.',
+);
+
+requireValue(
+  styles.includes('content: attr(data-secondary-label);'),
+  'Space capability grouping must use the Action Hub group label.',
+);
+
+console.log(`Spaces foundation Slice 1 + Slice 2 checks passed (${checks} structural checks).`);

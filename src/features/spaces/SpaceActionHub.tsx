@@ -88,14 +88,21 @@ export function SpaceActionHub({
       <section className="panel space-action-hub">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Quick Space actions</span>
-            <h2>Stay inside {space.name}</h2>
+            <span className="eyebrow">Your Space home</span>
+            <h2>{experience.heading}</h2>
             <p>{experience.context}</p>
           </div>
         </div>
+        <div className="space-home-access" aria-label="Your access in this Space">
+          <div>
+            <span>Your access</span>
+            <strong>{experience.roleLabel}</strong>
+          </div>
+          <small>{experience.accessSummary}</small>
+        </div>
         {feedback && <div className="notice success compact-notice">{feedback}</div>}
         {error && <div className="notice warning compact-notice">{error}</div>}
-        <div className="space-action-buttons">
+        <div className="space-action-buttons" data-secondary-label="More Space tools" aria-label="Recommended action and more Space tools">
           <button type="button" className={`space-action-button expense ${isPrimary('expense') ? 'primary-action' : ''}`} onClick={() => setMoneyType('expense')}>
             <span>−</span><div><strong>{isPrimary('expense') ? experience.label : '+ Expense'}</strong><small>{isPrimary('expense') ? experience.detail : 'Add money out to this Space'}</small></div>
           </button>

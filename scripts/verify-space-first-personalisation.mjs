@@ -15,7 +15,7 @@ for (const [path, tokens] of Object.entries({
     "smePosRole === 'manager'",
   ],
   'src/features/spaces/SpaceActionHub.tsx': [
-    'Quick Space actions',
+    'Your Space home',
     'lockedSpaceId={space.id}',
     "setTool('expenses')",
     "setTool('balances')",

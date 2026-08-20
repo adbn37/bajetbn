@@ -3758,3 +3758,98 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     display: block;
   }
 }
+/* Spaces foundation Slice 2 - role-aware home */
+.space-home-access {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: .35rem 1rem;
+  margin: -.1rem 0 .85rem;
+  padding: .7rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.space-home-access > div {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+}
+
+.space-home-access span {
+  color: var(--muted);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.space-home-access strong {
+  font-size: .8rem;
+  white-space: nowrap;
+}
+
+.space-home-access small {
+  color: var(--muted);
+  font-size: .7rem;
+  line-height: 1.4;
+}
+
+.space-action-buttons::before {
+  content: attr(data-secondary-label);
+  order: 0;
+  grid-column: 1 / -1;
+  padding-top: .25rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.space-action-button.primary-action {
+  position: relative;
+}
+
+.space-action-button.primary-action::after {
+  content: 'Recommended';
+  position: absolute;
+  top: .55rem;
+  right: .65rem;
+  padding: .18rem .4rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 44%, var(--border));
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent-2);
+  font-size: .56rem;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 680px) {
+  .space-home-access {
+    grid-template-columns: 1fr;
+    gap: .25rem;
+    margin-bottom: .65rem;
+    padding: .6rem .65rem;
+  }
+
+  .space-home-access small {
+    font-size: .66rem;
+  }
+
+  .space-action-buttons::before {
+    padding-top: .1rem;
+    font-size: .58rem;
+  }
+
+  .space-action-button.primary-action::after {
+    top: .4rem;
+    right: .45rem;
+    font-size: .52rem;
+  }
+}
