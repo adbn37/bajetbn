@@ -36,6 +36,7 @@ import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
+import { HouseholdCommandCentre } from './HouseholdCommandCentre';
 import { SpaceActionHub } from './SpaceActionHub';
 import { TripCommandCentre } from './TripCommandCentre';
 
@@ -359,6 +360,16 @@ export function SpaceDetailsPage() {
         supportsGroupFund={supportsGroupFund}
         fundLabel={fundTabLabel}
         onRefresh={load}
+      />
+    )}
+    {activeTab === 'overview' && space.type === 'household' && (
+      <HouseholdCommandCentre
+        space={space}
+        members={members}
+        commitments={commitments}
+        sharedBills={sharedBills}
+        sharedExpenses={sharedExpenses}
+        onOpenTab={chooseTab}
       />
     )}
     <nav className="space-details-tabs" aria-label="Space sections">

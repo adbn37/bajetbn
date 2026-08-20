@@ -4026,3 +4026,114 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     width: 100%;
   }
 }
+/* Household v2 Slice 1 - command centre */
+.household-command-centre {
+  display: grid;
+  gap: .85rem;
+}
+
+.household-attention-badge {
+  align-self: flex-start;
+  padding: .35rem .55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.household-attention-badge.active {
+  border-style: dashed;
+}
+
+.household-glance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.household-glance-card {
+  display: grid;
+  align-content: start;
+  gap: .3rem;
+  min-width: 0;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.household-glance-card strong {
+  font-size: 1.15rem;
+}
+
+.household-glance-card small {
+  overflow-wrap: anywhere;
+}
+
+.household-glance-card .button {
+  margin-top: .35rem;
+}
+
+.household-needs-attention {
+  display: grid;
+  gap: .6rem;
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.household-needs-attention-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .75rem;
+}
+
+.household-needs-attention-heading h3 {
+  margin: 0;
+}
+
+.household-attention-list {
+  display: grid;
+  gap: .5rem;
+}
+
+.household-attention-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.household-attention-item > div {
+  display: grid;
+  gap: .2rem;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .household-glance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 580px) {
+  .household-glance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .household-needs-attention {
+    padding: .65rem;
+  }
+
+  .household-needs-attention-heading,
+  .household-attention-item {
+    display: grid;
+  }
+
+  .household-attention-item .button {
+    width: 100%;
+  }
+}
