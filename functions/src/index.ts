@@ -1241,6 +1241,351 @@ function createNotification(transaction: Transaction, input: { uid: string; spac
 }
 
 
+function optionalCollaborationDate(value: unknown, label: string): string | null {
+  if (value == null || value === '') return null;
+  const next = String(value).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+    throw new HttpsError('invalid-argument', label + ' must use YYYY-MM-DD.');
+  }
+  return next;
+}
+
+function collaborationActorName(member: DocumentData, uid: string) {
+  return String(member.displayName || member.email || uid || 'Member').trim().slice(0, 120);
+}
+
+export const createSpaceAnnouncement = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const title = stringValue(request.data?.title, 'Announcement title', 120);
+  const body = stringValue(request.data?.body, 'Announcement message', 2000);
+  const expiresOn = optionalCollaborationDate(
+    request.data?.expiresOn,
+    'Announcement expiry',
+  );
+  const idempotencyKey = stringValue(
+    request.data?.idempotencyKey,
+    'Idempotency key',
+    64,
+  );
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const ref = db
+    .collection('spaceAnnouncements')
+    .doc(commandId(uid, idempotencyKey));
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return { announcementId: ref.id };
+
+    const now = FieldValue.serverTimestamp();
+    transaction.create(ref, {
+      displayId: displayId('ANN'),
+      spaceId,
+      title,
+      body,
+      createdBy: uid,
+      createdByName: actorName,
+      pinnedAt: null,
+      expiresOn,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'announcement_created',
+      targetType: 'announcement',
+      targetId: ref.id,
+      summary: 'Posted announcement: ' + title,
+      now,
+    });
+
+    return { announcementId: ref.id };
+  });
+});
+
+export const setSpaceAnnouncementState = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const announcementId = stringValue(
+    request.data?.announcementId,
+    'Announcement ID',
+    160,
+  );
+  const action = String(request.data?.action || '');
+
+  if (!['pin', 'unpin', 'archive'].includes(action)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose pin, unpin, or archive.',
+    );
+  }
+
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const ref = db.collection('spaceAnnouncements').doc(announcementId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) {
+      throw new HttpsError('not-found', 'Announcement not found.');
+    }
+
+    const current = snapshot.data() || {};
+    if (String(current.spaceId || '') !== spaceId) {
+      throw new HttpsError(
+        'permission-denied',
+        'Announcement does not belong to this Space.',
+      );
+    }
+    if (current.archivedAt && action !== 'archive') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Archived announcements cannot be changed.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const updates: DocumentData = { updatedAt: now };
+
+    if (action === 'pin') updates.pinnedAt = now;
+    if (action === 'unpin') updates.pinnedAt = null;
+    if (action === 'archive') {
+      updates.archivedAt = now;
+      updates.pinnedAt = null;
+    }
+
+    transaction.update(ref, updates);
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'announcement_' + action,
+      targetType: 'announcement',
+      targetId: ref.id,
+      summary:
+        action === 'archive'
+          ? 'Archived announcement: ' + String(current.title || 'Announcement')
+          : action === 'pin'
+            ? 'Pinned announcement: ' + String(current.title || 'Announcement')
+            : 'Unpinned announcement: ' +
+              String(current.title || 'Announcement'),
+      now,
+    });
+
+    return { announcementId: ref.id, action };
+  });
+});
+
+export const createSpacePoll = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const question = stringValue(request.data?.question, 'Poll question', 240);
+  const idempotencyKey = stringValue(
+    request.data?.idempotencyKey,
+    'Idempotency key',
+    64,
+  );
+  const rawOptions = Array.isArray(request.data?.options)
+    ? request.data.options
+    : [];
+  const labels = rawOptions
+    .map((value: unknown) => String(value || '').trim())
+    .filter(Boolean);
+
+  if (labels.length < 2 || labels.length > 8) {
+    throw new HttpsError(
+      'invalid-argument',
+      'A poll needs between 2 and 8 options.',
+    );
+  }
+  if (labels.some((label: string) => label.length > 120)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Poll options must be 120 characters or fewer.',
+    );
+  }
+  if (
+    new Set(labels.map((label: string) => label.toLowerCase())).size !==
+    labels.length
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Poll options must be different.',
+    );
+  }
+
+  const options = labels.map((label: string, index: number) => ({
+    id: 'option_' + String(index + 1),
+    label,
+  }));
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const ref = db.collection('spacePolls').doc(commandId(uid, idempotencyKey));
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return { pollId: ref.id };
+
+    const now = FieldValue.serverTimestamp();
+    transaction.create(ref, {
+      displayId: displayId('POL'),
+      spaceId,
+      question,
+      options,
+      status: 'open',
+      createdBy: uid,
+      createdByName: actorName,
+      closedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'poll_created',
+      targetType: 'poll',
+      targetId: ref.id,
+      summary: 'Opened poll: ' + question,
+      now,
+    });
+
+    return { pollId: ref.id };
+  });
+});
+
+export const voteSpacePoll = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const pollId = stringValue(request.data?.pollId, 'Poll ID', 160);
+  const optionId = stringValue(request.data?.optionId, 'Poll option', 80);
+
+  await requireActiveSpaceMember(spaceId, uid);
+
+  const pollRef = db.collection('spacePolls').doc(pollId);
+  const voteRef = db.collection('spacePollVotes').doc(commandId(uid, pollId));
+
+  return db.runTransaction(async (transaction) => {
+    const [pollSnapshot, voteSnapshot] = await Promise.all([
+      transaction.get(pollRef),
+      transaction.get(voteRef),
+    ]);
+
+    if (!pollSnapshot.exists) {
+      throw new HttpsError('not-found', 'Poll not found.');
+    }
+
+    const poll = pollSnapshot.data() || {};
+    if (String(poll.spaceId || '') !== spaceId) {
+      throw new HttpsError(
+        'permission-denied',
+        'Poll does not belong to this Space.',
+      );
+    }
+    if (poll.status !== 'open') {
+      throw new HttpsError(
+        'failed-precondition',
+        'This poll is closed.',
+      );
+    }
+
+    const options = Array.isArray(poll.options) ? poll.options : [];
+    if (
+      !options.some(
+        (option: DocumentData) => String(option.id || '') === optionId,
+      )
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a valid poll option.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    if (voteSnapshot.exists) {
+      transaction.update(voteRef, {
+        optionId,
+        updatedAt: now,
+      });
+    } else {
+      transaction.create(voteRef, {
+        spaceId,
+        pollId,
+        uid,
+        optionId,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return { voteId: voteRef.id, optionId };
+  });
+});
+
+export const setSpacePollStatus = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const pollId = stringValue(request.data?.pollId, 'Poll ID', 160);
+  const status = String(request.data?.status || '');
+
+  if (!['open', 'closed'].includes(status)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Poll status must be open or closed.',
+    );
+  }
+
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const pollRef = db.collection('spacePolls').doc(pollId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(pollRef);
+    if (!snapshot.exists) {
+      throw new HttpsError('not-found', 'Poll not found.');
+    }
+
+    const poll = snapshot.data() || {};
+    if (String(poll.spaceId || '') !== spaceId) {
+      throw new HttpsError(
+        'permission-denied',
+        'Poll does not belong to this Space.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(pollRef, {
+      status,
+      closedAt: status === 'closed' ? now : null,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: status === 'closed' ? 'poll_closed' : 'poll_reopened',
+      targetType: 'poll',
+      targetId: pollRef.id,
+      summary:
+        status === 'closed'
+          ? 'Closed poll: ' + String(poll.question || 'Poll')
+          : 'Reopened poll: ' + String(poll.question || 'Poll'),
+      now,
+    });
+
+    return { pollId: pollRef.id, status };
+  });
+});
+
 async function requireSmeSpaceOwner(spaceId: string, uid: string): Promise<{ space: DocumentData; member: DocumentData }> {
   const [spaceSnapshot, member] = await Promise.all([
     db.collection('spaces').doc(spaceId).get(),
@@ -5800,6 +6145,9 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('tripItineraryItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('tripTasks').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('tripBookings').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceAnnouncements').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spacePolls').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spacePollVotes').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItemMovements').where('spaceId', '==', spaceId)),
@@ -8330,6 +8678,9 @@ async function finalizeAccountDeletion(uid: string) {
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'assigneeUid', uid, updates: () => ({ assigneeUid: anonymousId, assigneeName: deletedMemberName, assigneeEmail: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'completedBy', uid, updates: () => ({ completedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceAnnouncements', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spacePolls', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spacePollVotes', field: 'uid', uid, updates: () => ({ uid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'actorUid', uid, updates: () => ({ actorUid: anonymousId, actorName: deletedMemberName, summary: 'Activity retained after a member deleted their account.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'targetId', uid, updates: () => ({ targetId: anonymousId, summary: 'Member-related activity retained after account deletion.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, paidByName: deletedMemberName, paidByEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });

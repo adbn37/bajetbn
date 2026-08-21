@@ -1,3 +1,4 @@
+import { SpaceUpdatesPanel } from './SpaceUpdatesPanel';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
@@ -122,7 +123,7 @@ function memberDetailLabel(member: SpaceMember) {
     : 'Profile details unavailable';
 }
 
-export type CollaborationTab = 'members' | 'bills' | 'activity' | 'settings';
+export type CollaborationTab = 'updates' | 'members' | 'bills' | 'activity' | 'settings';
 
 type CollaborationConfirmation =
   | { kind: 'remove-member'; member: SpaceMember }
@@ -305,12 +306,17 @@ export function CollaborationPage({
     </section>}
 
     {!embedded && <div className="segmented-control planning-filter collaboration-tabs">
+      <button className={tab === 'updates' ? 'active' : ''} onClick={() => setTab('updates')}>Updates</button>
       <button className={tab === 'members' ? 'active' : ''} onClick={() => setTab('members')}>Members</button>
       <button className={tab === 'bills' ? 'active' : ''} onClick={() => setTab('bills')}>Shared bills</button>
       <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}>Activity</button>
     </div>}
 
-    {loading ? <div className="loading-panel">Loading Space information…</div> : displayTab === 'settings' ? null : displayTab === 'members' ? <>
+    {!loading && displayTab === 'updates' && <SpaceUpdatesPanel
+      spaceId={spaceId}
+      currentMember={currentMember || null}
+    />}
+    {loading ? <div className="loading-panel">Loading Space information…</div> : (displayTab === 'settings' || displayTab === 'updates') ? null : displayTab === 'members' ? <>
       <section className="panel collaboration-panel">
         <div className="panel-heading"><div><span className="eyebrow">Access</span><h2>Members</h2></div>{embedded && canManage && <button className="button primary" onClick={() => setInviteOpen(true)}>Invite member</button>}</div>
         <div className="member-list">{members.map((member) => <article className={`member-row status-${member.status || 'active'}`} key={member.id}>

@@ -496,6 +496,21 @@ service cloud.firestore {
 
       allow update, delete: if false;
     }
+    match /spaceAnnouncements/{announcementId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /spacePolls/{pollId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /spacePollVotes/{voteId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
     match /spaceActivities/{activityId} {
       allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
       allow create, update, delete: if false;

@@ -108,7 +108,7 @@ const spaceTypeLabel: Record<SpaceType, string> = {
 
 function tabFromSearch(value: string | null, shared: boolean): SpaceDetailsTab {
   if (value === 'settings') return 'settings';
-  if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity' || value === 'chat')) return value;
+  if (shared && (value === 'updates' || value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity' || value === 'chat')) return value;
   return 'overview';
 }
 
@@ -293,7 +293,8 @@ export function SpaceDetailsPage() {
   const tabs: Array<{ id: SpaceDetailsTab; label: string }> = shared
     ? [
       { id: 'overview', label: 'Overview' },
-      { id: 'members', label: 'Members' },
+      { id: 'updates', label: 'Updates' },
+    { id: 'members', label: 'Members' },
       { id: 'chat', label: 'Chat' },
       ...sharedFinanceTabs,
       { id: 'activity', label: 'Activity' },

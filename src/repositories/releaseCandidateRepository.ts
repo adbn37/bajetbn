@@ -111,6 +111,11 @@ export async function buildUserDataExport(uid: string) {
 
   const { accounts, accountRecords } = await ownedAccountsAndRecords(uid);
 
+  const spaceAnnouncements = await rowsForValues('spaceAnnouncements', 'spaceId', activeSpaceIds);
+  const spacePolls = await rowsForValues('spacePolls', 'spaceId', activeSpaceIds);
+  const allSpacePollVotes = await rowsForValues('spacePollVotes', 'spaceId', activeSpaceIds);
+  const spacePollVotes = allSpacePollVotes.filter((item) => item.uid === uid);
+
   const [
     accountAccess,
     categories,
@@ -163,7 +168,7 @@ export async function buildUserDataExport(uid: string) {
       exportedAt: new Date().toISOString(),
       environment: import.meta.env.VITE_APP_ENV || 'local',
       projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-      formatVersion: 6,
+      formatVersion: 7,
     },
     profile: profileSnapshot.exists() ? { id: profileSnapshot.id, ...profileSnapshot.data() } : null,
     spaces,
@@ -187,6 +192,9 @@ export async function buildUserDataExport(uid: string) {
     tripMoneyContributions: allTripMoneyContributions.filter((item) => item.memberUid === uid),
     collectionItems,
     collectionItemMovements,
+    spaceAnnouncements,
+    spacePolls,
+    spacePollVotes,
     reminders: reminderHistory,
     notifications,
     invitations,

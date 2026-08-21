@@ -907,6 +907,52 @@ export interface SharedBillPayment {
   updatedAt?: Timestamp;
 }
 
+export interface SpaceAnnouncement {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  body: string;
+  createdBy: string;
+  createdByName?: string;
+  pinnedAt?: Timestamp | null;
+  expiresOn?: string | null;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SpacePollOption {
+  id: string;
+  label: string;
+}
+
+export type SpacePollStatus = 'open' | 'closed';
+
+export interface SpacePoll {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  question: string;
+  options: SpacePollOption[];
+  status: SpacePollStatus;
+  createdBy: string;
+  createdByName?: string;
+  closedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SpacePollVote {
+  id: string;
+  spaceId: string;
+  pollId: string;
+  uid: string;
+  optionId: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface SpaceActivity {
   id: string;
   displayId: string;
