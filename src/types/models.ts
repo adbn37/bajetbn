@@ -628,6 +628,25 @@ export interface AccountDeletionRequest {
   lastError?: string | null;
 }
 
+export interface SpaceAutomationPreference {
+  enabled: boolean;
+  contributionReminder: boolean;
+  contributionDueDate?: string | null;
+  budgetThresholdAlert: boolean;
+  budgetThresholdPercent: number;
+  lowFundAlert: boolean;
+  lowFundThresholdMinor: number;
+  overdueBillAlert: boolean;
+  overdueTaskAlert: boolean;
+  lowStockAlert: boolean;
+  lowStockThreshold: number;
+  sellerPayoutAlert: boolean;
+  sellerPayoutThresholdMinor: number;
+}
+
+export type SpaceAutomationPreferenceMap =
+  Record<string, SpaceAutomationPreference>;
+
 export interface UserProfile {
   uid: string;
   fullName: string;
@@ -646,6 +665,7 @@ export interface UserProfile {
   whatsappRemindersEnabled?: boolean;
   browserPushEnabled?: boolean;
   reminderDaysBefore?: number;
+  spaceAutomationV1?: SpaceAutomationPreferenceMap;
   onboardingCompleted: boolean;
   personalSpaceId?: string;
   lastDataExportAt?: Timestamp | null;

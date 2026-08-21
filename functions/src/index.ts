@@ -5042,6 +5042,596 @@ async function sendBrowserPush(uid: string, reminders: PreparedBackgroundReminde
   return sent;
 }
 
+interface SpaceAutomationPreferenceData {
+  enabled: boolean;
+  contributionReminder: boolean;
+  contributionDueDate: string | null;
+  budgetThresholdAlert: boolean;
+  budgetThresholdPercent: number;
+  lowFundAlert: boolean;
+  lowFundThresholdMinor: number;
+  overdueBillAlert: boolean;
+  overdueTaskAlert: boolean;
+  lowStockAlert: boolean;
+  lowStockThreshold: number;
+  sellerPayoutAlert: boolean;
+  sellerPayoutThresholdMinor: number;
+}
+
+interface SpaceAutomationCandidate {
+  spaceId: string;
+  rule: string;
+  sourceId: string;
+  cycle: string;
+  title: string;
+  message: string;
+  targetPath: string;
+  dueDate?: string | null;
+}
+
+function spaceAutomationInteger(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  fallback: number,
+): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.round(numeric)));
+}
+
+function normalizeSpaceAutomationPreference(
+  value: unknown,
+): SpaceAutomationPreferenceData {
+  const source =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+
+  const rawDate =
+    typeof source.contributionDueDate === 'string'
+      ? source.contributionDueDate.trim()
+      : '';
+
+  return {
+    enabled: source.enabled === true,
+    contributionReminder: source.contributionReminder === true,
+    contributionDueDate:
+      /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+        ? rawDate
+        : null,
+    budgetThresholdAlert: source.budgetThresholdAlert !== false,
+    budgetThresholdPercent: spaceAutomationInteger(
+      source.budgetThresholdPercent,
+      50,
+      100,
+      80,
+    ),
+    lowFundAlert: source.lowFundAlert === true,
+    lowFundThresholdMinor: spaceAutomationInteger(
+      source.lowFundThresholdMinor,
+      0,
+      99_999_999_999,
+      0,
+    ),
+    overdueBillAlert: source.overdueBillAlert !== false,
+    overdueTaskAlert: source.overdueTaskAlert !== false,
+    lowStockAlert: source.lowStockAlert !== false,
+    lowStockThreshold: spaceAutomationInteger(
+      source.lowStockThreshold,
+      0,
+      1_000_000,
+      0,
+    ),
+    sellerPayoutAlert: source.sellerPayoutAlert === true,
+    sellerPayoutThresholdMinor: spaceAutomationInteger(
+      source.sellerPayoutThresholdMinor,
+      0,
+      99_999_999_999,
+      0,
+    ),
+  };
+}
+
+function enabledSpaceAutomationPreferences(
+  profile: DocumentData,
+): Array<[string, SpaceAutomationPreferenceData]> {
+  const raw = profile.spaceAutomationV1;
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return [];
+  }
+
+  const result: Array<[string, SpaceAutomationPreferenceData]> = [];
+
+  for (const [spaceId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!spaceId || spaceId.length > 80) continue;
+
+    const preference = normalizeSpaceAutomationPreference(value);
+    if (!preference.enabled) continue;
+
+    result.push([spaceId, preference]);
+    if (result.length >= 25) break;
+  }
+
+  return result;
+}
+
+function minorAmountLabel(amountMinor: number, currency: string): string {
+  return (amountMinor / 100).toFixed(2) + ' ' + (currency || 'BND');
+}
+
+async function createSpaceAutomationReminder(input: {
+  uid: string;
+  candidate: SpaceAutomationCandidate;
+}): Promise<PreparedBackgroundReminder | null> {
+  const reminderKey = [
+    input.uid,
+    'space_automation',
+    input.candidate.spaceId,
+    input.candidate.rule,
+    input.candidate.sourceId,
+    input.candidate.cycle,
+  ].join('|');
+
+  const documentId = backgroundReminderId(reminderKey);
+  const notificationRef = db.collection('userNotifications').doc(documentId);
+  let created = false;
+
+  await db.runTransaction(async (transaction) => {
+    const notification = await transaction.get(notificationRef);
+    if (notification.exists) return;
+
+    const now = FieldValue.serverTimestamp();
+
+    transaction.create(notificationRef, {
+      uid: input.uid,
+      spaceId: input.candidate.spaceId,
+      type: 'space_reminder',
+      title: input.candidate.title,
+      message: input.candidate.message,
+      targetPath: input.candidate.targetPath,
+      actionLabel: 'Open',
+      source: 'background_reminder',
+      itemType: null,
+      itemId: input.candidate.sourceId,
+      dueDate: input.candidate.dueDate || null,
+      reminderKey,
+      pushAttemptedAt: null,
+      pushSentAt: null,
+      pushFailureCount: 0,
+      readAt: null,
+      createdAt: now,
+    });
+
+    created = true;
+  });
+
+  return created
+    ? {
+        notificationId: documentId,
+        reminderKey,
+        title: input.candidate.title,
+        message: input.candidate.message,
+        targetPath: input.candidate.targetPath,
+      }
+    : null;
+}
+
+async function processSpaceAutomationRemindersForUser(
+  uid: string,
+  profile: DocumentData,
+  today: string,
+  reminderDaysBefore: number,
+): Promise<BackgroundReminderResult> {
+  const result: BackgroundReminderResult = {
+    checked: 0,
+    created: 0,
+    pushSent: 0,
+    duplicates: 0,
+    today,
+  };
+
+  const preferences = enabledSpaceAutomationPreferences(profile);
+  if (!preferences.length) return result;
+
+  const needsBills = preferences.some(([, item]) => item.overdueBillAlert);
+  const needsTasks = preferences.some(([, item]) => item.overdueTaskAlert);
+
+  const [billSnapshot, taskSnapshot] = await Promise.all([
+    needsBills
+      ? db.collection('sharedBillAssignments').where('memberUid', '==', uid).get()
+      : Promise.resolve(null),
+    needsTasks
+      ? db.collection('tripTasks').where('assigneeUid', '==', uid).get()
+      : Promise.resolve(null),
+  ]);
+
+  const assignedBills = billSnapshot?.docs || [];
+  const assignedTasks = taskSnapshot?.docs || [];
+  const candidates: SpaceAutomationCandidate[] = [];
+
+  const addCandidate = (candidate: SpaceAutomationCandidate) => {
+    result.checked += 1;
+    if (candidates.length < 100) candidates.push(candidate);
+  };
+
+  for (const [spaceId, preference] of preferences) {
+    const [spaceSnapshot, memberSnapshot] = await Promise.all([
+      db.collection('spaces').doc(spaceId).get(),
+      db.collection('spaceMembers').doc(spaceId + '_' + uid).get(),
+    ]);
+
+    if (
+      !spaceSnapshot.exists
+      || spaceSnapshot.data()?.archivedAt
+      || !memberSnapshot.exists
+      || (
+        memberSnapshot.data()?.status
+        && memberSnapshot.data()?.status !== 'active'
+      )
+    ) {
+      continue;
+    }
+
+    const space = spaceSnapshot.data() || {};
+    const role = String(memberSnapshot.data()?.role || '');
+    const canManage = role === 'owner' || role === 'admin';
+    const spaceType = String(space.type || '');
+    const spaceName = String(space.name || 'Space');
+    const currency = String(space.currency || 'BND');
+
+    if (
+      preference.contributionReminder
+      && preference.contributionDueDate
+    ) {
+      const days = localDateDifference(
+        preference.contributionDueDate,
+        today,
+      );
+
+      if (
+        Number.isFinite(days)
+        && days <= reminderDaysBefore
+        && !(days >= 0 && profile.dueSoonReminders === false)
+        && !(days < 0 && profile.lateReminders === false)
+      ) {
+        addCandidate({
+          spaceId,
+          rule: 'contribution_due',
+          sourceId: spaceId,
+          cycle: preference.contributionDueDate,
+          title:
+            days < 0
+              ? 'Contribution reminder is overdue'
+              : days === 0
+                ? 'Contribution reminder is today'
+                : 'Contribution reminder is coming up',
+          message:
+            spaceName
+            + ' has your contribution reminder set for '
+            + preference.contributionDueDate
+            + '.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab='
+            + (spaceType === 'trip' ? 'trip_money' : 'group_fund'),
+          dueDate: preference.contributionDueDate,
+        });
+      }
+    }
+
+    if (preference.overdueBillAlert && profile.lateReminders !== false) {
+      for (const row of assignedBills) {
+        const item = row.data();
+
+        if (
+          String(item.spaceId || '') !== spaceId
+          || typeof item.dueDate !== 'string'
+          || item.dueDate >= today
+        ) {
+          continue;
+        }
+
+        const assignedMinor = Number(item.assignedMinor || 0);
+        const settledMinor = Number(item.settledMinor || 0);
+        const storedOutstanding = Number(item.outstandingMinor);
+        const outstandingMinor = Number.isFinite(storedOutstanding)
+          ? storedOutstanding
+          : assignedMinor - settledMinor;
+
+        if (
+          outstandingMinor <= 0
+          || item.status === 'paid'
+          || item.status === 'confirmed'
+        ) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'overdue_bill',
+          sourceId: row.id,
+          cycle: item.dueDate,
+          title: 'Shared bill overdue',
+          message:
+            String(item.commitmentName || 'Shared bill')
+            + ' still has '
+            + minorAmountLabel(outstandingMinor, String(item.currency || currency))
+            + ' assigned to you.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab=bills&assignmentId='
+            + encodeURIComponent(row.id),
+          dueDate: item.dueDate,
+        });
+      }
+    }
+
+    if (preference.overdueTaskAlert && profile.lateReminders !== false) {
+      for (const row of assignedTasks) {
+        const item = row.data();
+
+        if (
+          String(item.spaceId || '') !== spaceId
+          || item.status !== 'open'
+          || item.archivedAt
+          || typeof item.dueDate !== 'string'
+          || item.dueDate >= today
+        ) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'overdue_task',
+          sourceId: row.id,
+          cycle: item.dueDate,
+          title: 'Assigned task overdue',
+          message:
+            String(item.title || 'Task')
+            + ' was due on '
+            + item.dueDate
+            + '.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab=overview&taskId='
+            + encodeURIComponent(row.id)
+            + '#trip-planning',
+          dueDate: item.dueDate,
+        });
+      }
+    }
+
+    if (canManage && preference.budgetThresholdAlert) {
+      const budgets = await db
+        .collection('budgets')
+        .where('spaceId', '==', spaceId)
+        .get();
+
+      for (const row of budgets.docs) {
+        const item = row.data();
+        const limitMinor = Number(item.limitMinor || 0);
+        const spentMinor = Number(item.spentMinor || 0);
+
+        if (
+          item.archivedAt
+          || limitMinor <= 0
+          || typeof item.startDate !== 'string'
+          || typeof item.endDate !== 'string'
+          || today < item.startDate
+          || today > item.endDate
+        ) {
+          continue;
+        }
+
+        const percentage = Math.floor((spentMinor * 100) / limitMinor);
+
+        if (percentage < preference.budgetThresholdPercent) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'budget_threshold',
+          sourceId: row.id,
+          cycle:
+            item.startDate
+            + ':'
+            + item.endDate
+            + ':'
+            + preference.budgetThresholdPercent,
+          title: 'Budget needs attention',
+          message:
+            String(item.name || 'Budget')
+            + ' has used '
+            + percentage
+            + '% of '
+            + minorAmountLabel(limitMinor, String(item.currency || currency))
+            + '.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab=overview&section=budgets&budgetId='
+            + encodeURIComponent(row.id),
+        });
+      }
+    }
+
+    if (
+      canManage
+      && preference.lowFundAlert
+      && preference.lowFundThresholdMinor > 0
+    ) {
+      const fundSnapshot = await db.collection('spaceFunds').doc(spaceId).get();
+
+      if (fundSnapshot.exists) {
+        const fund = fundSnapshot.data() || {};
+        const availableMinor = Number(fund.availableMinor || 0);
+
+        if (availableMinor <= preference.lowFundThresholdMinor) {
+          const kind = String(fund.kind || '');
+          const label = String(
+            fund.label
+            || (kind === 'trip'
+              ? 'Trip Fund'
+              : kind === 'household'
+                ? 'Household Fund'
+                : 'Group Fund'),
+          );
+
+          addCandidate({
+            spaceId,
+            rule: 'low_fund',
+            sourceId: fundSnapshot.id,
+            cycle: String(preference.lowFundThresholdMinor),
+            title: label + ' is running low',
+            message:
+              label
+              + ' has '
+              + minorAmountLabel(
+                availableMinor,
+                String(fund.currency || currency),
+              )
+              + ' available.',
+            targetPath:
+              '/spaces/'
+              + spaceId
+              + '?tab='
+              + (kind === 'trip' || spaceType === 'trip'
+                ? 'trip_money'
+                : 'group_fund'),
+          });
+        }
+      }
+    }
+
+    if (
+      canManage
+      && spaceType === 'sme'
+      && preference.lowStockAlert
+    ) {
+      const products = await db
+        .collection('smePosProducts')
+        .where('spaceId', '==', spaceId)
+        .get();
+
+      for (const row of products.docs) {
+        const item = row.data();
+
+        if (item.archivedAt || item.trackStock !== true) continue;
+
+        const quantity = Number(item.quantityOnHand || 0);
+        const itemThreshold = Number(item.lowStockLevel || 0);
+        const threshold = Math.max(
+          preference.lowStockThreshold,
+          Number.isFinite(itemThreshold) ? itemThreshold : 0,
+        );
+
+        if (quantity > threshold) continue;
+
+        addCandidate({
+          spaceId,
+          rule: 'low_stock',
+          sourceId: row.id,
+          cycle: threshold + ':' + quantity,
+          title: 'Low stock',
+          message:
+            String(item.name || 'Product')
+            + ' has '
+            + quantity
+            + ' left in stock.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '/pos?tab=inventory&productId='
+            + encodeURIComponent(row.id),
+        });
+      }
+    }
+
+    if (
+      canManage
+      && spaceType === 'sme'
+      && preference.sellerPayoutAlert
+      && preference.sellerPayoutThresholdMinor > 0
+    ) {
+      const sellers = await db
+        .collection('smePosSellers')
+        .where('spaceId', '==', spaceId)
+        .get();
+
+      for (const row of sellers.docs) {
+        const item = row.data();
+        const balanceMinor = Number(item.balanceMinor || 0);
+
+        if (
+          item.archivedAt
+          || balanceMinor < preference.sellerPayoutThresholdMinor
+        ) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'seller_payout_due',
+          sourceId: row.id,
+          cycle:
+            String(preference.sellerPayoutThresholdMinor)
+            + ':'
+            + String(Number(item.paidOutMinor || 0)),
+          title: 'Seller payout due',
+          message:
+            String(item.name || 'Seller')
+            + ' has '
+            + minorAmountLabel(
+              balanceMinor,
+              String(item.currency || currency),
+            )
+            + ' available for payout.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '/pos?tab=payouts&sellerId='
+            + encodeURIComponent(row.id),
+        });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => {
+    const dueA = a.dueDate || '9999-12-31';
+    const dueB = b.dueDate || '9999-12-31';
+    return dueA.localeCompare(dueB) || a.title.localeCompare(b.title);
+  });
+
+  const created: PreparedBackgroundReminder[] = [];
+
+  for (const candidate of candidates.slice(0, 50)) {
+    const reminder = await createSpaceAutomationReminder({
+      uid,
+      candidate,
+    });
+
+    if (reminder) {
+      created.push(reminder);
+      result.created += 1;
+    }
+    else {
+      result.duplicates += 1;
+    }
+  }
+
+  if (profile.browserPushEnabled === true) {
+    result.pushSent = await sendBrowserPush(uid, created);
+  }
+
+  return result;
+}
+
 async function processBackgroundRemindersForUser(
   uid: string,
   profile: DocumentData,
@@ -5113,6 +5703,16 @@ async function processBackgroundRemindersForUser(
     } else result.duplicates += 1;
   }
   if (profile.browserPushEnabled === true) result.pushSent = await sendBrowserPush(uid, created);
+  const automationResult = await processSpaceAutomationRemindersForUser(
+    uid,
+    profile,
+    today,
+    reminderDaysBefore,
+  );
+  result.checked += automationResult.checked;
+  result.created += automationResult.created;
+  result.duplicates += automationResult.duplicates;
+  result.pushSent += automationResult.pushSent;
   return result;
 }
 

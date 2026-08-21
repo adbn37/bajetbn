@@ -5699,3 +5699,107 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     justify-content: center;
   }
 }
+
+/* v1.7.0 Space reminders and automation */
+.space-automation-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.space-automation-heading,
+.space-automation-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.space-automation-heading p,
+.space-automation-footer small,
+.space-automation-toggle small {
+  color: var(--text-muted, #9fb1bd);
+}
+
+.space-automation-master {
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.space-automation-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  cursor: pointer;
+}
+
+.space-automation-toggle > input {
+  margin-top: .2rem;
+  flex: 0 0 auto;
+}
+
+.space-automation-toggle > span {
+  display: grid;
+  gap: .15rem;
+}
+
+.space-automation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.space-automation-grid.disabled {
+  opacity: .68;
+}
+
+.space-automation-card {
+  display: grid;
+  align-content: start;
+  gap: .75rem;
+  padding: .85rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.space-automation-card > label:not(.space-automation-toggle) {
+  display: grid;
+  gap: .35rem;
+}
+
+.space-automation-inline-input {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.space-automation-inline-input input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.space-automation-footer > div:first-child {
+  display: grid;
+  gap: .2rem;
+}
+
+@media (max-width: 720px) {
+  .space-automation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .space-automation-heading,
+  .space-automation-footer {
+    flex-direction: column;
+  }
+
+  .space-automation-footer .button-row {
+    width: 100%;
+  }
+
+  .space-automation-footer .button {
+    flex: 1 1 auto;
+  }
+}

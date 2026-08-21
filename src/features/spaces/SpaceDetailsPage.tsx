@@ -36,6 +36,7 @@ import { updateSpace } from '../../repositories/spaceRepository';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
+import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAutomationPanel';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
@@ -472,6 +473,13 @@ export function SpaceDetailsPage() {
             onSpaceUpdated={load}
           />
         )}
+  {activeTab === 'settings'
+    && currentMember
+    && (currentMember.status || 'active') === 'active'
+    && <SpaceReminderAutomationPanel
+      space={space}
+      currentMember={currentMember}
+    />}
       {activeTab === 'settings' && currentMember?.role === 'owner' && <>
       {space.type === 'custom' && <CustomSpaceModuleSettings space={space} onSaved={load} />}
       <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />
