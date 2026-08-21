@@ -83,7 +83,7 @@ for (const prop of [
 }
 
 need(
-  details.includes("space.type === 'household' || space.type === 'project' || space.type === 'event' || space.type === 'custom'"),
+  details.includes("space.type === 'household'"),
   'Existing Household Fund capability must remain enabled.',
 );
 

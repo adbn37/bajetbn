@@ -32,6 +32,7 @@ import type {
   SmePosRole,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import { updateSpace } from '../../repositories/spaceRepository';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
@@ -39,11 +40,13 @@ import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
 import { SpaceActionHub } from './SpaceActionHub';
+import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
 import { CollectionCommandCentre } from './CollectionCommandCentre';
 import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
 import { TripCommandCentre } from './TripCommandCentre';
 
+import type { CustomSpaceModule } from '../../types/models';
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
 type SpaceOverviewSection = 'money' | 'budgets' | 'goals' | 'bills' | 'reports' | 'calendar';
 type SpaceReportRange = 'week' | 'month' | 'year' | 'custom';
@@ -266,7 +269,17 @@ export function SpaceDetailsPage() {
     </main>;
   }
 
-  const supportsGroupFund = space.type === 'trip' || space.type === 'household' || space.type === 'project' || space.type === 'event' || space.type === 'custom';
+  const customModules =
+    space.type === 'custom'
+      ? normalizeCustomSpaceModules(space.customModules)
+      : DEFAULT_CUSTOM_SPACE_MODULES;
+
+  const supportsGroupFund =
+    space.type === 'trip' ||
+    space.type === 'household' ||
+    space.type === 'project' ||
+    space.type === 'event' ||
+    (space.type === 'custom' && customModules.includes('group_fund'));
   const fundTabId: SpaceDetailsTab = space.type === 'trip' ? 'trip_money' : 'group_fund';
   const fundTabLabel = space.type === 'trip' ? 'Trip money' : space.type === 'household' ? 'Household fund' : space.type === 'event' ? 'Event fund' : space.type === 'project' ? 'Project fund' : 'Group fund';
 
@@ -457,7 +470,10 @@ export function SpaceDetailsPage() {
             onSpaceUpdated={load}
           />
         )}
-      {activeTab === 'settings' && currentMember?.role === 'owner' && <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />}
+      {activeTab === 'settings' && currentMember?.role === 'owner' && <>
+      {space.type === 'custom' && <CustomSpaceModuleSettings space={space} onSaved={load} />}
+      <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />
+    </>}
     </> : <PersonalSpaceSettings space={space} />}
   </main>;
 }
@@ -492,6 +508,10 @@ function SpaceOverview({
   smePosRole: SmePosRole | null;
 }) {
   const shared = space.type !== 'personal';
+  const customModules =
+    space.type === 'custom'
+      ? normalizeCustomSpaceModules(space.customModules)
+      : DEFAULT_CUSTOM_SPACE_MODULES;
   const [section, setSection] = useState<SpaceOverviewSection | null>(null);
   const [reportRange, setReportRange] = useState<SpaceReportRange>('month');
   const today = localIsoDate(new Date());
@@ -532,6 +552,16 @@ function SpaceOverview({
     if (!accountId) return 'No account';
     return accountsUsed.find((item) => item.id === accountId)?.name || 'Account';
   };
+
+  if (space.type === 'custom') {
+    const enabledKeys = new Set<string>(['money', ...customModules]);
+
+    for (let index = quickLinks.length - 1; index >= 0; index -= 1) {
+      if (!enabledKeys.has(quickLinks[index].key)) {
+        quickLinks.splice(index, 1);
+      }
+    }
+  }
 
   const moneyRows = [...transactions].sort((a, b) => b.transactionDate.localeCompare(a.transactionDate));
   const billRows = [...commitments].sort((a, b) =>
@@ -747,6 +777,95 @@ function SpaceOverview({
       </div>
     </Modal>}
   </>;
+}
+
+function CustomSpaceModuleSettings({
+  space,
+  onSaved,
+}: {
+  space: Space;
+  onSaved: () => Promise<void>;
+}) {
+  const [modules, setModules] = useState<CustomSpaceModule[]>(
+    normalizeCustomSpaceModules(space.customModules),
+  );
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setModules(normalizeCustomSpaceModules(space.customModules));
+  }, [space.customModules]);
+
+  const toggleModule = (module: CustomSpaceModule) => {
+    setModules((current) =>
+      current.includes(module)
+        ? current.filter((item) => item !== module)
+        : [...current, module],
+    );
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setMessage('');
+    setError('');
+
+    try {
+      await updateSpace(space.id, {
+        name: space.name,
+        description: space.description,
+        customModules: modules,
+      });
+
+      await onSaved();
+      setMessage('Custom Space modules updated.');
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <section className="panel space-settings-panel custom-space-module-settings">
+    <div className="panel-heading">
+      <div>
+        <span className="eyebrow">Custom Space</span>
+        <h2>Choose your modules</h2>
+      </div>
+    </div>
+
+    <p className="muted">
+      Money activity, Members, Chat, Shared expenses and Settlements stay available.
+    </p>
+
+    {error && <div className="notice error">{error}</div>}
+    {message && <div className="notice success">{message}</div>}
+
+    <div className="custom-space-module-list">
+      {CUSTOM_SPACE_MODULE_OPTIONS.map((item) => <label key={item.value} className="custom-space-module-option">
+        <input
+          type="checkbox"
+          checked={modules.includes(item.value)}
+          onChange={() => toggleModule(item.value)}
+        />
+        <span>
+          <strong>{item.label}</strong>
+          <small>{item.detail}</small>
+        </span>
+      </label>)}
+    </div>
+
+    <div className="button-row">
+      <button
+        type="button"
+        className="button primary"
+        disabled={saving}
+        onClick={() => void save()}
+      >
+        {saving ? 'Saving…' : 'Save modules'}
+      </button>
+    </div>
+  </section>;
 }
 
 function PersonalSpaceSettings({ space }: { space: Space }) {
