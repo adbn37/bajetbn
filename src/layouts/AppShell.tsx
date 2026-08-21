@@ -10,6 +10,7 @@ import { listenForForegroundPush } from '../repositories/notificationRepository'
 import { listSpaces } from '../repositories/spaceRepository';
 import type { Space } from '../types/models';
 import { SidebarCustomizer } from '../components/SidebarCustomizer';
+import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
 import {
   PERSONALISATION_EVENT,
   applyPersonalisation,
@@ -240,6 +241,7 @@ export function AppShell() {
 
   return (
     <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <ThemeStudioV2Runtime />
       <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-top">
           <Brand compact={collapsed} />
