@@ -38,6 +38,7 @@ import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
 import { SpaceActionHub } from './SpaceActionHub';
+import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { TripCommandCentre } from './TripCommandCentre';
 
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund';
@@ -360,6 +361,17 @@ export function SpaceDetailsPage() {
         supportsGroupFund={supportsGroupFund}
         fundLabel={fundTabLabel}
         onRefresh={load}
+      />
+    )}
+    {activeTab === 'overview' && space.type === 'sme' && (
+      <SmeOperationsCommandCentre
+        space={space}
+        role={smePosRole}
+        canViewFinancials={canViewSmeFinancials}
+        accounts={accounts}
+        transactions={transactions}
+        commitments={commitments}
+        memberCount={activeMembers.length}
       />
     )}
     {activeTab === 'overview' && space.type === 'household' && (
