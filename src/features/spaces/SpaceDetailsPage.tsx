@@ -39,6 +39,7 @@ import { SpaceFundPanel } from './SpaceFundPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
 import { SpaceActionHub } from './SpaceActionHub';
 import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
+import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
 import { TripCommandCentre } from './TripCommandCentre';
 
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund';
@@ -372,6 +373,12 @@ export function SpaceDetailsPage() {
         transactions={transactions}
         commitments={commitments}
         memberCount={activeMembers.length}
+      />
+    )}
+    {activeTab === 'overview' && space.type === 'sme' && (
+      <SmeOperationalAttentionPanel
+        space={space}
+        role={smePosRole}
       />
     )}
     {activeTab === 'overview' && space.type === 'household' && (
