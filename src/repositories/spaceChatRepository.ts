@@ -1,22 +1,54 @@
 import {
-  addDoc,
   collection,
   onSnapshot,
   query,
-  serverTimestamp,
   where,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
-import type { SpaceMessage } from '../types/models';
+import type {
+  SpaceChatRecordRef,
+  SpaceMessage,
+} from '../types/models';
+
+export interface SpaceChatAttachmentInput {
+  storagePath: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
 
 export interface SendSpaceMessageInput {
   spaceId: string;
-  senderUid: string;
   body: string;
+  mentionUids?: string[];
+  recordRef?: SpaceChatRecordRef | null;
+  replyToMessageId?: string | null;
+  attachment?: SpaceChatAttachmentInput | null;
 }
 
 function messageMilliseconds(message: SpaceMessage) {
   return Number(message.createdAt?.toMillis?.() || 0);
+}
+
+function idempotencyKey() {
+  return crypto.randomUUID();
+}
+
+function safeFileName(value: string) {
+  const cleaned = value
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 120);
+
+  return cleaned || 'attachment';
 }
 
 export function subscribeSpaceMessages(
@@ -53,6 +85,69 @@ export function subscribeSpaceMessages(
   );
 }
 
+export async function uploadSpaceChatAttachment(input: {
+  spaceId: string;
+  uid: string;
+  file: File;
+}): Promise<SpaceChatAttachmentInput> {
+  if (!input.spaceId.trim() || !input.uid.trim()) {
+    throw new Error('Space and member are required for attachments.');
+  }
+
+  if (
+    !input.file.type.startsWith('image/')
+    && input.file.type !== 'application/pdf'
+  ) {
+    throw new Error('Attach an image or PDF.');
+  }
+
+  if (input.file.size <= 0 || input.file.size >= 10 * 1024 * 1024) {
+    throw new Error('Attachments must be smaller than 10 MB.');
+  }
+
+  const { storage } = requireFirebase();
+  const attachmentId = crypto.randomUUID();
+  const fileName = safeFileName(input.file.name);
+  const storagePath =
+    'spaces/'
+    + input.spaceId
+    + '/chat-attachments/'
+    + input.uid
+    + '/'
+    + attachmentId
+    + '/'
+    + fileName;
+
+  await uploadBytes(
+    ref(storage, storagePath),
+    input.file,
+    { contentType: input.file.type },
+  );
+
+  return {
+    storagePath,
+    fileName,
+    contentType: input.file.type,
+    sizeBytes: input.file.size,
+  };
+}
+
+export async function removeSpaceChatAttachment(storagePath: string) {
+  const { storage } = requireFirebase();
+
+  try {
+    await deleteObject(ref(storage, storagePath));
+  }
+  catch {
+    // Best-effort cleanup only. Failed uploads remain protected by Storage rules.
+  }
+}
+
+export async function getSpaceChatAttachmentUrl(storagePath: string) {
+  const { storage } = requireFirebase();
+  return getDownloadURL(ref(storage, storagePath));
+}
+
 export async function sendSpaceMessage(
   input: SendSpaceMessageInput,
 ) {
@@ -62,27 +157,28 @@ export async function sendSpaceMessage(
     throw new Error('Space is required.');
   }
 
-  if (!input.senderUid.trim()) {
-    throw new Error('Sign in again before sending.');
-  }
-
-  if (!body) {
-    throw new Error('Write a message first.');
+  if (
+    !body
+    && !input.recordRef
+    && !input.attachment
+  ) {
+    throw new Error('Write a message or attach a record or file first.');
   }
 
   if (body.length > 2000) {
     throw new Error('Messages can be up to 2,000 characters.');
   }
 
-  const { db } = requireFirebase();
+  const { functions } = requireFirebase();
+  const call = httpsCallable<
+    SendSpaceMessageInput & { idempotencyKey: string },
+    { messageId: string }
+  >(functions, 'sendSpaceChatMessage');
 
-  await addDoc(
-    collection(db, 'spaceMessages'),
-    {
-      spaceId: input.spaceId,
-      senderUid: input.senderUid,
-      body,
-      createdAt: serverTimestamp(),
-    },
-  );
+  return call({
+    ...input,
+    body,
+    mentionUids: Array.from(new Set(input.mentionUids || [])),
+    idempotencyKey: idempotencyKey(),
+  });
 }

@@ -72,6 +72,17 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    match /spaces/{spaceId}/chat-attachments/{uid}/{attachmentId}/{fileName} {
+      allow read: if isActiveSpaceMember(spaceId);
+      allow create: if isActiveSpaceMember(spaceId)
+        && request.auth.uid == uid
+        && isImageOrPdf()
+        && underTenMb();
+      allow update: if false;
+      allow delete: if isActiveSpaceMember(spaceId)
+        && request.auth.uid == uid;
+    }
+
     match /spaces/{spaceId}/collection-items/{itemId}/{fileName} {
       allow read: if isCollectionSpace(spaceId) && isActiveSpaceMember(spaceId);
       allow create: if canEditCollection(spaceId)

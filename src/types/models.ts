@@ -628,6 +628,25 @@ export interface AccountDeletionRequest {
   lastError?: string | null;
 }
 
+export interface SpaceAutomationPreference {
+  enabled: boolean;
+  contributionReminder: boolean;
+  contributionDueDate?: string | null;
+  budgetThresholdAlert: boolean;
+  budgetThresholdPercent: number;
+  lowFundAlert: boolean;
+  lowFundThresholdMinor: number;
+  overdueBillAlert: boolean;
+  overdueTaskAlert: boolean;
+  lowStockAlert: boolean;
+  lowStockThreshold: number;
+  sellerPayoutAlert: boolean;
+  sellerPayoutThresholdMinor: number;
+}
+
+export type SpaceAutomationPreferenceMap =
+  Record<string, SpaceAutomationPreference>;
+
 export interface UserProfile {
   uid: string;
   fullName: string;
@@ -646,6 +665,7 @@ export interface UserProfile {
   whatsappRemindersEnabled?: boolean;
   browserPushEnabled?: boolean;
   reminderDaysBefore?: number;
+  spaceAutomationV1?: SpaceAutomationPreferenceMap;
   onboardingCompleted: boolean;
   personalSpaceId?: string;
   lastDataExportAt?: Timestamp | null;
@@ -747,6 +767,15 @@ export interface SpaceMember {
   invitedBy?: string | null;
   joinedAt?: Timestamp;
   updatedAt?: Timestamp;
+}
+
+export interface SpacePresence {
+  id: string;
+  spaceId: string;
+  uid: string;
+  activeAt?: Timestamp;
+  expiresAt?: Timestamp;
+  typingUntil?: Timestamp | null;
 }
 
 export type TripItineraryCategory =
@@ -903,6 +932,88 @@ export interface SharedBillPayment {
   reversedAt?: Timestamp | null;
   reversedBy?: string | null;
   reversalTransactionId?: string | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SpaceAnnouncement {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  body: string;
+  createdBy: string;
+  createdByName?: string;
+  pinnedAt?: Timestamp | null;
+  expiresOn?: string | null;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SpacePollOption {
+  id: string;
+  label: string;
+}
+
+export type SpacePollStatus = 'open' | 'closed';
+
+export interface SpacePoll {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  question: string;
+  options: SpacePollOption[];
+  status: SpacePollStatus;
+  createdBy: string;
+  createdByName?: string;
+  closedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SpacePollVote {
+  id: string;
+  spaceId: string;
+  pollId: string;
+  uid: string;
+  optionId: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export type SpaceApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export type SpaceApprovalTargetType =
+  | 'expense'
+  | 'contribution_adjustment'
+  | 'booking'
+  | 'household_purchase'
+  | 'sme_purchase'
+  | 'sme_payout'
+  | 'custom_action'
+  | 'other';
+
+export interface SpaceApproval {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  requestNote?: string;
+  targetType: SpaceApprovalTargetType;
+  targetId?: string | null;
+  targetPath?: string | null;
+  amountMinor?: number | null;
+  currency?: string | null;
+  status: SpaceApprovalStatus;
+  requestedBy: string;
+  requestedByName?: string;
+  requestedAt?: Timestamp;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: Timestamp | null;
+  decisionNote?: string;
+  cancelledAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -1254,10 +1365,41 @@ export interface SpaceFundContribution {
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
+export type SpaceChatRecordType =
+  | 'expense'
+  | 'shared_bill'
+  | 'commitment'
+  | 'trip_task'
+  | 'booking'
+  | 'budget'
+  | 'payout'
+  | 'collection_item'
+  | 'approval';
+
+export interface SpaceChatRecordRef {
+  type: SpaceChatRecordType;
+  id: string;
+  label: string;
+  targetPath: string;
+}
+
+export interface SpaceMessageReply {
+  messageId: string;
+  bodyPreview: string;
+}
+
 export interface SpaceMessage {
   id: string;
   spaceId: string;
   senderUid: string;
   body: string;
+  mentionLabels?: string[];
+  recordRef?: SpaceChatRecordRef | null;
+  replyTo?: SpaceMessageReply | null;
+  storagePath?: string | null;
+  fileName?: string | null;
+  contentType?: string | null;
+  sizeBytes?: number | null;
   createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }

@@ -6,6 +6,7 @@ export type DecorationIntensity = 'quiet' | 'balanced' | 'bold';
 export type NavigationId =
   | 'overview'
   | 'spaces'
+  | 'inbox'
   | 'accounts'
   | 'transactions'
   | 'recurring'
@@ -39,6 +40,7 @@ export interface PersonalisationSettings {
 export const NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'overview', path: '/', label: 'Overview', icon: '⌂', protected: true },
   { id: 'spaces', path: '/spaces', label: 'Spaces', icon: '◫', protected: true },
+  { id: 'inbox', path: '/inbox', label: 'Needs Attention', icon: '✓' },
   { id: 'accounts', path: '/accounts', label: 'Accounts', icon: '◉' },
   { id: 'transactions', path: '/transactions', label: 'Money activity', icon: '↔' },
   { id: 'recurring', path: '/recurring', label: 'Recurring money', icon: '↻' },
@@ -88,6 +90,7 @@ const ICONS: Record<IconPack, Partial<Record<NavigationId, string>>> = {
   rounded: {
     overview: '●',
     spaces: '▦',
+    inbox: '✓',
     accounts: '◉',
     transactions: '↕',
     recurring: '⟳',
@@ -102,6 +105,7 @@ const ICONS: Record<IconPack, Partial<Record<NavigationId, string>>> = {
   minimal: {
     overview: 'H',
     spaces: 'S',
+    inbox: '✓',
     accounts: 'A',
     transactions: 'M',
     recurring: 'R',
@@ -116,6 +120,7 @@ const ICONS: Record<IconPack, Partial<Record<NavigationId, string>>> = {
   retro: {
     overview: '★',
     spaces: '▧',
+    inbox: '✓',
     accounts: '¢',
     transactions: '↔',
     recurring: '⟳',

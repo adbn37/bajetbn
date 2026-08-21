@@ -189,7 +189,7 @@ service cloud.firestore {
           'fullName', 'language', 'currency', 'timezone', 'appearance', 'textSize',
           'notificationsEnabled', 'backgroundRemindersEnabled', 'dueSoonReminders', 'lateReminders',
           'goalReminders', 'sharedPaymentNotifications', 'whatsappRemindersEnabled',
-          'browserPushEnabled', 'reminderDaysBefore', 'themeStudioV2', 'updatedAt'
+          'browserPushEnabled', 'reminderDaysBefore', 'themeStudioV2', 'spaceAutomationV1', 'updatedAt'
         ])
         && request.resource.data.currency == 'BND'
         && request.resource.data.timezone == 'Asia/Brunei'
@@ -212,7 +212,9 @@ service cloud.firestore {
         && request.resource.data.reminderDaysBefore >= 0
         && request.resource.data.reminderDaysBefore <= 30
         && (!('themeStudioV2' in request.resource.data)
-          || request.resource.data.themeStudioV2 is map);
+          || request.resource.data.themeStudioV2 is map)
+        && (!('spaceAutomationV1' in request.resource.data)
+          || request.resource.data.spaceAutomationV1 is map);
       allow delete: if false;
 
       match /commands/{commandId} {
@@ -263,6 +265,71 @@ service cloud.firestore {
         && request.resource.data.role == 'owner'
         && getAfter(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId == request.auth.uid;
       allow update, delete: if false; // Membership changes move to Cloud Functions in collaboration phase.
+    }
+
+    match /spacePresence/{presenceId} {
+      allow read: if signedIn()
+        && isSpaceMember(resource.data.spaceId);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll([
+          'spaceId',
+          'uid',
+          'activeAt',
+          'expiresAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'spaceId',
+          'uid',
+          'activeAt',
+          'expiresAt',
+          'typingUntil'
+        ])
+        && request.resource.data.spaceId is string
+        && request.resource.data.uid == request.auth.uid
+        && presenceId == membershipId(request.resource.data.spaceId, request.auth.uid)
+        && isSpaceMember(request.resource.data.spaceId)
+        && request.resource.data.activeAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(2, 'm')
+        && (
+          request.resource.data.get('typingUntil', null) == null
+          || (
+            request.resource.data.typingUntil is timestamp
+            && request.resource.data.typingUntil >= request.time
+            && request.resource.data.typingUntil <= request.time + duration.value(15, 's')
+          )
+        );
+
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.spaceId == resource.data.spaceId
+        && presenceId == membershipId(resource.data.spaceId, request.auth.uid)
+        && isSpaceMember(resource.data.spaceId)
+        && request.resource.data.keys().hasOnly([
+          'spaceId',
+          'uid',
+          'activeAt',
+          'expiresAt',
+          'typingUntil'
+        ])
+        && request.resource.data.activeAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(2, 'm')
+        && (
+          request.resource.data.get('typingUntil', null) == null
+          || (
+            request.resource.data.typingUntil is timestamp
+            && request.resource.data.typingUntil >= request.time
+            && request.resource.data.typingUntil <= request.time + duration.value(15, 's')
+          )
+        );
+
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
     }
 
     match /collectionItems/{itemId} {
@@ -496,6 +563,26 @@ service cloud.firestore {
 
       allow update, delete: if false;
     }
+    match /spaceAnnouncements/{announcementId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /spacePolls/{pollId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /spacePollVotes/{voteId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
+    match /spaceApprovals/{approvalId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
     match /spaceActivities/{activityId} {
       allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
       allow create, update, delete: if false;

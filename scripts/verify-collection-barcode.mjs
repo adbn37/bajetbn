@@ -86,7 +86,9 @@ requireText('functions/src/index.ts', "'collectionItems', 'collectionItemMovemen
 requireText('functions/src/index.ts', "collectionName: 'collectionItemMovements', field: 'createdBy'");
 requireText('src/repositories/releaseCandidateRepository.ts', "rowsForValues('collectionItemMovements', 'spaceId', activeSpaceIds)");
 requireText('src/repositories/releaseCandidateRepository.ts', 'collectionItemMovements,');
-requireText('src/repositories/releaseCandidateRepository.ts', 'formatVersion: 6');
+const collectionExportSource = read('src/repositories/releaseCandidateRepository.ts');
+const collectionExportFormat = Number((collectionExportSource.match(/formatVersion:\s*(\d+)/) || [])[1] || 0);
+if (collectionExportFormat < 6) fail('Collection export format must remain version 6 or newer.');
 requireText('functions/src/index.ts', 'Collection photo path');
 
 console.log(`Collection photos, details, and barcode verification passed (${checks} checks).`);

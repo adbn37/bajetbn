@@ -1241,6 +1241,842 @@ function createNotification(transaction: Transaction, input: { uid: string; spac
 }
 
 
+const chatRecordTypes = [
+  'expense',
+  'shared_bill',
+  'commitment',
+  'trip_task',
+  'booking',
+  'budget',
+  'payout',
+  'collection_item',
+  'approval',
+] as const;
+
+export const sendSpaceChatMessage = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  const body = typeof request.data?.body === 'string'
+    ? request.data.body.trim()
+    : '';
+
+  if (body.length > 2000) {
+    throw new HttpsError('invalid-argument', 'Messages can be up to 2,000 characters.');
+  }
+
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  const spaceSnapshot = await db.collection('spaces').doc(spaceId).get();
+
+  if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) {
+    throw new HttpsError('failed-precondition', 'This Space is unavailable.');
+  }
+
+  const senderName = String(
+    member.displayName
+    || request.auth?.token.name
+    || request.auth?.token.email
+    || 'Space member',
+  );
+
+  const rawMentionUids = Array.isArray(request.data?.mentionUids)
+    ? request.data.mentionUids
+    : [];
+
+  if (rawMentionUids.length > 20) {
+    throw new HttpsError('invalid-argument', 'Mention up to 20 members in one message.');
+  }
+
+  const mentionUids: string[] = Array.from(
+    new Set<string>(
+      rawMentionUids
+        .map((value: unknown): string => String(value || '').trim())
+        .filter((value: string): boolean => Boolean(value && value !== uid)),
+    ),
+  );
+
+  if (mentionUids.some((value) => value.length > 80)) {
+    throw new HttpsError('invalid-argument', 'One mentioned member is invalid.');
+  }
+
+  const mentionMembers = await Promise.all(
+    mentionUids.map(async (mentionedUid) => {
+      const snapshot = await db
+        .collection('spaceMembers')
+        .doc(spaceId + '_' + mentionedUid)
+        .get();
+
+      if (
+        !snapshot.exists
+        || (
+          snapshot.data()?.status
+          && snapshot.data()?.status !== 'active'
+        )
+      ) {
+        throw new HttpsError(
+          'invalid-argument',
+          'One mentioned member is no longer active in this Space.',
+        );
+      }
+
+      return {
+        uid: mentionedUid,
+        label: String(
+          snapshot.data()?.displayName
+          || snapshot.data()?.email
+          || 'Member',
+        ).slice(0, 120),
+      };
+    }),
+  );
+
+  let recordRef: {
+    type: string;
+    id: string;
+    label: string;
+    targetPath: string;
+  } | null = null;
+
+  const rawRecordRef = request.data?.recordRef;
+
+  if (rawRecordRef != null) {
+    if (typeof rawRecordRef !== 'object' || Array.isArray(rawRecordRef)) {
+      throw new HttpsError('invalid-argument', 'Record reference is invalid.');
+    }
+
+    const type = String(rawRecordRef.type || '').trim();
+    const id = String(rawRecordRef.id || '').trim();
+    const label = String(rawRecordRef.label || '').trim();
+    const targetPath = String(rawRecordRef.targetPath || '').trim();
+
+    if (!(chatRecordTypes as readonly string[]).includes(type)) {
+      throw new HttpsError('invalid-argument', 'Record type is not supported in Chat.');
+    }
+
+    if (!id || id.length > 120 || !label || label.length > 160) {
+      throw new HttpsError('invalid-argument', 'Record reference is incomplete.');
+    }
+
+    if (
+      !targetPath
+      || targetPath.length > 500
+      || !targetPath.startsWith('/spaces/' + spaceId)
+    ) {
+      throw new HttpsError('invalid-argument', 'Record link must stay inside this Space.');
+    }
+
+    recordRef = { type, id, label, targetPath };
+  }
+
+  let attachment: {
+    storagePath: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+  } | null = null;
+
+  const rawAttachment = request.data?.attachment;
+
+  if (rawAttachment != null) {
+    if (typeof rawAttachment !== 'object' || Array.isArray(rawAttachment)) {
+      throw new HttpsError('invalid-argument', 'Attachment metadata is invalid.');
+    }
+
+    const storagePath = String(rawAttachment.storagePath || '').trim();
+    const fileName = String(rawAttachment.fileName || '').trim();
+    const contentType = String(rawAttachment.contentType || '').trim();
+    const sizeBytes = Number(rawAttachment.sizeBytes);
+
+    const requiredPrefix =
+      'spaces/'
+      + spaceId
+      + '/chat-attachments/'
+      + uid
+      + '/';
+
+    if (
+      !storagePath.startsWith(requiredPrefix)
+      || storagePath.length > 700
+      || !fileName
+      || fileName.length > 160
+    ) {
+      throw new HttpsError('invalid-argument', 'Attachment path is invalid.');
+    }
+
+    if (
+      !contentType.startsWith('image/')
+      && contentType !== 'application/pdf'
+    ) {
+      throw new HttpsError('invalid-argument', 'Only images and PDFs can be attached.');
+    }
+
+    if (
+      !Number.isSafeInteger(sizeBytes)
+      || sizeBytes <= 0
+      || sizeBytes >= 10 * 1024 * 1024
+    ) {
+      throw new HttpsError('invalid-argument', 'Attachment must be smaller than 10 MB.');
+    }
+
+    attachment = {
+      storagePath,
+      fileName,
+      contentType,
+      sizeBytes,
+    };
+  }
+
+  let replyTo: {
+    messageId: string;
+    bodyPreview: string;
+  } | null = null;
+
+  const replyToMessageId =
+    typeof request.data?.replyToMessageId === 'string'
+      ? request.data.replyToMessageId.trim()
+      : '';
+
+  if (replyToMessageId) {
+    if (replyToMessageId.length > 120) {
+      throw new HttpsError('invalid-argument', 'Reply message is invalid.');
+    }
+
+    const replySnapshot = await db
+      .collection('spaceMessages')
+      .doc(replyToMessageId)
+      .get();
+
+    if (
+      !replySnapshot.exists
+      || replySnapshot.data()?.spaceId !== spaceId
+    ) {
+      throw new HttpsError('invalid-argument', 'The replied message is not in this Space.');
+    }
+
+    const preview = String(
+      replySnapshot.data()?.body
+      || replySnapshot.data()?.recordRef?.label
+      || replySnapshot.data()?.fileName
+      || 'Message',
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+
+    replyTo = {
+      messageId: replyToMessageId,
+      bodyPreview: preview || 'Message',
+    };
+  }
+
+  if (!body && !recordRef && !attachment) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Write a message or attach a record or file first.',
+    );
+  }
+
+  const commandRef = db
+    .collection('collaborationCommands')
+    .doc(commandId(uid, key));
+
+  const messageRef = db.collection('spaceMessages').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+
+    if (command.exists) {
+      return command.data()?.result;
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    transaction.create(messageRef, {
+      spaceId,
+      senderUid: uid,
+      body,
+      mentionLabels: mentionMembers.map((item) => item.label),
+      recordRef,
+      replyTo,
+      storagePath: attachment?.storagePath || null,
+      fileName: attachment?.fileName || null,
+      contentType: attachment?.contentType || null,
+      sizeBytes: attachment?.sizeBytes || null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    for (const mentioned of mentionMembers) {
+      createNotification(transaction, {
+        uid: mentioned.uid,
+        spaceId,
+        type: recordRef ? 'record_mention' : 'space_mention',
+        title: recordRef
+          ? senderName + ' mentioned you with a record'
+          : senderName + ' mentioned you in Chat',
+        message: recordRef
+          ? recordRef.label
+          : (body.slice(0, 180) || 'Open the Space Chat to reply.'),
+        targetPath:
+          '/spaces/'
+          + spaceId
+          + '?tab=chat&messageId='
+          + messageRef.id,
+        actionLabel: recordRef ? 'Open discussion' : 'Open chat',
+        now,
+      });
+    }
+
+    const result = {
+      messageId: messageRef.id,
+    };
+
+    transaction.create(commandRef, {
+      uid,
+      kind: 'send_space_chat_message',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
+function optionalCollaborationDate(value: unknown, label: string): string | null {
+  if (value == null || value === '') return null;
+  const next = String(value).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+    throw new HttpsError('invalid-argument', label + ' must use YYYY-MM-DD.');
+  }
+  return next;
+}
+
+function collaborationActorName(member: DocumentData, uid: string) {
+  return String(member.displayName || member.email || uid || 'Member').trim().slice(0, 120);
+}
+
+export const createSpaceAnnouncement = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const title = stringValue(request.data?.title, 'Announcement title', 120);
+  const body = stringValue(request.data?.body, 'Announcement message', 2000);
+  const expiresOn = optionalCollaborationDate(
+    request.data?.expiresOn,
+    'Announcement expiry',
+  );
+  const idempotencyKey = stringValue(
+    request.data?.idempotencyKey,
+    'Idempotency key',
+    64,
+  );
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const ref = db
+    .collection('spaceAnnouncements')
+    .doc(commandId(uid, idempotencyKey));
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return { announcementId: ref.id };
+
+    const now = FieldValue.serverTimestamp();
+    transaction.create(ref, {
+      displayId: displayId('ANN'),
+      spaceId,
+      title,
+      body,
+      createdBy: uid,
+      createdByName: actorName,
+      pinnedAt: null,
+      expiresOn,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'announcement_created',
+      targetType: 'announcement',
+      targetId: ref.id,
+      summary: 'Posted announcement: ' + title,
+      now,
+    });
+
+    return { announcementId: ref.id };
+  });
+});
+
+export const setSpaceAnnouncementState = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const announcementId = stringValue(
+    request.data?.announcementId,
+    'Announcement ID',
+    160,
+  );
+  const action = String(request.data?.action || '');
+
+  if (!['pin', 'unpin', 'archive'].includes(action)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose pin, unpin, or archive.',
+    );
+  }
+
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const ref = db.collection('spaceAnnouncements').doc(announcementId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) {
+      throw new HttpsError('not-found', 'Announcement not found.');
+    }
+
+    const current = snapshot.data() || {};
+    if (String(current.spaceId || '') !== spaceId) {
+      throw new HttpsError(
+        'permission-denied',
+        'Announcement does not belong to this Space.',
+      );
+    }
+    if (current.archivedAt && action !== 'archive') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Archived announcements cannot be changed.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const updates: DocumentData = { updatedAt: now };
+
+    if (action === 'pin') updates.pinnedAt = now;
+    if (action === 'unpin') updates.pinnedAt = null;
+    if (action === 'archive') {
+      updates.archivedAt = now;
+      updates.pinnedAt = null;
+    }
+
+    transaction.update(ref, updates);
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'announcement_' + action,
+      targetType: 'announcement',
+      targetId: ref.id,
+      summary:
+        action === 'archive'
+          ? 'Archived announcement: ' + String(current.title || 'Announcement')
+          : action === 'pin'
+            ? 'Pinned announcement: ' + String(current.title || 'Announcement')
+            : 'Unpinned announcement: ' +
+              String(current.title || 'Announcement'),
+      now,
+    });
+
+    return { announcementId: ref.id, action };
+  });
+});
+
+export const createSpacePoll = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const question = stringValue(request.data?.question, 'Poll question', 240);
+  const idempotencyKey = stringValue(
+    request.data?.idempotencyKey,
+    'Idempotency key',
+    64,
+  );
+  const rawOptions = Array.isArray(request.data?.options)
+    ? request.data.options
+    : [];
+  const labels = rawOptions
+    .map((value: unknown) => String(value || '').trim())
+    .filter(Boolean);
+
+  if (labels.length < 2 || labels.length > 8) {
+    throw new HttpsError(
+      'invalid-argument',
+      'A poll needs between 2 and 8 options.',
+    );
+  }
+  if (labels.some((label: string) => label.length > 120)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Poll options must be 120 characters or fewer.',
+    );
+  }
+  if (
+    new Set(labels.map((label: string) => label.toLowerCase())).size !==
+    labels.length
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Poll options must be different.',
+    );
+  }
+
+  const options = labels.map((label: string, index: number) => ({
+    id: 'option_' + String(index + 1),
+    label,
+  }));
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const ref = db.collection('spacePolls').doc(commandId(uid, idempotencyKey));
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return { pollId: ref.id };
+
+    const now = FieldValue.serverTimestamp();
+    transaction.create(ref, {
+      displayId: displayId('POL'),
+      spaceId,
+      question,
+      options,
+      status: 'open',
+      createdBy: uid,
+      createdByName: actorName,
+      closedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'poll_created',
+      targetType: 'poll',
+      targetId: ref.id,
+      summary: 'Opened poll: ' + question,
+      now,
+    });
+
+    return { pollId: ref.id };
+  });
+});
+
+export const voteSpacePoll = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const pollId = stringValue(request.data?.pollId, 'Poll ID', 160);
+  const optionId = stringValue(request.data?.optionId, 'Poll option', 80);
+
+  await requireActiveSpaceMember(spaceId, uid);
+
+  const pollRef = db.collection('spacePolls').doc(pollId);
+  const voteRef = db.collection('spacePollVotes').doc(commandId(uid, pollId));
+
+  return db.runTransaction(async (transaction) => {
+    const [pollSnapshot, voteSnapshot] = await Promise.all([
+      transaction.get(pollRef),
+      transaction.get(voteRef),
+    ]);
+
+    if (!pollSnapshot.exists) {
+      throw new HttpsError('not-found', 'Poll not found.');
+    }
+
+    const poll = pollSnapshot.data() || {};
+    if (String(poll.spaceId || '') !== spaceId) {
+      throw new HttpsError(
+        'permission-denied',
+        'Poll does not belong to this Space.',
+      );
+    }
+    if (poll.status !== 'open') {
+      throw new HttpsError(
+        'failed-precondition',
+        'This poll is closed.',
+      );
+    }
+
+    const options = Array.isArray(poll.options) ? poll.options : [];
+    if (
+      !options.some(
+        (option: DocumentData) => String(option.id || '') === optionId,
+      )
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a valid poll option.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    if (voteSnapshot.exists) {
+      transaction.update(voteRef, {
+        optionId,
+        updatedAt: now,
+      });
+    } else {
+      transaction.create(voteRef, {
+        spaceId,
+        pollId,
+        uid,
+        optionId,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return { voteId: voteRef.id, optionId };
+  });
+});
+
+export const setSpacePollStatus = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const pollId = stringValue(request.data?.pollId, 'Poll ID', 160);
+  const status = String(request.data?.status || '');
+
+  if (!['open', 'closed'].includes(status)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Poll status must be open or closed.',
+    );
+  }
+
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, uid);
+  const pollRef = db.collection('spacePolls').doc(pollId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(pollRef);
+    if (!snapshot.exists) {
+      throw new HttpsError('not-found', 'Poll not found.');
+    }
+
+    const poll = snapshot.data() || {};
+    if (String(poll.spaceId || '') !== spaceId) {
+      throw new HttpsError(
+        'permission-denied',
+        'Poll does not belong to this Space.',
+      );
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(pollRef, {
+      status,
+      closedAt: status === 'closed' ? now : null,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: status === 'closed' ? 'poll_closed' : 'poll_reopened',
+      targetType: 'poll',
+      targetId: pollRef.id,
+      summary:
+        status === 'closed'
+          ? 'Closed poll: ' + String(poll.question || 'Poll')
+          : 'Reopened poll: ' + String(poll.question || 'Poll'),
+      now,
+    });
+
+    return { pollId: pollRef.id, status };
+  });
+});
+
+function approvalOptionalText(value: unknown, maximum: number): string {
+  if (value == null) return '';
+  return String(value).trim().slice(0, maximum);
+}
+
+const approvalTargetTypes = [
+  'expense',
+  'contribution_adjustment',
+  'booking',
+  'household_purchase',
+  'sme_purchase',
+  'sme_payout',
+  'custom_action',
+  'other',
+] as const;
+
+export const requestSpaceApproval = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const title = stringValue(request.data?.title, 'Approval title', 160);
+  const targetType = oneOf(request.data?.targetType, approvalTargetTypes, 'Approval target type');
+  const targetId = approvalOptionalText(request.data?.targetId, 160) || null;
+  const rawTargetPath = approvalOptionalText(request.data?.targetPath, 500);
+  const targetPath = rawTargetPath.startsWith('/') ? rawTargetPath : null;
+  const requestNote = approvalOptionalText(request.data?.requestNote, 1200);
+  const idempotencyKey = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  let amountMinor: number | null = null;
+  let currency: string | null = null;
+  if (request.data?.amountMinor != null) {
+    const numericAmount = Number(request.data.amountMinor);
+    if (!Number.isFinite(numericAmount) || numericAmount < 0 || numericAmount > Number.MAX_SAFE_INTEGER) {
+      throw new HttpsError('invalid-argument', 'Approval amount is invalid.');
+    }
+    amountMinor = Math.round(numericAmount);
+    currency = stringValue(request.data?.currency, 'Currency', 12).toUpperCase();
+  }
+
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  const actorName = collaborationActorName(member, String(request.auth?.token.name || request.auth?.token.email || uid));
+  const ref = db.collection('spaceApprovals').doc(commandId(uid, idempotencyKey));
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return { approvalId: ref.id, status: existing.data()?.status || 'pending' };
+
+    const now = FieldValue.serverTimestamp();
+    transaction.create(ref, {
+      displayId: displayId('APR'),
+      spaceId,
+      title,
+      requestNote,
+      targetType,
+      targetId,
+      targetPath,
+      amountMinor,
+      currency,
+      status: 'pending',
+      requestedBy: uid,
+      requestedByName: actorName,
+      requestedAt: now,
+      reviewedBy: null,
+      reviewedByName: null,
+      reviewedAt: null,
+      decisionNote: '',
+      cancelledAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'approval_requested',
+      targetType: 'approval',
+      targetId: ref.id,
+      summary: 'Requested approval: ' + title,
+      now,
+    });
+
+    return { approvalId: ref.id, status: 'pending' };
+  });
+});
+
+export const reviewSpaceApproval = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const approvalId = stringValue(request.data?.approvalId, 'Approval ID', 160);
+  const decision = oneOf(request.data?.decision, ['approved', 'rejected'] as const, 'Approval decision');
+  const decisionNote = approvalOptionalText(request.data?.decisionNote, 1000);
+
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, String(request.auth?.token.name || request.auth?.token.email || uid));
+  const ref = db.collection('spaceApprovals').doc(approvalId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Approval request not found.');
+
+    const current = snapshot.data() || {};
+    if (String(current.spaceId || '') !== spaceId) throw new HttpsError('permission-denied', 'Approval request does not belong to this Space.');
+
+    if (current.status !== 'pending') {
+      if (current.status === decision) return { approvalId: ref.id, status: current.status };
+      throw new HttpsError('failed-precondition', 'Only pending approval requests can be reviewed.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, {
+      status: decision,
+      reviewedBy: uid,
+      reviewedByName: actorName,
+      reviewedAt: now,
+      decisionNote,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: decision === 'approved' ? 'approval_approved' : 'approval_rejected',
+      targetType: 'approval',
+      targetId: ref.id,
+      summary: (decision === 'approved' ? 'Approved: ' : 'Rejected: ') + String(current.title || 'Approval request'),
+      now,
+    });
+
+    if (current.requestedBy && current.requestedBy !== uid) {
+      createNotification(transaction, {
+        uid: String(current.requestedBy),
+        spaceId,
+        type: decision === 'approved' ? 'approval_approved' : 'approval_rejected',
+        title: decision === 'approved' ? 'Approval request approved' : 'Approval request rejected',
+        message: String(current.title || 'Your approval request'),
+        targetPath: current.targetPath || ('/spaces/' + spaceId + '?tab=approvals'),
+        actionLabel: current.targetPath ? 'Open record' : 'Open approvals',
+        now,
+      });
+    }
+
+    return { approvalId: ref.id, status: decision };
+  });
+});
+
+export const cancelSpaceApproval = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const approvalId = stringValue(request.data?.approvalId, 'Approval ID', 160);
+
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  const actorName = collaborationActorName(member, String(request.auth?.token.name || request.auth?.token.email || uid));
+  const ref = db.collection('spaceApprovals').doc(approvalId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Approval request not found.');
+
+    const current = snapshot.data() || {};
+    if (String(current.spaceId || '') !== spaceId) throw new HttpsError('permission-denied', 'Approval request does not belong to this Space.');
+    if (String(current.requestedBy || '') !== uid) throw new HttpsError('permission-denied', 'Only the requester can cancel this approval request.');
+
+    if (current.status === 'cancelled') return { approvalId: ref.id, status: 'cancelled' };
+    if (current.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending approval requests can be cancelled.');
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, {
+      status: 'cancelled',
+      cancelledAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'approval_cancelled',
+      targetType: 'approval',
+      targetId: ref.id,
+      summary: 'Cancelled approval request: ' + String(current.title || 'Approval request'),
+      now,
+    });
+
+    return { approvalId: ref.id, status: 'cancelled' };
+  });
+});
+
 async function requireSmeSpaceOwner(spaceId: string, uid: string): Promise<{ space: DocumentData; member: DocumentData }> {
   const [spaceSnapshot, member] = await Promise.all([
     db.collection('spaces').doc(spaceId).get(),
@@ -4206,6 +5042,641 @@ async function sendBrowserPush(uid: string, reminders: PreparedBackgroundReminde
   return sent;
 }
 
+interface SpaceAutomationPreferenceData {
+  enabled: boolean;
+  contributionReminder: boolean;
+  contributionDueDate: string | null;
+  budgetThresholdAlert: boolean;
+  budgetThresholdPercent: number;
+  lowFundAlert: boolean;
+  lowFundThresholdMinor: number;
+  overdueBillAlert: boolean;
+  overdueTaskAlert: boolean;
+  lowStockAlert: boolean;
+  lowStockThreshold: number;
+  sellerPayoutAlert: boolean;
+  sellerPayoutThresholdMinor: number;
+}
+
+interface SpaceAutomationCandidate {
+  spaceId: string;
+  rule: string;
+  sourceId: string;
+  cycle: string;
+  title: string;
+  message: string;
+  targetPath: string;
+  dueDate?: string | null;
+}
+
+function spaceAutomationInteger(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  fallback: number,
+): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.round(numeric)));
+}
+
+function normalizeSpaceAutomationPreference(
+  value: unknown,
+): SpaceAutomationPreferenceData {
+  const source =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+
+  const rawDate =
+    typeof source.contributionDueDate === 'string'
+      ? source.contributionDueDate.trim()
+      : '';
+
+  return {
+    enabled: source.enabled === true,
+    contributionReminder: source.contributionReminder === true,
+    contributionDueDate:
+      /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+        ? rawDate
+        : null,
+    budgetThresholdAlert: source.budgetThresholdAlert !== false,
+    budgetThresholdPercent: spaceAutomationInteger(
+      source.budgetThresholdPercent,
+      50,
+      100,
+      80,
+    ),
+    lowFundAlert: source.lowFundAlert === true,
+    lowFundThresholdMinor: spaceAutomationInteger(
+      source.lowFundThresholdMinor,
+      0,
+      99_999_999_999,
+      0,
+    ),
+    overdueBillAlert: source.overdueBillAlert !== false,
+    overdueTaskAlert: source.overdueTaskAlert !== false,
+    lowStockAlert: source.lowStockAlert !== false,
+    lowStockThreshold: spaceAutomationInteger(
+      source.lowStockThreshold,
+      0,
+      1_000_000,
+      0,
+    ),
+    sellerPayoutAlert: source.sellerPayoutAlert === true,
+    sellerPayoutThresholdMinor: spaceAutomationInteger(
+      source.sellerPayoutThresholdMinor,
+      0,
+      99_999_999_999,
+      0,
+    ),
+  };
+}
+
+function enabledSpaceAutomationPreferences(
+  profile: DocumentData,
+): Array<[string, SpaceAutomationPreferenceData]> {
+  const raw = profile.spaceAutomationV1;
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return [];
+  }
+
+  const result: Array<[string, SpaceAutomationPreferenceData]> = [];
+
+  for (const [spaceId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!spaceId || spaceId.length > 80) continue;
+
+    const preference = normalizeSpaceAutomationPreference(value);
+    if (!preference.enabled) continue;
+
+    result.push([spaceId, preference]);
+    if (result.length >= 25) break;
+  }
+
+  return result;
+}
+
+function minorAmountLabel(amountMinor: number, currency: string): string {
+  return (amountMinor / 100).toFixed(2) + ' ' + (currency || 'BND');
+}
+
+function spaceAutomationReminderKey(
+  uid: string,
+  candidate: SpaceAutomationCandidate,
+): string {
+  return [
+    uid,
+    'space_automation',
+    candidate.spaceId,
+    candidate.rule,
+    candidate.sourceId,
+    candidate.cycle,
+  ].join('|');
+}
+
+async function cleanupResolvedSpaceAutomationReminders(
+  uid: string,
+  activeReminderKeys: Set<string>,
+): Promise<void> {
+  const snapshot = await db
+    .collection('userNotifications')
+    .where('uid', '==', uid)
+    .get();
+
+  const stale = snapshot.docs.filter((row) => {
+    const item = row.data();
+    const reminderKey = typeof item.reminderKey === 'string'
+      ? item.reminderKey
+      : '';
+
+    return item.type === 'space_reminder'
+      && item.source === 'background_reminder'
+      && reminderKey.includes('|space_automation|')
+      && !activeReminderKeys.has(reminderKey);
+  }).slice(0, 100);
+
+  if (!stale.length) return;
+
+  const writer = db.bulkWriter();
+  for (const row of stale) writer.delete(row.ref);
+  await writer.close();
+}
+
+async function createSpaceAutomationReminder(input: {
+  uid: string;
+  candidate: SpaceAutomationCandidate;
+}): Promise<PreparedBackgroundReminder | null> {
+  const reminderKey = spaceAutomationReminderKey(
+    input.uid,
+    input.candidate,
+  );
+
+  const documentId = backgroundReminderId(reminderKey);
+  const notificationRef = db.collection('userNotifications').doc(documentId);
+  let created = false;
+
+  await db.runTransaction(async (transaction) => {
+    const notification = await transaction.get(notificationRef);
+    if (notification.exists) return;
+
+    const now = FieldValue.serverTimestamp();
+
+    transaction.create(notificationRef, {
+      uid: input.uid,
+      spaceId: input.candidate.spaceId,
+      type: 'space_reminder',
+      title: input.candidate.title,
+      message: input.candidate.message,
+      targetPath: input.candidate.targetPath,
+      actionLabel: 'Open',
+      source: 'background_reminder',
+      itemType: null,
+      itemId: input.candidate.sourceId,
+      dueDate: input.candidate.dueDate || null,
+      reminderKey,
+      pushAttemptedAt: null,
+      pushSentAt: null,
+      pushFailureCount: 0,
+      readAt: null,
+      createdAt: now,
+    });
+
+    created = true;
+  });
+
+  return created
+    ? {
+        notificationId: documentId,
+        reminderKey,
+        title: input.candidate.title,
+        message: input.candidate.message,
+        targetPath: input.candidate.targetPath,
+      }
+    : null;
+}
+
+async function processSpaceAutomationRemindersForUser(
+  uid: string,
+  profile: DocumentData,
+  today: string,
+  reminderDaysBefore: number,
+): Promise<BackgroundReminderResult> {
+  const result: BackgroundReminderResult = {
+    checked: 0,
+    created: 0,
+    pushSent: 0,
+    duplicates: 0,
+    today,
+  };
+
+  const preferences = enabledSpaceAutomationPreferences(profile);
+  if (!preferences.length) return result;
+
+  const needsBills = preferences.some(([, item]) => item.overdueBillAlert);
+  const needsTasks = preferences.some(([, item]) => item.overdueTaskAlert);
+
+  const [billSnapshot, taskSnapshot] = await Promise.all([
+    needsBills
+      ? db.collection('sharedBillAssignments').where('memberUid', '==', uid).get()
+      : Promise.resolve(null),
+    needsTasks
+      ? db.collection('tripTasks').where('assigneeUid', '==', uid).get()
+      : Promise.resolve(null),
+  ]);
+
+  const assignedBills = billSnapshot?.docs || [];
+  const assignedTasks = taskSnapshot?.docs || [];
+  const candidates: SpaceAutomationCandidate[] = [];
+  const activeReminderKeys = new Set<string>();
+
+  const addCandidate = (candidate: SpaceAutomationCandidate) => {
+    result.checked += 1;
+    activeReminderKeys.add(spaceAutomationReminderKey(uid, candidate));
+    if (candidates.length < 100) candidates.push(candidate);
+  };
+
+  for (const [spaceId, preference] of preferences) {
+    const [spaceSnapshot, memberSnapshot] = await Promise.all([
+      db.collection('spaces').doc(spaceId).get(),
+      db.collection('spaceMembers').doc(spaceId + '_' + uid).get(),
+    ]);
+
+    if (
+      !spaceSnapshot.exists
+      || spaceSnapshot.data()?.archivedAt
+      || !memberSnapshot.exists
+      || (
+        memberSnapshot.data()?.status
+        && memberSnapshot.data()?.status !== 'active'
+      )
+    ) {
+      continue;
+    }
+
+    const space = spaceSnapshot.data() || {};
+    const role = String(memberSnapshot.data()?.role || '');
+    const canManage = role === 'owner' || role === 'admin';
+    const spaceType = String(space.type || '');
+    const spaceName = String(space.name || 'Space');
+    const currency = String(space.currency || 'BND');
+
+    if (
+      preference.contributionReminder
+      && preference.contributionDueDate
+    ) {
+      const days = localDateDifference(
+        preference.contributionDueDate,
+        today,
+      );
+
+      if (
+        Number.isFinite(days)
+        && days <= reminderDaysBefore
+        && !(days >= 0 && profile.dueSoonReminders === false)
+        && !(days < 0 && profile.lateReminders === false)
+      ) {
+        addCandidate({
+          spaceId,
+          rule: 'contribution_due',
+          sourceId: spaceId,
+          cycle: preference.contributionDueDate,
+          title:
+            days < 0
+              ? 'Contribution reminder is overdue'
+              : days === 0
+                ? 'Contribution reminder is today'
+                : 'Contribution reminder is coming up',
+          message:
+            spaceName
+            + ' has your contribution reminder set for '
+            + preference.contributionDueDate
+            + '.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab='
+            + (spaceType === 'trip' ? 'trip_money' : 'group_fund'),
+          dueDate: preference.contributionDueDate,
+        });
+      }
+    }
+
+    if (preference.overdueBillAlert && profile.lateReminders !== false) {
+      for (const row of assignedBills) {
+        const item = row.data();
+
+        if (
+          String(item.spaceId || '') !== spaceId
+          || typeof item.dueDate !== 'string'
+          || item.dueDate >= today
+        ) {
+          continue;
+        }
+
+        const assignedMinor = Number(item.assignedMinor || 0);
+        const settledMinor = Number(item.settledMinor || 0);
+        const storedOutstanding = Number(item.outstandingMinor);
+        const outstandingMinor = Number.isFinite(storedOutstanding)
+          ? storedOutstanding
+          : assignedMinor - settledMinor;
+
+        if (
+          outstandingMinor <= 0
+          || item.status === 'paid'
+          || item.status === 'confirmed'
+        ) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'overdue_bill',
+          sourceId: row.id,
+          cycle: item.dueDate,
+          title: 'Shared bill overdue',
+          message:
+            String(item.commitmentName || 'Shared bill')
+            + ' still has '
+            + minorAmountLabel(outstandingMinor, String(item.currency || currency))
+            + ' assigned to you.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab=bills&assignmentId='
+            + encodeURIComponent(row.id),
+          dueDate: item.dueDate,
+        });
+      }
+    }
+
+    if (preference.overdueTaskAlert && profile.lateReminders !== false) {
+      for (const row of assignedTasks) {
+        const item = row.data();
+
+        if (
+          String(item.spaceId || '') !== spaceId
+          || item.status !== 'open'
+          || item.archivedAt
+          || typeof item.dueDate !== 'string'
+          || item.dueDate >= today
+        ) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'overdue_task',
+          sourceId: row.id,
+          cycle: item.dueDate,
+          title: 'Assigned task overdue',
+          message:
+            String(item.title || 'Task')
+            + ' was due on '
+            + item.dueDate
+            + '.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab=overview&taskId='
+            + encodeURIComponent(row.id)
+            + '#trip-planning',
+          dueDate: item.dueDate,
+        });
+      }
+    }
+
+    if (canManage && preference.budgetThresholdAlert) {
+      const budgets = await db
+        .collection('budgets')
+        .where('spaceId', '==', spaceId)
+        .get();
+
+      for (const row of budgets.docs) {
+        const item = row.data();
+        const limitMinor = Number(item.limitMinor || 0);
+        const spentMinor = Number(item.spentMinor || 0);
+
+        if (
+          item.archivedAt
+          || limitMinor <= 0
+          || typeof item.startDate !== 'string'
+          || typeof item.endDate !== 'string'
+          || today < item.startDate
+          || today > item.endDate
+        ) {
+          continue;
+        }
+
+        const percentage = Math.floor((spentMinor * 100) / limitMinor);
+
+        if (percentage < preference.budgetThresholdPercent) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'budget_threshold',
+          sourceId: row.id,
+          cycle:
+            item.startDate
+            + ':'
+            + item.endDate
+            + ':'
+            + preference.budgetThresholdPercent,
+          title: 'Budget needs attention',
+          message:
+            String(item.name || 'Budget')
+            + ' has used '
+            + percentage
+            + '% of '
+            + minorAmountLabel(limitMinor, String(item.currency || currency))
+            + '.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab=overview&section=budgets&budgetId='
+            + encodeURIComponent(row.id),
+        });
+      }
+    }
+
+    if (
+      canManage
+      && preference.lowFundAlert
+      && preference.lowFundThresholdMinor > 0
+    ) {
+      const fundSnapshot = await db.collection('spaceFunds').doc(spaceId).get();
+
+      if (fundSnapshot.exists) {
+        const fund = fundSnapshot.data() || {};
+        const availableMinor = Number(fund.availableMinor || 0);
+
+        if (availableMinor <= preference.lowFundThresholdMinor) {
+          const kind = String(fund.kind || '');
+          const label = String(
+            fund.label
+            || (kind === 'trip'
+              ? 'Trip Fund'
+              : kind === 'household'
+                ? 'Household Fund'
+                : 'Group Fund'),
+          );
+
+          addCandidate({
+            spaceId,
+            rule: 'low_fund',
+            sourceId: fundSnapshot.id,
+            cycle: String(preference.lowFundThresholdMinor),
+            title: label + ' is running low',
+            message:
+              label
+              + ' has '
+              + minorAmountLabel(
+                availableMinor,
+                String(fund.currency || currency),
+              )
+              + ' available.',
+            targetPath:
+              '/spaces/'
+              + spaceId
+              + '?tab='
+              + (kind === 'trip' || spaceType === 'trip'
+                ? 'trip_money'
+                : 'group_fund'),
+          });
+        }
+      }
+    }
+
+    if (
+      canManage
+      && spaceType === 'sme'
+      && preference.lowStockAlert
+    ) {
+      const products = await db
+        .collection('smePosProducts')
+        .where('spaceId', '==', spaceId)
+        .get();
+
+      for (const row of products.docs) {
+        const item = row.data();
+
+        if (item.archivedAt || item.trackStock !== true) continue;
+
+        const quantity = Number(item.quantityOnHand || 0);
+        const itemThreshold = Number(item.lowStockLevel || 0);
+        const threshold = Math.max(
+          preference.lowStockThreshold,
+          Number.isFinite(itemThreshold) ? itemThreshold : 0,
+        );
+
+        if (quantity > threshold) continue;
+
+        addCandidate({
+          spaceId,
+          rule: 'low_stock',
+          sourceId: row.id,
+          cycle: threshold + ':' + quantity,
+          title: 'Low stock',
+          message:
+            String(item.name || 'Product')
+            + ' has '
+            + quantity
+            + ' left in stock.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '/pos?tab=inventory&productId='
+            + encodeURIComponent(row.id),
+        });
+      }
+    }
+
+    if (
+      canManage
+      && spaceType === 'sme'
+      && preference.sellerPayoutAlert
+      && preference.sellerPayoutThresholdMinor > 0
+    ) {
+      const sellers = await db
+        .collection('smePosSellers')
+        .where('spaceId', '==', spaceId)
+        .get();
+
+      for (const row of sellers.docs) {
+        const item = row.data();
+        const balanceMinor = Number(item.balanceMinor || 0);
+
+        if (
+          item.archivedAt
+          || balanceMinor < preference.sellerPayoutThresholdMinor
+        ) {
+          continue;
+        }
+
+        addCandidate({
+          spaceId,
+          rule: 'seller_payout_due',
+          sourceId: row.id,
+          cycle:
+            String(preference.sellerPayoutThresholdMinor)
+            + ':'
+            + String(Number(item.paidOutMinor || 0)),
+          title: 'Seller payout due',
+          message:
+            String(item.name || 'Seller')
+            + ' has '
+            + minorAmountLabel(
+              balanceMinor,
+              String(item.currency || currency),
+            )
+            + ' available for payout.',
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '/pos?tab=payouts&sellerId='
+            + encodeURIComponent(row.id),
+        });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => {
+    const dueA = a.dueDate || '9999-12-31';
+    const dueB = b.dueDate || '9999-12-31';
+    return dueA.localeCompare(dueB) || a.title.localeCompare(b.title);
+  });
+
+  const created: PreparedBackgroundReminder[] = [];
+
+  for (const candidate of candidates.slice(0, 50)) {
+    const reminder = await createSpaceAutomationReminder({
+      uid,
+      candidate,
+    });
+
+    if (reminder) {
+      created.push(reminder);
+      result.created += 1;
+    }
+    else {
+      result.duplicates += 1;
+    }
+  }
+
+  if (profile.browserPushEnabled === true) {
+    result.pushSent = await sendBrowserPush(uid, created);
+  }
+
+  await cleanupResolvedSpaceAutomationReminders(
+    uid,
+    activeReminderKeys,
+  );
+
+  return result;
+}
+
 async function processBackgroundRemindersForUser(
   uid: string,
   profile: DocumentData,
@@ -4277,6 +5748,16 @@ async function processBackgroundRemindersForUser(
     } else result.duplicates += 1;
   }
   if (profile.browserPushEnabled === true) result.pushSent = await sendBrowserPush(uid, created);
+  const automationResult = await processSpaceAutomationRemindersForUser(
+    uid,
+    profile,
+    today,
+    reminderDaysBefore,
+  );
+  result.checked += automationResult.checked;
+  result.created += automationResult.created;
+  result.duplicates += automationResult.duplicates;
+  result.pushSent += automationResult.pushSent;
   return result;
 }
 
@@ -5800,6 +7281,11 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('tripItineraryItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('tripTasks').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('tripBookings').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceAnnouncements').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spacePolls').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spacePollVotes').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceApprovals').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceMessages').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItemMovements').where('spaceId', '==', spaceId)),
@@ -8330,6 +9816,12 @@ async function finalizeAccountDeletion(uid: string) {
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'assigneeUid', uid, updates: () => ({ assigneeUid: anonymousId, assigneeName: deletedMemberName, assigneeEmail: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'completedBy', uid, updates: () => ({ completedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceAnnouncements', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spacePolls', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spacePollVotes', field: 'uid', uid, updates: () => ({ uid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceApprovals', field: 'requestedBy', uid, updates: () => ({ requestedBy: anonymousId, requestedByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceApprovals', field: 'reviewedBy', uid, updates: () => ({ reviewedBy: anonymousId, reviewedByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceMessages', field: 'senderUid', uid, proofPaths, updates: () => ({ senderUid: anonymousId, storagePath: null, fileName: null, contentType: null, sizeBytes: null, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'actorUid', uid, updates: () => ({ actorUid: anonymousId, actorName: deletedMemberName, summary: 'Activity retained after a member deleted their account.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'targetId', uid, updates: () => ({ targetId: anonymousId, summary: 'Member-related activity retained after account deletion.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, paidByName: deletedMemberName, paidByEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });

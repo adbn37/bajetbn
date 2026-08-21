@@ -36,6 +36,8 @@ import { updateSpace } from '../../repositories/spaceRepository';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
+import { useSpacePresenceHeartbeat } from '../collaboration/useSpacePresence';
+import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAutomationPanel';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
@@ -108,7 +110,7 @@ const spaceTypeLabel: Record<SpaceType, string> = {
 
 function tabFromSearch(value: string | null, shared: boolean): SpaceDetailsTab {
   if (value === 'settings') return 'settings';
-  if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity' || value === 'chat')) return value;
+  if (shared && (value === 'approvals' || value === 'updates' || value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity' || value === 'chat')) return value;
   return 'overview';
 }
 
@@ -249,6 +251,19 @@ export function SpaceDetailsPage() {
   const openSharedExpenses = sharedExpenses.filter((item) => item.status !== 'paid');
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
   const currentMember = members.find((item) => item.uid === user?.uid);
+
+  useSpacePresenceHeartbeat({
+    spaceId: space?.id || '',
+    uid: user?.uid || '',
+    enabled: Boolean(
+      space
+      && user
+      && currentMember
+      && space.type !== 'personal'
+      && !space.archivedAt
+      && (currentMember.status || 'active') === 'active',
+    ),
+  });
   const canViewSmeFinancials = !space
     || space.type !== 'sme'
     || space.ownerId === user?.uid
@@ -293,7 +308,9 @@ export function SpaceDetailsPage() {
   const tabs: Array<{ id: SpaceDetailsTab; label: string }> = shared
     ? [
       { id: 'overview', label: 'Overview' },
-      { id: 'members', label: 'Members' },
+      { id: 'updates', label: 'Updates' },
+    { id: 'approvals', label: 'Approvals' },
+    { id: 'members', label: 'Members' },
       { id: 'chat', label: 'Chat' },
       ...sharedFinanceTabs,
       { id: 'activity', label: 'Activity' },
@@ -470,6 +487,13 @@ export function SpaceDetailsPage() {
             onSpaceUpdated={load}
           />
         )}
+  {activeTab === 'settings'
+    && currentMember
+    && (currentMember.status || 'active') === 'active'
+    && <SpaceReminderAutomationPanel
+      space={space}
+      currentMember={currentMember}
+    />}
       {activeTab === 'settings' && currentMember?.role === 'owner' && <>
       {space.type === 'custom' && <CustomSpaceModuleSettings space={space} onSaved={load} />}
       <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />

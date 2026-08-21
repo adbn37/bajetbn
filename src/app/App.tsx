@@ -45,6 +45,7 @@ const DashboardPage = lazy(() => import('../pages/DashboardPage').then((module) 
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })));
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const NotificationsPage = lazy(() => import('../pages/NotificationsPage').then((module) => ({ default: module.NotificationsPage })));
+const MyInboxPage = lazy(() => import('../pages/MyInboxPage').then((module) => ({ default: module.MyInboxPage })));
 const OfflineSyncPage = lazy(() => import('../pages/OfflineSyncPage').then((module) => ({ default: module.OfflineSyncPage })));
 
 export default function App() {
@@ -93,6 +94,7 @@ export default function App() {
                   <Route path="reports" element={<ReportsPage />} />
                   <Route path="calendar" element={<CalendarPage />} />
                   <Route path="search" element={<SearchPage />} />
+                  <Route path="inbox" element={<MyInboxPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="offline-sync" element={<OfflineSyncPage />} />
                   <Route path="settings" element={<SettingsPage />} />
