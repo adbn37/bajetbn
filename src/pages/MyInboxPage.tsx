@@ -6,12 +6,11 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   subscribeMyInbox,
   type MyInboxItem,
-  type MyInboxKind,
 } from '../repositories/myInboxRepository';
 import { getErrorMessage } from '../utils/errors';
 import { formatMoney } from '../utils/money';
 
-type InboxFilter = 'all' | 'review' | 'mine' | 'money';
+type InboxFilter = 'all' | 'action' | 'waiting' | 'money';
 
 const DISMISSED_STORAGE_KEY = 'bajetbn:my-inbox-dismissed:v1';
 
@@ -36,14 +35,36 @@ function badge(item: MyInboxItem): string {
   if (item.kind === 'mention') return 'Mention';
   if (item.kind === 'task') return 'Task';
   if (item.kind === 'contribution') return 'Contribution';
+  if (item.automationRule === 'budget_threshold') return 'Budget';
+  if (item.automationRule === 'low_fund') return 'Low fund';
+  if (item.automationRule === 'overdue_task') return 'Task overdue';
+  if (item.automationRule === 'low_stock') return 'Low stock';
+  if (item.automationRule === 'seller_payout_due') return 'Seller payout';
+  if (item.automationRule === 'contribution_due') return 'Contribution';
   return 'Reminder';
 }
 
-function kindMatches(filter: InboxFilter, kind: MyInboxKind): boolean {
+function needsAction(item: MyInboxItem): boolean {
+  if (item.kind === 'approval_request') return false;
+  if (item.kind === 'approval_review') return true;
+  if (item.kind === 'mention' || item.kind === 'task' || item.kind === 'contribution') return true;
+  if (item.kind === 'reminder') return true;
+  return item.state === 'needs_action' || item.state === 'due_soon';
+}
+
+function isMoneyItem(item: MyInboxItem): boolean {
+  return item.kind === 'shared_bill'
+    || item.kind === 'contribution'
+    || item.automationRule === 'budget_threshold'
+    || item.automationRule === 'low_fund'
+    || item.automationRule === 'seller_payout_due';
+}
+
+function itemMatches(filter: InboxFilter, item: MyInboxItem): boolean {
   if (filter === 'all') return true;
-  if (filter === 'review') return kind === 'approval_review';
-  if (filter === 'mine') return kind === 'approval_request';
-  if (filter === 'money') return kind === 'shared_bill' || kind === 'contribution';
+  if (filter === 'action') return needsAction(item);
+  if (filter === 'waiting') return item.kind === 'approval_request';
+  if (filter === 'money') return isMoneyItem(item);
   return true;
 }
 
@@ -89,19 +110,12 @@ export function MyInboxPage() {
   );
 
   const filteredItems = useMemo(
-    () => visibleItems.filter((item) => kindMatches(filter, item.kind)),
+    () => visibleItems.filter((item) => itemMatches(filter, item)),
     [filter, visibleItems],
   );
 
-  const needsMe = useMemo(
-    () => visibleItems.filter((item) =>
-      item.kind === 'approval_review'
-      || item.kind === 'mention'
-      || item.kind === 'task'
-      || item.kind === 'contribution'
-      || item.state === 'needs_action'
-      || item.state === 'due_soon'
-    ).length,
+  const actionCount = useMemo(
+    () => visibleItems.filter(needsAction).length,
     [visibleItems],
   );
 
@@ -110,11 +124,8 @@ export function MyInboxPage() {
     [visibleItems],
   );
 
-  const dueSoon = useMemo(
-    () => visibleItems.filter((item) =>
-      item.kind === 'shared_bill'
-      && (item.state === 'needs_action' || item.state === 'due_soon')
-    ).length,
+  const moneyCount = useMemo(
+    () => visibleItems.filter(isMoneyItem).length,
     [visibleItems],
   );
 
@@ -134,28 +145,28 @@ export function MyInboxPage() {
     });
   }
 
-  return <main className="page my-inbox-page">
+  return <main className="page my-inbox-page needs-attention-page">
     <PageHeader
-      eyebrow="Personal action queue"
-      title="My Inbox"
-      description="One place for decisions and responsibilities that need you across your Spaces."
+      eyebrow="Cross-Space action queue"
+      title="Needs Attention"
+      description="One place for decisions, responsibilities and alerts that currently need you across your Spaces."
     />
 
     <section className="summary-grid my-inbox-summary">
       <article className="summary-card featured">
-        <span>Needs me</span>
-        <strong>{needsMe}</strong>
-        <small>Decisions, due items and future action requests</small>
+        <span>Needs action</span>
+        <strong>{actionCount}</strong>
+        <small>Decisions, due responsibilities and active alerts</small>
       </article>
       <article className="summary-card">
         <span>Waiting</span>
         <strong>{waiting}</strong>
-        <small>Your approval requests waiting on someone else</small>
+        <small>Your requests waiting for another member to decide</small>
       </article>
       <article className="summary-card">
-        <span>Due soon</span>
-        <strong>{dueSoon}</strong>
-        <small>Your assigned shared payments due now or within 7 days</small>
+        <span>Money</span>
+        <strong>{moneyCount}</strong>
+        <small>Bills, contributions, budget, fund and payout attention</small>
       </article>
     </section>
 
@@ -168,10 +179,10 @@ export function MyInboxPage() {
         </p>
       </div>
 
-      <div className="segmented-control planning-filter my-inbox-filters" aria-label="My Inbox filter">
+      <div className="segmented-control planning-filter my-inbox-filters" aria-label="Needs Attention filter">
         <button type="button" className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>All</button>
-        <button type="button" className={filter === 'review' ? 'active' : ''} onClick={() => setFilter('review')}>Needs review</button>
-        <button type="button" className={filter === 'mine' ? 'active' : ''} onClick={() => setFilter('mine')}>Waiting</button>
+        <button type="button" className={filter === 'action' ? 'active' : ''} onClick={() => setFilter('action')}>Needs action</button>
+        <button type="button" className={filter === 'waiting' ? 'active' : ''} onClick={() => setFilter('waiting')}>Waiting</button>
         <button type="button" className={filter === 'money' ? 'active' : ''} onClick={() => setFilter('money')}>Money</button>
       </div>
     </section>
@@ -179,12 +190,12 @@ export function MyInboxPage() {
     {error && <div className="notice error">{error}</div>}
 
     {loading
-      ? <div className="loading-panel">Loading My Inbox...</div>
+      ? <div className="loading-panel">Loading Needs Attention...</div>
       : filteredItems.length === 0
         ? <EmptyState
-            title={filter === 'all' ? 'Nothing needs you right now' : 'No matching Inbox items'}
+            title={filter === 'all' ? 'Nothing needs you right now' : 'No matching attention items'}
             description={filter === 'all'
-              ? 'Pending decisions and assigned responsibilities will appear here when they need action.'
+              ? 'Pending decisions, assigned responsibilities and active Space alerts will appear here when action is needed.'
               : 'Choose another filter or return when a new responsibility arrives.'}
           />
         : <section className="panel my-inbox-list">
@@ -230,8 +241,9 @@ export function MyInboxPage() {
 
     <section className="notice my-inbox-note">
       <strong>One source of truth.</strong>{' '}
-      Approval decisions stay in Approvals and payment completion stays in the related bill.
-      My Inbox only points you to the source. Dismiss is reserved for personal reminder or mention items.
+      Needs Attention only points to the real record. Approval decisions stay in Approvals,
+      bill completion stays in Bills, and financial actions remain explicit and manual.
+      It never posts a transfer, expense or seller payout for you.
     </section>
   </main>;
 }

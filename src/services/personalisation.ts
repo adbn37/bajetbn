@@ -40,7 +40,7 @@ export interface PersonalisationSettings {
 export const NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'overview', path: '/', label: 'Overview', icon: '⌂', protected: true },
   { id: 'spaces', path: '/spaces', label: 'Spaces', icon: '◫', protected: true },
-  { id: 'inbox', path: '/inbox', label: 'My Inbox', icon: '✓' },
+  { id: 'inbox', path: '/inbox', label: 'Needs Attention', icon: '✓' },
   { id: 'accounts', path: '/accounts', label: 'Accounts', icon: '◉' },
   { id: 'transactions', path: '/transactions', label: 'Money activity', icon: '↔' },
   { id: 'recurring', path: '/recurring', label: 'Recurring money', icon: '↻' },

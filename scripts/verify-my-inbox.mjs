@@ -64,8 +64,8 @@ for (const forbidden of [
 for (const marker of [
   'bajetbn:my-inbox-dismissed:v1',
   'dismissible',
-  "filter === 'review'",
-  "filter === 'mine'",
+  "filter === 'action'",
+  "filter === 'waiting'",
   "filter === 'money'",
   'Completing the source record removes the item automatically.',
   'One source of truth.',

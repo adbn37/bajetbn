@@ -5803,3 +5803,16 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     flex: 1 1 auto;
   }
 }
+
+/* v1.7.0 Needs Attention consolidation */
+.needs-attention-page .my-inbox-row.state-needs_action {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.needs-attention-page .my-inbox-row.state-due_soon {
+  border-inline-start-width: 3px;
+}
+
+.needs-attention-page .summary-card.featured strong {
+  line-height: 1;
+}

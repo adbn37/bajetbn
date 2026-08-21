@@ -39,6 +39,7 @@ export interface MyInboxItem {
   amountMinor?: number | null;
   currency?: string | null;
   dueDate?: string | null;
+  automationRule?: string | null;
   dismissible: boolean;
   sortTime: number;
 }
@@ -93,14 +94,21 @@ function notificationKind(item: UserNotification): MyInboxKind {
   return 'reminder';
 }
 
+function automationRule(item: UserNotification): string {
+  if (item.type !== 'space_reminder' || typeof item.reminderKey !== 'string') return '';
+  const parts = item.reminderKey.split('|');
+  return parts[1] === 'space_automation' ? parts[3] || '' : '';
+}
+
 function priority(item: MyInboxItem): number {
   if (item.kind === 'shared_bill' && item.state === 'needs_action') return 0;
   if (item.kind === 'approval_review') return 1;
   if (item.state === 'due_soon') return 2;
-  if (item.kind === 'shared_bill') return 3;
-  if (item.kind === 'mention' || item.kind === 'task' || item.kind === 'contribution' || item.kind === 'reminder') return 4;
-  if (item.kind === 'approval_request') return 5;
-  return 6;
+  if (item.kind === 'reminder' && item.automationRule) return 3;
+  if (item.kind === 'shared_bill') return 4;
+  if (item.kind === 'mention' || item.kind === 'task' || item.kind === 'contribution' || item.kind === 'reminder') return 5;
+  if (item.kind === 'approval_request') return 6;
+  return 7;
 }
 
 function buildItems(input: {
@@ -112,6 +120,7 @@ function buildItems(input: {
   notifications: UserNotification[];
 }): MyInboxItem[] {
   const result: MyInboxItem[] = [];
+  const assignedBillKeys = new Set<string>();
 
   for (const [spaceId, membership] of input.memberships.entries()) {
     const space = input.spaces.get(spaceId);
@@ -147,6 +156,7 @@ function buildItems(input: {
 
     for (const assignment of input.bills.get(spaceId) || []) {
       if (assignment.memberUid !== input.uid) continue;
+      assignedBillKeys.add(spaceId + ':' + assignment.id);
 
       const outstandingMinor = billOutstanding(assignment);
       if (outstandingMinor <= 0) continue;
@@ -184,6 +194,17 @@ function buildItems(input: {
     const space = spaceId ? input.spaces.get(spaceId) : null;
     if (space?.archivedAt) continue;
 
+    const rule = automationRule(notification);
+
+    if (
+      rule === 'overdue_bill'
+      && spaceId
+      && notification.itemId
+      && assignedBillKeys.has(spaceId + ':' + notification.itemId)
+    ) {
+      continue;
+    }
+
     result.push({
       id: 'notification:' + notification.id,
       sourceId: notification.id,
@@ -197,6 +218,7 @@ function buildItems(input: {
       amountMinor: null,
       currency: space?.currency || null,
       dueDate: notification.dueDate || null,
+      automationRule: rule || null,
       dismissible: true,
       sortTime: dateMillis(notification.dueDate) || timestampMillis(notification.createdAt),
     });

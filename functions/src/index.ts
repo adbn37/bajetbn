@@ -5161,18 +5161,56 @@ function minorAmountLabel(amountMinor: number, currency: string): string {
   return (amountMinor / 100).toFixed(2) + ' ' + (currency || 'BND');
 }
 
+function spaceAutomationReminderKey(
+  uid: string,
+  candidate: SpaceAutomationCandidate,
+): string {
+  return [
+    uid,
+    'space_automation',
+    candidate.spaceId,
+    candidate.rule,
+    candidate.sourceId,
+    candidate.cycle,
+  ].join('|');
+}
+
+async function cleanupResolvedSpaceAutomationReminders(
+  uid: string,
+  activeReminderKeys: Set<string>,
+): Promise<void> {
+  const snapshot = await db
+    .collection('userNotifications')
+    .where('uid', '==', uid)
+    .get();
+
+  const stale = snapshot.docs.filter((row) => {
+    const item = row.data();
+    const reminderKey = typeof item.reminderKey === 'string'
+      ? item.reminderKey
+      : '';
+
+    return item.type === 'space_reminder'
+      && item.source === 'background_reminder'
+      && reminderKey.includes('|space_automation|')
+      && !activeReminderKeys.has(reminderKey);
+  }).slice(0, 100);
+
+  if (!stale.length) return;
+
+  const writer = db.bulkWriter();
+  for (const row of stale) writer.delete(row.ref);
+  await writer.close();
+}
+
 async function createSpaceAutomationReminder(input: {
   uid: string;
   candidate: SpaceAutomationCandidate;
 }): Promise<PreparedBackgroundReminder | null> {
-  const reminderKey = [
+  const reminderKey = spaceAutomationReminderKey(
     input.uid,
-    'space_automation',
-    input.candidate.spaceId,
-    input.candidate.rule,
-    input.candidate.sourceId,
-    input.candidate.cycle,
-  ].join('|');
+    input.candidate,
+  );
 
   const documentId = backgroundReminderId(reminderKey);
   const notificationRef = db.collection('userNotifications').doc(documentId);
@@ -5250,9 +5288,11 @@ async function processSpaceAutomationRemindersForUser(
   const assignedBills = billSnapshot?.docs || [];
   const assignedTasks = taskSnapshot?.docs || [];
   const candidates: SpaceAutomationCandidate[] = [];
+  const activeReminderKeys = new Set<string>();
 
   const addCandidate = (candidate: SpaceAutomationCandidate) => {
     result.checked += 1;
+    activeReminderKeys.add(spaceAutomationReminderKey(uid, candidate));
     if (candidates.length < 100) candidates.push(candidate);
   };
 
@@ -5628,6 +5668,11 @@ async function processSpaceAutomationRemindersForUser(
   if (profile.browserPushEnabled === true) {
     result.pushSent = await sendBrowserPush(uid, created);
   }
+
+  await cleanupResolvedSpaceAutomationReminders(
+    uid,
+    activeReminderKeys,
+  );
 
   return result;
 }
