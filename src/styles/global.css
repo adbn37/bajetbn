@@ -5429,3 +5429,25 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     width: 100%;
   }
 }
+
+/* v1.7.0 Space approval engine */
+.space-approvals{display:grid;gap:1rem}
+.space-approvals .panel-heading p{margin:.3rem 0 0;max-width:720px;color:var(--muted)}
+.space-approval-composer{display:grid;gap:.8rem;margin-top:.9rem;padding-top:.9rem;border-top:1px solid var(--border)}
+.space-approval-composer label,.space-approval-review label{display:grid;gap:.35rem;font-size:.78rem;font-weight:700;color:var(--muted)}
+.space-approval-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.space-approval-list{display:grid;gap:.75rem}
+.space-approval-card{display:grid;gap:.6rem;padding:.9rem;border:1px solid var(--border);border-radius:var(--theme-card-radius,14px);background:var(--surface-2)}
+.space-approval-card.status-pending{border-color:color-mix(in srgb,var(--accent) 38%,var(--border))}
+.space-approval-card h3,.space-approval-card p{margin:0}
+.space-approval-card p{white-space:pre-wrap;overflow-wrap:anywhere}
+.space-approval-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem}
+.space-approval-heading>div{display:grid;gap:.35rem}
+.space-approval-target{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}
+.space-approval-decision{padding:.65rem .75rem;border-radius:12px;background:var(--surface);border:1px solid var(--border)}
+.space-approval-decision p{margin-top:.35rem}
+.space-approval-review{display:grid;gap:.55rem;padding-top:.55rem;border-top:1px solid var(--border)}
+@media(max-width:600px){
+  .space-approval-grid{grid-template-columns:1fr}
+  .space-approval-heading{flex-direction:column}
+}

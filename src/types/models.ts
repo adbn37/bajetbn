@@ -953,6 +953,42 @@ export interface SpacePollVote {
   updatedAt?: Timestamp;
 }
 
+export type SpaceApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export type SpaceApprovalTargetType =
+  | 'expense'
+  | 'contribution_adjustment'
+  | 'booking'
+  | 'household_purchase'
+  | 'sme_purchase'
+  | 'sme_payout'
+  | 'custom_action'
+  | 'other';
+
+export interface SpaceApproval {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  title: string;
+  requestNote?: string;
+  targetType: SpaceApprovalTargetType;
+  targetId?: string | null;
+  targetPath?: string | null;
+  amountMinor?: number | null;
+  currency?: string | null;
+  status: SpaceApprovalStatus;
+  requestedBy: string;
+  requestedByName?: string;
+  requestedAt?: Timestamp;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: Timestamp | null;
+  decisionNote?: string;
+  cancelledAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface SpaceActivity {
   id: string;
   displayId: string;

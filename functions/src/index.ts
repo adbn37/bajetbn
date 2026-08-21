@@ -1586,6 +1586,194 @@ export const setSpacePollStatus = onCall({ region }, async (request) => {
   });
 });
 
+function approvalOptionalText(value: unknown, maximum: number): string {
+  if (value == null) return '';
+  return String(value).trim().slice(0, maximum);
+}
+
+const approvalTargetTypes = [
+  'expense',
+  'contribution_adjustment',
+  'booking',
+  'household_purchase',
+  'sme_purchase',
+  'sme_payout',
+  'custom_action',
+  'other',
+] as const;
+
+export const requestSpaceApproval = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const title = stringValue(request.data?.title, 'Approval title', 160);
+  const targetType = oneOf(request.data?.targetType, approvalTargetTypes, 'Approval target type');
+  const targetId = approvalOptionalText(request.data?.targetId, 160) || null;
+  const rawTargetPath = approvalOptionalText(request.data?.targetPath, 500);
+  const targetPath = rawTargetPath.startsWith('/') ? rawTargetPath : null;
+  const requestNote = approvalOptionalText(request.data?.requestNote, 1200);
+  const idempotencyKey = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  let amountMinor: number | null = null;
+  let currency: string | null = null;
+  if (request.data?.amountMinor != null) {
+    const numericAmount = Number(request.data.amountMinor);
+    if (!Number.isFinite(numericAmount) || numericAmount < 0 || numericAmount > Number.MAX_SAFE_INTEGER) {
+      throw new HttpsError('invalid-argument', 'Approval amount is invalid.');
+    }
+    amountMinor = Math.round(numericAmount);
+    currency = stringValue(request.data?.currency, 'Currency', 12).toUpperCase();
+  }
+
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  const actorName = collaborationActorName(member, String(request.auth?.token.name || request.auth?.token.email || uid));
+  const ref = db.collection('spaceApprovals').doc(commandId(uid, idempotencyKey));
+
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return { approvalId: ref.id, status: existing.data()?.status || 'pending' };
+
+    const now = FieldValue.serverTimestamp();
+    transaction.create(ref, {
+      displayId: displayId('APR'),
+      spaceId,
+      title,
+      requestNote,
+      targetType,
+      targetId,
+      targetPath,
+      amountMinor,
+      currency,
+      status: 'pending',
+      requestedBy: uid,
+      requestedByName: actorName,
+      requestedAt: now,
+      reviewedBy: null,
+      reviewedByName: null,
+      reviewedAt: null,
+      decisionNote: '',
+      cancelledAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'approval_requested',
+      targetType: 'approval',
+      targetId: ref.id,
+      summary: 'Requested approval: ' + title,
+      now,
+    });
+
+    return { approvalId: ref.id, status: 'pending' };
+  });
+});
+
+export const reviewSpaceApproval = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const approvalId = stringValue(request.data?.approvalId, 'Approval ID', 160);
+  const decision = oneOf(request.data?.decision, ['approved', 'rejected'] as const, 'Approval decision');
+  const decisionNote = approvalOptionalText(request.data?.decisionNote, 1000);
+
+  const member = await requireSpaceManager(spaceId, uid);
+  const actorName = collaborationActorName(member, String(request.auth?.token.name || request.auth?.token.email || uid));
+  const ref = db.collection('spaceApprovals').doc(approvalId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Approval request not found.');
+
+    const current = snapshot.data() || {};
+    if (String(current.spaceId || '') !== spaceId) throw new HttpsError('permission-denied', 'Approval request does not belong to this Space.');
+
+    if (current.status !== 'pending') {
+      if (current.status === decision) return { approvalId: ref.id, status: current.status };
+      throw new HttpsError('failed-precondition', 'Only pending approval requests can be reviewed.');
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, {
+      status: decision,
+      reviewedBy: uid,
+      reviewedByName: actorName,
+      reviewedAt: now,
+      decisionNote,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: decision === 'approved' ? 'approval_approved' : 'approval_rejected',
+      targetType: 'approval',
+      targetId: ref.id,
+      summary: (decision === 'approved' ? 'Approved: ' : 'Rejected: ') + String(current.title || 'Approval request'),
+      now,
+    });
+
+    if (current.requestedBy && current.requestedBy !== uid) {
+      createNotification(transaction, {
+        uid: String(current.requestedBy),
+        spaceId,
+        type: decision === 'approved' ? 'approval_approved' : 'approval_rejected',
+        title: decision === 'approved' ? 'Approval request approved' : 'Approval request rejected',
+        message: String(current.title || 'Your approval request'),
+        targetPath: current.targetPath || ('/spaces/' + spaceId + '?tab=approvals'),
+        actionLabel: current.targetPath ? 'Open record' : 'Open approvals',
+        now,
+      });
+    }
+
+    return { approvalId: ref.id, status: decision };
+  });
+});
+
+export const cancelSpaceApproval = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const approvalId = stringValue(request.data?.approvalId, 'Approval ID', 160);
+
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  const actorName = collaborationActorName(member, String(request.auth?.token.name || request.auth?.token.email || uid));
+  const ref = db.collection('spaceApprovals').doc(approvalId);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) throw new HttpsError('not-found', 'Approval request not found.');
+
+    const current = snapshot.data() || {};
+    if (String(current.spaceId || '') !== spaceId) throw new HttpsError('permission-denied', 'Approval request does not belong to this Space.');
+    if (String(current.requestedBy || '') !== uid) throw new HttpsError('permission-denied', 'Only the requester can cancel this approval request.');
+
+    if (current.status === 'cancelled') return { approvalId: ref.id, status: 'cancelled' };
+    if (current.status !== 'pending') throw new HttpsError('failed-precondition', 'Only pending approval requests can be cancelled.');
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(ref, {
+      status: 'cancelled',
+      cancelledAt: now,
+      updatedAt: now,
+    });
+
+    createActivity(transaction, {
+      spaceId,
+      actorUid: uid,
+      actorName,
+      action: 'approval_cancelled',
+      targetType: 'approval',
+      targetId: ref.id,
+      summary: 'Cancelled approval request: ' + String(current.title || 'Approval request'),
+      now,
+    });
+
+    return { approvalId: ref.id, status: 'cancelled' };
+  });
+});
+
 async function requireSmeSpaceOwner(spaceId: string, uid: string): Promise<{ space: DocumentData; member: DocumentData }> {
   const [spaceSnapshot, member] = await Promise.all([
     db.collection('spaces').doc(spaceId).get(),
@@ -6148,6 +6336,7 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('spaceAnnouncements').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spacePolls').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spacePollVotes').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceApprovals').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItemMovements').where('spaceId', '==', spaceId)),
@@ -8681,6 +8870,8 @@ async function finalizeAccountDeletion(uid: string) {
     await queueFieldAnonymization({ plan, collectionName: 'spaceAnnouncements', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spacePolls', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spacePollVotes', field: 'uid', uid, updates: () => ({ uid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceApprovals', field: 'requestedBy', uid, updates: () => ({ requestedBy: anonymousId, requestedByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceApprovals', field: 'reviewedBy', uid, updates: () => ({ reviewedBy: anonymousId, reviewedByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'actorUid', uid, updates: () => ({ actorUid: anonymousId, actorName: deletedMemberName, summary: 'Activity retained after a member deleted their account.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'targetId', uid, updates: () => ({ targetId: anonymousId, summary: 'Member-related activity retained after account deletion.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, paidByName: deletedMemberName, paidByEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });

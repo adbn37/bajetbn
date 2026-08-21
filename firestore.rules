@@ -511,6 +511,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /spaceApprovals/{approvalId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
     match /spaceActivities/{activityId} {
       allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
       allow create, update, delete: if false;
