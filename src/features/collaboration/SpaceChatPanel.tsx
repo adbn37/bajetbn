@@ -20,6 +20,10 @@ import {
   type SpaceChatAttachmentInput,
 } from '../../repositories/spaceChatRepository';
 import {
+  setSpaceTyping,
+  subscribeSpacePresence,
+} from '../../repositories/spacePresenceRepository';
+import {
   listSpaceChatRecordOptions,
   spaceChatRecordTypeLabel,
   type SpaceChatRecordOption,
@@ -29,6 +33,7 @@ import type {
   SpaceMember,
   SpaceMessage,
 } from '../../types/models';
+import type { SpacePresence } from '../../types/models';
 
 interface Props {
   space: Space;
@@ -137,6 +142,7 @@ export function SpaceChatPanel({
 
   const [messages, setMessages] =
     useState<SpaceMessage[]>([]);
+  const [presence, setPresence] = useState<SpacePresence[]>([]);
 
   const [message, setMessage] = useState('');
   const [mentionUids, setMentionUids] = useState<string[]>([]);
@@ -157,6 +163,7 @@ export function SpaceChatPanel({
   const [error, setError] = useState('');
 
   const endRef = useRef<HTMLDivElement | null>(null);
+  const typingWriteAtRef = useRef(0);
 
   const activeMembers = useMemo(
     () =>
@@ -224,6 +231,14 @@ export function SpaceChatPanel({
       },
     );
   }, [space.id]);
+
+  useEffect(() =>
+    subscribeSpacePresence(
+      space.id,
+      setPresence,
+      () => setPresence([]),
+    ),
+  [space.id]);
 
   useEffect(() => {
     let active = true;
@@ -345,6 +360,27 @@ export function SpaceChatPanel({
     setError('');
   }
 
+  function updateMessageDraft(value: string) {
+    setMessage(value);
+
+    if (!user || !maySend) return;
+
+    const now = Date.now();
+
+    if (!value.trim()) {
+      if (typingWriteAtRef.current !== 0) {
+        typingWriteAtRef.current = 0;
+        void setSpaceTyping(space.id, user.uid, false).catch(() => undefined);
+      }
+      return;
+    }
+
+    if (now - typingWriteAtRef.current < 2_500) return;
+
+    typingWriteAtRef.current = now;
+    void setSpaceTyping(space.id, user.uid, true).catch(() => undefined);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
 
@@ -385,6 +421,8 @@ export function SpaceChatPanel({
       });
 
       setMessage('');
+      typingWriteAtRef.current = 0;
+      void setSpaceTyping(space.id, user.uid, false).catch(() => undefined);
       setMentionUids([]);
       setSelectedRecord(null);
       setReplyingTo(null);
@@ -409,6 +447,20 @@ export function SpaceChatPanel({
     }
   }
 
+  const activePresenceNames = presence.map((item) =>
+    item.uid === user?.uid
+      ? 'You'
+      : memberNames.get(item.uid) || 'Member',
+  );
+
+  const typingPresenceNames = presence
+    .filter(
+      (item) =>
+        item.uid !== user?.uid
+        && Number(item.typingUntil?.toMillis?.() || 0) > Date.now(),
+    )
+    .map((item) => memberNames.get(item.uid) || 'Member');
+
   return (
     <section className="panel space-chat-panel">
       <div className="panel-heading space-chat-heading">
@@ -420,10 +472,31 @@ export function SpaceChatPanel({
           </p>
         </div>
 
-        <span className="type-badge">
-          {messages.length} message(s)
-        </span>
+        <div className="button-row">
+          {presence.length > 0 && (
+            <span className="type-badge">
+              {presence.length} active now
+            </span>
+          )}
+          <span className="type-badge">
+            {messages.length} message(s)
+          </span>
+        </div>
       </div>
+
+      {activePresenceNames.length > 0 && (
+        <div className="permission-chips" aria-label="Members active in this Space">
+          <span>Active now: {activePresenceNames.join(', ')}</span>
+        </div>
+      )}
+
+      {typingPresenceNames.length > 0 && (
+        <div className="notice info" aria-live="polite">
+          {typingPresenceNames.join(', ')}
+          {' '}
+          {typingPresenceNames.length === 1 ? 'is' : 'are'} typing...
+        </div>
+      )}
 
       <div
         className="space-chat-messages"
@@ -613,7 +686,7 @@ export function SpaceChatPanel({
               rows={3}
               placeholder={'Message ' + space.name}
               onChange={(event) =>
-                setMessage(event.target.value)
+                updateMessageDraft(event.target.value)
               }
             />
           </label>

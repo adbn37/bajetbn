@@ -36,6 +36,7 @@ import { updateSpace } from '../../repositories/spaceRepository';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
+import { useSpacePresenceHeartbeat } from '../collaboration/useSpacePresence';
 import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAutomationPanel';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
@@ -250,6 +251,19 @@ export function SpaceDetailsPage() {
   const openSharedExpenses = sharedExpenses.filter((item) => item.status !== 'paid');
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
   const currentMember = members.find((item) => item.uid === user?.uid);
+
+  useSpacePresenceHeartbeat({
+    spaceId: space?.id || '',
+    uid: user?.uid || '',
+    enabled: Boolean(
+      space
+      && user
+      && currentMember
+      && space.type !== 'personal'
+      && !space.archivedAt
+      && (currentMember.status || 'active') === 'active',
+    ),
+  });
   const canViewSmeFinancials = !space
     || space.type !== 'sme'
     || space.ownerId === user?.uid

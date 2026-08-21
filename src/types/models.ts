@@ -769,6 +769,15 @@ export interface SpaceMember {
   updatedAt?: Timestamp;
 }
 
+export interface SpacePresence {
+  id: string;
+  spaceId: string;
+  uid: string;
+  activeAt?: Timestamp;
+  expiresAt?: Timestamp;
+  typingUntil?: Timestamp | null;
+}
+
 export type TripItineraryCategory =
   | 'flight'
   | 'hotel'

@@ -267,6 +267,71 @@ service cloud.firestore {
       allow update, delete: if false; // Membership changes move to Cloud Functions in collaboration phase.
     }
 
+    match /spacePresence/{presenceId} {
+      allow read: if signedIn()
+        && isSpaceMember(resource.data.spaceId);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll([
+          'spaceId',
+          'uid',
+          'activeAt',
+          'expiresAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'spaceId',
+          'uid',
+          'activeAt',
+          'expiresAt',
+          'typingUntil'
+        ])
+        && request.resource.data.spaceId is string
+        && request.resource.data.uid == request.auth.uid
+        && presenceId == membershipId(request.resource.data.spaceId, request.auth.uid)
+        && isSpaceMember(request.resource.data.spaceId)
+        && request.resource.data.activeAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(2, 'm')
+        && (
+          request.resource.data.get('typingUntil', null) == null
+          || (
+            request.resource.data.typingUntil is timestamp
+            && request.resource.data.typingUntil >= request.time
+            && request.resource.data.typingUntil <= request.time + duration.value(15, 's')
+          )
+        );
+
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.spaceId == resource.data.spaceId
+        && presenceId == membershipId(resource.data.spaceId, request.auth.uid)
+        && isSpaceMember(resource.data.spaceId)
+        && request.resource.data.keys().hasOnly([
+          'spaceId',
+          'uid',
+          'activeAt',
+          'expiresAt',
+          'typingUntil'
+        ])
+        && request.resource.data.activeAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(2, 'm')
+        && (
+          request.resource.data.get('typingUntil', null) == null
+          || (
+            request.resource.data.typingUntil is timestamp
+            && request.resource.data.typingUntil >= request.time
+            && request.resource.data.typingUntil <= request.time + duration.value(15, 's')
+          )
+        );
+
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
     match /collectionItems/{itemId} {
       allow read: if isCollectionSpace(resource.data.spaceId) && isSpaceMember(resource.data.spaceId);
       allow create: if canEditCollection(request.resource.data.spaceId)
