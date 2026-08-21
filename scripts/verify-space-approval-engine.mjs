@@ -63,7 +63,7 @@ need(functions.includes("collectionName: 'spaceApprovals', field: 'requestedBy'"
 need(functions.includes("collectionName: 'spaceApprovals', field: 'reviewedBy'"), 'Reviewer anonymisation is missing.');
 
 need(exporter.includes("rowsForValues('spaceApprovals', 'spaceId', activeSpaceIds)"), 'Approvals are missing from user export.');
-need(exporter.includes('formatVersion: 8'), 'Approval export schema must be format 8.');
+need(exporter.includes('formatVersion: 9'), 'Approval export schema must be format 8.');
 need(css.includes('/* v1.7.0 Space approval engine */'), 'Approval CSS marker is missing.');
 
 console.log('v1.7.0 Slice 2 reusable Approval Engine checks passed.');

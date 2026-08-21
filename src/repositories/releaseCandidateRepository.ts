@@ -116,6 +116,7 @@ export async function buildUserDataExport(uid: string) {
   const allSpacePollVotes = await rowsForValues('spacePollVotes', 'spaceId', activeSpaceIds);
   const spacePollVotes = allSpacePollVotes.filter((item) => item.uid === uid);
   const spaceApprovals = await rowsForValues('spaceApprovals', 'spaceId', activeSpaceIds);
+  const spaceMessages = await rowsForValues('spaceMessages', 'spaceId', activeSpaceIds);
 
   const [
     accountAccess,
@@ -169,11 +170,12 @@ export async function buildUserDataExport(uid: string) {
       exportedAt: new Date().toISOString(),
       environment: import.meta.env.VITE_APP_ENV || 'local',
       projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-      formatVersion: 8,
+      formatVersion: 9,
     },
     profile: profileSnapshot.exists() ? { id: profileSnapshot.id, ...profileSnapshot.data() } : null,
     spaces,
     memberships,
+    spaceMessages,
     accounts,
     accountAccess,
     accountRecords,

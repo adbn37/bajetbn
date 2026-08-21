@@ -1336,10 +1336,41 @@ export interface SpaceFundContribution {
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
+export type SpaceChatRecordType =
+  | 'expense'
+  | 'shared_bill'
+  | 'commitment'
+  | 'trip_task'
+  | 'booking'
+  | 'budget'
+  | 'payout'
+  | 'collection_item'
+  | 'approval';
+
+export interface SpaceChatRecordRef {
+  type: SpaceChatRecordType;
+  id: string;
+  label: string;
+  targetPath: string;
+}
+
+export interface SpaceMessageReply {
+  messageId: string;
+  bodyPreview: string;
+}
+
 export interface SpaceMessage {
   id: string;
   spaceId: string;
   senderUid: string;
   body: string;
+  mentionLabels?: string[];
+  recordRef?: SpaceChatRecordRef | null;
+  replyTo?: SpaceMessageReply | null;
+  storagePath?: string | null;
+  fileName?: string | null;
+  contentType?: string | null;
+  sizeBytes?: number | null;
   createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }

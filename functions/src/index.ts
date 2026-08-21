@@ -1241,6 +1241,309 @@ function createNotification(transaction: Transaction, input: { uid: string; spac
 }
 
 
+const chatRecordTypes = [
+  'expense',
+  'shared_bill',
+  'commitment',
+  'trip_task',
+  'booking',
+  'budget',
+  'payout',
+  'collection_item',
+  'approval',
+] as const;
+
+export const sendSpaceChatMessage = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
+
+  const body = typeof request.data?.body === 'string'
+    ? request.data.body.trim()
+    : '';
+
+  if (body.length > 2000) {
+    throw new HttpsError('invalid-argument', 'Messages can be up to 2,000 characters.');
+  }
+
+  const member = await requireActiveSpaceMember(spaceId, uid);
+  const spaceSnapshot = await db.collection('spaces').doc(spaceId).get();
+
+  if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) {
+    throw new HttpsError('failed-precondition', 'This Space is unavailable.');
+  }
+
+  const senderName = String(
+    member.displayName
+    || request.auth?.token.name
+    || request.auth?.token.email
+    || 'Space member',
+  );
+
+  const rawMentionUids = Array.isArray(request.data?.mentionUids)
+    ? request.data.mentionUids
+    : [];
+
+  if (rawMentionUids.length > 20) {
+    throw new HttpsError('invalid-argument', 'Mention up to 20 members in one message.');
+  }
+
+  const mentionUids: string[] = Array.from(
+    new Set<string>(
+      rawMentionUids
+        .map((value: unknown): string => String(value || '').trim())
+        .filter((value: string): boolean => Boolean(value && value !== uid)),
+    ),
+  );
+
+  if (mentionUids.some((value) => value.length > 80)) {
+    throw new HttpsError('invalid-argument', 'One mentioned member is invalid.');
+  }
+
+  const mentionMembers = await Promise.all(
+    mentionUids.map(async (mentionedUid) => {
+      const snapshot = await db
+        .collection('spaceMembers')
+        .doc(spaceId + '_' + mentionedUid)
+        .get();
+
+      if (
+        !snapshot.exists
+        || (
+          snapshot.data()?.status
+          && snapshot.data()?.status !== 'active'
+        )
+      ) {
+        throw new HttpsError(
+          'invalid-argument',
+          'One mentioned member is no longer active in this Space.',
+        );
+      }
+
+      return {
+        uid: mentionedUid,
+        label: String(
+          snapshot.data()?.displayName
+          || snapshot.data()?.email
+          || 'Member',
+        ).slice(0, 120),
+      };
+    }),
+  );
+
+  let recordRef: {
+    type: string;
+    id: string;
+    label: string;
+    targetPath: string;
+  } | null = null;
+
+  const rawRecordRef = request.data?.recordRef;
+
+  if (rawRecordRef != null) {
+    if (typeof rawRecordRef !== 'object' || Array.isArray(rawRecordRef)) {
+      throw new HttpsError('invalid-argument', 'Record reference is invalid.');
+    }
+
+    const type = String(rawRecordRef.type || '').trim();
+    const id = String(rawRecordRef.id || '').trim();
+    const label = String(rawRecordRef.label || '').trim();
+    const targetPath = String(rawRecordRef.targetPath || '').trim();
+
+    if (!(chatRecordTypes as readonly string[]).includes(type)) {
+      throw new HttpsError('invalid-argument', 'Record type is not supported in Chat.');
+    }
+
+    if (!id || id.length > 120 || !label || label.length > 160) {
+      throw new HttpsError('invalid-argument', 'Record reference is incomplete.');
+    }
+
+    if (
+      !targetPath
+      || targetPath.length > 500
+      || !targetPath.startsWith('/spaces/' + spaceId)
+    ) {
+      throw new HttpsError('invalid-argument', 'Record link must stay inside this Space.');
+    }
+
+    recordRef = { type, id, label, targetPath };
+  }
+
+  let attachment: {
+    storagePath: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+  } | null = null;
+
+  const rawAttachment = request.data?.attachment;
+
+  if (rawAttachment != null) {
+    if (typeof rawAttachment !== 'object' || Array.isArray(rawAttachment)) {
+      throw new HttpsError('invalid-argument', 'Attachment metadata is invalid.');
+    }
+
+    const storagePath = String(rawAttachment.storagePath || '').trim();
+    const fileName = String(rawAttachment.fileName || '').trim();
+    const contentType = String(rawAttachment.contentType || '').trim();
+    const sizeBytes = Number(rawAttachment.sizeBytes);
+
+    const requiredPrefix =
+      'spaces/'
+      + spaceId
+      + '/chat-attachments/'
+      + uid
+      + '/';
+
+    if (
+      !storagePath.startsWith(requiredPrefix)
+      || storagePath.length > 700
+      || !fileName
+      || fileName.length > 160
+    ) {
+      throw new HttpsError('invalid-argument', 'Attachment path is invalid.');
+    }
+
+    if (
+      !contentType.startsWith('image/')
+      && contentType !== 'application/pdf'
+    ) {
+      throw new HttpsError('invalid-argument', 'Only images and PDFs can be attached.');
+    }
+
+    if (
+      !Number.isSafeInteger(sizeBytes)
+      || sizeBytes <= 0
+      || sizeBytes >= 10 * 1024 * 1024
+    ) {
+      throw new HttpsError('invalid-argument', 'Attachment must be smaller than 10 MB.');
+    }
+
+    attachment = {
+      storagePath,
+      fileName,
+      contentType,
+      sizeBytes,
+    };
+  }
+
+  let replyTo: {
+    messageId: string;
+    bodyPreview: string;
+  } | null = null;
+
+  const replyToMessageId =
+    typeof request.data?.replyToMessageId === 'string'
+      ? request.data.replyToMessageId.trim()
+      : '';
+
+  if (replyToMessageId) {
+    if (replyToMessageId.length > 120) {
+      throw new HttpsError('invalid-argument', 'Reply message is invalid.');
+    }
+
+    const replySnapshot = await db
+      .collection('spaceMessages')
+      .doc(replyToMessageId)
+      .get();
+
+    if (
+      !replySnapshot.exists
+      || replySnapshot.data()?.spaceId !== spaceId
+    ) {
+      throw new HttpsError('invalid-argument', 'The replied message is not in this Space.');
+    }
+
+    const preview = String(
+      replySnapshot.data()?.body
+      || replySnapshot.data()?.recordRef?.label
+      || replySnapshot.data()?.fileName
+      || 'Message',
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+
+    replyTo = {
+      messageId: replyToMessageId,
+      bodyPreview: preview || 'Message',
+    };
+  }
+
+  if (!body && !recordRef && !attachment) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Write a message or attach a record or file first.',
+    );
+  }
+
+  const commandRef = db
+    .collection('collaborationCommands')
+    .doc(commandId(uid, key));
+
+  const messageRef = db.collection('spaceMessages').doc();
+
+  return db.runTransaction(async (transaction) => {
+    const command = await transaction.get(commandRef);
+
+    if (command.exists) {
+      return command.data()?.result;
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    transaction.create(messageRef, {
+      spaceId,
+      senderUid: uid,
+      body,
+      mentionLabels: mentionMembers.map((item) => item.label),
+      recordRef,
+      replyTo,
+      storagePath: attachment?.storagePath || null,
+      fileName: attachment?.fileName || null,
+      contentType: attachment?.contentType || null,
+      sizeBytes: attachment?.sizeBytes || null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    for (const mentioned of mentionMembers) {
+      createNotification(transaction, {
+        uid: mentioned.uid,
+        spaceId,
+        type: recordRef ? 'record_mention' : 'space_mention',
+        title: recordRef
+          ? senderName + ' mentioned you with a record'
+          : senderName + ' mentioned you in Chat',
+        message: recordRef
+          ? recordRef.label
+          : (body.slice(0, 180) || 'Open the Space Chat to reply.'),
+        targetPath:
+          '/spaces/'
+          + spaceId
+          + '?tab=chat&messageId='
+          + messageRef.id,
+        actionLabel: recordRef ? 'Open discussion' : 'Open chat',
+        now,
+      });
+    }
+
+    const result = {
+      messageId: messageRef.id,
+    };
+
+    transaction.create(commandRef, {
+      uid,
+      kind: 'send_space_chat_message',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
+    return result;
+  });
+});
+
 function optionalCollaborationDate(value: unknown, label: string): string | null {
   if (value == null || value === '') return null;
   const next = String(value).trim();
@@ -6337,6 +6640,7 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('spacePolls').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spacePollVotes').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceApprovals').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceMessages').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceActivities').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('collectionItemMovements').where('spaceId', '==', spaceId)),
@@ -8872,6 +9176,7 @@ async function finalizeAccountDeletion(uid: string) {
     await queueFieldAnonymization({ plan, collectionName: 'spacePollVotes', field: 'uid', uid, updates: () => ({ uid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceApprovals', field: 'requestedBy', uid, updates: () => ({ requestedBy: anonymousId, requestedByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceApprovals', field: 'reviewedBy', uid, updates: () => ({ reviewedBy: anonymousId, reviewedByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceMessages', field: 'senderUid', uid, proofPaths, updates: () => ({ senderUid: anonymousId, storagePath: null, fileName: null, contentType: null, sizeBytes: null, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'actorUid', uid, updates: () => ({ actorUid: anonymousId, actorName: deletedMemberName, summary: 'Activity retained after a member deleted their account.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceActivities', field: 'targetId', uid, updates: () => ({ targetId: anonymousId, summary: 'Member-related activity retained after account deletion.', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'sharedExpenses', field: 'paidByUid', uid, updates: () => ({ paidByUid: anonymousId, paidByName: deletedMemberName, paidByEmail: '', note: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
