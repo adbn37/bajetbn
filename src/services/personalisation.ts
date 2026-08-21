@@ -1,6 +1,8 @@
 export type IconPack = 'classic' | 'rounded' | 'minimal' | 'retro';
 export type SurfaceStyle = 'solid' | 'soft' | 'glass';
 export type WallpaperStyle = 'none' | 'dots' | 'grid' | 'waves' | 'stars';
+export type TypographyStyle = 'system' | 'friendly' | 'editorial' | 'mono';
+export type DecorationIntensity = 'quiet' | 'balanced' | 'bold';
 export type NavigationId =
   | 'overview'
   | 'spaces'
@@ -27,6 +29,8 @@ export interface PersonalisationSettings {
   iconPack: IconPack;
   surfaceStyle: SurfaceStyle;
   wallpaperStyle: WallpaperStyle;
+  typographyStyle: TypographyStyle;
+  decorationIntensity: DecorationIntensity;
   navigationOrder: NavigationId[];
   hiddenNavigation: NavigationId[];
   pinnedNavigation: NavigationId[];
@@ -74,6 +78,8 @@ export const RECOMMENDED_HIDDEN_NAVIGATION: NavigationId[] = [
 const ICON_PACKS: IconPack[] = ['classic', 'rounded', 'minimal', 'retro'];
 const SURFACE_STYLES: SurfaceStyle[] = ['solid', 'soft', 'glass'];
 const WALLPAPER_STYLES: WallpaperStyle[] = ['none', 'dots', 'grid', 'waves', 'stars'];
+const TYPOGRAPHY_STYLES: TypographyStyle[] = ['system', 'friendly', 'editorial', 'mono'];
+const DECORATION_INTENSITIES: DecorationIntensity[] = ['quiet', 'balanced', 'bold'];
 const STORAGE_PREFIX = 'bajetbn:personalisation:';
 export const PERSONALISATION_EVENT = 'bajetbn:personalisation-changed';
 
@@ -128,6 +134,8 @@ export function defaultPersonalisation(): PersonalisationSettings {
     iconPack: 'classic',
     surfaceStyle: 'solid',
     wallpaperStyle: 'none',
+    typographyStyle: 'system',
+    decorationIntensity: 'balanced',
     navigationOrder: [...RECOMMENDED_NAVIGATION_ORDER],
     hiddenNavigation: [...RECOMMENDED_HIDDEN_NAVIGATION],
     pinnedNavigation: [],
@@ -162,6 +170,8 @@ export function sanitizePersonalisation(value: Partial<PersonalisationSettings> 
     iconPack: ICON_PACKS.includes(value?.iconPack as IconPack) ? value!.iconPack as IconPack : defaults.iconPack,
     surfaceStyle: SURFACE_STYLES.includes(value?.surfaceStyle as SurfaceStyle) ? value!.surfaceStyle as SurfaceStyle : defaults.surfaceStyle,
     wallpaperStyle: WALLPAPER_STYLES.includes(value?.wallpaperStyle as WallpaperStyle) ? value!.wallpaperStyle as WallpaperStyle : defaults.wallpaperStyle,
+    typographyStyle: TYPOGRAPHY_STYLES.includes(value?.typographyStyle as TypographyStyle) ? value!.typographyStyle as TypographyStyle : defaults.typographyStyle,
+    decorationIntensity: DECORATION_INTENSITIES.includes(value?.decorationIntensity as DecorationIntensity) ? value!.decorationIntensity as DecorationIntensity : defaults.decorationIntensity,
     navigationOrder: order,
     hiddenNavigation: hidden,
     pinnedNavigation: pinned,
@@ -184,6 +194,8 @@ export function applyPersonalisation(settings: PersonalisationSettings) {
   root.dataset.iconPack = settings.iconPack;
   root.dataset.surfaceStyle = settings.surfaceStyle;
   root.dataset.wallpaperStyle = settings.wallpaperStyle;
+  root.dataset.typographyStyle = settings.typographyStyle;
+  root.dataset.decorationIntensity = settings.decorationIntensity;
 }
 
 export function savePersonalisation(uid: string, value: PersonalisationSettings): PersonalisationSettings {
