@@ -38,6 +38,7 @@ import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
 import { SpaceActionHub } from './SpaceActionHub';
+import { CollectionCommandCentre } from './CollectionCommandCentre';
 import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
 import { TripCommandCentre } from './TripCommandCentre';
@@ -395,6 +396,9 @@ export function SpaceDetailsPage() {
         }
         onOpenTab={chooseTab}
       />
+    )}
+    {activeTab === 'overview' && space.type === 'collection' && (
+      <CollectionCommandCentre space={space} />
     )}
     <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
