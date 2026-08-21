@@ -29,7 +29,15 @@ for (const item of audit.items) {
 }
 
 // Core implemented evidence.
-requireText('src/types/models.ts', "export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'vehicle' | 'property' | 'project' | 'event' | 'asset' | 'custom'");
+const spaceTypeSource = read('src/types/models.ts');
+const spaceTypeMatch = spaceTypeSource.match(/export type SpaceType\s*=\s*([^;]+);/s);
+if (!spaceTypeMatch) fail('SpaceType declaration is missing.');
+const actualSpaceTypes = Array.from(spaceTypeMatch[1].matchAll(/'([^']+)'/g), (match) => match[1]);
+const expectedSpaceTypes = ['personal', 'household', 'sme', 'trip', 'goal', 'collection', 'vehicle', 'property', 'project', 'event', 'asset', 'custom'];
+for (const type of expectedSpaceTypes) {
+  if (!actualSpaceTypes.includes(type)) fail('SpaceType is missing ' + type + '.');
+}
+if (actualSpaceTypes.length !== expectedSpaceTypes.length) fail('SpaceType contains unexpected values: ' + actualSpaceTypes.join(', ') + '.');
 requireText('src/types/models.ts', "export type SharedExpenseSplitMode = 'equal' | 'custom' | 'percentage'");
 requireText('src/features/spaces/SharedExpensesPanel.tsx', 'Settlements');
 requireText('src/features/spaces/TripMoneyPanel.tsx', 'Trip money');
@@ -48,7 +56,7 @@ if (['complete', 'manual_test'].includes(deletionStatus)) {
   requireText('firestore.rules', 'match /accountDeletionRequests/{uid}');
   requireText('ACCOUNT_DATA_DELETION_ALPHA.md', 'seven-day cooling-off period');
 } else {
-  requireText('src/pages/SettingsPage.tsx', 'Delete my account — coming later');
+  requireText('src/pages/SettingsPage.tsx', 'Delete my account Ã¢â‚¬â€ coming later');
 }
 
 const recurringStatus = itemById.get('recurring.transactions')?.status;

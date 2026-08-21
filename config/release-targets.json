@@ -1,0 +1,12 @@
+{
+  "staging": {
+    "gitBranch": "staging",
+    "firebaseProject": "bajetbn-staging",
+    "cloudflareProject": "bajetbn-staging",
+    "url": "https://bajetbn-staging.pages.dev"
+  },
+  "production": {
+    "gitBranch": "main",
+    "url": "https://bajetbn.pages.dev"
+  }
+}
