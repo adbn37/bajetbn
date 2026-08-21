@@ -10,7 +10,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { requireFirebase } from '../services/firebase';
-import type { Space, SpaceType } from '../types/models';
+import type { CustomSpaceModule, Space, SpaceType } from '../types/models';
 import { createClientDisplayId } from '../utils/ids';
 
 export async function listSpaces(uid: string): Promise<Space[]> {
@@ -38,6 +38,7 @@ export async function createSpace(input: {
   currency: string;
   timezone: string;
   description?: string;
+  customModules?: CustomSpaceModule[];
 }): Promise<string> {
   const { db } = requireFirebase();
   const spaceRef = doc(collection(db, 'spaces'));
@@ -55,6 +56,7 @@ export async function createSpace(input: {
     currency: input.currency,
     timezone: input.timezone,
     description: input.description?.trim() || '',
+    ...(input.type === 'custom' ? { customModules: input.customModules || [] } : {}),
     archivedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -74,11 +76,12 @@ export async function createSpace(input: {
   return spaceRef.id;
 }
 
-export async function updateSpace(spaceId: string, updates: { name: string; description?: string }) {
+export async function updateSpace(spaceId: string, updates: { name: string; description?: string; customModules?: CustomSpaceModule[] }) {
   const { db } = requireFirebase();
   await updateDoc(doc(db, 'spaces', spaceId), {
     name: updates.name.trim(),
     description: updates.description?.trim() || '',
+    ...(updates.customModules ? { customModules: updates.customModules } : {}),
     updatedAt: serverTimestamp(),
   });
 }

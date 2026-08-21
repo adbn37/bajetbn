@@ -4698,3 +4698,13 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     padding: .5rem;
   }
 }
+
+/* Custom Space v2 - module picker */
+.custom-space-module-picker { border:1px solid var(--border); border-radius:14px; padding:14px; margin:0; }
+.custom-space-module-picker legend { font-weight:700; padding:0 6px; }
+.custom-space-module-list { display:grid; gap:8px; margin-top:10px; }
+.custom-space-module-option { display:flex; align-items:flex-start; gap:10px; padding:10px; border:1px solid var(--border); border-radius:12px; cursor:pointer; }
+.custom-space-module-option input { margin-top:3px; flex:0 0 auto; }
+.custom-space-module-option span { display:grid; gap:2px; }
+.custom-space-module-option small { color:var(--muted); }
+@media (min-width:720px) { .custom-space-module-list { grid-template-columns:repeat(2,minmax(0,1fr)); } }

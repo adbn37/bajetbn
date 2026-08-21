@@ -8,8 +8,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { acceptSpaceInvitation, declineSpaceInvitation, listMySpaceInvitations } from '../../repositories/collaborationRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { createSpace, listSpaces, updateSpace } from '../../repositories/spaceRepository';
-import type { Space, SpaceInvitation, SpaceType } from '../../types/models';
+import type { CustomSpaceModule, Space, SpaceInvitation, SpaceType } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
 
 const labels: Record<SpaceType, string> = {
   personal: 'Personal',
@@ -238,11 +239,137 @@ function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { 
   })}</section>;
 }
 
-function SpaceForm({ title, submitLabel, initial, lockType = false, onClose, onSubmit }: { title: string; submitLabel: string; initial?: Space; lockType?: boolean; onClose: () => void; onSubmit: (value: { name: string; type: Exclude<SpaceType, 'personal'>; description: string }) => Promise<void> }) {
+function SpaceForm({
+  title,
+  submitLabel,
+  initial,
+  lockType = false,
+  onClose,
+  onSubmit,
+}: {
+  title: string;
+  submitLabel: string;
+  initial?: Space;
+  lockType?: boolean;
+  onClose: () => void;
+  onSubmit: (value: {
+    name: string;
+    type: Exclude<SpaceType, 'personal'>;
+    description: string;
+    customModules?: CustomSpaceModule[];
+  }) => Promise<void>;
+}) {
   const [name, setName] = useState(initial?.name || '');
-  const [type, setType] = useState<Exclude<SpaceType, 'personal'>>((initial?.type === 'personal' ? 'custom' : initial?.type) || 'household');
+  const [type, setType] = useState<Exclude<SpaceType, 'personal'>>(
+    (initial?.type === 'personal' ? 'custom' : initial?.type) || 'household',
+  );
   const [description, setDescription] = useState(initial?.description || '');
-  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await onSubmit({ name, type, description }); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <Modal title={title} onClose={onClose}><form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Space name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Our Household" /></label><label>Type<select disabled={lockType} value={type} onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}><option value="household">Household</option><option value="sme">SME</option><option value="trip">Trip</option><option value="goal">Goal</option><option value="collection">Collection</option><option value="vehicle">Vehicle</option><option value="property">Property</option><option value="project">Project</option><option value="event">Event</option><option value="asset">Asset</option><option value="custom">Custom</option></select></label><label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button></div></form></Modal>;
+  const [customModules, setCustomModules] = useState<CustomSpaceModule[]>(
+    initial?.type === 'custom'
+      ? normalizeCustomSpaceModules(initial.customModules)
+      : [...DEFAULT_CUSTOM_SPACE_MODULES],
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const toggleModule = (module: CustomSpaceModule) => {
+    setCustomModules((current) =>
+      current.includes(module)
+        ? current.filter((item) => item !== module)
+        : [...current, module],
+    );
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+
+    try {
+      await onSubmit({
+        name,
+        type,
+        description,
+        customModules: type === 'custom' ? customModules : undefined,
+      });
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <Modal title={title} onClose={onClose}>
+    <form className="form-stack" onSubmit={submit}>
+      {error && <div className="notice error">{error}</div>}
+
+      <label>
+        Space name
+        <input
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="e.g. Our Household"
+        />
+      </label>
+
+      <label>
+        Type
+        <select
+          disabled={lockType}
+          value={type}
+          onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}
+        >
+          <option value="household">Household</option>
+          <option value="sme">SME</option>
+          <option value="trip">Trip</option>
+          <option value="goal">Goal</option>
+          <option value="collection">Collection</option>
+          <option value="vehicle">Vehicle</option>
+          <option value="property">Property</option>
+          <option value="project">Project</option>
+          <option value="event">Event</option>
+          <option value="asset">Asset</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+
+      {type === 'custom' && <fieldset className="custom-space-module-picker">
+        <legend>Choose what this Space needs</legend>
+        <p className="muted">
+          Money activity, Members, Chat, Shared expenses and Settlements are always included.
+        </p>
+
+        <div className="custom-space-module-list">
+          {CUSTOM_SPACE_MODULE_OPTIONS.map((item) => <label key={item.value} className="custom-space-module-option">
+            <input
+              type="checkbox"
+              checked={customModules.includes(item.value)}
+              onChange={() => toggleModule(item.value)}
+            />
+            <span>
+              <strong>{item.label}</strong>
+              <small>{item.detail}</small>
+            </span>
+          </label>)}
+        </div>
+      </fieldset>}
+
+      <label>
+        Description
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={3}
+        />
+      </label>
+
+      <div className="modal-actions">
+        <button type="button" className="button secondary" onClick={onClose}>Cancel</button>
+        <button className="button primary" disabled={busy}>
+          {busy ? 'Saving…' : submitLabel}
+        </button>
+      </div>
+    </form>
+  </Modal>;
 }

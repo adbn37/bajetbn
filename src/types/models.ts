@@ -18,6 +18,14 @@ export type Appearance =
   | 'dark'; // Legacy value: treated as Black.
 export type TextSize = 'normal' | 'large';
 export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'vehicle' | 'property' | 'project' | 'event' | 'asset' | 'custom';
+export type CustomSpaceModule =
+  | 'budgets'
+  | 'goals'
+  | 'bills'
+  | 'reports'
+  | 'calendar'
+  | 'group_fund';
+
 export type SpaceRole = 'owner' | 'admin' | 'contributor' | 'payer' | 'viewer' | 'member';
 export type SpaceMemberStatus = 'active' | 'suspended' | 'removed';
 export type SpaceApprovalMode = 'none' | 'owner_approval';
@@ -717,6 +725,7 @@ export interface Space {
   currency: string;
   timezone: string;
   description?: string;
+  customModules?: CustomSpaceModule[];
   approvalMode?: SpaceApprovalMode;
   headWhatsapp?: string;
   archivedAt?: Timestamp | null;
