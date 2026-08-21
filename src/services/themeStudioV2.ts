@@ -1,6 +1,8 @@
 export type ThemeV2CardStyle = "solid" | "soft" | "glass" | "outline";
 export type ThemeV2CardDensity = "compact" | "comfortable" | "roomy";
 export type ThemeV2FontChoice = "system" | "friendly" | "editorial" | "mono" | "humanist" | "rounded";
+export type ThemeWallpaperFit = "cover" | "contain" | "fill";
+export type ThemeWallpaperPosition = "center" | "top" | "bottom" | "left" | "right";
 
 export interface ThemeStudioV2Settings {
   accentColor: string;
@@ -10,6 +12,11 @@ export interface ThemeStudioV2Settings {
   shadowStrength: number;
   cardDensity: ThemeV2CardDensity;
   fontChoice: ThemeV2FontChoice;
+  wallpaperPath: string | null;
+  wallpaperFit: ThemeWallpaperFit;
+  wallpaperPosition: ThemeWallpaperPosition;
+  wallpaperBlur: number;
+  wallpaperDim: number;
 }
 
 export const THEME_STUDIO_V2_EVENT = "bajetbn:theme-studio-v2";
@@ -18,6 +25,8 @@ const STORAGE_PREFIX = "bajetbn.themeStudioV2.";
 const CARD_STYLES: ThemeV2CardStyle[] = ["solid", "soft", "glass", "outline"];
 const CARD_DENSITIES: ThemeV2CardDensity[] = ["compact", "comfortable", "roomy"];
 const FONT_CHOICES: ThemeV2FontChoice[] = ["system", "friendly", "editorial", "mono", "humanist", "rounded"];
+const WALLPAPER_FITS: ThemeWallpaperFit[] = ["cover", "contain", "fill"];
+const WALLPAPER_POSITIONS: ThemeWallpaperPosition[] = ["center", "top", "bottom", "left", "right"];
 
 const FONT_STACKS: Record<ThemeV2FontChoice, string> = {
   system: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -37,6 +46,11 @@ export function defaultThemeStudioV2(): ThemeStudioV2Settings {
     shadowStrength: 45,
     cardDensity: "comfortable",
     fontChoice: "system",
+    wallpaperPath: null,
+    wallpaperFit: "cover",
+    wallpaperPosition: "center",
+    wallpaperBlur: 0,
+    wallpaperDim: 28,
   };
 }
 
@@ -81,15 +95,30 @@ function accentSecondary(hex: string) {
 
 export function sanitizeThemeStudioV2(value?: Partial<ThemeStudioV2Settings> | null): ThemeStudioV2Settings {
   const defaults = defaultThemeStudioV2();
+
   const cardStyle = CARD_STYLES.includes(value?.cardStyle as ThemeV2CardStyle)
     ? value!.cardStyle as ThemeV2CardStyle
     : defaults.cardStyle;
+
   const cardDensity = CARD_DENSITIES.includes(value?.cardDensity as ThemeV2CardDensity)
     ? value!.cardDensity as ThemeV2CardDensity
     : defaults.cardDensity;
+
   const fontChoice = FONT_CHOICES.includes(value?.fontChoice as ThemeV2FontChoice)
     ? value!.fontChoice as ThemeV2FontChoice
     : defaults.fontChoice;
+
+  const wallpaperFit = WALLPAPER_FITS.includes(value?.wallpaperFit as ThemeWallpaperFit)
+    ? value!.wallpaperFit as ThemeWallpaperFit
+    : defaults.wallpaperFit;
+
+  const wallpaperPosition = WALLPAPER_POSITIONS.includes(value?.wallpaperPosition as ThemeWallpaperPosition)
+    ? value!.wallpaperPosition as ThemeWallpaperPosition
+    : defaults.wallpaperPosition;
+
+  const wallpaperPathValue = typeof value?.wallpaperPath === "string"
+    ? value.wallpaperPath.trim()
+    : "";
 
   return {
     accentColor: normalizeThemeAccent(value?.accentColor, defaults.accentColor),
@@ -99,6 +128,11 @@ export function sanitizeThemeStudioV2(value?: Partial<ThemeStudioV2Settings> | n
     shadowStrength: Math.round(clamp(Number(value?.shadowStrength ?? defaults.shadowStrength), 0, 100)),
     cardDensity,
     fontChoice,
+    wallpaperPath: wallpaperPathValue || null,
+    wallpaperFit,
+    wallpaperPosition,
+    wallpaperBlur: Math.round(clamp(Number(value?.wallpaperBlur ?? defaults.wallpaperBlur), 0, 20)),
+    wallpaperDim: Math.round(clamp(Number(value?.wallpaperDim ?? defaults.wallpaperDim), 0, 80)),
   };
 }
 
@@ -119,6 +153,8 @@ export function clearThemeStudioV2() {
   delete root.dataset.v2CardStyle;
   delete root.dataset.v2CardDensity;
   delete root.dataset.v2FontChoice;
+  delete root.dataset.themeWallpaper;
+
   for (const property of [
     "--theme-user-accent",
     "--theme-accent-contrast",
@@ -127,13 +163,34 @@ export function clearThemeStudioV2() {
     "--theme-card-shadow",
     "--theme-card-density-y",
     "--theme-font-family",
+    "--theme-wallpaper-image",
+    "--theme-wallpaper-fit",
+    "--theme-wallpaper-position",
+    "--theme-wallpaper-blur",
+    "--theme-wallpaper-dim",
     "--accent",
     "--accent-2",
   ]) root.style.removeProperty(property);
 }
 
+export function applyThemeStudioV2WallpaperUrl(url: string | null) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+
+  if (!url) {
+    root.style.removeProperty("--theme-wallpaper-image");
+    root.dataset.themeWallpaper = "none";
+    return;
+  }
+
+  const safeUrl = url.replace(/"/g, "%22");
+  root.style.setProperty("--theme-wallpaper-image", 'url("' + safeUrl + '")');
+  root.dataset.themeWallpaper = "custom";
+}
+
 export function applyThemeStudioV2(value: ThemeStudioV2Settings) {
   if (typeof document === "undefined") return;
+
   const settings = sanitizeThemeStudioV2(value);
   const root = document.documentElement;
   const highContrast = String(root.dataset.theme || "").toLowerCase().includes("contrast");
@@ -142,12 +199,17 @@ export function applyThemeStudioV2(value: ThemeStudioV2Settings) {
   root.dataset.v2CardStyle = settings.cardStyle;
   root.dataset.v2CardDensity = settings.cardDensity;
   root.dataset.v2FontChoice = settings.fontChoice;
+  root.dataset.themeWallpaper = settings.wallpaperPath ? "custom" : "none";
 
   root.style.setProperty("--theme-pattern-strength", String(Math.round(settings.patternIntensity * 0.42)) + "%");
   root.style.setProperty("--theme-card-radius", String(settings.cardRadius) + "px");
   root.style.setProperty("--theme-card-shadow", "0 " + String(Math.round(settings.shadowStrength * 0.16)) + "px " + String(Math.round(10 + settings.shadowStrength * 0.38)) + "px rgba(0,0,0," + String((0.05 + settings.shadowStrength * 0.0022).toFixed(3)) + ")");
   root.style.setProperty("--theme-card-density-y", settings.cardDensity === "compact" ? "0.62rem" : settings.cardDensity === "roomy" ? "1.18rem" : "0.88rem");
   root.style.setProperty("--theme-font-family", FONT_STACKS[settings.fontChoice]);
+  root.style.setProperty("--theme-wallpaper-fit", settings.wallpaperFit);
+  root.style.setProperty("--theme-wallpaper-position", settings.wallpaperPosition);
+  root.style.setProperty("--theme-wallpaper-blur", String(settings.wallpaperBlur) + "px");
+  root.style.setProperty("--theme-wallpaper-dim", String(settings.wallpaperDim / 100));
 
   if (highContrast) {
     root.style.removeProperty("--theme-user-accent");
@@ -165,13 +227,18 @@ export function applyThemeStudioV2(value: ThemeStudioV2Settings) {
 export function saveThemeStudioV2(uid: string, value: ThemeStudioV2Settings): ThemeStudioV2Settings {
   const next = sanitizeThemeStudioV2(value);
   applyThemeStudioV2(next);
+
   if (uid && typeof window !== "undefined") {
     try {
       window.localStorage.setItem(STORAGE_PREFIX + uid, JSON.stringify(next));
     } catch {
       // Keep the visual change for this session when local storage is unavailable.
     }
-    window.dispatchEvent(new CustomEvent(THEME_STUDIO_V2_EVENT, { detail: { uid, settings: next } }));
+
+    window.dispatchEvent(new CustomEvent(THEME_STUDIO_V2_EVENT, {
+      detail: { uid, settings: next },
+    }));
   }
+
   return next;
 }

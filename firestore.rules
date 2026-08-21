@@ -189,7 +189,7 @@ service cloud.firestore {
           'fullName', 'language', 'currency', 'timezone', 'appearance', 'textSize',
           'notificationsEnabled', 'backgroundRemindersEnabled', 'dueSoonReminders', 'lateReminders',
           'goalReminders', 'sharedPaymentNotifications', 'whatsappRemindersEnabled',
-          'browserPushEnabled', 'reminderDaysBefore', 'updatedAt'
+          'browserPushEnabled', 'reminderDaysBefore', 'themeStudioV2', 'updatedAt'
         ])
         && request.resource.data.currency == 'BND'
         && request.resource.data.timezone == 'Asia/Brunei'
@@ -210,7 +210,9 @@ service cloud.firestore {
         && request.resource.data.browserPushEnabled is bool
         && request.resource.data.reminderDaysBefore is int
         && request.resource.data.reminderDaysBefore >= 0
-        && request.resource.data.reminderDaysBefore <= 30;
+        && request.resource.data.reminderDaysBefore <= 30
+        && (!('themeStudioV2' in request.resource.data)
+          || request.resource.data.themeStudioV2 is map);
       allow delete: if false;
 
       match /commands/{commandId} {

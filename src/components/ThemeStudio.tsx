@@ -1,6 +1,7 @@
 import { ThemeChooser } from './ThemeChooser';
 import { ThemeStudioPersonalTouches } from './ThemeStudioPersonalTouches';
 import { ThemeStudioAdvancedControls } from './ThemeStudioAdvancedControls';
+import { ThemeStudioSyncPanel } from './ThemeStudioSyncPanel';
 import { normalizeAppearance, themeOptions } from '../config/themePresets';
 import { usePreferences } from '../contexts/PreferencesContext';
 
@@ -82,6 +83,7 @@ export function ThemeStudio() {
 
     <ThemeStudioPersonalTouches />
       <ThemeStudioAdvancedControls />
+      <ThemeStudioSyncPanel />
 
     <div className="theme-studio-principles">
       <span>{isMalay ? 'Latar lebih peribadi' : 'Personal backgrounds'}</span>

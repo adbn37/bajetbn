@@ -5216,3 +5216,57 @@ html[data-theme*=contrast] .theme-v2-accent-row::after { content:"High Contrast 
   .theme-v2-accent-row { grid-template-columns:52px minmax(0,1fr); }
   .theme-v2-preview-phone { width:min(240px,100%); }
 }
+
+/* Theme Studio v2 - wallpaper and personal Space themes */
+html[data-theme-wallpaper=custom] body {
+  position:relative;
+  isolation:isolate;
+  background-color:var(--bg);
+}
+
+html[data-theme-wallpaper=custom] body::before {
+  content:"";
+  position:fixed;
+  inset:-24px;
+  z-index:-2;
+  pointer-events:none;
+  background-image:var(--theme-wallpaper-image);
+  background-size:var(--theme-wallpaper-fit,cover);
+  background-position:var(--theme-wallpaper-position,center);
+  background-repeat:no-repeat;
+  filter:blur(var(--theme-wallpaper-blur,0));
+  transform:scale(1.035);
+}
+
+html[data-theme-wallpaper=custom] body::after {
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background:rgba(0,0,0,var(--theme-wallpaper-dim,.28));
+}
+
+html[data-theme*=contrast][data-theme-wallpaper=custom] body::before {
+  opacity:.16;
+  filter:grayscale(1) blur(max(4px,var(--theme-wallpaper-blur,0px)));
+}
+
+html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
+  background:rgba(0,0,0,.82);
+}
+
+.theme-v2-sync { display:grid; gap:1rem; margin-top:1rem; }
+.theme-v2-sync-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.theme-v2-wallpaper-upload { display:flex !important; justify-content:center; align-items:center; min-height:46px; border:1px dashed color-mix(in srgb,var(--accent) 48%,var(--border)); border-radius:12px; background:color-mix(in srgb,var(--accent) 8%,var(--surface)); cursor:pointer; color:var(--text) !important; }
+.theme-v2-wallpaper-upload input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.theme-v2-space-summary { display:flex; justify-content:space-between; align-items:center; gap:.6rem; padding:.75rem; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.theme-v2-space-summary strong,.theme-v2-space-summary small { display:block; }
+.theme-v2-space-summary small { color:var(--muted); }
+.theme-v2-space-summary.active { border-color:color-mix(in srgb,var(--accent) 52%,var(--border)); background:color-mix(in srgb,var(--accent) 9%,var(--surface)); }
+.theme-v2-space-actions { display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap; }
+.theme-v2-sync-status { display:block; color:var(--muted); text-align:right; }
+
+@media(max-width:800px) {
+  .theme-v2-sync-grid { grid-template-columns:1fr; }
+}
