@@ -9,7 +9,20 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import type { Space, SpaceType } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 
-const labels: Record<SpaceType, string> = { personal: 'Personal', household: 'Household', sme: 'SME', trip: 'Trip', goal: 'Goal', custom: 'Custom', collection: 'Collection' };
+const labels: Record<SpaceType, string> = {
+  personal: 'Personal',
+  household: 'Household',
+  sme: 'SME',
+  trip: 'Trip',
+  goal: 'Goal',
+  collection: 'Collection',
+  vehicle: 'Vehicle',
+  property: 'Property',
+  project: 'Project',
+  event: 'Event',
+  asset: 'Asset',
+  custom: 'Custom',
+};
 type Action = 'restore' | 'delete';
 
 function archivedDate(space: Space) {

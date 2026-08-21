@@ -95,6 +95,11 @@ const spaceTypeLabel: Record<SpaceType, string> = {
   trip: 'Trip',
   goal: 'Goal',
   collection: 'Collection',
+  vehicle: 'Vehicle',
+  property: 'Property',
+  project: 'Project',
+  event: 'Event',
+  asset: 'Asset',
   custom: 'Custom',
 };
 
@@ -112,6 +117,11 @@ function spaceDescription(space: Space) {
   if (space.type === 'sme') return 'Keep business money separate from personal money.';
   if (space.type === 'goal') return 'Track money for a shared goal or project.';
   if (space.type === 'collection') return 'Organise collectibles, quantities, barcodes, labels, and storage locations.';
+  if (space.type === 'vehicle') return 'Track fuel, servicing, insurance, repairs and other vehicle costs.';
+  if (space.type === 'property') return 'Track rent, utilities, maintenance and other property money in one place.';
+  if (space.type === 'project') return 'Keep project budgets, shared costs, goals and important dates together.';
+  if (space.type === 'event') return 'Plan an event budget, shared contributions, spending and important dates together.';
+  if (space.type === 'asset') return 'Track ownership costs, maintenance and spending connected to this asset.';
   return 'A separate place for this money activity.';
 }
 
@@ -256,9 +266,9 @@ export function SpaceDetailsPage() {
     </main>;
   }
 
-  const supportsGroupFund = space.type === 'trip' || space.type === 'household' || space.type === 'custom';
+  const supportsGroupFund = space.type === 'trip' || space.type === 'household' || space.type === 'project' || space.type === 'event' || space.type === 'custom';
   const fundTabId: SpaceDetailsTab = space.type === 'trip' ? 'trip_money' : 'group_fund';
-  const fundTabLabel = space.type === 'trip' ? 'Trip money' : space.type === 'household' ? 'Household fund' : 'Group fund';
+  const fundTabLabel = space.type === 'trip' ? 'Trip money' : space.type === 'household' ? 'Household fund' : space.type === 'event' ? 'Event fund' : space.type === 'project' ? 'Project fund' : 'Group fund';
 
   const sharedFinanceTabs: Array<{ id: SpaceDetailsTab; label: string }> =
     space.type === 'sme' && canViewSmeFinancials
@@ -500,7 +510,7 @@ function SpaceOverview({
 
   const quickLinks: QuickItem[] = canViewFinancials ? [
     { key: 'money', section: 'money', icon: '↔', title: 'Money activity', detail: 'See only money activity saved in this Space.' },
-    { key: 'budgets', section: 'budgets', icon: '▤', title: space.type === 'trip' ? 'Trip budget' : 'Budgets', detail: 'Review budgets connected to this Space.' },
+    { key: 'budgets', section: 'budgets', icon: '▤', title: space.type === 'trip' ? 'Trip budget' : space.type === 'event' ? 'Event budget' : space.type === 'project' ? 'Project budget' : space.type === 'property' ? 'Property budget' : space.type === 'vehicle' ? 'Vehicle budget' : space.type === 'asset' ? 'Asset budget' : 'Budgets', detail: 'Review budgets connected to this Space.' },
     { key: 'bills', section: 'bills', icon: '◷', title: 'Bills & instalments', detail: 'See only bills and instalments for this Space.' },
     { key: 'reports', section: 'reports', icon: '⌁', title: 'Money reports', detail: 'Weekly, monthly, yearly or custom dates for this Space.' },
     { key: 'calendar', section: 'calendar', icon: '▦', title: 'Calendar', detail: 'See dates and deadlines belonging to this Space.' },
@@ -514,7 +524,7 @@ function SpaceOverview({
     quickLinks.unshift({ key: 'collection', to: `/spaces/${space.id}/collection`, icon: 'C', title: 'Collection inventory', detail: 'Scan, find, label, and organise collectibles.', featured: true });
   }
 
-  if (space.type === 'personal' || space.type === 'goal' || space.type === 'custom') {
+  if (space.type === 'personal' || space.type === 'goal' || space.type === 'project' || space.type === 'event' || space.type === 'custom') {
     quickLinks.splice(Math.min(2, quickLinks.length), 0, { key: 'goals', section: 'goals', icon: '◇', title: 'Goals', detail: 'Review savings goals connected to this Space.' });
   }
 
@@ -580,7 +590,7 @@ function SpaceOverview({
 
   const sectionTitle: Record<SpaceOverviewSection, string> = {
     money: 'Money activity',
-    budgets: space.type === 'trip' ? 'Trip budget' : 'Budgets',
+    budgets: space.type === 'trip' ? 'Trip budget' : space.type === 'event' ? 'Event budget' : space.type === 'project' ? 'Project budget' : space.type === 'property' ? 'Property budget' : space.type === 'vehicle' ? 'Vehicle budget' : space.type === 'asset' ? 'Asset budget' : 'Budgets',
     goals: 'Goals',
     bills: 'Bills & instalments',
     reports: 'Money reports',

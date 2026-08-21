@@ -17,7 +17,7 @@ export type Appearance =
   | 'high-contrast'
   | 'dark'; // Legacy value: treated as Black.
 export type TextSize = 'normal' | 'large';
-export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'custom';
+export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'vehicle' | 'property' | 'project' | 'event' | 'asset' | 'custom';
 export type SpaceRole = 'owner' | 'admin' | 'contributor' | 'payer' | 'viewer' | 'member';
 export type SpaceMemberStatus = 'active' | 'suspended' | 'removed';
 export type SpaceApprovalMode = 'none' | 'owner_approval';

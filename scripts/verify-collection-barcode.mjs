@@ -35,7 +35,7 @@ if (packageJson.dependencies?.['@zxing/library'] !== '0.23.0') fail('Expected ex
 if (packageJson.dependencies?.['@bwip-js/browser'] !== '4.11.2') fail('Expected exact @bwip-js/browser 4.11.2.');
 if (!packageJson.scripts?.['verify:all-structural']?.includes('verify-collection-barcode.mjs')) fail('Collection verifier is not part of verify:all-structural.');
 
-requireText('src/types/models.ts', "export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'custom';");
+requireText('src/types/models.ts', "export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'vehicle' | 'property' | 'project' | 'event' | 'asset' | 'custom';");
 requireText('src/types/models.ts', 'export interface CollectionItem');
 requireText('src/types/models.ts', 'export interface CollectionQuantityMovement');
 requireText('src/types/models.ts', 'export interface CollectionItemPhoto');

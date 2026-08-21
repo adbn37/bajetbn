@@ -11,7 +11,20 @@ import { createSpace, listSpaces, updateSpace } from '../../repositories/spaceRe
 import type { Space, SpaceInvitation, SpaceType } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 
-const labels: Record<SpaceType, string> = { personal: 'Personal', household: 'Household', sme: 'SME', trip: 'Trip', goal: 'Goal', custom: 'Custom', collection: 'Collection' };
+const labels: Record<SpaceType, string> = {
+  personal: 'Personal',
+  household: 'Household',
+  sme: 'SME',
+  trip: 'Trip',
+  goal: 'Goal',
+  collection: 'Collection',
+  vehicle: 'Vehicle',
+  property: 'Property',
+  project: 'Project',
+  event: 'Event',
+  asset: 'Asset',
+  custom: 'Custom',
+};
 type SpaceLifecycleAction = 'archive' | 'delete';
 
 export function SpacesPage() {
@@ -231,5 +244,5 @@ function SpaceForm({ title, submitLabel, initial, lockType = false, onClose, onS
   const [description, setDescription] = useState(initial?.description || '');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(''); try { await onSubmit({ name, type, description }); } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); } };
-  return <Modal title={title} onClose={onClose}><form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Space name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Our Household" /></label><label>Type<select disabled={lockType} value={type} onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}><option value="household">Household</option><option value="sme">SME</option><option value="trip">Trip</option><option value="goal">Goal</option><option value="collection">Collection</option><option value="custom">Custom</option></select></label><label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button></div></form></Modal>;
+  return <Modal title={title} onClose={onClose}><form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Space name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Our Household" /></label><label>Type<select disabled={lockType} value={type} onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}><option value="household">Household</option><option value="sme">SME</option><option value="trip">Trip</option><option value="goal">Goal</option><option value="collection">Collection</option><option value="vehicle">Vehicle</option><option value="property">Property</option><option value="project">Project</option><option value="event">Event</option><option value="asset">Asset</option><option value="custom">Custom</option></select></label><label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button></div></form></Modal>;
 }
