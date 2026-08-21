@@ -4483,3 +4483,134 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     display: grid;
   }
 }
+/* Collection v2 Slice 2 - organization */
+.collection-organizer-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.collection-organizer-entry > div {
+  display: grid;
+  gap: .2rem;
+}
+
+.collection-organizer-page {
+  display: grid;
+  gap: .85rem;
+}
+
+.collection-organizer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.collection-organizer-header > div {
+  display: grid;
+  gap: .25rem;
+}
+
+.collection-organizer-header h1,
+.collection-organizer-header p {
+  margin: 0;
+}
+
+.collection-organizer-summary {
+  margin: 0;
+}
+
+.collection-organizer-controls,
+.collection-organizer-results {
+  display: grid;
+  gap: .75rem;
+}
+
+.collection-organizer-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.collection-organizer-filter-grid label {
+  display: grid;
+  gap: .3rem;
+  min-width: 0;
+}
+
+.collection-organizer-filter-grid input,
+.collection-organizer-filter-grid select {
+  width: 100%;
+  min-width: 0;
+}
+
+.collection-organizer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+}
+
+.collection-organizer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-width: 0;
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.collection-organizer-item > div:first-child {
+  display: grid;
+  gap: .4rem;
+  min-width: 0;
+}
+
+.collection-organizer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.collection-organizer-quantity {
+  display: grid;
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+@media (max-width: 980px) {
+  .collection-organizer-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .collection-organizer-header,
+  .collection-organizer-entry {
+    display: grid;
+  }
+
+  .collection-organizer-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-organizer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .collection-organizer-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}

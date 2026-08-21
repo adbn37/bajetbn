@@ -255,6 +255,22 @@ function CollectionPage({ mode }: { mode: CollectionPageMode }) {
         <BarcodeCameraScanner startLabel="Find with camera" onDetected={handleBarcode} onError={setError} />
       </section>
 
+      <section className="collection-organizer-entry">
+        <div>
+          <span className="eyebrow">Collection tools</span>
+          <strong>Organize your Collection</strong>
+          <small>
+            Search, group, sort, and review active or archived items.
+          </small>
+        </div>
+
+        <Link
+          className="button secondary"
+          to={`/spaces/${spaceId}/collection/organize`}
+        >
+          Organize Collection
+        </Link>
+      </section>
       <section className="panel collection-list-panel">
         <div className="panel-heading collection-list-heading">
           <div><span className="eyebrow">Inventory</span><h2>{showArchived ? 'Archived items' : 'Active collection'}</h2></div>
