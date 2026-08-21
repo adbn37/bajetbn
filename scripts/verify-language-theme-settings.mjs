@@ -119,7 +119,7 @@ const checks = [
   [chooser, 'aria-checked={active}', 'Theme selected state'],
 
   [settings, 'Language and appearance', 'Language and appearance section'],
-  [settings, '<ThemeChooser />', 'Settings theme chooser'],
+  [settings, '<ThemeStudio />', 'Settings Theme Studio'],
   [settings, 'Show reminders inside BajetBN', 'In-app reminder preference'],
   [settings, 'Show WhatsApp reminder buttons', 'WhatsApp preference'],
   [settings, 'Save settings', 'Save button'],

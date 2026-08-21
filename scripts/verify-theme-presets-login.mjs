@@ -222,9 +222,9 @@ expect(
 
 expect(
   settings.includes(
-    '<ThemeChooser />',
+    '<ThemeStudio />',
   ),
-  'Settings theme chooser is missing.',
+  'Settings Theme Studio is missing.',
 );
 
 expect(

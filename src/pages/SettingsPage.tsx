@@ -1,4 +1,4 @@
-import { ThemeChooser } from '../components/ThemeChooser';
+import { ThemeStudio } from '../components/ThemeStudio';
 import { PersonalStyleSettings } from '../components/PersonalStyleSettings';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Timestamp } from 'firebase/firestore';
@@ -299,7 +299,7 @@ export function SettingsPage() {
               </select>
             </label>
             <div className="settings-theme-field">
-              <ThemeChooser />
+              <ThemeStudio />
             </div>
             <label>Text size
               <select value={preferences.textSize} onChange={(event) => preferences.setTextSize(event.target.value as TextSize)}>
