@@ -119,15 +119,16 @@ export function SmeOperationsCommandCentre({
     .filter((item) => item.type === 'expense')
     .reduce((sum, item) => sum + item.amountMinor, 0);
 
-  const accountIds = new Set(
-    postedTransactions
-      .map((item) => item.accountId)
-      .filter((value): value is string => Boolean(value)),
-  );
-
-  const accountsUsed = accounts.filter((item) => accountIds.has(item.id));
-
-  const activeCommitments = commitments.filter(
+  const businessAccounts = accounts
+    .filter(
+      (item) =>
+        item.classification === 'business'
+        && item.spaceId === space.id
+        && !item.archivedAt
+        && !item.closedAt,
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+const activeCommitments = commitments.filter(
     (item) => item.status === 'active' && !item.archivedAt,
   );
 
@@ -192,9 +193,9 @@ export function SmeOperationsCommandCentre({
             </article>
 
             <article className="sme-operation-card">
-              <span>Accounts used</span>
-              <strong>{accountsUsed.length}</strong>
-              <small>Cash or bank accounts used by SME money activity</small>
+              <span>Business accounts</span>
+              <strong>{businessAccounts.length}</strong>
+              <small>Accounts assigned directly to this SME Space</small>
             </article>
 
             <article className="sme-operation-card">
@@ -204,6 +205,62 @@ export function SmeOperationsCommandCentre({
             </article>
           </div>
 
+          <section className="sme-business-accounts">
+            <div className="sme-business-accounts-heading">
+              <div>
+                <span className="eyebrow">Finance</span>
+                <h3>Business accounts</h3>
+                <p>
+                  Cash, bank and other business accounts assigned directly to {space.name}.
+                </p>
+              </div>
+
+              {role === 'owner' && (
+                <Link className="text-button" to="/accounts">
+                  Manage accounts
+                </Link>
+              )}
+            </div>
+
+            {businessAccounts.length ? (
+              <div className="sme-business-account-grid">
+                {businessAccounts.map((account) => (
+                  <article className="sme-business-account-card" key={account.id}>
+                    <div>
+                      <strong>{account.name}</strong>
+                      <small>
+                        {account.type.replace('_', ' ')}
+                        {' · '}
+                        {account.currency}
+                        {' · '}
+                        {account.posEnabled
+                          ? 'POS payments enabled'
+                          : 'POS payments off'}
+                      </small>
+                    </div>
+
+                    {role === 'owner' ? (
+                      <strong>
+                        {formatMoney(account.ledgerBalanceMinor, account.currency)}
+                      </strong>
+                    ) : (
+                      <span className="type-badge">Assigned to this SME</span>
+                    )}
+                  </article>
+                ))}
+              </div>
+            ) : role === 'owner' ? (
+              <div className="notice">
+                <strong>No business account is assigned to this SME yet.</strong>{' '}
+                Open Accounts, create or edit a business account, and assign it to {space.name}.
+              </div>
+            ) : (
+              <div className="notice">
+                <strong>No assigned business account is available to you.</strong>{' '}
+                The SME owner manages account ownership and account access.
+              </div>
+            )}
+          </section>
           {operationalRole && (
             <section className="sme-operations-attention">
               <div className="sme-operations-attention-heading">

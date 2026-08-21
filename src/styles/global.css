@@ -4315,3 +4315,77 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     width: 100%;
   }
 }
+/* SME v2 Slice 2 - business accounts */
+.sme-business-accounts {
+  display: grid;
+  gap: .7rem;
+  padding: .85rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.sme-business-accounts-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.sme-business-accounts-heading > div {
+  display: grid;
+  gap: .2rem;
+}
+
+.sme-business-accounts-heading h3,
+.sme-business-accounts-heading p {
+  margin: 0;
+}
+
+.sme-business-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+}
+
+.sme-business-account-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-width: 0;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.sme-business-account-card > div {
+  display: grid;
+  gap: .2rem;
+  min-width: 0;
+}
+
+.sme-business-account-card > div strong,
+.sme-business-account-card > div small {
+  overflow-wrap: anywhere;
+}
+
+.sme-business-account-card > strong {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 700px) {
+  .sme-business-account-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 580px) {
+  .sme-business-accounts-heading,
+  .sme-business-account-card {
+    display: grid;
+  }
+
+  .sme-business-account-card > strong {
+    font-size: 1.05rem;
+  }
+}
