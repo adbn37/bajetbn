@@ -4614,3 +4614,87 @@ html[data-wallpaper-style='stars'] body { background-color:var(--bg); background
     grid-template-columns: 1fr;
   }
 }
+/* Collaboration Chat - realtime Space chat */
+.space-chat-panel {
+  display: grid;
+  gap: .8rem;
+}
+
+.space-chat-heading p {
+  margin: .2rem 0 0;
+}
+
+.space-chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+  min-height: 220px;
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.space-chat-message {
+  align-self: flex-start;
+  display: grid;
+  gap: .25rem;
+  width: min(82%, 620px);
+  padding: .65rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.space-chat-message.mine {
+  align-self: flex-end;
+}
+
+.space-chat-message-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.space-chat-message p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.space-chat-composer {
+  display: grid;
+  gap: .55rem;
+}
+
+.space-chat-composer label {
+  display: grid;
+  gap: .3rem;
+}
+
+.space-chat-composer textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.space-chat-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .7rem;
+}
+
+@media (max-width: 600px) {
+  .space-chat-message {
+    width: 92%;
+  }
+
+  .space-chat-messages {
+    min-height: 260px;
+    max-height: 56vh;
+    padding: .5rem;
+  }
+}

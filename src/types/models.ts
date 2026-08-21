@@ -1245,3 +1245,10 @@ export interface SpaceFundContribution {
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
+export interface SpaceMessage {
+  id: string;
+  spaceId: string;
+  senderUid: string;
+  body: string;
+  createdAt?: Timestamp;
+}

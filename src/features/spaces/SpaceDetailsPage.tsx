@@ -34,6 +34,7 @@ import type {
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
+import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
@@ -43,7 +44,7 @@ import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
 import { TripCommandCentre } from './TripCommandCentre';
 
-type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund';
+type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
 type SpaceOverviewSection = 'money' | 'budgets' | 'goals' | 'bills' | 'reports' | 'calendar';
 type SpaceReportRange = 'week' | 'month' | 'year' | 'custom';
 
@@ -99,7 +100,7 @@ const spaceTypeLabel: Record<SpaceType, string> = {
 
 function tabFromSearch(value: string | null, shared: boolean): SpaceDetailsTab {
   if (value === 'settings') return 'settings';
-  if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity')) return value;
+  if (shared && (value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity' || value === 'chat')) return value;
   return 'overview';
 }
 
@@ -270,6 +271,7 @@ export function SpaceDetailsPage() {
     ? [
       { id: 'overview', label: 'Overview' },
       { id: 'members', label: 'Members' },
+      { id: 'chat', label: 'Chat' },
       ...sharedFinanceTabs,
       { id: 'activity', label: 'Activity' },
       { id: 'settings', label: 'Space settings' },
@@ -431,7 +433,20 @@ export function SpaceDetailsPage() {
       canViewFinancials={canViewSmeFinancials}
       smePosRole={smePosRole}
     /> : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
-      <CollaborationPage embedded spaceIdOverride={space.id} activeTab={activeTab as CollaborationTab} onSpaceUpdated={load} />
+      {activeTab === 'chat' ? (
+          <SpaceChatPanel
+            space={space}
+            members={members}
+            currentMember={currentMember || null}
+          />
+        ) : (
+          <CollaborationPage
+            embedded
+            spaceIdOverride={space.id}
+            activeTab={activeTab as CollaborationTab}
+            onSpaceUpdated={load}
+          />
+        )}
       {activeTab === 'settings' && currentMember?.role === 'owner' && <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />}
     </> : <PersonalSpaceSettings space={space} />}
   </main>;

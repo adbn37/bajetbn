@@ -467,6 +467,33 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /spaceMessages/{messageId} {
+      allow read: if signedIn()
+        && isSpaceMember(resource.data.spaceId);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll([
+          'spaceId',
+          'senderUid',
+          'body',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'spaceId',
+          'senderUid',
+          'body',
+          'createdAt'
+        ])
+        && request.resource.data.spaceId is string
+        && isSpaceMember(request.resource.data.spaceId)
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 2000
+        && request.resource.data.createdAt == request.time;
+
+      allow update, delete: if false;
+    }
     match /spaceActivities/{activityId} {
       allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
       allow create, update, delete: if false;
