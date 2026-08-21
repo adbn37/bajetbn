@@ -5451,3 +5451,101 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
   .space-approval-grid{grid-template-columns:1fr}
   .space-approval-heading{flex-direction:column}
 }
+
+
+/* v1.7.0 My Inbox */
+.my-inbox-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.my-inbox-summary {
+  margin-bottom: 0;
+}
+
+.my-inbox-controls {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.my-inbox-controls h2,
+.my-inbox-row h3 {
+  margin: .2rem 0;
+}
+
+.my-inbox-controls p,
+.my-inbox-row p {
+  margin: .35rem 0 0;
+  color: var(--text-muted, #9fb1bd);
+}
+
+.my-inbox-filters {
+  flex: 0 0 auto;
+}
+
+.my-inbox-list {
+  display: grid;
+  gap: .7rem;
+}
+
+.my-inbox-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .9rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.my-inbox-row.state-needs_action {
+  border-inline-start-width: 4px;
+}
+
+.my-inbox-row-main {
+  min-width: 0;
+}
+
+.my-inbox-space {
+  font-size: .8rem;
+  color: var(--text-muted, #9fb1bd);
+}
+
+.my-inbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+  margin-top: .55rem;
+  font-size: .82rem;
+}
+
+.my-inbox-actions {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  flex: 0 0 auto;
+}
+
+.my-inbox-note {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .my-inbox-controls,
+  .my-inbox-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .my-inbox-filters {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .my-inbox-actions {
+    justify-content: flex-end;
+  }
+}
