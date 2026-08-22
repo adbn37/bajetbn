@@ -40,13 +40,10 @@ import { useSpacePresenceHeartbeat } from '../collaboration/useSpacePresence';
 import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAutomationPanel';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
-import { HouseholdCommandCentre } from './HouseholdCommandCentre';
 import { SpaceActionHub } from './SpaceActionHub';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
 import { CollectionCommandCentre } from './CollectionCommandCentre';
-import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
-import { TripCommandCentre } from './TripCommandCentre';
 
 import type { CustomSpaceModule } from '../../types/models';
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
@@ -321,6 +318,11 @@ export function SpaceDetailsPage() {
       { id: 'settings', label: 'Space settings' },
     ];
 
+  const compactActionHome =
+    space.type === 'sme'
+    || space.type === 'household'
+    || space.type === 'trip';
+
   return <main className="page space-details-page">
     <PageHeader
       eyebrow={`${spaceTypeLabel[space.type]} Space`}
@@ -356,33 +358,6 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
-    {space.type === 'sme' && !space.archivedAt && (
-      <section className="sme-pos-hero">
-        <div className="sme-pos-hero-copy">
-          <h2>Point of sale</h2>
-          <p>Register, manage stock and review sales.</p>
-        </div>
-
-        <div className="sme-pos-hero-actions">
-          <Link
-            className="button primary sme-pos-open-button"
-            to={`/spaces/${space.id}/pos`}
-          >
-            Open POS
-          </Link>
-
-          {currentMember?.role === 'owner' && (
-            <Link
-              className="button secondary"
-              to={`/spaces/${space.id}/pos/settings`}
-            >
-              Settings
-            </Link>
-          )}
-        </div>
-      </section>
-    )}
-
     {space.type === 'collection' && !space.archivedAt && (
       <section className="sme-pos-hero collection-space-hero">
         <div className="sme-pos-hero-copy">
@@ -404,18 +379,9 @@ export function SpaceDetailsPage() {
         currentMember={currentMember || null}
         supportsGroupFund={supportsGroupFund}
         fundLabel={fundTabLabel}
+        smePosRole={smePosRole}
+        canViewSmeFinancials={canViewSmeFinancials}
         onRefresh={load}
-      />
-    )}
-    {activeTab === 'overview' && space.type === 'sme' && (
-      <SmeOperationsCommandCentre
-        space={space}
-        role={smePosRole}
-        canViewFinancials={canViewSmeFinancials}
-        accounts={accounts}
-        transactions={transactions}
-        commitments={commitments}
-        memberCount={activeMembers.length}
       />
     )}
     {activeTab === 'overview' && space.type === 'sme' && (
@@ -424,40 +390,17 @@ export function SpaceDetailsPage() {
         role={smePosRole}
       />
     )}
-    {activeTab === 'overview' && space.type === 'household' && (
-      <HouseholdCommandCentre
-        space={space}
-        members={members}
-        commitments={commitments}
-        sharedBills={sharedBills}
-        sharedExpenses={sharedExpenses}
-        currentMember={currentMember || null}
-        canManage={
-          currentMember?.role === 'owner'
-          || currentMember?.role === 'admin'
-        }
-        onOpenTab={chooseTab}
-      />
-    )}
     {activeTab === 'overview' && space.type === 'collection' && (
       <CollectionCommandCentre space={space} />
     )}
-    <nav className="space-details-tabs" aria-label="Space sections">
+    {(!compactActionHome || activeTab !== 'overview') && (
+      <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
       {space.type === 'sme' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/pos`}>Point of sale</Link>}
       {space.type === 'collection' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/collection`}>Collection</Link>}
-    </nav>
-
-    {activeTab === 'overview' && space.type === 'trip' && (
-      <TripCommandCentre
-        space={space}
-        budgets={budgets}
-        members={members}
-        currentMember={currentMember}
-        sharedExpenses={sharedExpenses}
-        onOpenTab={(tab) => chooseTab(tab)}
-      />
+      </nav>
     )}
+
     {activeTab === 'overview' ? <SpaceOverview
       space={space}
       moneyIn={moneyIn}
@@ -664,6 +607,14 @@ function SpaceOverview({
             : smePosRole === 'owner'
               ? 'Owner'
               : 'Staff';
+
+  const usesCompactActionHome = (
+    ['sme', 'household', 'trip']
+  ).includes(space.type);
+
+  if (usesCompactActionHome) {
+    return null;
+  }
 
   return <>
     {space.type === 'sme' && !canViewFinancials ? (
