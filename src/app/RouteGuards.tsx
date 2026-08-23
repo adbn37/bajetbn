@@ -13,3 +13,19 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   if (!profile?.onboardingCompleted) return <Navigate to="/onboarding" replace />;
   return children;
 }
+
+export function PlatformAdminRoute({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const { profile, loading } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+
+  if (profile?.platformRole !== 'platform_admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}

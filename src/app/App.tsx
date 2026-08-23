@@ -9,7 +9,7 @@ import { firebaseConfigured } from '../services/firebase';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { AppShell } from '../layouts/AppShell';
 import { SetupRequiredPage } from '../pages/SetupRequiredPage';
-import { ProtectedRoute } from './RouteGuards';
+import { PlatformAdminRoute, ProtectedRoute } from './RouteGuards';
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
 const RegisterPage = lazy(() => import('../features/auth/RegisterPage').then((module) => ({ default: module.RegisterPage })));
@@ -47,6 +47,8 @@ const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) =>
 const NotificationsPage = lazy(() => import('../pages/NotificationsPage').then((module) => ({ default: module.NotificationsPage })));
 const MyInboxPage = lazy(() => import('../pages/MyInboxPage').then((module) => ({ default: module.MyInboxPage })));
 const OfflineSyncPage = lazy(() => import('../pages/OfflineSyncPage').then((module) => ({ default: module.OfflineSyncPage })));
+const SubscriptionPage = lazy(() => import('../pages/SubscriptionPage').then((module) => ({ default: module.SubscriptionPage })));
+const AdminPortalPage = lazy(() => import('../pages/AdminPortalPage').then((module) => ({ default: module.AdminPortalPage })));
 
 export default function App() {
   if (!firebaseConfigured) return <SetupRequiredPage />;
@@ -97,6 +99,15 @@ export default function App() {
                   <Route path="inbox" element={<MyInboxPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="offline-sync" element={<OfflineSyncPage />} />
+                  <Route path="subscription" element={<SubscriptionPage />} />
+                  <Route
+                    path="admin"
+                    element={
+                      <PlatformAdminRoute>
+                        <AdminPortalPage />
+                      </PlatformAdminRoute>
+                    }
+                  />
                   <Route path="settings" element={<SettingsPage />} />
                 </Route>
                 <Route path="*" element={<NotFoundPage />} />

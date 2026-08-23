@@ -17,6 +17,18 @@ export type Appearance =
   | 'high-contrast'
   | 'dark'; // Legacy value: treated as Black.
 export type TextSize = 'normal' | 'large';
+
+export type BajetBnPlan = 'basic' | 'plus';
+
+export type SubscriptionStatus =
+  | 'basic'
+  | 'active'
+  | 'expired'
+  | 'cancelled';
+
+export type PlatformRole =
+  | 'user'
+  | 'platform_admin';
 export type SpaceType = 'personal' | 'household' | 'sme' | 'trip' | 'goal' | 'collection' | 'vehicle' | 'property' | 'project' | 'event' | 'asset' | 'custom';
 export type CustomSpaceModule =
   | 'budgets'
@@ -652,6 +664,17 @@ export interface UserProfile {
   uid: string;
   fullName: string;
   email: string;
+
+  platformRole?: PlatformRole;
+  subscriptionPlan?: BajetBnPlan;
+  subscriptionStatus?: SubscriptionStatus;
+  subscriptionStartedAt?: Timestamp | null;
+  subscriptionExpiresAt?: Timestamp | null;
+  subscriptionSource?:
+    | 'whatsapp_manual'
+    | 'complimentary'
+    | 'internal'
+    | null;
   language: Language;
   currency: string;
   timezone: string;
