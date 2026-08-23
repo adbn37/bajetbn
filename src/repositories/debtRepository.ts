@@ -11,6 +11,7 @@ import type {
   DebtInterestType,
   DebtRecord,
   DebtSchedule,
+  DebtPayment,
 } from '../types/models';
 
 export async function listDebts(uid: string): Promise<DebtRecord[]> {
@@ -84,6 +85,98 @@ export async function archiveDebt(debtId: string) {
 
   const result = await call({
     debtId,
+    idempotencyKey: crypto.randomUUID(),
+  });
+
+  return result.data;
+}
+
+export async function listDebtPayments(
+  uid: string,
+): Promise<DebtPayment[]> {
+  const { db } = requireFirebase();
+
+  const snapshot = await getDocs(
+    query(
+      collection(db, 'debtPayments'),
+      where('ownerId', '==', uid),
+    ),
+  );
+
+  return snapshot.docs
+    .map((item) => ({
+      id: item.id,
+      ...item.data(),
+    }) as DebtPayment)
+    .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+}
+
+export async function recordDebtPayment(input: {
+  debtId: string;
+  amountMinor: number;
+  paymentDate: string;
+  accountId: string;
+  note?: string;
+}): Promise<{
+  paymentId: string;
+  transactionId: string;
+}> {
+  if (!navigator.onLine) {
+    throw new Error(
+      'Connect to the internet before recording a debt payment.',
+    );
+  }
+
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable<
+    typeof input & { idempotencyKey: string },
+    {
+      paymentId: string;
+      transactionId: string;
+    }
+  >(
+    functions,
+    'recordDebtPayment',
+  );
+
+  const result = await call({
+    ...input,
+    idempotencyKey: crypto.randomUUID(),
+  });
+
+  return result.data;
+}
+
+export async function reverseDebtPayment(input: {
+  paymentId: string;
+  reversalDate: string;
+  reason: string;
+}): Promise<{
+  paymentId: string;
+  reversalTransactionId: string;
+}> {
+  if (!navigator.onLine) {
+    throw new Error(
+      'Connect to the internet before reversing a debt payment.',
+    );
+  }
+
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable<
+    typeof input & { idempotencyKey: string },
+    {
+      paymentId: string;
+      reversalTransactionId: string;
+    }
+  >(
+    functions,
+    'reverseDebtPayment',
+  );
+
+  const result = await call({
+    ...input,
     idempotencyKey: crypto.randomUUID(),
   });
 

@@ -810,10 +810,16 @@ export interface DebtPayment {
   currency: string;
   paymentDate: string;
   accountId?: string | null;
+  accountName?: string | null;
   transactionId?: string | null;
+  ledgerEntryId?: string | null;
   proofPath?: string | null;
   note?: string | null;
   reversedAt?: Timestamp | null;
+  reversedBy?: string | null;
+  reversalReason?: string | null;
+  reversalTransactionId?: string | null;
+  reversalLedgerEntryId?: string | null;
   createdAt?: Timestamp;
 }
 export interface Space {

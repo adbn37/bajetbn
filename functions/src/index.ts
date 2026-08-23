@@ -13735,3 +13735,558 @@ export const archiveDebt = onCall(
     };
   },
 );
+
+export const recordDebtPayment = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const debtId =
+      stringValue(request.data?.debtId, 'Debt record', 160);
+
+    const accountId =
+      stringValue(request.data?.accountId, 'Account', 160);
+
+    const amountMinor =
+      positiveMoney(request.data?.amountMinor);
+
+    const paymentDate =
+      localDate(request.data?.paymentDate, 'Payment date');
+
+    const note =
+      optionalString(request.data?.note, 500);
+
+    const idempotencyKey =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const paymentRef =
+      db.collection('debtPayments')
+        .doc(`${uid}_${idempotencyKey}`);
+
+    const debtRef =
+      db.collection('debts').doc(debtId);
+
+    const accountRef =
+      db.collection('accounts').doc(accountId);
+
+    const transactionRef =
+      db.collection('transactions').doc();
+
+    const result = await db.runTransaction(
+      async (transaction) => {
+        const existingPayment =
+          await transaction.get(paymentRef);
+
+        if (existingPayment.exists) {
+          const existing =
+            existingPayment.data() || {};
+
+          return {
+            paymentId: paymentRef.id,
+            transactionId:
+              String(existing.transactionId || ''),
+          };
+        }
+
+        const debtSnapshot =
+          await transaction.get(debtRef);
+
+        const accountSnapshot =
+          await transaction.get(accountRef);
+
+        if (!debtSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Debt record not found.',
+          );
+        }
+
+        const debt =
+          debtSnapshot.data() || {};
+
+        if (debt.ownerId !== uid) {
+          throw new HttpsError(
+            'permission-denied',
+            'You cannot record a payment for this debt.',
+          );
+        }
+
+        if (debt.status !== 'active') {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only active debt can receive a payment.',
+          );
+        }
+
+        const currentBalance =
+          nonNegativeMoney(debt.balanceMinor);
+
+        const currentPaid =
+          nonNegativeMoney(debt.paidMinor);
+
+        if (amountMinor > currentBalance) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Payment is greater than the outstanding debt balance.',
+          );
+        }
+
+        const account =
+          assertAccount(
+            accountSnapshot.data(),
+            uid,
+            'Account',
+          );
+
+        if (account.currency !== 'BND') {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt payments currently require a BND account.',
+          );
+        }
+
+        const direction =
+          debt.direction === 'owed'
+            ? 'owed'
+            : 'owe';
+
+        const flow =
+          direction === 'owe'
+            ? 'out'
+            : 'in';
+
+        const accountDelta =
+          accountEffect(
+            account.type,
+            flow,
+            amountMinor,
+          );
+
+        const nextBalance =
+          currentBalance - amountMinor;
+
+        const nextPaid =
+          currentPaid + amountMinor;
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const accountData =
+          accountSnapshot.data() || {};
+
+        const spaceId =
+          typeof debt.spaceId === 'string' && debt.spaceId
+            ? debt.spaceId
+            : String(accountData.spaceId || '');
+
+        const transactionType =
+          direction === 'owe'
+            ? 'expense'
+            : 'income';
+
+        transaction.create(
+          transactionRef,
+          {
+            displayId: displayId('TXN'),
+            ownerId: uid,
+            type: transactionType,
+            status: 'posted',
+            accountId,
+            destinationAccountId: null,
+            spaceId,
+            amountMinor,
+            currency: 'BND',
+            transactionDate: paymentDate,
+            categoryId: null,
+            category:
+              direction === 'owe'
+                ? 'Debt repayment'
+                : 'Debt repayment received',
+            categoryIcon: 'repeat',
+            categoryColor: 'slate',
+            categoryScope: 'personal',
+            counterparty:
+              String(debt.counterparty || ''),
+            note,
+            paymentMethod: null,
+            paymentMethodLabel: null,
+            sourceType: 'debt_payment',
+            sourceId: paymentRef.id,
+            postedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+        );
+
+        const ledgerEntryId =
+          createLedgerEntry(
+            transaction,
+            {
+              accountId,
+              ownerId: uid,
+              spaceId,
+              transactionId: transactionRef.id,
+              entryType:
+                direction === 'owe'
+                  ? 'debt_payment_out'
+                  : 'debt_payment_in',
+              amountMinor: accountDelta,
+              currency: 'BND',
+              idempotencyKey,
+              now,
+            },
+          );
+
+        updateAccountBalance(
+          transaction,
+          accountRef,
+          account,
+          accountDelta,
+        );
+
+        transaction.create(
+          paymentRef,
+          {
+            displayId: displayId('DPAY'),
+            ownerId: uid,
+            debtId,
+            direction,
+            amountMinor,
+            currency: 'BND',
+            paymentDate,
+            accountId,
+            accountName:
+              String(accountData.name || 'Account'),
+            transactionId: transactionRef.id,
+            ledgerEntryId,
+            proofPath: null,
+            note,
+            reversedAt: null,
+            reversedBy: null,
+            reversalReason: null,
+            reversalTransactionId: null,
+            reversalLedgerEntryId: null,
+            createdAt: now,
+          },
+        );
+
+        transaction.update(
+          debtRef,
+          {
+            paidMinor: nextPaid,
+            balanceMinor: nextBalance,
+            status:
+              nextBalance === 0
+                ? 'settled'
+                : 'active',
+            settledAt:
+              nextBalance === 0
+                ? now
+                : null,
+            updatedAt: now,
+          },
+        );
+
+        return {
+          paymentId: paymentRef.id,
+          transactionId: transactionRef.id,
+        };
+      },
+    );
+
+    return result;
+  },
+);
+
+export const reverseDebtPayment = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const paymentId =
+      stringValue(
+        request.data?.paymentId,
+        'Debt payment',
+        200,
+      );
+
+    const reversalDate =
+      localDate(
+        request.data?.reversalDate,
+        'Reversal date',
+      );
+
+    const reason =
+      stringValue(
+        request.data?.reason,
+        'Reversal reason',
+        500,
+      );
+
+    const idempotencyKey =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const paymentRef =
+      db.collection('debtPayments').doc(paymentId);
+
+    const reversalTransactionRef =
+      db.collection('transactions').doc();
+
+    const result = await db.runTransaction(
+      async (transaction) => {
+        const paymentSnapshot =
+          await transaction.get(paymentRef);
+
+        if (!paymentSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Debt payment not found.',
+          );
+        }
+
+        const payment =
+          paymentSnapshot.data() || {};
+
+        if (payment.ownerId !== uid) {
+          throw new HttpsError(
+            'permission-denied',
+            'You cannot reverse this debt payment.',
+          );
+        }
+
+        if (payment.reversedAt) {
+          return {
+            paymentId,
+            reversalTransactionId:
+              String(payment.reversalTransactionId || ''),
+          };
+        }
+
+        const debtId =
+          String(payment.debtId || '');
+
+        const accountId =
+          String(payment.accountId || '');
+
+        const transactionId =
+          String(payment.transactionId || '');
+
+        const debtRef =
+          db.collection('debts').doc(debtId);
+
+        const accountRef =
+          db.collection('accounts').doc(accountId);
+
+        const originalTransactionRef =
+          db.collection('transactions').doc(transactionId);
+
+        const debtSnapshot =
+          await transaction.get(debtRef);
+
+        const accountSnapshot =
+          await transaction.get(accountRef);
+
+        const originalTransactionSnapshot =
+          await transaction.get(originalTransactionRef);
+
+        if (!debtSnapshot.exists) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The linked debt record no longer exists.',
+          );
+        }
+
+        const debt =
+          debtSnapshot.data() || {};
+
+        if (debt.ownerId !== uid) {
+          throw new HttpsError(
+            'permission-denied',
+            'You cannot change this debt.',
+          );
+        }
+
+        const account =
+          assertAccount(
+            accountSnapshot.data(),
+            uid,
+            'Account',
+            true,
+          );
+
+        const amountMinor =
+          positiveMoney(payment.amountMinor);
+
+        const direction =
+          payment.direction === 'owed'
+            ? 'owed'
+            : 'owe';
+
+        const originalFlow =
+          direction === 'owe'
+            ? 'out'
+            : 'in';
+
+        const originalDelta =
+          accountEffect(
+            account.type,
+            originalFlow,
+            amountMinor,
+          );
+
+        const reversalDelta =
+          -originalDelta;
+
+        const currentPaid =
+          nonNegativeMoney(debt.paidMinor);
+
+        const currentBalance =
+          nonNegativeMoney(debt.balanceMinor);
+
+        const nextPaid =
+          Math.max(0, currentPaid - amountMinor);
+
+        const nextBalance =
+          currentBalance + amountMinor;
+
+        if (
+          !Number.isSafeInteger(nextBalance) ||
+          nextBalance > Number(debt.totalMinor || 0)
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt balance cannot be safely reversed.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const accountData =
+          accountSnapshot.data() || {};
+
+        const originalTransactionData =
+          originalTransactionSnapshot.data() || {};
+
+        const spaceId =
+          String(
+            originalTransactionData.spaceId ||
+            debt.spaceId ||
+            accountData.spaceId ||
+            '',
+          );
+
+        transaction.create(
+          reversalTransactionRef,
+          {
+            displayId: displayId('TXN'),
+            ownerId: uid,
+            type: 'reversal',
+            status: 'posted',
+            accountId,
+            destinationAccountId: null,
+            spaceId,
+            amountMinor,
+            currency: 'BND',
+            transactionDate: reversalDate,
+            categoryId: null,
+            category: 'Debt payment reversal',
+            categoryIcon: 'repeat',
+            categoryColor: 'slate',
+            categoryScope: 'personal',
+            counterparty:
+              String(debt.counterparty || ''),
+            note: reason,
+            paymentMethod: null,
+            paymentMethodLabel: null,
+            sourceType: 'debt_payment_reversal',
+            sourceId: paymentId,
+            reversalOf: transactionId,
+            postedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+        );
+
+        const reversalLedgerEntryId =
+          createLedgerEntry(
+            transaction,
+            {
+              accountId,
+              ownerId: uid,
+              spaceId,
+              transactionId:
+                reversalTransactionRef.id,
+              entryType:
+                direction === 'owe'
+                  ? 'debt_payment_reversal_in'
+                  : 'debt_payment_reversal_out',
+              amountMinor: reversalDelta,
+              currency: 'BND',
+              idempotencyKey,
+              now,
+            },
+          );
+
+        updateAccountBalance(
+          transaction,
+          accountRef,
+          account,
+          reversalDelta,
+        );
+
+        if (originalTransactionSnapshot.exists) {
+          transaction.update(
+            originalTransactionRef,
+            {
+              status: 'reversed',
+              reversedAt: now,
+              reversalTransactionId:
+                reversalTransactionRef.id,
+              updatedAt: now,
+            },
+          );
+        }
+
+        transaction.update(
+          paymentRef,
+          {
+            reversedAt: now,
+            reversedBy: uid,
+            reversalReason: reason,
+            reversalTransactionId:
+              reversalTransactionRef.id,
+            reversalLedgerEntryId,
+          },
+        );
+
+        transaction.update(
+          debtRef,
+          {
+            paidMinor: nextPaid,
+            balanceMinor: nextBalance,
+            status: 'active',
+            settledAt: null,
+            updatedAt: now,
+          },
+        );
+
+        return {
+          paymentId,
+          reversalTransactionId:
+            reversalTransactionRef.id,
+        };
+      },
+    );
+
+    return result;
+  },
+);

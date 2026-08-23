@@ -8,10 +8,14 @@ import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
+import { listAccounts } from '../../repositories/accountRepository';
 import {
   archiveDebt,
   createDebt,
   listDebts,
+  listDebtPayments,
+  recordDebtPayment,
+  reverseDebtPayment,
 } from '../../repositories/debtRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import type {
@@ -19,6 +23,8 @@ import type {
   DebtInterestType,
   DebtRecord,
   DebtSchedule,
+  DebtPayment,
+  Account,
   Space,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
@@ -39,9 +45,13 @@ function moneyToMinor(value: string) {
 export function DebtPage() {
   const { user } = useAuth();
   const [debts, setDebts] = useState<DebtRecord[]>([]);
+  const [payments, setPayments] = useState<DebtPayment[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [direction, setDirection] = useState<DebtDirection>('owe');
   const [showAdd, setShowAdd] = useState(false);
+  const [paymentDebt, setPaymentDebt] = useState<DebtRecord | null>(null);
+  const [historyDebt, setHistoryDebt] = useState<DebtRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
@@ -53,12 +63,21 @@ export function DebtPage() {
     setError('');
 
     try {
-      const [nextDebts, nextSpaces] = await Promise.all([
+      const [
+        nextDebts,
+        nextPayments,
+        nextAccounts,
+        nextSpaces,
+      ] = await Promise.all([
         listDebts(user.uid),
+        listDebtPayments(user.uid),
+        listAccounts(user.uid),
         listSpaces(user.uid),
       ]);
 
       setDebts(nextDebts);
+      setPayments(nextPayments);
+      setAccounts(nextAccounts);
       setSpaces(nextSpaces.filter((space) => !space.archivedAt));
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -244,14 +263,37 @@ export function DebtPage() {
                 <footer className="debt-card-footer">
                   <small>{item.displayId}</small>
 
-                  <button
-                    type="button"
-                    className="button secondary"
-                    disabled={busyId === item.id}
-                    onClick={() => void runArchive(item)}
-                  >
-                    {busyId === item.id ? 'Working…' : 'Archive'}
-                  </button>
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      className="button primary"
+                      disabled={
+                        busyId === item.id
+                        || item.status !== 'active'
+                        || item.balanceMinor <= 0
+                      }
+                      onClick={() => setPaymentDebt(item)}
+                    >
+                      Record payment
+                    </button>
+
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => setHistoryDebt(item)}
+                    >
+                      History
+                    </button>
+
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={busyId === item.id}
+                      onClick={() => void runArchive(item)}
+                    >
+                      {busyId === item.id ? 'Working…' : 'Archive'}
+                    </button>
+                  </div>
                 </footer>
               </article>
             );
@@ -268,6 +310,29 @@ export function DebtPage() {
             setShowAdd(false);
             await load();
           }}
+        />
+      )}
+
+      {paymentDebt && (
+        <DebtPaymentForm
+          debt={paymentDebt}
+          accounts={accounts}
+          onClose={() => setPaymentDebt(null)}
+          onSaved={async () => {
+            setPaymentDebt(null);
+            await load();
+          }}
+        />
+      )}
+
+      {historyDebt && (
+        <DebtPaymentHistory
+          debt={historyDebt}
+          payments={payments.filter(
+            (payment) => payment.debtId === historyDebt.id,
+          )}
+          onClose={() => setHistoryDebt(null)}
+          onChanged={load}
         />
       )}
     </main>
@@ -534,6 +599,252 @@ function DebtForm({
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function DebtPaymentForm({
+  debt,
+  accounts,
+  onClose,
+  onSaved,
+}: {
+  debt: DebtRecord;
+  accounts: Account[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(
+    (debt.balanceMinor / 100).toFixed(2),
+  );
+  const [paymentDate, setPaymentDate] = useState(todayIso());
+  const [accountId, setAccountId] = useState(accounts[0]?.id || '');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const amountMinor = moneyToMinor(amount);
+
+      if (amountMinor <= 0) {
+        throw new Error('Enter a payment greater than zero.');
+      }
+
+      if (amountMinor > debt.balanceMinor) {
+        throw new Error(
+          'Payment cannot be more than the outstanding balance.',
+        );
+      }
+
+      if (!accountId) {
+        throw new Error('Choose the account used for this payment.');
+      }
+
+      await recordDebtPayment({
+        debtId: debt.id,
+        amountMinor,
+        paymentDate,
+        accountId,
+        note: note.trim() || undefined,
+      });
+
+      await onSaved();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={
+        debt.direction === 'owe'
+          ? `Record payment to ${debt.counterparty}`
+          : `Record payment from ${debt.counterparty}`
+      }
+      onClose={onClose}
+    >
+      <form className="form-stack" onSubmit={submit}>
+        {error && <div className="notice error">{error}</div>}
+
+        <div className="notice">
+          Outstanding: {formatMoney(debt.balanceMinor, debt.currency)}
+        </div>
+
+        <label>
+          Amount
+          <input
+            required
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+        </label>
+
+        <label>
+          Payment date
+          <input
+            required
+            type="date"
+            value={paymentDate}
+            onChange={(event) => setPaymentDate(event.target.value)}
+          />
+        </label>
+
+        <label>
+          {debt.direction === 'owe'
+            ? 'Paid from account'
+            : 'Received into account'}
+
+          <select
+            required
+            value={accountId}
+            onChange={(event) => setAccountId(event.target.value)}
+          >
+            <option value="">Choose account</option>
+
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Note
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Optional payment note"
+          />
+        </label>
+
+        <div className="button-row">
+          <button
+            type="submit"
+            className="button primary"
+            disabled={busy}
+          >
+            {busy ? 'Recording…' : 'Record payment'}
+          </button>
+
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function DebtPaymentHistory({
+  debt,
+  payments,
+  onClose,
+  onChanged,
+}: {
+  debt: DebtRecord;
+  payments: DebtPayment[];
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [busyId, setBusyId] = useState('');
+  const [error, setError] = useState('');
+
+  async function reverse(payment: DebtPayment) {
+    const reason = window.prompt(
+      'Reason for reversing this payment?',
+    )?.trim();
+
+    if (!reason) return;
+
+    setBusyId(payment.id);
+    setError('');
+
+    try {
+      await reverseDebtPayment({
+        paymentId: payment.id,
+        reversalDate: todayIso(),
+        reason,
+      });
+
+      await onChanged();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  return (
+    <Modal
+      title={`${debt.counterparty} — payment history`}
+      onClose={onClose}
+    >
+      {error && <div className="notice error">{error}</div>}
+
+      <div className="debt-payment-history">
+        {payments.length === 0 ? (
+          <EmptyState
+            title="No payments yet"
+            description="Recorded repayments will appear here."
+          />
+        ) : (
+          payments.map((payment) => (
+            <article
+              key={payment.id}
+              className="debt-payment-history-row"
+            >
+              <div>
+                <strong>
+                  {formatMoney(payment.amountMinor, payment.currency)}
+                </strong>
+
+                <small>
+                  {payment.paymentDate}
+                  {payment.accountName
+                    ? ` · ${payment.accountName}`
+                    : ''}
+                </small>
+
+                {payment.note && <span>{payment.note}</span>}
+
+                {payment.reversedAt && (
+                  <span className="status-pill">
+                    Reversed
+                  </span>
+                )}
+              </div>
+
+              {!payment.reversedAt && (
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={busyId === payment.id}
+                  onClick={() => void reverse(payment)}
+                >
+                  {busyId === payment.id
+                    ? 'Working…'
+                    : 'Reverse'}
+                </button>
+              )}
+            </article>
+          ))
+        )}
+      </div>
     </Modal>
   );
 }
