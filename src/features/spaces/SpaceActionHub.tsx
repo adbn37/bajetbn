@@ -240,7 +240,7 @@ export function SpaceActionHub({
         )}
 
         {space.type === 'sme' ? (
-          <div style={shortcutGridStyle}>
+          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
             <ShortcutLink
               to={`/spaces/${space.id}/pos`}
               label={smePosLabel(smePosRole)}
@@ -286,7 +286,7 @@ export function SpaceActionHub({
             )}
           </div>
         ) : space.type === 'trip' ? (
-          <div style={shortcutGridStyle}>
+          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
             <ShortcutButton
               label="Trip Plan"
               primary
@@ -341,7 +341,7 @@ export function SpaceActionHub({
             )}
           </div>
         ) : space.type === 'household' ? (
-          <div style={shortcutGridStyle}>
+          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
             <ShortcutButton
               label="Household Fund"
               primary
@@ -391,7 +391,7 @@ export function SpaceActionHub({
             )}
           </div>
         ) : (
-          <div style={shortcutGridStyle}>
+          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
             <ShortcutButton
               label="Add Expense"
               primary={isPrimary('expense')}

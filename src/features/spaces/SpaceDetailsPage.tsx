@@ -41,8 +41,11 @@ import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAuto
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { SpaceActionHub } from './SpaceActionHub';
+import { HouseholdCommandCentre } from './HouseholdCommandCentre';
+import { TripCommandCentre } from './TripCommandCentre';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
 import { CollectionCommandCentre } from './CollectionCommandCentre';
+import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
 
 import type { CustomSpaceModule } from '../../types/models';
@@ -384,6 +387,98 @@ export function SpaceDetailsPage() {
         onRefresh={load}
       />
     )}
+
+    {activeTab === 'overview' && space.type === 'trip' && (
+      <details
+        className="space-home-secondary-details"
+        style={{ marginTop: '0.75rem' }}
+      >
+        <summary
+          style={{
+            cursor: 'pointer',
+            fontWeight: 600,
+            padding: '0.5rem 0',
+          }}
+        >
+          Detailed Trip overview
+        </summary>
+
+        <div style={{ marginTop: '0.75rem' }}>
+          <TripCommandCentre
+        space={space}
+        budgets={budgets}
+        members={members}
+        currentMember={currentMember}
+        sharedExpenses={sharedExpenses}
+        onOpenTab={(tab) => chooseTab(tab)}
+      />
+        </div>
+      </details>
+    )}
+
+
+    {activeTab === 'overview' && space.type === 'household' && (
+      <details
+        className="space-home-secondary-details"
+        style={{ marginTop: '0.75rem' }}
+      >
+        <summary
+          style={{
+            cursor: 'pointer',
+            fontWeight: 600,
+            padding: '0.5rem 0',
+          }}
+        >
+          Detailed Household overview
+        </summary>
+
+        <div style={{ marginTop: '0.75rem' }}>
+          <HouseholdCommandCentre
+        space={space}
+        members={members}
+        commitments={commitments}
+        sharedBills={sharedBills}
+        sharedExpenses={sharedExpenses}
+        currentMember={currentMember || null}
+        canManage={
+          currentMember?.role === 'owner'
+          || currentMember?.role === 'admin'
+        }
+        onOpenTab={chooseTab}
+      />
+        </div>
+      </details>
+    )}
+
+    {activeTab === 'overview' && space.type === 'sme' && (
+      <details
+        className="space-home-secondary-details"
+        style={{ marginTop: '0.75rem' }}
+      >
+        <summary
+          style={{
+            cursor: 'pointer',
+            fontWeight: 600,
+            padding: '0.5rem 0',
+          }}
+        >
+          Detailed SME overview
+        </summary>
+
+        <div style={{ marginTop: '0.75rem' }}>
+          <SmeOperationsCommandCentre
+            space={space}
+            role={smePosRole}
+            canViewFinancials={canViewSmeFinancials}
+            accounts={accounts}
+            transactions={transactions}
+            commitments={commitments}
+            memberCount={activeMembers.length}
+          />
+        </div>
+      </details>
+    )}
+
     {activeTab === 'overview' && space.type === 'sme' && (
       <SmeOperationalAttentionPanel
         space={space}
