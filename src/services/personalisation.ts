@@ -13,6 +13,7 @@ export type NavigationId =
   | 'budgets'
   | 'goals'
   | 'bills'
+  | 'debt'
   | 'calendar'
   | 'search'
   | 'offline-sync'
@@ -47,6 +48,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'budgets', path: '/budgets', label: 'Budgets', icon: '▤' },
   { id: 'goals', path: '/goals', label: 'Goals', icon: '◇' },
   { id: 'bills', path: '/bills', label: 'Bills & instalments', icon: '◷' },
+  { id: 'debt', path: '/debt', label: 'Debt', icon: '⇄' },
   { id: 'calendar', path: '/calendar', label: 'Calendar', icon: '▦' },
   { id: 'search', path: '/search', label: 'Search', icon: '⌕' },
   { id: 'offline-sync', path: '/offline-sync', label: 'Offline & sync', icon: '⇅' },
@@ -62,6 +64,7 @@ export const RECOMMENDED_NAVIGATION_ORDER: NavigationId[] = [
   'accounts',
   'budgets',
   'bills',
+  'debt',
   'search',
   'recurring',
   'goals',
@@ -97,6 +100,7 @@ const ICONS: Record<IconPack, Partial<Record<NavigationId, string>>> = {
     budgets: '▣',
     goals: '◆',
     bills: '◴',
+    debt: '⇄',
     calendar: '▦',
     search: '⌕',
     'offline-sync': '⇅',
@@ -112,6 +116,7 @@ const ICONS: Record<IconPack, Partial<Record<NavigationId, string>>> = {
     budgets: 'B',
     goals: 'G',
     bills: 'D',
+    debt: 'D',
     calendar: 'C',
     search: 'Q',
     'offline-sync': '↕',
@@ -127,6 +132,7 @@ const ICONS: Record<IconPack, Partial<Record<NavigationId, string>>> = {
     budgets: '▤',
     goals: '♦',
     bills: '◴',
+    debt: '⇄',
     calendar: '▥',
     search: '⌕',
     'offline-sync': '⇵',

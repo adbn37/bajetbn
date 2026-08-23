@@ -13470,3 +13470,268 @@ export const removeSpaceAvatar = onCall(
     };
   },
 );
+
+export const createDebt = onCall(
+  { region },
+  async (request) => {
+    const uid = request.auth?.uid;
+
+    if (!uid) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before adding debt.',
+      );
+    }
+
+    const direction =
+      request.data?.direction === 'owe'
+      || request.data?.direction === 'owed'
+        ? request.data.direction
+        : '';
+
+    const counterparty =
+      typeof request.data?.counterparty === 'string'
+        ? request.data.counterparty.trim()
+        : '';
+
+    const description =
+      typeof request.data?.description === 'string'
+        ? request.data.description.trim().slice(0, 1000)
+        : '';
+
+    const principalMinor =
+      Number.isInteger(request.data?.principalMinor)
+        ? request.data.principalMinor
+        : 0;
+
+    const interestType =
+      ['none', 'fixed', 'percentage'].includes(
+        request.data?.interestType,
+      )
+        ? request.data.interestType
+        : 'none';
+
+    const interestRateBps =
+      Number.isInteger(request.data?.interestRateBps)
+        ? Math.max(
+            0,
+            Math.min(
+              100000,
+              request.data.interestRateBps,
+            ),
+          )
+        : 0;
+
+    const suppliedInterestMinor =
+      Number.isInteger(request.data?.interestMinor)
+        ? Math.max(0, request.data.interestMinor)
+        : 0;
+
+    const startDate =
+      typeof request.data?.startDate === 'string'
+        ? request.data.startDate
+        : '';
+
+    const dueDate =
+      typeof request.data?.dueDate === 'string'
+      && request.data.dueDate
+        ? request.data.dueDate
+        : null;
+
+    const schedule =
+      ['none', 'weekly', 'monthly', 'custom'].includes(
+        request.data?.schedule,
+      )
+        ? request.data.schedule
+        : 'none';
+
+    const scheduleNote =
+      typeof request.data?.scheduleNote === 'string'
+        ? request.data.scheduleNote.trim().slice(0, 300)
+        : '';
+
+    const reminderEnabled =
+      request.data?.reminderEnabled !== false;
+
+    const spaceId =
+      typeof request.data?.spaceId === 'string'
+      && request.data.spaceId.trim()
+        ? request.data.spaceId.trim()
+        : null;
+
+    if (!direction) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose whether you owe this money or it is owed to you.',
+      );
+    }
+
+    if (!counterparty || counterparty.length > 160) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Enter a valid person, lender or borrower.',
+      );
+    }
+
+    if (
+      !Number.isInteger(principalMinor)
+      || principalMinor <= 0
+      || principalMinor > 999999999999
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Enter a valid debt amount.',
+      );
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a valid start date.',
+      );
+    }
+
+    if (
+      dueDate
+      && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a valid due date.',
+      );
+    }
+
+    if (spaceId) {
+      const memberId = `${spaceId}_${uid}`;
+
+      const memberSnapshot =
+        await db
+          .collection('spaceMembers')
+          .doc(memberId)
+          .get();
+
+      if (
+        !memberSnapshot.exists
+        || memberSnapshot.data()?.status === 'removed'
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'You cannot link this debt to that Space.',
+        );
+      }
+    }
+
+    const interestMinor =
+      interestType === 'percentage'
+        ? Math.round(
+            principalMinor
+            * interestRateBps
+            / 10000,
+          )
+        : interestType === 'fixed'
+          ? suppliedInterestMinor
+          : 0;
+
+    const totalMinor =
+      principalMinor + interestMinor;
+
+    const debtRef =
+      db.collection('debts').doc();
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    await debtRef.set({
+      displayId:
+        `DEBT-${debtRef.id.slice(0, 8).toUpperCase()}`,
+      ownerId: uid,
+      direction,
+      counterparty,
+      description,
+      principalMinor,
+      interestType,
+      interestRateBps:
+        interestType === 'percentage'
+          ? interestRateBps
+          : 0,
+      interestMinor,
+      totalMinor,
+      paidMinor: 0,
+      balanceMinor: totalMinor,
+      currency: 'BND',
+      startDate,
+      dueDate,
+      schedule,
+      scheduleNote,
+      reminderEnabled,
+      spaceId,
+      status: 'active',
+      settledAt: null,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return {
+      debtId: debtRef.id,
+    };
+  },
+);
+
+export const archiveDebt = onCall(
+  { region },
+  async (request) => {
+    const uid = request.auth?.uid;
+
+    if (!uid) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before changing debt.',
+      );
+    }
+
+    const debtId =
+      typeof request.data?.debtId === 'string'
+        ? request.data.debtId.trim()
+        : '';
+
+    if (!debtId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Debt record is required.',
+      );
+    }
+
+    const debtRef =
+      db.collection('debts').doc(debtId);
+
+    const debtSnapshot =
+      await debtRef.get();
+
+    if (!debtSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Debt record not found.',
+      );
+    }
+
+    if (debtSnapshot.data()?.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'You cannot change this debt record.',
+      );
+    }
+
+    await debtRef.update({
+      status: 'archived',
+      archivedAt:
+        FieldValue.serverTimestamp(),
+      updatedAt:
+        FieldValue.serverTimestamp(),
+    });
+
+    return {
+      debtId,
+    };
+  },
+);

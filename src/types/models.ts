@@ -767,6 +767,55 @@ export interface CollectionQuantityMovement {
   createdAt?: Timestamp;
 }
 
+export type DebtDirection = 'owe' | 'owed';
+export type DebtStatus = 'active' | 'settled' | 'archived';
+export type DebtInterestType = 'none' | 'fixed' | 'percentage';
+export type DebtSchedule = 'none' | 'weekly' | 'monthly' | 'custom';
+
+export interface DebtRecord {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  direction: DebtDirection;
+  counterparty: string;
+  description?: string | null;
+  principalMinor: number;
+  interestType: DebtInterestType;
+  interestRateBps: number;
+  interestMinor: number;
+  totalMinor: number;
+  paidMinor: number;
+  balanceMinor: number;
+  currency: string;
+  startDate: string;
+  dueDate?: string | null;
+  schedule: DebtSchedule;
+  scheduleNote?: string | null;
+  reminderEnabled: boolean;
+  spaceId?: string | null;
+  status: DebtStatus;
+  settledAt?: Timestamp | null;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface DebtPayment {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  debtId: string;
+  direction: DebtDirection;
+  amountMinor: number;
+  currency: string;
+  paymentDate: string;
+  accountId?: string | null;
+  transactionId?: string | null;
+  proofPath?: string | null;
+  note?: string | null;
+  reversedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+}
 export interface Space {
   id: string;
   displayId: string;

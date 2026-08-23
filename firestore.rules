@@ -249,6 +249,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /debts/{debtId} {
+      allow read: if signedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create, update, delete: if false;
+    }
+
+    match /debtPayments/{paymentId} {
+      allow read: if signedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create, update, delete: if false;
+    }
     match /spaces/{spaceId} {
       allow read: if isSpaceMember(spaceId);
       allow create: if false; // Created by entitlement-enforced Cloud Functions.

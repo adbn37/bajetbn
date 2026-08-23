@@ -5887,3 +5887,96 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     align-items: flex-start;
   }
 }
+
+/* v1.9.0 Slice 7A - Debt foundation */
+.debt-page {
+  padding-bottom: 5rem;
+}
+
+.debt-summary-grid {
+  margin-bottom: 1rem;
+}
+
+.debt-tabs {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.3rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface);
+}
+
+.debt-tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 0.7rem;
+  padding: 0.75rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.debt-tabs button.active {
+  background: var(--surface-strong, var(--surface));
+}
+
+.debt-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.debt-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.debt-card-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.debt-balance {
+  min-width: 9rem;
+  text-align: right;
+}
+
+.debt-balance strong,
+.debt-balance span,
+.debt-balance small {
+  display: block;
+}
+
+.debt-progress {
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.debt-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+}
+
+.debt-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .debt-card-main {
+    display: grid;
+  }
+
+  .debt-balance {
+    text-align: left;
+  }
+}

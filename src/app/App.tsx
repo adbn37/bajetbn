@@ -35,6 +35,7 @@ const ArchivedBudgetsPage = lazy(() => import('../features/budgets/ArchivedBudge
 const GoalsPage = lazy(() => import('../features/goals/GoalsPage').then((module) => ({ default: module.GoalsPage })));
 const ArchivedGoalsPage = lazy(() => import('../features/goals/ArchivedGoalsPage').then((module) => ({ default: module.ArchivedGoalsPage })));
 const CommitmentsPage = lazy(() => import('../features/commitments/CommitmentsPage').then((module) => ({ default: module.CommitmentsPage })));
+const DebtPage = lazy(() => import('../features/debt/DebtPage').then((module) => ({ default: module.DebtPage })));
 const ArchivedCommitmentsPage = lazy(() => import('../features/commitments/ArchivedCommitmentsPage').then((module) => ({ default: module.ArchivedCommitmentsPage })));
 const ArchivedCategoriesPage = lazy(() => import('../features/categories/ArchivedCategoriesPage').then((module) => ({ default: module.ArchivedCategoriesPage })));
 const JoinSpacePage = lazy(() => import('../features/collaboration/JoinSpacePage').then((module) => ({ default: module.JoinSpacePage })));
@@ -89,6 +90,7 @@ export default function App() {
                   <Route path="goals" element={<GoalsPage />} />
                   <Route path="goals/archived" element={<ArchivedGoalsPage />} />
                   <Route path="bills" element={<CommitmentsPage />} />
+                  <Route path="debt" element={<DebtPage />} />
                   <Route path="bills/archived" element={<ArchivedCommitmentsPage />} />
                   <Route path="categories/archived" element={<ArchivedCategoriesPage />} />
                   <Route path="sharing" element={<Navigate to="/spaces" replace />} />
