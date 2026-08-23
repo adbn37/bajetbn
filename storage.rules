@@ -43,11 +43,15 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.role in ['owner', 'admin', 'contributor'];
     }
 
-    function isSmeSpaceOwner(spaceId) {
+    function isSpaceOwner(spaceId) {
       return signedIn()
         && firestore.exists(/databases/(default)/documents/spaces/$(spaceId))
-        && firestore.get(/databases/(default)/documents/spaces/$(spaceId)).data.type == 'sme'
         && firestore.get(/databases/(default)/documents/spaces/$(spaceId)).data.ownerId == request.auth.uid;
+    }
+
+    function isSmeSpaceOwner(spaceId) {
+      return isSpaceOwner(spaceId)
+        && firestore.get(/databases/(default)/documents/spaces/$(spaceId)).data.type == 'sme';
     }
 
     function hasActiveSmePosAccess(spaceId) {
@@ -71,6 +75,18 @@ service firebase.storage {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, update: if signedIn() && request.auth.uid == uid && isImageOrPdf() && underTenMb();
       allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /spaces/{spaceId}/avatar/{fileName} {
+      allow read: if isActiveSpaceMember(spaceId);
+
+      allow create: if isSpaceOwner(spaceId)
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.size > 0
+        && request.resource.size < 700 * 1024;
+
+      allow update: if false;
+      allow delete: if isSpaceOwner(spaceId);
     }
 
     match /spaces/{spaceId}/payment-proofs/{assignmentId}/{fileName} {

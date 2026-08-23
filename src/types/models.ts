@@ -777,6 +777,7 @@ export interface Space {
   currency: string;
   timezone: string;
   description?: string;
+  avatarPath?: string | null;
   customModules?: CustomSpaceModule[];
   approvalMode?: SpaceApprovalMode;
   headWhatsapp?: string;

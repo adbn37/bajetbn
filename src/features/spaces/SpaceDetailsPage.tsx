@@ -47,6 +47,8 @@ import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCus
 import { CollectionCommandCentre } from './CollectionCommandCentre';
 import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
+import { SpaceAvatar } from './SpaceAvatar';
+import { SpaceAvatarSettings } from './SpaceAvatarSettings';
 
 import type { CustomSpaceModule } from '../../types/models';
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
@@ -330,6 +332,7 @@ export function SpaceDetailsPage() {
     <PageHeader
       eyebrow={`${spaceTypeLabel[space.type]} Space`}
       title={space.name}
+      leading={<SpaceAvatar space={space} size="large" />}
       description={
         space.type === 'sme'
           ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · SME`
@@ -342,7 +345,7 @@ export function SpaceDetailsPage() {
 
     {space.type !== 'sme' && (
       <section className="space-details-identity">
-        <span className={`space-icon large ${space.type}`}>{space.name.charAt(0).toUpperCase()}</span>
+        <SpaceAvatar space={space} size="large" />
 
         <div>
           <strong>{spaceTypeLabel[space.type]}</strong>
@@ -533,10 +536,20 @@ export function SpaceDetailsPage() {
       currentMember={currentMember}
     />}
       {activeTab === 'settings' && currentMember?.role === 'owner' && <>
+      <SpaceAvatarSettings space={space} onSaved={load} />
       {space.type === 'custom' && <CustomSpaceModuleSettings space={space} onSaved={load} />}
       <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />
     </>}
-    </> : <PersonalSpaceSettings space={space} />}
+    </> : <>
+      {activeTab === 'settings' && space.ownerId === user?.uid && (
+        <SpaceAvatarSettings
+          space={space}
+          onSaved={load}
+        />
+      )}
+
+      <PersonalSpaceSettings space={space} />
+    </>}
   </main>;
 }
 

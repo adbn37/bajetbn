@@ -5816,3 +5816,74 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 .needs-attention-page .summary-card.featured strong {
   line-height: 1;
 }
+
+/* v1.9.0 Slice 6 - Space icon / avatar */
+.space-avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 2.75rem;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  background: var(--surface-strong, var(--surface));
+  border: 1px solid var(--border);
+}
+
+.space-avatar-large {
+  width: 3.25rem;
+  height: 3.25rem;
+  flex-basis: 3.25rem;
+  font-size: 1.15rem;
+}
+
+.space-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.page-header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.page-header-main > div {
+  min-width: 0;
+}
+
+.space-avatar-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.space-avatar-preview {
+  width: 5rem;
+  height: 5rem;
+  flex-basis: 5rem;
+  border-radius: 1.25rem;
+  font-size: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .page-header-main {
+    align-items: flex-start;
+  }
+
+  .space-avatar-large {
+    width: 2.85rem;
+    height: 2.85rem;
+    flex-basis: 2.85rem;
+  }
+
+  .space-avatar-settings-row {
+    align-items: flex-start;
+  }
+}

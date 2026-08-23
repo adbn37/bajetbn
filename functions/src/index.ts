@@ -13281,3 +13281,192 @@ export const voidSmePosSale = onCall({ region }, async (request) => {
     return result;
   });
 });
+
+export const setSpaceAvatar = onCall(
+  { region },
+  async (request) => {
+    const uid = request.auth?.uid;
+
+    if (!uid) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before changing a Space icon.',
+      );
+    }
+
+    const spaceId =
+      typeof request.data?.spaceId === 'string'
+        ? request.data.spaceId.trim()
+        : '';
+
+    const storagePath =
+      typeof request.data?.storagePath === 'string'
+        ? request.data.storagePath.trim()
+        : '';
+
+    if (!spaceId || !storagePath) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Space and image are required.',
+      );
+    }
+
+    const expectedPrefix = `spaces/${spaceId}/avatar/`;
+
+    if (
+      !storagePath.startsWith(expectedPrefix)
+      || !storagePath.endsWith('.jpg')
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Invalid Space icon path.',
+      );
+    }
+
+    const spaceRef = db.collection('spaces').doc(spaceId);
+    const spaceSnapshot = await spaceRef.get();
+
+    if (!spaceSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Space not found.',
+      );
+    }
+
+    const space = spaceSnapshot.data() || {};
+
+    if (space.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the Space owner can change its icon.',
+      );
+    }
+
+    const bucket = getStorage().bucket();
+    const uploadedFile = bucket.file(storagePath);
+    const [exists] = await uploadedFile.exists();
+
+    if (!exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Uploaded Space icon was not found.',
+      );
+    }
+
+    const [metadata] = await uploadedFile.getMetadata();
+
+    if (
+      metadata.contentType !== 'image/jpeg'
+      || Number(metadata.size || 0) <= 0
+      || Number(metadata.size || 0) >= 700 * 1024
+    ) {
+      await uploadedFile.delete({ ignoreNotFound: true });
+
+      throw new HttpsError(
+        'invalid-argument',
+        'Space icon must be a compressed JPEG smaller than 700 KB.',
+      );
+    }
+
+    const previousPath =
+      typeof space.avatarPath === 'string'
+        ? space.avatarPath
+        : '';
+
+    await spaceRef.update({
+      avatarPath: storagePath,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    if (
+      previousPath
+      && previousPath !== storagePath
+      && previousPath.startsWith(expectedPrefix)
+    ) {
+      try {
+        await bucket
+          .file(previousPath)
+          .delete({ ignoreNotFound: true });
+      } catch {
+        // New avatar remains safely linked.
+      }
+    }
+
+    return {
+      avatarPath: storagePath,
+    };
+  },
+);
+
+export const removeSpaceAvatar = onCall(
+  { region },
+  async (request) => {
+    const uid = request.auth?.uid;
+
+    if (!uid) {
+      throw new HttpsError(
+        'unauthenticated',
+        'Sign in before changing a Space icon.',
+      );
+    }
+
+    const spaceId =
+      typeof request.data?.spaceId === 'string'
+        ? request.data.spaceId.trim()
+        : '';
+
+    if (!spaceId) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Space is required.',
+      );
+    }
+
+    const spaceRef = db.collection('spaces').doc(spaceId);
+    const spaceSnapshot = await spaceRef.get();
+
+    if (!spaceSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Space not found.',
+      );
+    }
+
+    const space = spaceSnapshot.data() || {};
+
+    if (space.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the Space owner can remove its icon.',
+      );
+    }
+
+    const previousPath =
+      typeof space.avatarPath === 'string'
+        ? space.avatarPath
+        : '';
+
+    await spaceRef.update({
+      avatarPath: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    if (
+      previousPath
+      && previousPath.startsWith(`spaces/${spaceId}/avatar/`)
+    ) {
+      try {
+        await getStorage()
+          .bucket()
+          .file(previousPath)
+          .delete({ ignoreNotFound: true });
+      } catch {
+        // Metadata is already safely cleared.
+      }
+    }
+
+    return {
+      removed: true,
+    };
+  },
+);

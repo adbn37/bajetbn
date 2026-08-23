@@ -11,6 +11,7 @@ import { createSpace, listSpaces, updateSpace } from '../../repositories/spaceRe
 import type { CustomSpaceModule, Space, SpaceInvitation, SpaceType } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
+import { SpaceAvatar } from './SpaceAvatar';
 
 const labels: Record<SpaceType, string> = {
   personal: 'Personal',
@@ -156,7 +157,7 @@ function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { 
       aria-label={`Open ${space.name}`}
     >
       <div className="card-top">
-        <span className={`space-icon large ${space.type}`}>{space.name.charAt(0).toUpperCase()}</span>
+        <SpaceAvatar space={space} size="large" />
         <span className="type-badge">{labels[space.type]}</span>
       </div>
 
