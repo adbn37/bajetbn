@@ -503,6 +503,7 @@ export interface FinancialTransaction {
   budgetIds?: string[];
   commitmentId?: string | null;
   commitmentPaymentId?: string | null;
+  spaceWorkItemId?: string | null;
   sharedBillAssignmentId?: string | null;
   sharedBillPaymentId?: string | null;
   paymentProofPath?: string | null;

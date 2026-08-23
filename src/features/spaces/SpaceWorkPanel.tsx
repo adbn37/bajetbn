@@ -4,6 +4,14 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import { suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
+import { useAuth } from '../../contexts/AuthContext';
+import { useOfflineSync } from '../../contexts/OfflineSyncContext';
+import { listAllAccounts } from '../../repositories/accountRepository';
+import { listAllCustomCategories } from '../../repositories/categoryRepository';
+import { uploadTransactionAttachment } from '../../repositories/transactionRepository';
+import { DEFAULT_TRANSACTION_CATEGORIES, categoryApplies } from '../categories/defaultCategories';
 import {
   archiveSpaceWorkItem,
   listSpaceWorkItems,
@@ -11,12 +19,19 @@ import {
   reopenSpaceWorkItem,
   saveSpaceWorkItem,
   setSpaceWorkItemStatus,
+  uploadSpaceWorkItemPhoto,
+  getSpaceWorkItemPhotoUrl,
+  removeSpaceWorkItemPhoto,
+  recordSpaceWorkPurchaseExpense,
 } from '../../repositories/spaceWorkRepository';
 import type {
   Space,
   SpaceMember,
   SpaceWorkItem,
   SpaceWorkPriority,
+  Account,
+  PaymentMethodCode,
+  TransactionCategory,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
@@ -68,6 +83,440 @@ function priorityLabel(priority: SpaceWorkPriority) {
   return 'Normal';
 }
 
+function PurchaseExpenseForm({
+  space,
+  item,
+  currentMember,
+  onSaved,
+}: {
+  space: Space;
+  item: SpaceWorkItem;
+  currentMember: SpaceMember | null;
+  onSaved: (message: string) => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const { online } = useOfflineSync();
+
+  const [accounts, setAccounts] =
+    useState<Account[]>([]);
+
+  const [categories, setCategories] =
+    useState<TransactionCategory[]>([]);
+
+  const [accountId, setAccountId] =
+    useState('');
+
+  const [categoryId, setCategoryId] =
+    useState('');
+
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethodCode>('cash');
+
+  const [
+    paymentMethodCustom,
+    setPaymentMethodCustom,
+  ] = useState('');
+
+  const [receiptFile, setReceiptFile] =
+    useState<File | null>(null);
+
+  const [loadingOptions, setLoadingOptions] =
+    useState(true);
+
+  const [busyPurchase, setBusyPurchase] =
+    useState(false);
+
+  const [purchaseError, setPurchaseError] =
+    useState('');
+
+  const scope =
+    space.type === 'sme'
+      ? 'business'
+      : 'personal';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOptions() {
+      if (!user) return;
+
+      setLoadingOptions(true);
+      setPurchaseError('');
+
+      try {
+        const [
+          nextAccounts,
+          nextCustomCategories,
+        ] = await Promise.all([
+          listAllAccounts(user.uid),
+          listAllCustomCategories(user.uid),
+        ]);
+
+        if (cancelled) return;
+
+        const compatibleAccounts =
+          nextAccounts.filter(
+            (account) =>
+              !account.archivedAt
+              && !account.closedAt
+              && account.currency ===
+                space.currency,
+          );
+
+        const expenseCategories = [
+          ...DEFAULT_TRANSACTION_CATEGORIES,
+          ...nextCustomCategories.filter(
+            (category) =>
+              !category.archivedAt,
+          ),
+        ].filter((category) =>
+          categoryApplies(
+            category,
+            'expense',
+            scope,
+          ),
+        );
+
+        setAccounts(compatibleAccounts);
+        setCategories(expenseCategories);
+
+        const firstAccount =
+          compatibleAccounts[0];
+
+        setAccountId(firstAccount?.id || '');
+
+        setPaymentMethod(
+          suggestedPaymentMethod(firstAccount),
+        );
+
+        const preferredCategory =
+          space.type === 'sme'
+            ? 'expense-supplier'
+            : 'expense-groceries';
+
+        const defaultCategory =
+          expenseCategories.find(
+            (category) =>
+              category.id ===
+              preferredCategory,
+          )
+          || expenseCategories[0];
+
+        setCategoryId(
+          defaultCategory?.id || '',
+        );
+      } catch (error) {
+        if (!cancelled) {
+          setPurchaseError(
+            getErrorMessage(error),
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingOptions(false);
+        }
+      }
+    }
+
+    void loadOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, space.currency, space.type, user]);
+
+  const selectedAccount =
+    accounts.find(
+      (account) =>
+        account.id === accountId,
+    );
+
+  useEffect(() => {
+    setPaymentMethod(
+      suggestedPaymentMethod(
+        selectedAccount,
+      ),
+    );
+
+    setPaymentMethodCustom('');
+  }, [accountId]);
+
+  if (
+    currentMember?.canUseAccounts !== true
+  ) {
+    return (
+      <div className="notice">
+        Your Space role can record that this item
+        was bought, but it cannot post financial
+        activity.
+      </div>
+    );
+  }
+
+  if (
+    !item.actualPriceMinor
+    || item.actualPriceMinor <= 0
+  ) {
+    return (
+      <div className="notice">
+        This was recorded as a zero-cost purchase,
+        so no expense transaction is required.
+      </div>
+    );
+  }
+
+  async function submitPurchaseExpense(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      busyPurchase
+      || !accountId
+      || !categoryId
+    ) {
+      return;
+    }
+
+    if (!online) {
+      setPurchaseError(
+        'Connect to the internet before creating and linking this financial record.',
+      );
+
+      return;
+    }
+
+    setBusyPurchase(true);
+    setPurchaseError('');
+
+    try {
+      const result =
+        await recordSpaceWorkPurchaseExpense({
+          spaceId: space.id,
+          itemId: item.id,
+          accountId,
+          categoryId,
+          paymentMethod,
+          paymentMethodLabel:
+            paymentMethod === 'other'
+              ? paymentMethodCustom.trim()
+              : undefined,
+        });
+
+      let message =
+        space.type === 'sme'
+          ? 'SME Purchase recorded and linked.'
+          : 'Household Expense recorded and linked.';
+
+      if (receiptFile) {
+        try {
+          await uploadTransactionAttachment({
+            transactionId:
+              result.transactionId,
+            spaceId: space.id,
+            file: receiptFile,
+          });
+
+          message +=
+            ' Receipt/photo attached.';
+        } catch (attachmentError) {
+          message +=
+            ' The financial record is safe, but the receipt/photo could not be uploaded. Add it later from Money Activity. '
+            + getErrorMessage(
+              attachmentError,
+            );
+        }
+      }
+
+      await onSaved(message);
+    } catch (error) {
+      setPurchaseError(
+        getErrorMessage(error),
+      );
+    } finally {
+      setBusyPurchase(false);
+    }
+  }
+
+  return (
+    <details>
+      <summary>
+        {space.type === 'sme'
+          ? 'Record as SME Purchase'
+          : 'Record as Household Expense'}
+      </summary>
+
+      <form
+        className="form-stack"
+        onSubmit={submitPurchaseExpense}
+      >
+        <div className="notice">
+          <strong>
+            {formatMoney(
+              item.actualPriceMinor || 0,
+              space.currency,
+            )}
+          </strong>
+
+          <span>
+            {item.actualPlace || 'No place'}
+            {' · '}
+            {item.purchasedOn ||
+              'No purchase date'}
+          </span>
+        </div>
+
+        {loadingOptions ? (
+          <div className="loading-panel">
+            Loading financial options...
+          </div>
+        ) : (
+          <>
+            <label className="field">
+              <span>Paid from account</span>
+
+              <select
+                required
+                value={accountId}
+                onChange={(event) =>
+                  setAccountId(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  Choose account
+                </option>
+
+                {accounts.map((account) => (
+                  <option
+                    key={account.id}
+                    value={account.id}
+                  >
+                    {account.name}
+                    {' · '}
+                    {formatMoney(
+                      account.ledgerBalanceMinor,
+                      account.currency,
+                    )}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Category</span>
+
+              <select
+                required
+                value={categoryId}
+                onChange={(event) =>
+                  setCategoryId(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  Choose category
+                </option>
+
+                {categories.map(
+                  (category) => (
+                    <option
+                      key={category.id}
+                      value={category.id}
+                    >
+                      {category.name}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+
+            <PaymentMethodField
+              label="Payment method"
+              value={paymentMethod}
+              customLabel={
+                paymentMethodCustom
+              }
+              onChange={(value, custom) => {
+                setPaymentMethod(value);
+                setPaymentMethodCustom(
+                  custom,
+                );
+              }}
+            />
+
+            <label className="field">
+              <span>
+                Receipt or photo (optional)
+              </span>
+
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                disabled={
+                  !online || busyPurchase
+                }
+                onChange={(event) =>
+                  setReceiptFile(
+                    event.currentTarget
+                      .files?.[0]
+                    || null,
+                  )
+                }
+              />
+
+              <small className="muted">
+                Images or PDF. You can also add
+                more receipts later from Money
+                Activity.
+              </small>
+            </label>
+
+            {!accounts.length && (
+              <div className="notice warning">
+                No active account uses{' '}
+                {space.currency}.
+              </div>
+            )}
+
+            {!online && (
+              <div className="notice warning">
+                Internet is required because the
+                expense and To-Buy link are saved
+                together.
+              </div>
+            )}
+
+            {purchaseError && (
+              <div className="notice error">
+                {purchaseError}
+              </div>
+            )}
+
+            <button
+              className="button primary"
+              disabled={
+                busyPurchase
+                || !online
+                || !accountId
+                || !categoryId
+              }
+            >
+              {busyPurchase
+                ? 'Recording...'
+                : space.type === 'sme'
+                  ? 'Record SME Purchase'
+                  : 'Record Household Expense'}
+            </button>
+          </>
+        )}
+      </form>
+    </details>
+  );
+}
+
 export function SpaceWorkPanel({
   space,
   members,
@@ -95,6 +544,45 @@ export function SpaceWorkPanel({
     'admin',
     'contributor',
   ].includes(currentMember?.role || '');
+
+
+  const [photoUrls, setPhotoUrls] =
+    useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolvePhotos() {
+      const rows = await Promise.all(
+        items
+          .filter((item) => item.photoPath)
+          .map(async (item) => {
+            try {
+              const url =
+                await getSpaceWorkItemPhotoUrl(
+                  String(item.photoPath),
+                );
+
+              return [item.id, url] as const;
+            } catch {
+              return [item.id, ''] as const;
+            }
+          }),
+      );
+
+      if (!cancelled) {
+        setPhotoUrls(
+          Object.fromEntries(rows),
+        );
+      }
+    }
+
+    void resolvePhotos();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
 
   useEffect(() => {
     setView(initialView);
@@ -205,42 +693,110 @@ export function SpaceWorkPanel({
       !Number.isFinite(quantityValue)
       || quantityValue <= 0
     ) {
-      setError('Quantity must be greater than zero.');
+      setError(
+        'Quantity must be greater than zero.',
+      );
       return;
     }
 
-    await runMutation(
-      'create-buy',
-      () =>
-        saveSpaceWorkItem({
+    const photoValue =
+      data.get('itemPhoto');
+
+    const itemPhoto =
+      photoValue instanceof File
+        && photoValue.size > 0
+        ? photoValue
+        : null;
+
+    setBusy('create-buy');
+    setError('');
+    setMessage('');
+
+    try {
+      const result =
+        await saveSpaceWorkItem({
           spaceId: space.id,
           kind: 'buy',
           title: formText(data, 'title'),
-          brand: formText(data, 'brand') || undefined,
-          model: formText(data, 'model') || undefined,
-          size: formText(data, 'size') || undefined,
-          unit: formText(data, 'unit') || undefined,
+          brand:
+            formText(data, 'brand')
+            || undefined,
+          model:
+            formText(data, 'model')
+            || undefined,
+          size:
+            formText(data, 'size')
+            || undefined,
+          unit:
+            formText(data, 'unit')
+            || undefined,
           quantity: quantityValue,
-          targetPriceMinor: optionalMinor(
-            formText(data, 'targetPrice'),
-          ),
+          targetPriceMinor:
+            optionalMinor(
+              formText(
+                data,
+                'targetPrice',
+              ),
+            ),
           preferredPlace:
-            formText(data, 'preferredPlace') || undefined,
+            formText(
+              data,
+              'preferredPlace',
+            )
+            || undefined,
           assigneeUid:
-            formText(data, 'assigneeUid') || undefined,
+            formText(
+              data,
+              'assigneeUid',
+            )
+            || undefined,
           priority:
-            (formText(data, 'priority') ||
-              'normal') as SpaceWorkPriority,
+            (
+              formText(
+                data,
+                'priority',
+              )
+              || 'normal'
+            ) as SpaceWorkPriority,
           dueDate:
-            formText(data, 'dueDate') || undefined,
-          note: formText(data, 'note') || undefined,
-        }),
-      space.type === 'sme'
-        ? 'Procurement item added.'
-        : 'To-Buy item added.',
-    );
+            formText(data, 'dueDate')
+            || undefined,
+          note:
+            formText(data, 'note')
+            || undefined,
+        });
 
-    if (!error) form.reset();
+      let success =
+        space.type === 'sme'
+          ? 'Procurement item added.'
+          : 'To-Buy item added.';
+
+      if (itemPhoto) {
+        try {
+          await uploadSpaceWorkItemPhoto({
+            spaceId: space.id,
+            itemId: result.itemId,
+            file: itemPhoto,
+          });
+
+          success += ' Photo added.';
+        } catch (photoError) {
+          success +=
+            ' The item is saved, but its photo could not be uploaded. '
+            + getErrorMessage(photoError);
+        }
+      }
+
+      setMessage(success);
+      form.reset();
+      await loadItems();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(nextError),
+      );
+    } finally {
+      setBusy('');
+    }
   }
 
   function historyFor(item: SpaceWorkItem) {
@@ -713,6 +1269,22 @@ export function SpaceWorkPanel({
                   />
                 </label>
 
+                <label className="field">
+                  <span>Item photo (optional)</span>
+
+                  <input
+                    name="itemPhoto"
+                    type="file"
+                    accept="image/*"
+                    disabled={Boolean(busy)}
+                  />
+
+                  <small className="muted">
+                    One shared item photo, smaller
+                    than 5 MB.
+                  </small>
+                </label>
+
                 <button
                   className="button primary"
                   disabled={Boolean(busy)}
@@ -783,6 +1355,81 @@ export function SpaceWorkPanel({
                     )}
 
                     {item.note && <p>{item.note}</p>}
+
+                    {item.photoPath
+                      && photoUrls[item.id] && (
+                        <img
+                          src={photoUrls[item.id]}
+                          alt={item.title}
+                          style={{
+                            width: '100%',
+                            maxHeight: '220px',
+                            objectFit: 'cover',
+                            borderRadius: '12px',
+                          }}
+                        />
+                      )}
+
+                    {canManage && (
+                      <div className="button-row">
+                        <label className="button secondary compact">
+                          {item.photoPath
+                            ? 'Replace item photo'
+                            : 'Add item photo'}
+
+                          <input
+                            hidden
+                            type="file"
+                            accept="image/*"
+                            disabled={Boolean(busy)}
+                            onChange={(event) => {
+                              const file =
+                                event.currentTarget
+                                  .files?.[0];
+
+                              event.currentTarget.value =
+                                '';
+
+                              if (!file) return;
+
+                              void runMutation(
+                                'photo-' + item.id,
+                                () =>
+                                  uploadSpaceWorkItemPhoto({
+                                    spaceId: space.id,
+                                    itemId: item.id,
+                                    file,
+                                  }),
+                                'Item photo updated.',
+                              );
+                            }}
+                          />
+                        </label>
+
+                        {item.photoPath && (
+                          <button
+                            type="button"
+                            className="button ghost compact"
+                            disabled={Boolean(busy)}
+                            onClick={() =>
+                              void runMutation(
+                                'photo-remove-'
+                                  + item.id,
+                                () =>
+                                  removeSpaceWorkItemPhoto({
+                                    spaceId: space.id,
+                                    itemId: item.id,
+                                  }),
+                                'Item photo removed.',
+                              )
+                            }
+                          >
+                            Remove photo
+                          </button>
+                        )}
+                      </div>
+                    )}
+
 
                     {history && (
                       <div className="notice">
@@ -949,6 +1596,11 @@ export function SpaceWorkPanel({
                     key={item.id}
                   >
                     <strong>{item.title}</strong>
+                    {item.linkedTransactionId && (
+                      <small className="muted">
+                        Financial record linked
+                      </small>
+                    )}
 
                     <small className="muted">
                       {item.purchasedOn || 'No date'}
