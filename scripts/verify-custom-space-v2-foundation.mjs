@@ -7,6 +7,7 @@ const need = (condition, message) => { if (!condition) throw new Error(message);
 
 const models = read("src/types/models.ts");
 const repository = read("src/repositories/spaceRepository.ts");
+const functions = read("functions/src/index.ts");
 const spaces = read("src/features/spaces/SpacesPage.tsx");
 const modules = read("src/features/spaces/customSpaceModules.ts");
 const css = read("src/styles/global.css");
@@ -25,8 +26,21 @@ need(modules.includes("normalizeCustomSpaceModules"), "Custom Space normalizer i
 need(modules.includes("if (!value) return [...DEFAULT_CUSTOM_SPACE_MODULES];"), "Existing Custom Spaces must default to all modules.");
 
 need(repository.includes("customModules?: CustomSpaceModule[]"), "createSpace/updateSpace inputs must accept Custom Space modules.");
-need(repository.includes("input.type ==="), "Custom Space creation persistence is missing.");
-need(repository.includes("customModules: input.customModules"), "Custom Space creation must save selected modules.");
+need(
+  (
+    repository.includes("input.type ===")
+    && repository.includes("customModules: input.customModules")
+  )
+  || (
+    repository.includes("createSpaceWithEntitlement")
+    && repository.includes("customModules: input.customModules")
+    && functions.includes("export const createSpaceWithEntitlement")
+    && functions.includes("type === 'custom'")
+    && functions.includes("{ customModules }")
+  ),
+  "Custom Space creation persistence is missing.",
+);
+need(repository.includes("customModules: input.customModules"), "Custom Space creation must pass selected modules.");
 need(repository.includes("updates.customModules"), "Custom Space editing must save selected modules.");
 
 need(spaces.includes("Choose what this Space needs"), "Custom Space module picker is missing.");

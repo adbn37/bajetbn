@@ -2761,6 +2761,12 @@ export const saveSmePosProduct = onCall({ region, cpu: 'gcf_gen1', concurrency: 
   const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+  if (!productId) {
+    await assertBasicSmeInventoryCapacity(
+      context.settings.ownerId,
+      spaceId,
+    );
+  }
   const productRef = productId ? db.collection('smePosProducts').doc(productId) : db.collection('smePosProducts').doc();
   const productQuery = db.collection('smePosProducts').where('spaceId', '==', spaceId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
@@ -2833,6 +2839,10 @@ export const registerExistingSmePosProduct = onCall({ region }, async (request) 
   const lowStockLevel = smePosQuantity(request.data?.lowStockLevel, 'Low stock alert');
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  await assertBasicSmeInventoryCapacity(
+    context.settings.ownerId,
+    spaceId,
+  );
   const costPriceMinor = context.role === 'cashier' ? null : requestedCostPriceMinor;
   if (context.settings.mode !== 'standard') throw new HttpsError('failed-precondition', 'Use the Marketplace register for consignment stock.');
 
@@ -3004,6 +3014,12 @@ export const saveSmePosCustomer = onCall({ region }, async (request) => {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid customer email.');
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier']);
+  if (!customerId) {
+    await assertBasicSmeCustomerCapacity(
+      context.settings.ownerId,
+      spaceId,
+    );
+  }
   const customerRef = customerId ? db.collection('smePosCustomers').doc(customerId) : db.collection('smePosCustomers').doc();
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   return db.runTransaction(async (transaction) => {
@@ -3454,6 +3470,12 @@ export const saveMarketplaceSeller = onCall({ region }, async (request) => {
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
   requireMarketplaceSettings(context);
+  if (!sellerId) {
+    await assertBasicSmeSellerCapacity(
+      context.settings.ownerId,
+      spaceId,
+    );
+  }
 
   if (linkedUid) {
     const [member, access, duplicate] = await Promise.all([
@@ -3641,6 +3663,12 @@ export const saveMarketplaceListing = onCall({ region, cpu: 'gcf_gen1', concurre
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier', 'stock_staff', 'seller', 'viewer']);
   requireMarketplaceSettings(context);
+  if (!listingId) {
+    await assertBasicSmeInventoryCapacity(
+      context.settings.ownerId,
+      spaceId,
+    );
+  }
   const canManageAnySellerListing = context.role === 'owner' || context.role === 'manager';
   if (!canManageAnySellerListing && !listingId) throw new HttpsError('permission-denied', 'Use Add stock to create items for your linked seller profile.');
 
@@ -3708,6 +3736,10 @@ export const registerExistingMarketplaceListing = onCall({ region, cpu: 'gcf_gen
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager', 'cashier', 'stock_staff', 'seller', 'viewer']);
   requireMarketplaceSettings(context);
+  await assertBasicSmeInventoryCapacity(
+    context.settings.ownerId,
+    spaceId,
+  );
 
   const listingRef = db.collection('smePosListings').doc();
   const sellerRef = db.collection('smePosSellers').doc(sellerId);
@@ -5848,6 +5880,12 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
   if (posRole && space.data()?.type !== 'sme') throw new HttpsError('failed-precondition', 'POS roles are only available in an SME Space.');
   if (posRole && space.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'Only the SME Space owner can assign a POS role during an invitation.');
 
+  if (space.data()?.type === 'sme') {
+    await assertBasicSmeAdditionalMemberCapacity(
+      String(space.data()?.ownerId || ''),
+      spaceId,
+    );
+  }
   const [existing, registeredUsers, posSettings] = await Promise.all([
     email
       ? db.collection('spaceInvitations').where('spaceId', '==', spaceId).where('email', '==', email).get()
@@ -6005,6 +6043,23 @@ export const acceptSpaceInvitation = onCall({ region }, async (request) => {
   const spaceId = String(initialInvitation.spaceId || '');
   if (!spaceId) throw new HttpsError('failed-precondition', 'This invitation is incomplete. Ask the Space owner for a new link.');
 
+  const entitlementSpace =
+    await db.collection('spaces')
+      .doc(spaceId)
+      .get();
+
+  if (
+    entitlementSpace.exists
+    && entitlementSpace.data()?.type === 'sme'
+  ) {
+    await assertBasicSmeAdditionalMemberCapacity(
+      String(
+        entitlementSpace.data()?.ownerId || '',
+      ),
+      spaceId,
+      invitationRef.id,
+    );
+  }
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
   const profileRef = db.collection('users').doc(uid);
   const spaceRef = db.collection('spaces').doc(spaceId);
@@ -12015,5 +12070,395 @@ export const processSubscriptionExpiries =
       if (changed > 0) {
         await batch.commit();
       }
+    },
+  );
+
+const basicSubscriptionLimits = {
+  householdSpaces: 1,
+  tripSpaces: 1,
+  smeSpaces: 1,
+  smeInventoryItems: 20,
+  smeCustomers: 10,
+  smeSellers: 3,
+  smeAdditionalMembers: 1,
+} as const;
+
+const creatableSpaceTypes = [
+  'household',
+  'sme',
+  'trip',
+  'goal',
+  'collection',
+  'vehicle',
+  'property',
+  'project',
+  'event',
+  'asset',
+  'custom',
+] as const;
+
+type CreatableSpaceType =
+  (typeof creatableSpaceTypes)[number];
+
+async function userHasActivePlus(
+  uid: string,
+): Promise<boolean> {
+  const profile = await db
+    .collection('users')
+    .doc(uid)
+    .get();
+
+  if (!profile.exists) {
+    return false;
+  }
+
+  const data = profile.data() || {};
+
+  if (
+    data.subscriptionPlan !== 'plus'
+    || data.subscriptionStatus !== 'active'
+  ) {
+    return false;
+  }
+
+  const expiresAt = data.subscriptionExpiresAt;
+
+  if (!(expiresAt instanceof Timestamp)) {
+    return true;
+  }
+
+  return expiresAt.toMillis() > Date.now();
+}
+
+function basicSpaceAllowance(
+  type: CreatableSpaceType,
+): number {
+  switch (type) {
+    case 'household':
+      return basicSubscriptionLimits.householdSpaces;
+
+    case 'trip':
+      return basicSubscriptionLimits.tripSpaces;
+
+    case 'sme':
+      return basicSubscriptionLimits.smeSpaces;
+
+    default:
+      return 0;
+  }
+}
+
+function activeDocumentCount(
+  docs: QueryDocumentSnapshot[],
+): number {
+  return docs.filter((document) => {
+    const data = document.data();
+
+    return (
+      !data.archivedAt
+      && !data.deletedAt
+    );
+  }).length;
+}
+
+async function assertCanCreateSpaceForPlan(
+  uid: string,
+  type: CreatableSpaceType,
+): Promise<void> {
+  if (await userHasActivePlus(uid)) {
+    return;
+  }
+
+  const allowance =
+    basicSpaceAllowance(type);
+
+  if (allowance === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'This Space type is available with BajetBN Plus. Upgrade to Plus to create it. Your existing information remains safe.',
+    );
+  }
+
+  const spaces = await db
+    .collection('spaces')
+    .where('ownerId', '==', uid)
+    .get();
+
+  const activeOfType =
+    spaces.docs.filter((document) => {
+      const data = document.data();
+
+      return (
+        data.type === type
+        && !data.archivedAt
+      );
+    }).length;
+
+  if (activeOfType >= allowance) {
+    const label =
+      type === 'sme'
+        ? 'SME'
+        : type.charAt(0).toUpperCase()
+          + type.slice(1);
+
+    throw new HttpsError(
+      'failed-precondition',
+      `BajetBN Basic includes ${allowance} ${label} Space. Upgrade to BajetBN Plus to create another. Your existing Space remains safe.`,
+    );
+  }
+}
+
+async function assertBasicSmeInventoryCapacity(
+  ownerUid: string,
+  spaceId: string,
+): Promise<void> {
+  if (await userHasActivePlus(ownerUid)) {
+    return;
+  }
+
+  const [products, listings] =
+    await Promise.all([
+      db.collection('smePosProducts')
+        .where('spaceId', '==', spaceId)
+        .get(),
+
+      db.collection('smePosListings')
+        .where('spaceId', '==', spaceId)
+        .get(),
+    ]);
+
+  const activeCount =
+    activeDocumentCount(products.docs)
+    + activeDocumentCount(listings.docs);
+
+  if (
+    activeCount
+    >= basicSubscriptionLimits.smeInventoryItems
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      `BajetBN Basic supports up to ${basicSubscriptionLimits.smeInventoryItems} SME inventory items. Upgrade to BajetBN Plus to add more. Existing inventory remains safe.`,
+    );
+  }
+}
+
+async function assertBasicSmeCustomerCapacity(
+  ownerUid: string,
+  spaceId: string,
+): Promise<void> {
+  if (await userHasActivePlus(ownerUid)) {
+    return;
+  }
+
+  const customers = await db
+    .collection('smePosCustomers')
+    .where('spaceId', '==', spaceId)
+    .get();
+
+  if (
+    activeDocumentCount(customers.docs)
+    >= basicSubscriptionLimits.smeCustomers
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      `BajetBN Basic supports up to ${basicSubscriptionLimits.smeCustomers} SME customers. Upgrade to BajetBN Plus to add more. Existing customers remain safe.`,
+    );
+  }
+}
+
+async function assertBasicSmeSellerCapacity(
+  ownerUid: string,
+  spaceId: string,
+): Promise<void> {
+  if (await userHasActivePlus(ownerUid)) {
+    return;
+  }
+
+  const sellers = await db
+    .collection('smePosSellers')
+    .where('spaceId', '==', spaceId)
+    .get();
+
+  if (
+    activeDocumentCount(sellers.docs)
+    >= basicSubscriptionLimits.smeSellers
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      `BajetBN Basic supports up to ${basicSubscriptionLimits.smeSellers} SME sellers. Upgrade to BajetBN Plus to add more. Existing seller records remain safe.`,
+    );
+  }
+}
+
+async function assertBasicSmeAdditionalMemberCapacity(
+  ownerUid: string,
+  spaceId: string,
+  ignoredInvitationId = '',
+): Promise<void> {
+  if (await userHasActivePlus(ownerUid)) {
+    return;
+  }
+
+  const [members, invitations] =
+    await Promise.all([
+      db.collection('spaceMembers')
+        .where('spaceId', '==', spaceId)
+        .get(),
+
+      db.collection('spaceInvitations')
+        .where('spaceId', '==', spaceId)
+        .get(),
+    ]);
+
+  const additionalMembers =
+    members.docs.filter((document) => {
+      const data = document.data();
+
+      return (
+        data.uid !== ownerUid
+        && (
+          !data.status
+          || data.status === 'active'
+        )
+      );
+    }).length;
+
+  const pendingInvitations =
+    invitations.docs.filter((document) => {
+      const data = document.data();
+
+      return (
+        document.id !== ignoredInvitationId
+        && data.status === 'pending'
+      );
+    }).length;
+
+  if (
+    additionalMembers + pendingInvitations
+    >= basicSubscriptionLimits.smeAdditionalMembers
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      `BajetBN Basic includes the SME owner plus ${basicSubscriptionLimits.smeAdditionalMembers} additional member. Upgrade to BajetBN Plus to invite more team members.`,
+    );
+  }
+}
+
+export const createSpaceWithEntitlement =
+  onCall(
+    { region },
+    async (request) => {
+      const uid =
+        requireAuth(request.auth?.uid);
+
+      const name = stringValue(
+        request.data?.name,
+        'Space name',
+        100,
+      );
+
+      const type = oneOf(
+        request.data?.type,
+        creatableSpaceTypes,
+        'Space type',
+      );
+
+      const currency = stringValue(
+        request.data?.currency,
+        'Currency',
+        10,
+      );
+
+      const timezone = stringValue(
+        request.data?.timezone,
+        'Timezone',
+        80,
+      );
+
+      const description = optionalString(
+        request.data?.description,
+        500,
+      );
+
+      const rawModules =
+        Array.isArray(request.data?.customModules)
+          ? request.data.customModules
+          : [];
+
+      const customModules = [
+        ...new Set(
+          rawModules
+            .filter(
+              (value: unknown) =>
+                typeof value === 'string'
+                && value.length > 0
+                && value.length <= 80,
+            )
+            .map(
+              (value: unknown) =>
+                String(value),
+            ),
+        ),
+      ].slice(0, 20);
+
+      await assertCanCreateSpaceForPlan(
+        uid,
+        type,
+      );
+
+      const spaceRef =
+        db.collection('spaces').doc();
+
+      const memberRef =
+        db.collection('spaceMembers')
+          .doc(`${spaceRef.id}_${uid}`);
+
+      const now =
+        FieldValue.serverTimestamp();
+
+      await db.runTransaction(
+        async (transaction) => {
+          transaction.create(
+            spaceRef,
+            {
+              displayId: displayId('SPC'),
+              name,
+              type,
+              ownerId: uid,
+              collaborationMode:
+                'owner_managed',
+              approvalMode: 'none',
+              headWhatsapp: '',
+              currency,
+              timezone,
+              description,
+              ...(type === 'custom'
+                ? { customModules }
+                : {}),
+              archivedAt: null,
+              createdAt: now,
+              updatedAt: now,
+            },
+          );
+
+          transaction.create(
+            memberRef,
+            {
+              spaceId: spaceRef.id,
+              uid,
+              role: 'owner',
+              status: 'active',
+              canUseAccounts: true,
+              canViewBalances: true,
+              canViewLedger: true,
+              joinedAt: now,
+            },
+          );
+        },
+      );
+
+      return {
+        spaceId: spaceRef.id,
+      };
     },
   );

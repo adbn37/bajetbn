@@ -1,3 +1,4 @@
+import { httpsCallable } from 'firebase/functions';
 import {
   collection,
   doc,
@@ -7,7 +8,6 @@ import {
   serverTimestamp,
   updateDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 import { requireFirebase } from '../services/firebase';
 import type { CustomSpaceModule, Space, SpaceType } from '../types/models';
@@ -40,42 +40,34 @@ export async function createSpace(input: {
   description?: string;
   customModules?: CustomSpaceModule[];
 }): Promise<string> {
-  const { db } = requireFirebase();
-  const spaceRef = doc(collection(db, 'spaces'));
-  const memberRef = doc(db, 'spaceMembers', `${spaceRef.id}_${input.uid}`);
-  const batch = writeBatch(db);
+  const { functions } = requireFirebase();
 
-  batch.set(spaceRef, {
-    displayId: createClientDisplayId('SPC'),
-    name: input.name.trim(),
+  const call = httpsCallable<
+    {
+      name: string;
+      type: Exclude<SpaceType, 'personal'>;
+      currency: string;
+      timezone: string;
+      description?: string;
+      customModules?: CustomSpaceModule[];
+    },
+    { spaceId: string }
+  >(
+    functions,
+    'createSpaceWithEntitlement',
+  );
+
+  const result = await call({
+    name: input.name,
     type: input.type,
-    ownerId: input.uid,
-    collaborationMode: 'owner_managed',
-    approvalMode: 'none',
-    headWhatsapp: '',
     currency: input.currency,
     timezone: input.timezone,
-    description: input.description?.trim() || '',
-    ...(input.type === 'custom' ? { customModules: input.customModules || [] } : {}),
-    archivedAt: null,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  batch.set(memberRef, {
-    spaceId: spaceRef.id,
-    uid: input.uid,
-    role: 'owner',
-    status: 'active',
-    canUseAccounts: true,
-    canViewBalances: true,
-    canViewLedger: true,
-    joinedAt: serverTimestamp(),
+    description: input.description,
+    customModules: input.customModules,
   });
 
-  await batch.commit();
-  return spaceRef.id;
+  return result.data.spaceId;
 }
-
 export async function updateSpace(spaceId: string, updates: { name: string; description?: string; customModules?: CustomSpaceModule[] }) {
   const { db } = requireFirebase();
   await updateDoc(doc(db, 'spaces', spaceId), {

@@ -251,10 +251,7 @@ service cloud.firestore {
 
     match /spaces/{spaceId} {
       allow read: if isSpaceMember(spaceId);
-      allow create: if signedIn()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.type != 'personal'
-        && existsAfter(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid)));
+      allow create: if false; // Created by entitlement-enforced Cloud Functions.
       allow update: if isSpaceOwner(spaceId)
         && request.resource.data.ownerId == resource.data.ownerId
         && request.resource.data.type == resource.data.type
@@ -264,10 +261,7 @@ service cloud.firestore {
 
     match /spaceMembers/{memberId} {
       allow read: if signedIn() && (resource.data.uid == request.auth.uid || isSpaceMember(resource.data.spaceId));
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.role == 'owner'
-        && getAfter(/databases/$(database)/documents/spaces/$(request.resource.data.spaceId)).data.ownerId == request.auth.uid;
+      allow create: if false; // Created by onboarding, invitations, or entitlement-enforced Cloud Functions.
       allow update, delete: if false; // Membership changes move to Cloud Functions in collaboration phase.
     }
 
