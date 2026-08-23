@@ -23,7 +23,7 @@ for (const text of [
   'Treasurer',
   'Trip members',
   'Trip Expenses',
-  'Review Settlements',
+  'Settle Up',
   'No Contributions yet',
   'No Trip Budget yet',
   'No Trip Expenses yet',

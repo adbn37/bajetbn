@@ -100,7 +100,7 @@ export function TripCommandCentre({
           <span className="eyebrow">Trip command centre</span>
           <h2>Trip at a glance</h2>
           <p className="muted">
-            Follow the Trip Fund, Budget, treasurer, members and Settlements
+            Follow the Trip Fund, Budget, treasurer, members and Settle Up
             from one place.
           </p>
         </div>
@@ -204,7 +204,7 @@ export function TripCommandCentre({
           className="button secondary"
           onClick={() => onOpenTab('balances')}
         >
-          Review Settlements
+          Settle Up
         </button>
       </div>
 

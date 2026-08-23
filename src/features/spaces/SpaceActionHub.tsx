@@ -1,4 +1,4 @@
-﻿import {
+import {
   type CSSProperties,
   useCallback,
   useEffect,
@@ -200,11 +200,11 @@ export function SpaceActionHub({
   const toolTitle: Record<SpaceTool, string> = {
     fund: fundLabel,
     expenses: space.type === 'trip' ? 'Trip Expenses' : 'Shared expenses',
-    balances: 'Settlements',
+    balances: space.type === 'trip' ? 'Settle Up' : 'Settlements',
     bills: 'Shared Bills',
     trip_planning: 'Trip Plan',
     tasks: space.type === 'household' ? 'To-Do' : 'Tasks',
-    shopping: space.type === 'sme' ? 'Procurement / To-Buy' : 'To-Buy',
+    shopping: space.type === 'sme' ? 'Purchase List' : 'To-Buy',
   };
 
   return (
@@ -258,7 +258,7 @@ export function SpaceActionHub({
             />
 
             <ShortcutButton
-              label="Procurement"
+              label="Purchase List"
               onClick={() => setTool('shopping')}
             />
 
@@ -324,7 +324,7 @@ export function SpaceActionHub({
             />
 
             <ShortcutButton
-              label="Settlements"
+              label="Settle Up"
               onClick={() => setTool('balances')}
             />
 

@@ -158,7 +158,7 @@ export function SharedExpensesPanel({
 
   if (view === 'balances') {
     return <section className="panel shared-expense-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Member balances</span><h2>Settlements</h2></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Member balances</span><h2>{space.type === 'trip' ? 'Settle Up' : 'Settlements'}</h2></div></div>
       {error && <div className="notice error">{error}</div>}
       <div className="info-banner"><strong>One simple amount per pair</strong><span>BajetBN combines open shares between the same two people. These payments do not change bank account balances.</span></div>
       <div className="who-owes-list">

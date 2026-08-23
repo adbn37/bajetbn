@@ -768,7 +768,7 @@ export function SpaceWorkPanel({
 
       let success =
         space.type === 'sme'
-          ? 'Procurement item added.'
+          ? 'Purchase List item added.'
           : 'To-Buy item added.';
 
       if (itemPhoto) {
@@ -866,7 +866,7 @@ export function SpaceWorkPanel({
           onClick={() => setView('shopping')}
         >
           {space.type === 'sme'
-            ? 'Procurement / To-Buy'
+            ? 'Purchase List'
             : 'To-Buy'}
         </button>
       </div>
@@ -1111,13 +1111,13 @@ export function SpaceWorkPanel({
             <div>
               <span className="eyebrow">
                 {space.type === 'sme'
-                  ? 'Procurement'
+                  ? 'Purchase List'
                   : 'Household'}
               </span>
 
               <h2>
                 {space.type === 'sme'
-                  ? 'Procurement / To-Buy'
+                  ? 'Purchase List'
                   : 'To-Buy'}
               </h2>
 
@@ -1132,7 +1132,7 @@ export function SpaceWorkPanel({
             <details>
               <summary>
                 {space.type === 'sme'
-                  ? 'Add procurement item'
+                  ? '+ Add item'
                   : 'Add To-Buy item'}
               </summary>
 
@@ -1297,7 +1297,9 @@ export function SpaceWorkPanel({
 
           {!openShopping.length ? (
             <div className="empty-inline">
-              Nothing waiting to be bought.
+              {space.type === 'sme'
+                ? 'No items on the Purchase List yet. Use + Add item to plan what the business needs to buy.'
+                : 'Nothing waiting to be bought.'}
             </div>
           ) : (
             <div className="form-stack">

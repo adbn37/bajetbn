@@ -174,6 +174,8 @@ export function CollaborationPage({
   const activeMembers = members.filter((item) => (item.status || 'active') === 'active');
   const unreadForSpace = notifications.filter((item) => item.spaceId === spaceId);
   const pendingAssignments = assignments.filter((item) => item.status !== 'paid');
+  const pendingInvitations = invitations.filter((item) => item.status === 'pending');
+  const invitationHistory = invitations.filter((item) => item.status !== 'pending');
   const paymentMap = useMemo(() => new Map(payments.map((item) => [item.id, item])), [payments]);
   const posAccessByUid = useMemo(() => new Map(posAccess.map((item) => [item.uid, item])), [posAccess]);
 
@@ -352,14 +354,118 @@ export function CollaborationPage({
         </article>)}</div>
       </section>
       {canManage && <section className="panel collaboration-panel">
-        <div className="panel-heading"><div><span className="eyebrow">Invitations</span><h2>Invitations</h2></div></div>
-        <div className="invitation-list">{invitations.length === 0 ? <p>No invitations yet.</p> : invitations.map((invitation) => <article key={invitation.id} className="invitation-row">
-          <div><strong>{invitation.email || 'WhatsApp / secure link invite'}</strong><small>{invitation.posRole ? smePosRoleLabel[invitation.posRole] : roleLabel[invitation.role]} · {invitation.status}</small></div>
-          {invitation.status === 'pending' && <><button className="button secondary" onClick={() => void navigator.clipboard.writeText(inviteUrl(invitation.token))}>Copy invite link</button><a className="button secondary" href={`https://wa.me/?text=${encodeURIComponent(`Join ${selectedSpace?.name || 'my BajetBN Space'}: ${inviteUrl(invitation.token)}`)}`} target="_blank" rel="noreferrer">WhatsApp</a><button className="text-button danger" onClick={() => void runAction(() => revokeSpaceInvitation(invitation.id))}>Cancel invite</button></>}
-        </article>)}</div>
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Invitations</span>
+            <h2>Invitations</h2>
+            <p>
+              {pendingInvitations.length
+                ? `${pendingInvitations.length} waiting for someone to join.`
+                : 'No invitations are waiting for action.'}
+            </p>
+          </div>
+
+          <button
+            className="button primary"
+            type="button"
+            onClick={() => setInviteOpen(true)}
+          >
+            Invite member
+          </button>
+        </div>
+
+        <div className="invitation-list">
+          {pendingInvitations.length === 0 ? (
+            <div className="empty-inline">
+              No pending invitations.
+            </div>
+          ) : pendingInvitations.map((invitation) => (
+            <article
+              key={invitation.id}
+              className="invitation-row"
+            >
+              <div>
+                <strong>
+                  {invitation.email || 'WhatsApp / secure link invite'}
+                </strong>
+                <small>
+                  {invitation.posRole
+                    ? smePosRoleLabel[invitation.posRole]
+                    : roleLabel[invitation.role]}
+                  {' · pending'}
+                </small>
+              </div>
+
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() =>
+                  void navigator.clipboard.writeText(
+                    inviteUrl(invitation.token),
+                  )
+                }
+              >
+                Copy invite link
+              </button>
+
+              <a
+                className="button secondary"
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `Join ${selectedSpace?.name || 'my BajetBN Space'}: ${inviteUrl(invitation.token)}`,
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                WhatsApp
+              </a>
+
+              <button
+                className="text-button danger"
+                type="button"
+                onClick={() =>
+                  void runAction(() =>
+                    revokeSpaceInvitation(invitation.id),
+                  )
+                }
+              >
+                Cancel invite
+              </button>
+            </article>
+          ))}
+        </div>
+
+        {invitationHistory.length > 0 && (
+          <details className="invitation-history">
+            <summary>
+              Invitation history ({invitationHistory.length})
+            </summary>
+
+            <div className="invitation-list">
+              {invitationHistory.map((invitation) => (
+                <article
+                  key={invitation.id}
+                  className="invitation-row"
+                >
+                  <div>
+                    <strong>
+                      {invitation.email || 'WhatsApp / secure link invite'}
+                    </strong>
+                    <small>
+                      {invitation.posRole
+                        ? smePosRoleLabel[invitation.posRole]
+                        : roleLabel[invitation.role]}
+                      {' · '}
+                      {invitation.status}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
       </section>}
     </> : displayTab === 'bills' ? <section className="panel collaboration-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Payments</span><h2>Shared bills</h2></div>{canManage && <button className="button primary" onClick={() => setAssignmentOpen(true)}>Give bill share</button>}</div>
+      <div className="panel-heading"><div><span className="eyebrow">Payments</span><h2>Shared bills</h2></div>{canManage && <button className="button primary" onClick={() => setAssignmentOpen(true)}>Share a bill</button>}</div>
       <div className="info-banner"><strong>Choose how you paid</strong><span>Use a BajetBN account to update its balance, or choose another method to mark the bill paid without changing an account.</span></div>
       <div className="shared-bill-grid">{assignments.length === 0 ? <p>No bill shares yet.</p> : assignments.map((assignment) => {
         const isMine = assignment.memberUid === user?.uid;
@@ -401,7 +507,26 @@ export function CollaborationPage({
     {confirmDialog && <ActionConfirmModal state={confirmDialog} busy={confirmBusy} error={error} onClose={() => { setConfirmDialog(null); setError(''); }} onConfirm={() => void runConfirmedAction()} />}
     {inviteOpen && selectedSpace && <Modal title={`Invite person to ${selectedSpace.name}`} onClose={() => setInviteOpen(false)}><InviteForm space={selectedSpace} canAssignPosRole={isOwner} onSaved={async () => { setInviteOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
     {editingMember && <Modal title="Change member access" onClose={() => setEditingMember(null)}><MemberForm member={editingMember} onSaved={async () => { setEditingMember(null); await loadSpaceData(spaceId); }} /></Modal>}
-    {assignmentOpen && selectedSpace && <Modal title="Give a bill share" onClose={() => setAssignmentOpen(false)}><AssignmentForm space={selectedSpace} members={activeMembers} commitments={commitments} onSaved={async () => { setAssignmentOpen(false); await loadSpaceData(spaceId); }} /></Modal>}
+    {assignmentOpen && selectedSpace && (
+      <Modal
+        title="Share a bill"
+        onClose={() => setAssignmentOpen(false)}
+      >
+        <AssignmentForm
+          space={selectedSpace}
+          members={activeMembers}
+          commitments={commitments}
+          onInviteMember={() => {
+            setAssignmentOpen(false);
+            setInviteOpen(true);
+          }}
+          onSaved={async () => {
+            setAssignmentOpen(false);
+            await loadSpaceData(spaceId);
+          }}
+        />
+      </Modal>
+    )}
     {submitting && <Modal title={`Add payment for ${submitting.commitmentName}`} onClose={() => setSubmitting(null)}><SubmitPaymentForm assignment={submitting} accounts={accounts.filter((account) => account.currency === submitting.currency)} onSaved={async () => { setSubmitting(null); await loadSpaceData(spaceId); }} /></Modal>}
   </Root>;
 }
@@ -579,7 +704,19 @@ function MemberForm({ member, onSaved }: { member: SpaceMember; onSaved: () => P
   return <form className="form-stack" onSubmit={submit}>{error && <div className="notice error">{error}</div>}<label>Access level<select value={role} onChange={(event) => setRole(event.target.value as Exclude<SpaceRole, 'owner' | 'member'>)}>{editableRoles.map((item) => <option value={item} key={item}>{roleLabel[item]}</option>)}</select></label><label>Member status<select value={status} onChange={(event) => setStatus(event.target.value as 'active' | 'suspended')}><option value="active">Active</option><option value="suspended">Paused</option></select></label><div className="permission-editor"><label><input type="checkbox" checked={canUseAccounts} onChange={(event) => setCanUseAccounts(event.target.checked)}/> Can use shared Accounts</label><label><input type="checkbox" checked={canViewBalances} onChange={(event) => setCanViewBalances(event.target.checked)}/> Can view balances</label><label><input type="checkbox" checked={canViewLedger} onChange={(event) => setCanViewLedger(event.target.checked)}/> Can see account activity</label></div><button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Save access'}</button></form>;
 }
 
-function AssignmentForm({ space, members, commitments, onSaved }: { space: Space; members: SpaceMember[]; commitments: Commitment[]; onSaved: () => Promise<void> }) {
+function AssignmentForm({
+  space,
+  members,
+  commitments,
+  onInviteMember,
+  onSaved,
+}: {
+  space: Space;
+  members: SpaceMember[];
+  commitments: Commitment[];
+  onInviteMember: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const [commitmentId, setCommitmentId] = useState(commitments[0]?.id || '');
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
   const [selectedMembers, setSelectedMembers] = useState<Record<string, boolean>>(() => Object.fromEntries(members.map((item) => [item.uid, true])));
@@ -590,6 +727,8 @@ function AssignmentForm({ space, members, commitments, onSaved }: { space: Space
   const [error, setError] = useState('');
   const selected = commitments.find((item) => item.id === commitmentId);
   const chosen = members.filter((member) => selectedMembers[member.uid]);
+  const hasBill = commitments.length > 0;
+  const hasAnotherMember = members.length > 1;
 
   useEffect(() => {
     if (selected) setDueDate(selected.nextDueDate || selected.startDate);
@@ -623,7 +762,48 @@ function AssignmentForm({ space, members, commitments, onSaved }: { space: Space
 
   return <form className="form-stack" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
-    {commitments.length === 0 || members.length === 0 ? <div className="notice">Add a bill and invite at least one person before sharing the bill.</div> : <>
+    {!hasBill || !hasAnotherMember ? (
+      <div className="form-stack">
+        <div className="notice">
+          <strong>Finish these steps to share the bill.</strong>
+          <span>
+            BajetBN needs a saved bill and at least one other
+            Space member before it can create the split.
+          </span>
+        </div>
+
+        {!hasBill && (
+          <div className="info-banner">
+            <strong>1. Add the bill</strong>
+            <span>
+              Create the bill or instalment first, then return
+              here to choose who should pay.
+            </span>
+            <Link className="button primary" to="/bills">
+              Add Bill
+            </Link>
+          </div>
+        )}
+
+        {!hasAnotherMember && (
+          <div className="info-banner">
+            <strong>2. Invite a member</strong>
+            <span>
+              Invite the person who should share this bill.
+              Once they join the Space, reopen Share a Bill
+              and continue the split.
+            </span>
+            <button
+              className="button primary"
+              type="button"
+              onClick={onInviteMember}
+            >
+              Invite Member
+            </button>
+          </div>
+        )}
+      </div>
+    ) : <>
       <label>Bill or instalment<select value={commitmentId} onChange={(event) => setCommitmentId(event.target.value)}>{commitments.map((item) => <option value={item.id} key={item.id}>{item.name} — {formatMoney(item.amountMinor, item.currency)}</option>)}</select></label>
       <label>How should it be shared?<select value={splitMode} onChange={(event) => setSplitMode(event.target.value as 'equal' | 'custom')}><option value="equal">Split equally</option><option value="custom">Enter different amounts</option></select></label>
       <fieldset className="member-split-fieldset"><legend>Who should pay?</legend>{members.map((member) => <div className="member-split-row" key={member.uid}><label className="checkbox-label"><input type="checkbox" checked={Boolean(selectedMembers[member.uid])} onChange={(event) => setSelectedMembers((current) => ({ ...current, [member.uid]: event.target.checked }))} /> {memberDisplayLabel(member)}{member.role === 'owner' ? ' (Owner)' : ''}</label>{splitMode === 'custom' && selectedMembers[member.uid] && <input aria-label={`${member.displayName || member.email || 'Member'} share`} inputMode="decimal" placeholder="BND" value={amounts[member.uid] || ''} onChange={(event) => setAmounts((current) => ({ ...current, [member.uid]: event.target.value }))} />}</div>)}</fieldset>

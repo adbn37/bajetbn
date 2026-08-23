@@ -12,7 +12,7 @@ const checks = [
   ['equal split option', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Split equally')],
   ['custom split option', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Enter different amounts')],
   ['percentage split option', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Split by percentage')],
-  ['settlements view', read('src/features/spaces/SharedExpensesPanel.tsx').includes('<h2>Settlements</h2>')],
+  ['settlements view', read('src/features/spaces/SharedExpensesPanel.tsx').includes("space.type === 'trip' ? 'Settle Up' : 'Settlements'")],
   ['partial member payment', read('src/features/spaces/SharedExpensesPanel.tsx').includes('You can pay part of it')],
   ['payment proof', read('src/features/spaces/SharedExpensesPanel.tsx').includes('Proof of payment')],
   ['approval function', read('functions/src/index.ts').includes('export const reviewSharedExpensePayment')],

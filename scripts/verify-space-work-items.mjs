@@ -54,7 +54,7 @@ for (const token of [
 for (const text of [
   'To-Do',
   'To-Buy',
-  'Procurement / To-Buy',
+  'Purchase List',
   'Target / expected price',
   'Preferred shop / vendor / place',
   'Actual shop / vendor / place',
@@ -77,8 +77,8 @@ need(
 
 need(
   hub.includes('label="Tasks"')
-    && hub.includes('label="Procurement"'),
-  'SME launcher must expose Tasks and Procurement.',
+    && hub.includes('label="Purchase List"'),
+  'SME launcher must expose Tasks and Purchase List.',
 );
 
 need(
