@@ -549,6 +549,35 @@ export async function returnSmePosSale(input: {
   return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { returnId: string; saleId: string; refundMinor: number; transactionId: string } }>;
 }
 
+export async function voidSmePosSale(input: {
+  spaceId: string;
+  saleId: string;
+  voidDate: string;
+  reason: string;
+}): Promise<{
+  data: {
+    saleId: string;
+    voidedMinor: number;
+    transactionIds: string[];
+    sellerAdjustments: number;
+  };
+}> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'voidSmePosSale');
+
+  return call({
+    ...input,
+    idempotencyKey: crypto.randomUUID(),
+  }) as Promise<{
+    data: {
+      saleId: string;
+      voidedMinor: number;
+      transactionIds: string[];
+      sellerAdjustments: number;
+    };
+  }>;
+}
+
 export async function recordMarketplaceSellerPayout(input: {
   spaceId: string;
   sellerId: string;

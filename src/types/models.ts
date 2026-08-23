@@ -193,7 +193,7 @@ export interface SmePosSellerLedgerEntry {
   sellerId: string;
   sellerName: string;
   sellerUid?: string | null;
-  kind: 'sale_earning' | 'payout' | 'return_adjustment';
+  kind: 'sale_earning' | 'payout' | 'return_adjustment' | 'void_adjustment';
   amountMinor: number;
   balanceAfterMinor: number;
   currency: string;
@@ -409,7 +409,7 @@ export interface SmePosSaleItem {
   sellerEarningMinor?: number;
 }
 
-export type SmePosSaleStatus = 'completed' | 'partially_returned' | 'refunded';
+export type SmePosSaleStatus = 'completed' | 'partially_returned' | 'refunded' | 'voided';
 export type SmePosReturnStatus = 'not_returned' | 'partial' | 'full';
 
 export interface SmePosSale {
@@ -450,6 +450,14 @@ export interface SmePosSale {
   transactionIds?: string[];
   ledgerEntryIds?: string[];
   reservationId?: string | null;
+  voidedAt?: Timestamp | null;
+  voidedBy?: string | null;
+  voidDate?: string | null;
+  voidReason?: string | null;
+  voidedMinor?: number;
+  voidPayments?: SmePosRefundPayment[];
+  voidTransactionIds?: string[];
+  voidLedgerEntryIds?: string[];
   receiptName: string;
   receiptFooter?: string;
   createdAt?: Timestamp;
