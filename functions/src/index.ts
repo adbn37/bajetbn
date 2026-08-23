@@ -12471,6 +12471,8 @@ export const createSpaceWithEntitlement =
         ),
       ].slice(0, 20);
 
+      // Fast UX pre-check. The authoritative capacity
+      // check is repeated inside the transaction below.
       await assertCanCreateSpaceForPlan(
         uid,
         type,
@@ -12483,11 +12485,100 @@ export const createSpaceWithEntitlement =
         db.collection('spaceMembers')
           .doc(`${spaceRef.id}_${uid}`);
 
+      const profileRef =
+        db.collection('users').doc(uid);
+
+      const ownedSpacesQuery =
+        db.collection('spaces')
+          .where('ownerId', '==', uid);
+
+      const capacityLockRef =
+        db.collection('subscriptionCapacityLocks')
+          .doc(`spaces_${uid}`);
+
       const now =
         FieldValue.serverTimestamp();
 
       await db.runTransaction(
         async (transaction) => {
+          const [
+            profileSnapshot,
+            ownedSpaces,
+            capacityLock,
+          ] = await Promise.all([
+            transaction.get(profileRef),
+            transaction.get(ownedSpacesQuery),
+            transaction.get(capacityLockRef),
+          ]);
+
+          const profile =
+            profileSnapshot.data() || {};
+
+          const expiresAt =
+            profile.subscriptionExpiresAt;
+
+          const plusActive =
+            profile.subscriptionPlan === 'plus'
+            && profile.subscriptionStatus === 'active'
+            && (
+              !(expiresAt instanceof Timestamp)
+              || expiresAt.toMillis() > Date.now()
+            );
+
+          if (!plusActive) {
+            const allowance =
+              basicSpaceAllowance(type);
+
+            if (allowance === 0) {
+              throw new HttpsError(
+                'failed-precondition',
+                'This Space type is available with BajetBN Plus. Upgrade to Plus to create it. Your existing information remains safe.',
+              );
+            }
+
+            const activeOfType =
+              ownedSpaces.docs.filter(
+                (document) => {
+                  const data =
+                    document.data();
+
+                  return (
+                    data.type === type
+                    && !data.archivedAt
+                  );
+                },
+              ).length;
+
+            if (activeOfType >= allowance) {
+              const label =
+                type === 'sme'
+                  ? 'SME'
+                  : type.charAt(0).toUpperCase()
+                    + type.slice(1);
+
+              throw new HttpsError(
+                'failed-precondition',
+                `BajetBN Basic includes ${allowance} ${label} Space. Upgrade to BajetBN Plus to create another. Your existing Space remains safe.`,
+              );
+            }
+          }
+
+          const lockVersion =
+            Number(
+              capacityLock.data()?.version || 0,
+            );
+
+          transaction.set(
+            capacityLockRef,
+            {
+              scope: 'spaces',
+              ownerUid: uid,
+              version: lockVersion + 1,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+
           transaction.create(
             spaceRef,
             {
