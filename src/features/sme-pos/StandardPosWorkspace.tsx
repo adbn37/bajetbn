@@ -22,7 +22,7 @@ import {
   receiveSmePosProductStock,
   registerExistingSmePosProduct,
   returnSmePosSale,
-  saveSmePosCustomer,
+  voidSmePosSale,  saveSmePosCustomer,
   saveSmePosProduct,
   setSmePosProductArchived,
   updateSmePosProductStock,
@@ -62,6 +62,12 @@ interface ReturnFormState {
   reason: string;
 }
 
+
+interface VoidSaleFormState {
+  sale: SmePosSale;
+  voidDate: string;
+  reason: string;
+}
 interface StandardQuickCartItem {
   clientId: string;
   name: string;
@@ -131,7 +137,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const [customerForm, setCustomerForm] = useState<SmePosCustomer | 'new' | null>(null);
   const [receipt, setReceipt] = useState<SmePosSale | null>(null);
   const [returnForm, setReturnForm] = useState<ReturnFormState | null>(null);
-  const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
+  const [voidForm, setVoidForm] = useState<VoidSaleFormState | null>(null);  const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [quickItems, setQuickItems] = useState<StandardQuickCartItem[]>([]);
@@ -150,7 +156,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
   const canManageReturns = role === 'owner' || role === 'manager';
-  const canViewReports = ['owner', 'manager'].includes(role);
+  const canVoidSales = role === 'owner';  const canViewReports = ['owner', 'manager'].includes(role);
   const canViewSales = ['owner', 'manager', 'cashier'].includes(role);
 
   async function load() {
@@ -583,6 +589,59 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     }
   }
 
+
+  function openVoidForm(sale: SmePosSale) {
+    setReceipt(null);
+    setReturnForm(null);
+    setVoidForm({
+      sale,
+      voidDate: today(),
+      reason: '',
+    });
+    setError('');
+    setSuccess('');
+  }
+
+  async function submitVoidSale(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!voidForm || !canVoidSales || !requireOnline()) return;
+
+    const reason = voidForm.reason.trim();
+
+    if (!reason) {
+      setError('Enter a reason for voiding this sale.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const sale = voidForm.sale;
+
+      const result = await voidSmePosSale({
+        spaceId: space.id,
+        saleId: sale.id,
+        voidDate: voidForm.voidDate,
+        reason,
+      });
+
+      setVoidForm(null);
+
+      setSuccess(
+        `Sale ${sale.receiptNumber} voided. ${formatMoney(result.data.voidedMinor, sale.currency)} was reversed.`,
+      );
+
+      await load();
+      await onChanged();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
   if (role === 'seller') {
     return <section className="panel"><span className="eyebrow">Seller access</span><h2>Marketplace seller workspace</h2><p>Seller listings, balances, and payouts are added in the Marketplace Consignment POS phase.</p></section>;
   }
@@ -749,6 +808,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     {receipt && <Modal title={`Receipt ${receipt.receiptNumber}`} onClose={() => setReceipt(null)}>
       <div className="sme-pos-receipt">
         <header><strong>{receipt.receiptName}</strong><span>{receipt.saleDate}</span><small>{receipt.customerName || 'Walk-in customer'}</small></header>
+        {receipt.status === 'voided' && <div className="notice warning"><strong>Voided sale</strong><br />{receipt.voidDate && <span>{receipt.voidDate}</span>}{receipt.voidReason && <span> · {receipt.voidReason}</span>}</div>}
         {receipt.items.map((item) => <div className="sme-pos-receipt-line" key={item.productId}>
           <span>{item.quantity} × {item.productName}{item.returnedQuantity > 0 ? ` · ${item.returnedQuantity} returned` : ''}</span>
           <strong>{formatMoney(item.lineTotalMinor, receipt.currency)}</strong>
@@ -763,11 +823,54 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
       </div>
       <div className="modal-actions">
         <button className="button secondary" type="button" onClick={() => window.print()}>Print</button>
-        {canManageReturns && receipt.status !== 'refunded' && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
+        {canManageReturns && !['refunded', 'voided'].includes(receipt.status) && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
+        {canVoidSales && !['refunded', 'voided'].includes(receipt.status) && receipt.totalMinor > receipt.returnedMinor && <button className="button ghost danger" type="button" onClick={() => openVoidForm(receipt)}>Void sale</button>}
         <button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button>
       </div>
     </Modal>}
 
+    {voidForm && <Modal title={`Void sale · ${voidForm.sale.receiptNumber}`} onClose={() => !busy && setVoidForm(null)}>
+      <form className="form-stack" onSubmit={submitVoidSale}>
+        <div className="notice warning">
+          <strong>This reverses the remaining sale.</strong><br />
+          Payment, stock and customer totals will be reversed. The original receipt stays in BajetBN as a voided audit record.
+        </div>
+
+        {voidForm.sale.returnedMinor > 0 && <div className="notice">
+          This receipt already has {formatMoney(voidForm.sale.returnedMinor, voidForm.sale.currency)} returned. Only the remaining {formatMoney(voidForm.sale.totalMinor - voidForm.sale.returnedMinor, voidForm.sale.currency)} will be reversed.
+        </div>}
+
+        <label>
+          Void date
+          <input
+            type="date"
+            value={voidForm.voidDate}
+            onChange={(event) => setVoidForm((current) => current ? { ...current, voidDate: event.target.value } : current)}
+            required
+          />
+        </label>
+
+        <label>
+          Reason for voiding
+          <textarea
+            rows={3}
+            value={voidForm.reason}
+            onChange={(event) => setVoidForm((current) => current ? { ...current, reason: event.target.value } : current)}
+            maxLength={500}
+            placeholder="Example: Duplicate checkout, wrong payment, cashier mistake"
+            required
+            autoFocus
+          />
+        </label>
+
+        <div className="modal-actions">
+          <button className="button secondary" type="button" disabled={busy} onClick={() => setVoidForm(null)}>Cancel</button>
+          <button className="button danger" type="submit" disabled={busy || !voidForm.reason.trim()}>
+            {busy ? 'Voiding sale…' : 'Void sale and reverse'}
+          </button>
+        </div>
+      </form>
+    </Modal>}
     {returnForm && <Modal title={`Return items · ${returnForm.sale.receiptNumber}`} onClose={() => !busy && setReturnForm(null)}>
       <form className="form-stack" onSubmit={submitReturn}>
         <div className="notice">Refunds are posted as Money Out across the original payment account(s). Quick Add lines do not create or restore inventory stock.</div>

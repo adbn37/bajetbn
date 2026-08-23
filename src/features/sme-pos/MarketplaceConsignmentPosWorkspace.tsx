@@ -23,7 +23,7 @@ import {
   registerExistingMarketplaceListing,
   recordMarketplaceSellerPayout,
   returnSmePosSale,
-  saveMarketplaceListing,
+  voidSmePosSale,  saveMarketplaceListing,
   saveMarketplaceSeller,
   saveSmePosCustomer,
   setMarketplaceListingArchived,
@@ -69,6 +69,12 @@ interface ReturnFormState {
   reason: string;
 }
 
+
+interface VoidSaleFormState {
+  sale: SmePosSale;
+  voidDate: string;
+  reason: string;
+}
 interface MarketplaceQuickCartItem {
   clientId: string;
   sellerId: string;
@@ -144,7 +150,7 @@ function sellerBalanceLabel(balanceMinor: number) {
 function ledgerKindLabel(entry: SmePosSellerLedgerEntry) {
   if (entry.kind === 'sale_earning') return 'Sale earning';
   if (entry.kind === 'return_adjustment') return 'Return adjustment';
-  return 'Seller payout';
+  if (entry.kind === 'void_adjustment') return 'Void adjustment';  return 'Seller payout';
 }
 
 function roleLabel(role: SmePosRole) {
@@ -198,7 +204,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [customerForm, setCustomerForm] = useState<SmePosCustomer | 'new' | null>(null);
   const [receipt, setReceipt] = useState<SmePosSale | null>(null);
   const [returnForm, setReturnForm] = useState<ReturnFormState | null>(null);
-  const [payoutForm, setPayoutForm] = useState<PayoutFormState | null>(null);
+  const [voidForm, setVoidForm] = useState<VoidSaleFormState | null>(null);  const [payoutForm, setPayoutForm] = useState<PayoutFormState | null>(null);
   const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [quickItems, setQuickItems] = useState<MarketplaceQuickCartItem[]>([]);
@@ -219,7 +225,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role) || Boolean(mySeller);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
   const canManageReturns = role === 'owner' || role === 'manager';
-  const canManagePayouts = role === 'owner' || role === 'manager';
+  const canVoidSales = role === 'owner';  const canManagePayouts = role === 'owner' || role === 'manager';
   const canViewReports = role === 'owner' || role === 'manager';
   const canViewSales = ['owner', 'manager', 'cashier', 'seller'].includes(role) || Boolean(mySeller);
   const isOwnSellerListing = (listing: SmePosListing) => Boolean(mySeller && listing.sellerId === mySeller.id);
@@ -297,7 +303,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     setPaymentRows((current) => current.length === 1 ? [{ ...current[0], amount: (totalMinor / 100).toFixed(2) }] : current);
   }, [totalMinor]);
   const monthPrefix = today().slice(0, 7);
-  const activeSales = sales.filter((item) => item.status !== 'refunded');
+  const activeSales = sales.filter((item) => !['refunded', 'voided'].includes(item.status));
   const todayGross = activeSales.filter((item) => item.saleDate === today()).reduce((sum, item) => sum + item.totalMinor - item.returnedMinor, 0);
   const monthGross = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + item.totalMinor - item.returnedMinor, 0);
   const monthCommission = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + (item.marketplaceCommissionMinor || item.profitMinor), 0);
@@ -748,6 +754,59 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     }
   }
 
+
+  function openVoidForm(sale: SmePosSale) {
+    setReceipt(null);
+    setReturnForm(null);
+    setVoidForm({
+      sale,
+      voidDate: today(),
+      reason: '',
+    });
+    setError('');
+    setSuccess('');
+  }
+
+  async function submitVoidSale(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!voidForm || !canVoidSales || !requireOnline()) return;
+
+    const reason = voidForm.reason.trim();
+
+    if (!reason) {
+      setError('Enter a reason for voiding this sale.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const sale = voidForm.sale;
+
+      const result = await voidSmePosSale({
+        spaceId: space.id,
+        saleId: sale.id,
+        voidDate: voidForm.voidDate,
+        reason,
+      });
+
+      setVoidForm(null);
+
+      setSuccess(
+        `Sale ${sale.receiptNumber} voided. ${formatMoney(result.data.voidedMinor, sale.currency)} was reversed and seller balances were adjusted.`,
+      );
+
+      await load();
+      await onChanged();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
   function openPayoutForm(seller: SmePosSeller) {
     const amount = seller.balanceMinor > 0 ? (seller.balanceMinor / 100).toFixed(2) : '0.00';
     setPayoutForm({
@@ -1005,7 +1064,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
         {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller money waiting</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
-        {canManageReturns && <SmePosBarcodeReturnScanner itemLabel="listing" items={listings} sales={sales} getSaleItemId={(item) => item.listingId || item.productId} onSelectSale={openReturnForm} />}
+        {canManageReturns && <SmePosBarcodeReturnScanner itemLabel="listing" items={listings} sales={sales.filter((sale) => sale.status !== 'voided')} getSaleItemId={(item) => item.listingId || item.productId} onSelectSale={openReturnForm} />}
         <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My register sales' : role === 'seller' || (mySeller && !['owner', 'manager'].includes(role)) ? 'My Sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? 'Only the part of each sale belonging to your seller profile is shown.' : 'Open a sale to view its receipt or record a return where permitted.'}</p></div></div><div className="sme-pos-sales-list">{(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || (mySeller ? 'Seller sale' : 'Walk-in customer')} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
         {canViewReports && <section className="panel"><div className="panel-heading"><div><h3>Recent seller payouts</h3><p>Each payout records exactly which SME cash/bank account the money came from. Split payouts can use up to four sources.</p></div></div><div className="sme-pos-sales-list">{payouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.sellerName}</strong><small>{payout.payoutDate}</small><small>{payout.payments?.length ? payout.payments.map((payment) => `${space.name} — ${payment.accountName}: ${formatMoney(payment.amountMinor, payout.currency)}`).join(' · ') : (payout.paymentSourceLabel || `${space.name} — ${payout.paymentAccountName}`)}</small>{payout.reference && <small>Ref {payout.reference}</small>}{payout.createdByName && <small>Processed by {payout.createdByName}</small>}</div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Seller wallet {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!payouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>}
       </div>}
@@ -1086,6 +1145,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     {receipt && <Modal title={`Receipt ${receipt.receiptNumber}`} onClose={() => setReceipt(null)}>
       <div className="sme-pos-receipt">
         <header><strong>{receipt.receiptName}</strong><span>{receipt.saleDate}</span><small>{receipt.customerName || 'Walk-in customer'}</small></header>
+        {receipt.status === 'voided' && <div className="notice warning"><strong>Voided sale</strong><br />{receipt.voidDate && <span>{receipt.voidDate}</span>}{receipt.voidReason && <span> · {receipt.voidReason}</span>}</div>}
         {receipt.items.map((item, index) => <div className="sme-pos-receipt-line" key={`${item.listingId || item.productId}-${index}`}>
           <span>{item.quantity} × {item.productName}{item.returnedQuantity > 0 ? ` · ${item.returnedQuantity} returned` : ''}</span>
           <strong>{formatMoney(item.netLineMinor ?? item.lineTotalMinor, receipt.currency)}</strong>
@@ -1100,11 +1160,54 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </div>
       <div className="modal-actions">
         <button className="button secondary" type="button" onClick={() => window.print()}>Print</button>
-        {canManageReturns && receipt.status !== 'refunded' && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
+        {canManageReturns && !['refunded', 'voided'].includes(receipt.status) && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
+        {canVoidSales && !['refunded', 'voided'].includes(receipt.status) && receipt.totalMinor > receipt.returnedMinor && <button className="button ghost danger" type="button" onClick={() => openVoidForm(receipt)}>Void sale</button>}
         <button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button>
       </div>
     </Modal>}
 
+    {voidForm && <Modal title={`Void sale · ${voidForm.sale.receiptNumber}`} onClose={() => !busy && setVoidForm(null)}>
+      <form className="form-stack" onSubmit={submitVoidSale}>
+        <div className="notice warning">
+          <strong>This is an audited financial reversal.</strong><br />
+          Remaining customer payment, seller earnings, commission and stock will be reversed. The receipt stays visible as Voided.
+        </div>
+
+        {voidForm.sale.returnedMinor > 0 && <div className="notice">
+          Previous returns: {formatMoney(voidForm.sale.returnedMinor, voidForm.sale.currency)}. Remaining reversal: {formatMoney(voidForm.sale.totalMinor - voidForm.sale.returnedMinor, voidForm.sale.currency)}.
+        </div>}
+
+        <label>
+          Void date
+          <input
+            type="date"
+            value={voidForm.voidDate}
+            onChange={(event) => setVoidForm((current) => current ? { ...current, voidDate: event.target.value } : current)}
+            required
+          />
+        </label>
+
+        <label>
+          Reason for voiding
+          <textarea
+            rows={3}
+            value={voidForm.reason}
+            onChange={(event) => setVoidForm((current) => current ? { ...current, reason: event.target.value } : current)}
+            maxLength={500}
+            placeholder="Example: Duplicate checkout, wrong seller, payment mistake"
+            required
+            autoFocus
+          />
+        </label>
+
+        <div className="modal-actions">
+          <button className="button secondary" type="button" disabled={busy} onClick={() => setVoidForm(null)}>Cancel</button>
+          <button className="button danger" type="submit" disabled={busy || !voidForm.reason.trim()}>
+            {busy ? 'Voiding sale…' : 'Void sale and reverse'}
+          </button>
+        </div>
+      </form>
+    </Modal>}
     {returnForm && <Modal title={`Return items · ${returnForm.sale.receiptNumber}`} onClose={() => !busy && setReturnForm(null)}>
       <form className="form-stack" onSubmit={submitReturn}>
         <div className="notice">The customer refund posts as Money Out across the original payment account(s). Seller balances, commission and reports are adjusted together. Quick Add lines do not create or restore inventory stock.</div>
