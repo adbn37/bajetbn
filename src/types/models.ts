@@ -832,6 +832,62 @@ export interface TripTask {
   updatedAt?: Timestamp;
 }
 
+export type SpaceWorkItemKind = 'task' | 'buy';
+
+export type SpaceWorkItemStatus =
+  | 'open'
+  | 'completed'
+  | 'bought';
+
+export type SpaceWorkPriority =
+  | 'low'
+  | 'normal'
+  | 'high'
+  | 'urgent';
+
+export interface SpaceWorkItem {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  spaceType: 'household' | 'sme';
+  kind: SpaceWorkItemKind;
+  title: string;
+
+  brand?: string | null;
+  model?: string | null;
+  size?: string | null;
+  unit?: string | null;
+  quantity: number;
+
+  targetPriceMinor?: number | null;
+  preferredPlace?: string | null;
+
+  assigneeUid?: string | null;
+  assigneeName?: string | null;
+  assigneeEmail?: string | null;
+
+  priority: SpaceWorkPriority;
+  dueDate?: string | null;
+  note?: string | null;
+
+  status: SpaceWorkItemStatus;
+
+  actualPriceMinor?: number | null;
+  actualPlace?: string | null;
+  purchasedOn?: string | null;
+
+  photoPath?: string | null;
+  linkedTransactionId?: string | null;
+
+  createdBy: string;
+  completedBy?: string | null;
+  completedAt?: Timestamp | null;
+
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface TripBooking {
   id: string;
   displayId: string;

@@ -26,13 +26,16 @@ import { MoneyActivityModal } from '../transactions/TransactionsPage';
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { TripPlanningPanel } from './TripPlanningPanel';
+import { SpaceWorkPanel } from './SpaceWorkPanel';
 
 type SpaceTool =
   | 'fund'
   | 'expenses'
   | 'balances'
   | 'bills'
-  | 'trip_planning';
+  | 'trip_planning'
+  | 'tasks'
+  | 'shopping';
 
 const shortcutGridStyle: CSSProperties = {
   display: 'grid',
@@ -200,6 +203,8 @@ export function SpaceActionHub({
     balances: 'Settlements',
     bills: 'Shared Bills',
     trip_planning: 'Trip Plan',
+    tasks: space.type === 'household' ? 'To-Do' : 'Tasks',
+    shopping: space.type === 'sme' ? 'Procurement / To-Buy' : 'To-Buy',
   };
 
   return (
@@ -245,6 +250,16 @@ export function SpaceActionHub({
               to={`/spaces/${space.id}/pos`}
               label={smePosLabel(smePosRole)}
               primary
+            />
+
+            <ShortcutButton
+              label="Tasks"
+              onClick={() => setTool('tasks')}
+            />
+
+            <ShortcutButton
+              label="Procurement"
+              onClick={() => setTool('shopping')}
             />
 
             {canViewSmeFinancials && (
@@ -346,6 +361,16 @@ export function SpaceActionHub({
               label="Household Fund"
               primary
               onClick={() => setTool('fund')}
+            />
+
+            <ShortcutButton
+              label="To-Do"
+              onClick={() => setTool('tasks')}
+            />
+
+            <ShortcutButton
+              label="To-Buy"
+              onClick={() => setTool('shopping')}
             />
 
             <ShortcutButton
@@ -488,6 +513,16 @@ export function SpaceActionHub({
                 currentMember={currentMember}
               />
             )}
+
+            {(tool === 'tasks' || tool === 'shopping')
+              && (space.type === 'household' || space.type === 'sme') && (
+                <SpaceWorkPanel
+                  space={space}
+                  members={members}
+                  currentMember={currentMember}
+                  initialView={tool === 'tasks' ? 'tasks' : 'shopping'}
+                />
+              )}
 
             {tool === 'fund' && supportsGroupFund && (
               <SpaceFundPanel
