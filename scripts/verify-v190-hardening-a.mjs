@@ -22,7 +22,7 @@ const checks = [
   ],
   [
     functions,
-    'Each processed expiry may write both the user',
+    'Each expiry can write both the user',
     'expiry batch rationale',
   ],
   [

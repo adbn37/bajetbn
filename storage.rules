@@ -78,7 +78,8 @@ service firebase.storage {
     }
 
     match /spaces/{spaceId}/avatar/{fileName} {
-      allow read: if isActiveSpaceMember(spaceId);
+      allow read: if isSpaceOwner(spaceId)
+        || isActiveSpaceMember(spaceId);
 
       allow create: if isSpaceOwner(spaceId)
         && request.resource.contentType == 'image/jpeg'

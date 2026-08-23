@@ -128,7 +128,6 @@ export function SpaceAvatarSettings({
             className="visually-hidden"
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={(event) => void chooseAvatar(event)}
           />
 

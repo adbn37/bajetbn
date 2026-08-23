@@ -12066,7 +12066,10 @@ export const processSubscriptionExpiries =
           'subscriptionExpiresAt',
           'asc',
         )
-        .limit(500)
+        // Each expiry can write both the user
+        // and one audit row. 240 users stays
+        // safely below Firestore batch limits.
+        .limit(240)
         .get();
 
       if (snapshot.empty) {
@@ -12750,6 +12753,126 @@ export const voidSmePosSale = onCall({ region }, async (request) => {
 
     const now = FieldValue.serverTimestamp();
 
+    const originalPayments: DocumentData[] =
+      Array.isArray(sale.payments)
+      && sale.payments.length
+        ? sale.payments.map((row: unknown) => ({
+            ...((row || {}) as DocumentData),
+          }))
+        : [
+            {
+              accountId: stringValue(
+                sale.paymentAccountId,
+                'Original payment account',
+                80,
+              ),
+              accountName: String(
+                sale.paymentAccountName
+                || 'Business account',
+              ),
+              paymentMethod:
+                sale.paymentMethod || null,
+              paymentMethodLabel:
+                sale.paymentMethodLabel || null,
+              amountMinor: totalMinor,
+              returnedMinor:
+                currentReturnedMinor,
+              transactionId:
+                String(sale.transactionId || ''),
+              ledgerEntryId:
+                String(sale.ledgerEntryId || ''),
+            },
+          ];
+
+    let remainingToReverse =
+      voidedMinor;
+
+    const allocations =
+      new Map<number, number>();
+
+    originalPayments.forEach((payment, index) => {
+      if (remainingToReverse <= 0) {
+        return;
+      }
+
+      const capacity = Math.max(
+        0,
+        nonNegativeMoney(payment.amountMinor || 0)
+        - nonNegativeMoney(payment.returnedMinor || 0),
+      );
+
+      const amount = Math.min(
+        capacity,
+        remainingToReverse,
+      );
+
+      if (amount > 0) {
+        allocations.set(index, amount);
+        remainingToReverse -= amount;
+      }
+    });
+
+    if (remainingToReverse !== 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original split payments do not have enough remaining balance to reverse this sale.',
+      );
+    }
+
+    const reversalRows: SmePosPaymentRequestRow[] =
+      [...allocations.entries()].map(
+        ([index, amountMinor]) => ({
+          accountId: stringValue(
+            originalPayments[index].accountId,
+            'Original payment account',
+            80,
+          ),
+
+          paymentMethod:
+            originalPayments[index].paymentMethod
+              ? oneOf(
+                  originalPayments[index].paymentMethod,
+                  paymentMethodCodes,
+                  'Payment method',
+                )
+              : null,
+
+          paymentMethodLabel:
+            optionalString(
+              originalPayments[index].paymentMethodLabel,
+              80,
+            ) || null,
+
+          amountMinor,
+        }),
+      );
+
+    const reversalPayments =
+      await postSmePosPayments({
+        transaction,
+        rows: reversalRows,
+        settings: context.settings,
+        spaceId,
+        uid,
+        idempotencyKey: `${key}:void`,
+        now,
+        transactionDate: voidDate,
+        direction: 'out',
+        entryType:
+          sourceMode === 'marketplace_consignment'
+            ? 'marketplace_pos_sale_void'
+            : 'sme_pos_sale_void',
+        counterparty:
+          sale.customerName || 'POS customer',
+        note:
+          `Void reversal for POS receipt ${sale.receiptNumber || saleId}: ${reason}`,
+        categoryId: 'expense-other',
+        extra: {
+          posSaleId: saleId,
+          posVoid: true,
+        },
+      });
+
     const updatedItems = items.map((line, index) => {
       const quantity = integerBetween(
         line.quantity,
@@ -13011,126 +13134,6 @@ export const voidSmePosSale = onCall({ region }, async (request) => {
         returnedMinor: lineNetMinor,
       };
     });
-
-    const originalPayments: DocumentData[] =
-      Array.isArray(sale.payments)
-      && sale.payments.length
-        ? sale.payments.map((row: unknown) => ({
-            ...((row || {}) as DocumentData),
-          }))
-        : [
-            {
-              accountId: stringValue(
-                sale.paymentAccountId,
-                'Original payment account',
-                80,
-              ),
-              accountName: String(
-                sale.paymentAccountName
-                || 'Business account',
-              ),
-              paymentMethod:
-                sale.paymentMethod || null,
-              paymentMethodLabel:
-                sale.paymentMethodLabel || null,
-              amountMinor: totalMinor,
-              returnedMinor:
-                currentReturnedMinor,
-              transactionId:
-                String(sale.transactionId || ''),
-              ledgerEntryId:
-                String(sale.ledgerEntryId || ''),
-            },
-          ];
-
-    let remainingToReverse =
-      voidedMinor;
-
-    const allocations =
-      new Map<number, number>();
-
-    originalPayments.forEach((payment, index) => {
-      if (remainingToReverse <= 0) {
-        return;
-      }
-
-      const capacity = Math.max(
-        0,
-        nonNegativeMoney(payment.amountMinor || 0)
-        - nonNegativeMoney(payment.returnedMinor || 0),
-      );
-
-      const amount = Math.min(
-        capacity,
-        remainingToReverse,
-      );
-
-      if (amount > 0) {
-        allocations.set(index, amount);
-        remainingToReverse -= amount;
-      }
-    });
-
-    if (remainingToReverse !== 0) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Original split payments do not have enough remaining balance to reverse this sale.',
-      );
-    }
-
-    const reversalRows: SmePosPaymentRequestRow[] =
-      [...allocations.entries()].map(
-        ([index, amountMinor]) => ({
-          accountId: stringValue(
-            originalPayments[index].accountId,
-            'Original payment account',
-            80,
-          ),
-
-          paymentMethod:
-            originalPayments[index].paymentMethod
-              ? oneOf(
-                  originalPayments[index].paymentMethod,
-                  paymentMethodCodes,
-                  'Payment method',
-                )
-              : null,
-
-          paymentMethodLabel:
-            optionalString(
-              originalPayments[index].paymentMethodLabel,
-              80,
-            ) || null,
-
-          amountMinor,
-        }),
-      );
-
-    const reversalPayments =
-      await postSmePosPayments({
-        transaction,
-        rows: reversalRows,
-        settings: context.settings,
-        spaceId,
-        uid,
-        idempotencyKey: `${key}:void`,
-        now,
-        transactionDate: voidDate,
-        direction: 'out',
-        entryType:
-          sourceMode === 'marketplace_consignment'
-            ? 'marketplace_pos_sale_void'
-            : 'sme_pos_sale_void',
-        counterparty:
-          sale.customerName || 'POS customer',
-        note:
-          `Void reversal for POS receipt ${sale.receiptNumber || saleId}: ${reason}`,
-        categoryId: 'expense-other',
-        extra: {
-          posSaleId: saleId,
-          posVoid: true,
-        },
-      });
 
     const updatedPayments =
       originalPayments.map((payment) => ({
@@ -13550,6 +13553,12 @@ export const createDebt = onCall(
       );
     }
 
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
     const direction =
       request.data?.direction === 'owe'
       || request.data?.direction === 'owed'
@@ -13671,16 +13680,42 @@ export const createDebt = onCall(
     if (spaceId) {
       const memberId = `${spaceId}_${uid}`;
 
-      const memberSnapshot =
-        await db
-          .collection('spaceMembers')
-          .doc(memberId)
-          .get();
+      const [
+        spaceSnapshot,
+        memberSnapshot,
+      ] = await Promise.all([
+        db.collection('spaces')
+          .doc(spaceId)
+          .get(),
 
-      if (
-        !memberSnapshot.exists
-        || memberSnapshot.data()?.status === 'removed'
-      ) {
+        db.collection('spaceMembers')
+          .doc(memberId)
+          .get(),
+      ]);
+
+      if (!spaceSnapshot.exists) {
+        throw new HttpsError(
+          'not-found',
+          'The linked Space was not found.',
+        );
+      }
+
+      const memberStatus =
+        memberSnapshot.exists
+          ? String(memberSnapshot.data()?.status || '')
+          : '';
+
+      const activeMember =
+        memberSnapshot.exists
+        && (
+          !memberStatus
+          || memberStatus === 'active'
+        );
+
+      const ownsSpace =
+        spaceSnapshot.data()?.ownerId === uid;
+
+      if (!ownsSpace && !activeMember) {
         throw new HttpsError(
           'permission-denied',
           'You cannot link this debt to that Space.',
@@ -13703,41 +13738,63 @@ export const createDebt = onCall(
       principalMinor + interestMinor;
 
     const debtRef =
-      db.collection('debts').doc();
+      db.collection('debts')
+        .doc(commandId(uid, key));
 
-    const now =
-      FieldValue.serverTimestamp();
+    await db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(debtRef);
 
-    await debtRef.set({
-      displayId:
-        `DEBT-${debtRef.id.slice(0, 8).toUpperCase()}`,
-      ownerId: uid,
-      direction,
-      counterparty,
-      description,
-      principalMinor,
-      interestType,
-      interestRateBps:
-        interestType === 'percentage'
-          ? interestRateBps
-          : 0,
-      interestMinor,
-      totalMinor,
-      paidMinor: 0,
-      balanceMinor: totalMinor,
-      currency: 'BND',
-      startDate,
-      dueDate,
-      schedule,
-      scheduleNote,
-      reminderEnabled,
-      spaceId,
-      status: 'active',
-      settledAt: null,
-      archivedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    });
+        if (existing.exists) {
+          if (existing.data()?.ownerId !== uid) {
+            throw new HttpsError(
+              'permission-denied',
+              'You cannot use this Debt command.',
+            );
+          }
+
+          return;
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.create(
+          debtRef,
+          {
+            displayId:
+              `DEBT-${debtRef.id.slice(-8).toUpperCase()}`,
+            ownerId: uid,
+            direction,
+            counterparty,
+            description,
+            principalMinor,
+            interestType,
+            interestRateBps:
+              interestType === 'percentage'
+                ? interestRateBps
+                : 0,
+            interestMinor,
+            totalMinor,
+            paidMinor: 0,
+            balanceMinor: totalMinor,
+            currency: 'BND',
+            startDate,
+            dueDate,
+            schedule,
+            scheduleNote,
+            reminderEnabled,
+            spaceId,
+            status: 'active',
+            settledAt: null,
+            archivedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        );
+      },
+    );
 
     return {
       debtId: debtRef.id,
