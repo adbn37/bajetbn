@@ -224,6 +224,10 @@ service cloud.firestore {
     }
 
 
+    match /subscriptionAudit/{auditId} {
+      allow read, write: if false;
+    }
+
     match /accountDeletionRequests/{uid} {
       allow read: if isSelf(uid);
       allow create, update, delete: if false;

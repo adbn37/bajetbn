@@ -453,7 +453,14 @@ export const completeOnboarding = onCall({ region }, async (request) => {
       canViewBalances: true, canViewLedger: true, joinedAt: now,
     });
     transaction.set(userRef, {
-      uid, fullName, email: request.auth?.token.email || '', language, currency, timezone,
+      uid, fullName, email: request.auth?.token.email || '',
+      platformRole: 'user',
+      subscriptionPlan: 'basic',
+      subscriptionStatus: 'basic',
+      subscriptionStartedAt: null,
+      subscriptionExpiresAt: null,
+      subscriptionSource: null,
+      language, currency, timezone,
       appearance, textSize: 'normal', notificationsEnabled: true,
       backgroundRemindersEnabled: true, dueSoonReminders: true, lateReminders: true, goalReminders: true,
       sharedPaymentNotifications: true, whatsappRemindersEnabled: true, browserPushEnabled: false, reminderDaysBefore: 3,
@@ -11454,3 +11461,559 @@ export const recordSpaceWorkPurchaseExpense = onCall(
     );
   },
 );
+
+
+
+const subscriptionPlatformAdminEmail =
+  'zardeerwandy@gmail.com';
+
+const subscriptionSources = [
+  'whatsapp_manual',
+  'complimentary',
+  'internal',
+] as const;
+
+type SubscriptionSource =
+  (typeof subscriptionSources)[number];
+
+function normalizedRequestEmail(
+  request: CallableRequest,
+): string {
+  return String(
+    request.auth?.token.email || '',
+  ).trim().toLowerCase();
+}
+
+function timestampToIso(
+  value: unknown,
+): string | null {
+  if (value instanceof Timestamp) {
+    return value.toDate().toISOString();
+  }
+
+  return null;
+}
+
+async function requirePlatformAdmin(
+  request: CallableRequest,
+): Promise<string> {
+  const uid = requireAuth(request.auth?.uid);
+
+  if (request.auth?.token.platformAdmin !== true) {
+    throw new HttpsError(
+      'permission-denied',
+      'BajetBN platform administrator access is required.',
+    );
+  }
+
+  return uid;
+}
+
+function validSubscriptionSource(
+  value: unknown,
+): SubscriptionSource {
+  return oneOf(
+    value ?? 'whatsapp_manual',
+    subscriptionSources,
+    'subscription source',
+  );
+}
+
+function addSubscriptionMonths(
+  base: Date,
+  months: number,
+): Date {
+  const result = new Date(base.getTime());
+
+  result.setUTCMonth(
+    result.getUTCMonth() + months,
+  );
+
+  return result;
+}
+
+function subscriptionExpiryFromInput(
+  data: Record<string, unknown>,
+  currentExpiry: unknown,
+): Date {
+  const requestedMonths =
+    data.months == null
+      ? null
+      : Number(data.months);
+
+  const customExpiry =
+    optionalString(
+      data.customExpiresAt,
+      40,
+    );
+
+  const now = new Date();
+
+  if (customExpiry) {
+    const parsed = new Date(customExpiry);
+
+    if (
+      Number.isNaN(parsed.getTime())
+      || parsed.getTime() <= now.getTime()
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a future subscription expiry date.',
+      );
+    }
+
+    return parsed;
+  }
+
+  if (
+    requestedMonths == null
+    || ![1, 3, 6, 12].includes(requestedMonths)
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose a 1, 3, 6 or 12 month subscription.',
+    );
+  }
+
+  let base = now;
+
+  if (
+    data.action === 'extend'
+    && currentExpiry instanceof Timestamp
+    && currentExpiry.toMillis() > now.getTime()
+  ) {
+    base = currentExpiry.toDate();
+  }
+
+  return addSubscriptionMonths(
+    base,
+    requestedMonths,
+  );
+}
+
+export const ensureMyPlatformAdmin = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const email = normalizedRequestEmail(request);
+
+    if (
+      email !== subscriptionPlatformAdminEmail
+      || request.auth?.token.email_verified !== true
+    ) {
+      return {
+        platformAdmin: false,
+      };
+    }
+
+    const auth = getAuth();
+    const authUser = await auth.getUser(uid);
+
+    const claims = {
+      ...(authUser.customClaims || {}),
+      platformAdmin: true,
+    };
+
+    await auth.setCustomUserClaims(
+      uid,
+      claims,
+    );
+
+    await db
+      .collection('users')
+      .doc(uid)
+      .set(
+        {
+          platformRole: 'platform_admin',
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+    return {
+      platformAdmin: true,
+      refreshToken: true,
+    };
+  },
+);
+
+export const adminListSubscriptions = onCall(
+  { region },
+  async (request) => {
+    await requirePlatformAdmin(request);
+
+    const snapshot = await db
+      .collection('users')
+      .orderBy('createdAt', 'desc')
+      .limit(200)
+      .get();
+
+    const users = snapshot.docs.map(
+      (document) => {
+        const data = document.data();
+
+        const expiresAt =
+          data.subscriptionExpiresAt;
+
+        const plusActive =
+          data.subscriptionPlan === 'plus'
+          && data.subscriptionStatus === 'active'
+          && (
+            !(expiresAt instanceof Timestamp)
+            || expiresAt.toMillis() > Date.now()
+          );
+
+        return {
+          uid: document.id,
+          fullName:
+            String(data.fullName || ''),
+          email:
+            String(data.email || ''),
+          platformRole:
+            data.platformRole === 'platform_admin'
+              ? 'platform_admin'
+              : 'user',
+          effectivePlan:
+            plusActive
+              ? 'plus'
+              : 'basic',
+          subscriptionPlan:
+            data.subscriptionPlan === 'plus'
+              ? 'plus'
+              : 'basic',
+          subscriptionStatus:
+            String(
+              data.subscriptionStatus
+              || 'basic',
+            ),
+          subscriptionSource:
+            data.subscriptionSource
+              ? String(
+                  data.subscriptionSource,
+                )
+              : null,
+          subscriptionStartedAt:
+            timestampToIso(
+              data.subscriptionStartedAt,
+            ),
+          subscriptionExpiresAt:
+            timestampToIso(
+              expiresAt,
+            ),
+          createdAt:
+            timestampToIso(
+              data.createdAt,
+            ),
+        };
+      },
+    );
+
+    return { users };
+  },
+);
+
+export const adminUpdateSubscription = onCall(
+  { region },
+  async (request) => {
+    const adminUid =
+      await requirePlatformAdmin(request);
+
+    const targetUid = stringValue(
+      request.data?.uid,
+      'User',
+      128,
+    );
+
+    const action = oneOf(
+      request.data?.action,
+      [
+        'activate',
+        'extend',
+        'cancel',
+      ] as const,
+      'subscription action',
+    );
+
+    const source =
+      validSubscriptionSource(
+        request.data?.source,
+      );
+
+    const userRef =
+      db.collection('users').doc(targetUid);
+
+    const snapshot = await userRef.get();
+
+    if (!snapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'The BajetBN user was not found.',
+      );
+    }
+
+    const current = snapshot.data() || {};
+    const now =
+      FieldValue.serverTimestamp();
+
+    if (action === 'cancel') {
+      await userRef.set(
+        {
+          subscriptionPlan: 'plus',
+          subscriptionStatus:
+            'cancelled',
+          subscriptionExpiresAt:
+            Timestamp.now(),
+          subscriptionSource: source,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+
+      await db
+        .collection('subscriptionAudit')
+        .add({
+          targetUid,
+          targetEmail:
+            String(current.email || ''),
+          action: 'cancel',
+          previousPlan:
+            current.subscriptionPlan
+            || 'basic',
+          previousStatus:
+            current.subscriptionStatus
+            || 'basic',
+          nextPlan: 'basic',
+          nextStatus: 'cancelled',
+          source,
+          adminUid,
+          createdAt: now,
+        });
+
+      return {
+        uid: targetUid,
+        effectivePlan: 'basic',
+        subscriptionStatus:
+          'cancelled',
+        subscriptionExpiresAt:
+          new Date().toISOString(),
+      };
+    }
+
+    const expiry =
+      subscriptionExpiryFromInput(
+        {
+          ...(request.data || {}),
+          action,
+        },
+        current.subscriptionExpiresAt,
+      );
+
+    const expiryTimestamp =
+      Timestamp.fromDate(expiry);
+
+    const startedAt =
+      action === 'extend'
+      && current.subscriptionStartedAt
+        ? current.subscriptionStartedAt
+        : Timestamp.now();
+
+    await userRef.set(
+      {
+        subscriptionPlan: 'plus',
+        subscriptionStatus:
+          'active',
+        subscriptionStartedAt:
+          startedAt,
+        subscriptionExpiresAt:
+          expiryTimestamp,
+        subscriptionSource:
+          source,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+
+    await db
+      .collection('subscriptionAudit')
+      .add({
+        targetUid,
+        targetEmail:
+          String(current.email || ''),
+        action,
+        previousPlan:
+          current.subscriptionPlan
+          || 'basic',
+        previousStatus:
+          current.subscriptionStatus
+          || 'basic',
+        previousExpiresAt:
+          current.subscriptionExpiresAt
+          || null,
+        nextPlan: 'plus',
+        nextStatus: 'active',
+        nextExpiresAt:
+          expiryTimestamp,
+        source,
+        adminUid,
+        createdAt: now,
+      });
+
+    return {
+      uid: targetUid,
+      effectivePlan: 'plus',
+      subscriptionStatus:
+        'active',
+      subscriptionExpiresAt:
+        expiry.toISOString(),
+    };
+  },
+);
+
+export const adminListSubscriptionAudit = onCall(
+  { region },
+  async (request) => {
+    await requirePlatformAdmin(request);
+
+    const snapshot = await db
+      .collection('subscriptionAudit')
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .get();
+
+    return {
+      entries: snapshot.docs.map(
+        (document) => {
+          const data = document.data();
+
+          return {
+            id: document.id,
+            targetUid:
+              String(data.targetUid || ''),
+            targetEmail:
+              String(
+                data.targetEmail || '',
+              ),
+            action:
+              String(data.action || ''),
+            previousPlan:
+              String(
+                data.previousPlan || '',
+              ),
+            previousStatus:
+              String(
+                data.previousStatus || '',
+              ),
+            nextPlan:
+              String(data.nextPlan || ''),
+            nextStatus:
+              String(
+                data.nextStatus || '',
+              ),
+            source:
+              String(data.source || ''),
+            createdAt:
+              timestampToIso(
+                data.createdAt,
+              ),
+          };
+        },
+      ),
+    };
+  },
+);
+
+export const processSubscriptionExpiries =
+  onSchedule(
+    {
+      region,
+      schedule: 'every 60 minutes',
+      timeZone: 'Asia/Brunei',
+    },
+    async () => {
+      const now = Timestamp.now();
+
+      const snapshot = await db
+        .collection('users')
+        .where(
+          'subscriptionExpiresAt',
+          '<=',
+          now,
+        )
+        .orderBy(
+          'subscriptionExpiresAt',
+          'asc',
+        )
+        .limit(500)
+        .get();
+
+      if (snapshot.empty) {
+        return;
+      }
+
+      const batch = db.batch();
+      let changed = 0;
+
+      for (const document of snapshot.docs) {
+        const data = document.data();
+
+        if (
+          data.subscriptionPlan !== 'plus'
+          || data.subscriptionStatus
+            !== 'active'
+        ) {
+          continue;
+        }
+
+        batch.set(
+          document.ref,
+          {
+            subscriptionStatus:
+              'expired',
+            updatedAt:
+              FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        const auditRef =
+          db.collection(
+            'subscriptionAudit',
+          ).doc();
+
+        batch.set(
+          auditRef,
+          {
+            targetUid:
+              document.id,
+            targetEmail:
+              String(
+                data.email || '',
+              ),
+            action:
+              'automatic_expiry',
+            previousPlan:
+              'plus',
+            previousStatus:
+              'active',
+            nextPlan:
+              'basic',
+            nextStatus:
+              'expired',
+            source:
+              data.subscriptionSource
+              || 'whatsapp_manual',
+            adminUid: null,
+            createdAt:
+              FieldValue.serverTimestamp(),
+          },
+        );
+
+        changed += 1;
+      }
+
+      if (changed > 0) {
+        await batch.commit();
+      }
+    },
+  );
