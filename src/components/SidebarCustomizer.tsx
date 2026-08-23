@@ -78,7 +78,7 @@ export function SidebarCustomizer({
       <div className="menu-customizer">
         <div className="notice compact-notice">
           <strong>Your menu, your order</strong>
-          <span>Drag on desktop or use the arrows on mobile. Overview and Spaces always stay available. Reset menu restores the recommended simple layout.</span>
+          <span>Choose what stays in your main sidebar. Hidden items remain available under More tools. Drag on desktop or use the arrows on mobile. Overview and Spaces always stay available. Reset menu restores the recommended simple layout.</span>
         </div>
         <div className="menu-customizer-list">
           {ordered.map((item, index) => {
@@ -98,7 +98,7 @@ export function SidebarCustomizer({
                 <span className="nav-icon">{navigationIcon(settings.iconPack, item.id, item.icon)}</span>
                 <div className="menu-customizer-copy">
                   <strong>{item.label}</strong>
-                  <small>{hidden ? 'Hidden from your sidebar' : pinned ? 'Pinned near the top' : 'Shown in your sidebar'}</small>
+                  <small>{hidden ? 'Available under More tools' : pinned ? 'Pinned near the top' : 'Shown in your main sidebar'}</small>
                 </div>
                 <div className="menu-customizer-actions">
                   <button type="button" className="text-button" onClick={() => move(item.id, -1)} disabled={index === 0} aria-label={`Move ${item.label} up`}>↑</button>

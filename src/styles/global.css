@@ -6059,3 +6059,86 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     width: 100%;
   }
 }
+
+/* v1.9.0 Slice 8 - Simple navigation */
+.sidebar-more-tools {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.sidebar-more-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-more-arrow {
+  margin-left: auto;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.sidebar-more-list {
+  display: grid;
+  gap: 0.1rem;
+  margin-left: 0.45rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid var(--border);
+}
+
+.sidebar-more-list a {
+  min-height: 2.45rem;
+  font-size: 0.92rem;
+}
+
+.sidebar-plan-link .nav-label {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.sidebar-plan-link .nav-label small {
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+.plus-upgrade-notice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface);
+}
+
+.plus-upgrade-notice > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.plus-upgrade-notice p {
+  margin: 0;
+}
+
+.plus-upgrade-notice.compact {
+  padding: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .plus-upgrade-notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sidebar-more-list {
+    margin-left: 0.25rem;
+  }
+}

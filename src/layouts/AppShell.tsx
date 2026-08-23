@@ -9,6 +9,7 @@ import { subscribeSpaceActivities, subscribeUserNotifications } from '../reposit
 import { listenForForegroundPush } from '../repositories/notificationRepository';
 import { listSpaces } from '../repositories/spaceRepository';
 import type { Space } from '../types/models';
+import { planLabel } from '../services/entitlements';
 import { SidebarCustomizer } from '../components/SidebarCustomizer';
 import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
 import {
@@ -18,6 +19,7 @@ import {
   loadPersonalisation,
   navigationIcon,
   orderedNavigation,
+  secondaryNavigation,
   savePersonalisation,
   type PersonalisationSettings,
 } from '../services/personalisation';
@@ -63,6 +65,7 @@ export function AppShell() {
   const [posPickerError, setPosPickerError] = useState('');
   const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
   const [menuCustomizerOpen, setMenuCustomizerOpen] = useState(false);
+  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [activityToast, setActivityToast] = useState<ActivityToast | null>(null);
   const { profile, user, logOut } = useAuth();
   const { pendingCount, needsAttentionCount, syncing } = useOfflineSync();
@@ -72,6 +75,8 @@ export function AppShell() {
   const currentPosMatch = location.pathname.match(/^\/spaces\/([^/]+)\/pos(?:\/|$)/);
   const currentPosPath = currentPosMatch ? `/spaces/${currentPosMatch[1]}/pos` : '';
   const visibleNavigation = useMemo(() => orderedNavigation(personalisation), [personalisation]);
+  const secondaryTools = useMemo(() => secondaryNavigation(personalisation), [personalisation]);
+  const currentPlanLabel = planLabel(profile);
 
   function updatePersonalisation(next: PersonalisationSettings) {
     if (!user) return;
@@ -256,12 +261,101 @@ export function AppShell() {
               {item.path === '/offline-sync' && (pendingCount + needsAttentionCount > 0 || syncing) && <span className={`nav-count ${needsAttentionCount > 0 ? 'attention' : ''}`}>{syncing ? '…' : pendingCount + needsAttentionCount}</span>}
             </NavLink>
           ))}
+
+          {secondaryTools.length > 0 && (
+            <div className="sidebar-more-tools">
+              <button
+                type="button"
+                className="sidebar-more-toggle"
+                aria-expanded={moreToolsOpen}
+                onClick={() => setMoreToolsOpen((value) => !value)}
+              >
+                <span className="nav-icon">•••</span>
+                <span className="nav-label">More tools</span>
+                <span className="sidebar-more-arrow" aria-hidden="true">
+                  {moreToolsOpen ? '⌃' : '⌄'}
+                </span>
+              </button>
+
+              {moreToolsOpen && (
+                <div className="sidebar-more-list">
+                  {secondaryTools.map((item) => (
+                    <NavLink
+                      key={`secondary-${item.path}`}
+                      to={item.path}
+                      end={item.path === '/'}
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      <span className="nav-icon">
+                        {navigationIcon(
+                          personalisation.iconPack,
+                          item.id,
+                          item.icon,
+                        )}
+                      </span>
+                      <span className="nav-label">
+                        {item.label}
+                      </span>
+
+                      {item.path === '/offline-sync'
+                        && (
+                          pendingCount + needsAttentionCount > 0
+                          || syncing
+                        )
+                        && (
+                          <span
+                            className={`nav-count ${
+                              needsAttentionCount > 0
+                                ? 'attention'
+                                : ''
+                            }`}
+                          >
+                            {syncing
+                              ? '…'
+                              : pendingCount + needsAttentionCount}
+                          </span>
+                        )}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
         <div className="sidebar-footer">
-          <button type="button" className="sidebar-customize-button" onClick={() => setMenuCustomizerOpen(true)}>
-            <span className="nav-icon">{navigationIcon(personalisation.iconPack, 'spaces', '☷')}</span>
+          <NavLink
+            to="/settings/subscription"
+            className="sidebar-plan-link"
+            onClick={() => setMobileOpen(false)}
+          >
+            <span className="nav-icon">
+              {currentPlanLabel === 'Plus' ? '✦' : '○'}
+            </span>
+            <span className="nav-label">
+              <strong>BajetBN {currentPlanLabel}</strong>
+              <small>
+                {currentPlanLabel === 'Plus'
+                  ? 'Subscription active'
+                  : 'Free plan · View Plus'}
+              </small>
+            </span>
+          </NavLink>
+
+          <button
+            type="button"
+            className="sidebar-customize-button"
+            onClick={() => setMenuCustomizerOpen(true)}
+          >
+            <span className="nav-icon">
+              {navigationIcon(
+                personalisation.iconPack,
+                'spaces',
+                '☷',
+              )}
+            </span>
             <span className="nav-label">Customize menu</span>
           </button>
+
           <NavLink to="/settings" onClick={() => setMobileOpen(false)}>
             <span className="nav-icon">⚙</span>
             <span className="nav-label">Settings</span>
@@ -358,7 +452,13 @@ export function AppShell() {
             <small>Alerts</small>
           </NavLink>
 
-          <button type="button" onClick={() => setMobileOpen(true)}>
+          <button
+            type="button"
+            onClick={() => {
+              setMoreToolsOpen(true);
+              setMobileOpen(true);
+            }}
+          >
             <span aria-hidden="true">☰</span>
             <small>More</small>
           </button>

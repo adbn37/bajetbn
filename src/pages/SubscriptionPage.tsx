@@ -65,7 +65,7 @@ export function SubscriptionPage() {
       <PageHeader
         eyebrow="BajetBN"
         title="Subscription"
-        description="Use BajetBN Basic for free, or unlock the full experience with BajetBN Plus."
+        description="Basic stays free forever. Plus expands your Spaces, collaboration, SME capacity, storage and advanced tools."
       />
 
       <section className="card stack">
@@ -108,6 +108,8 @@ export function SubscriptionPage() {
           <li>Up to 10 SME customers</li>
           <li>Up to 3 SME sellers</li>
           <li>Owner + 1 additional SME member</li>
+          <li>Up to 2 personal accounts</li>
+          <li>Existing Plus information stays safe if you return to Basic</li>
         </ul>
       </section>
 
@@ -116,9 +118,10 @@ export function SubscriptionPage() {
         <h2>BajetBN Plus</h2>
 
         <p>
-          Unlock additional Spaces, full SME tools,
-          collaboration, reports, automation and
-          personalization.
+          Expand Space limits, SME capacity, collaboration,
+          advanced reports and automation, plus additional
+          storage and personalization. Your existing data is never
+          deleted if Plus later expires.
         </p>
 
         {Object.values(BAJETBN_PLUS_PRICES).map((plan) => (

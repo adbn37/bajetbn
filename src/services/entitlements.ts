@@ -110,3 +110,35 @@ export function requiresPlusForSpaceType(
 ): boolean {
   return basicSpaceLimit(type) === 0;
 }
+
+export interface UpgradeToPlusCopy {
+  title: string;
+  message: string;
+  actionLabel: string;
+  path: string;
+}
+
+export function upgradeToPlusCopy(
+  featureLabel: string,
+  detail?: string,
+): UpgradeToPlusCopy {
+  const feature =
+    featureLabel.trim() || 'This feature';
+
+  return {
+    title: 'Upgrade to BajetBN Plus',
+    message:
+      detail?.trim()
+      || `${feature} has reached the BajetBN Basic limit. Your existing information stays safe. Upgrade to Plus to keep adding and unlock the full experience.`,
+    actionLabel: 'View Plus',
+    path: '/settings/subscription',
+  };
+}
+
+export function planLabel(
+  profile: UserProfile | null,
+): 'Basic' | 'Plus' {
+  return isPlusActive(profile)
+    ? 'Plus'
+    : 'Basic';
+}
