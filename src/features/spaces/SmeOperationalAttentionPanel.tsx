@@ -52,6 +52,7 @@ function localDate(value = new Date()) {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');
+
   return `${year}-${month}-${day}`;
 }
 
@@ -66,10 +67,15 @@ function isLowStockItem(item: StockItem) {
   return available <= item.lowStockLevel;
 }
 
-export function SmeOperationalAttentionPanel({ space, role }: Props) {
+export function SmeOperationalAttentionPanel({
+  space,
+  role,
+}: Props) {
   const operationalRole = role === 'owner' || role === 'manager';
 
-  const [snapshot, setSnapshot] = useState<AttentionSnapshot>(emptySnapshot);
+  const [snapshot, setSnapshot] =
+    useState<AttentionSnapshot>(emptySnapshot);
+
   const [loading, setLoading] = useState(false);
   const [warning, setWarning] = useState('');
 
@@ -80,6 +86,7 @@ export function SmeOperationalAttentionPanel({ space, role }: Props) {
       setSnapshot(emptySnapshot);
       setWarning('');
       setLoading(false);
+
       return () => {
         cancelled = true;
       };
@@ -101,17 +108,21 @@ export function SmeOperationalAttentionPanel({ space, role }: Props) {
 
       if (cancelled) return;
 
-      const marketplace = marketplaceResult.status === 'fulfilled';
+      const marketplace =
+        marketplaceResult.status === 'fulfilled';
 
       const lowStock = marketplace
-        ? marketplaceResult.value.listings.filter(isLowStockItem).length
+        ? marketplaceResult.value.listings
+            .filter(isLowStockItem).length
         : standardResult.status === 'fulfilled'
-          ? standardResult.value.products.filter(isLowStockItem).length
+          ? standardResult.value.products
+              .filter(isLowStockItem).length
           : 0;
 
-      const reservations = reservationsResult.status === 'fulfilled'
-        ? reservationsResult.value
-        : [];
+      const reservations =
+        reservationsResult.status === 'fulfilled'
+          ? reservationsResult.value
+          : [];
 
       const openBookings = reservations.filter((item) =>
         openBookingStatuses.has(item.status),
@@ -120,15 +131,19 @@ export function SmeOperationalAttentionPanel({ space, role }: Props) {
       const today = localDate();
 
       const overdueBookings = openBookings.filter(
-        (item) => Boolean(item.dueDate && item.dueDate < today),
+        (item) =>
+          Boolean(item.dueDate && item.dueDate < today),
       ).length;
 
       const sellersWaiting = marketplace
-        ? marketplaceResult.value.sellers.filter((item) => item.balanceMinor > 0)
+        ? marketplaceResult.value.sellers.filter(
+            (item) => item.balanceMinor > 0,
+          )
         : [];
 
       const payoutWaitingMinor = sellersWaiting.reduce(
-        (sum, item) => sum + Math.max(0, item.balanceMinor),
+        (sum, item) =>
+          sum + Math.max(0, item.balanceMinor),
         0,
       );
 
@@ -145,10 +160,14 @@ export function SmeOperationalAttentionPanel({ space, role }: Props) {
         standardResult.status === 'rejected'
         && marketplaceResult.status === 'rejected'
       ) {
-        setWarning('Inventory attention could not be refreshed. Open POS to review the latest stock.');
+        setWarning(
+          'Inventory attention could not be refreshed. Open POS to review the latest stock.',
+        );
       }
       else if (reservationsResult.status === 'rejected') {
-        setWarning('Booking attention could not be refreshed. Open POS to review current bookings.');
+        setWarning(
+          'Booking attention could not be refreshed. Open POS to review current bookings.',
+        );
       }
 
       setLoading(false);
@@ -168,75 +187,110 @@ export function SmeOperationalAttentionPanel({ space, role }: Props) {
     + snapshot.openBookings
     + snapshot.sellerPayouts;
 
+  /*
+   * v1.8 home rule:
+   * do not occupy homepage space when there is nothing
+   * requiring the Owner/Manager's attention.
+   */
+  if (!loading && !warning && attentionTotal === 0) {
+    return null;
+  }
+
   return (
-    <section className="panel sme-pos-operational-attention">
-      <div className="panel-heading">
+    <section
+      className="panel sme-pos-operational-attention"
+      aria-label="POS attention"
+      style={{
+        padding: '0.65rem 0.75rem',
+        marginTop: '0.5rem',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.75rem',
+          marginBottom: warning || attentionTotal ? '0.55rem' : 0,
+        }}
+      >
         <div>
-          <span className="eyebrow">Daily operations</span>
-          <h2>POS attention</h2>
-          <p>
-            A quick check of stock, bookings and seller payouts.
-            Open POS to review or change the underlying records.
-          </p>
+          <span className="eyebrow">POS attention</span>
+          <small className="muted">
+            Only items that need action
+          </small>
         </div>
 
         <span className="type-badge">
-          {loading ? 'Checking…' : attentionTotal ? `${attentionTotal} open` : 'Clear'}
+          {loading ? 'Checking...' : `${attentionTotal} open`}
         </span>
       </div>
 
-      {loading ? (
-        <div className="loading-panel">Checking shop operations…</div>
-      ) : (
-        <>
-          <div className="summary-grid">
-            <article className="summary-card">
-              <span>Low stock</span>
-              <strong>{snapshot.lowStock}</strong>
-              <small>Available stock is at or below its alert level</small>
-              <Link className="text-button" to={`/spaces/${space.id}/pos`}>
-                Open inventory →
-              </Link>
-            </article>
-
-            <article className="summary-card">
-              <span>Open bookings</span>
-              <strong>{snapshot.openBookings}</strong>
-              <small>
-                {snapshot.overdueBookings
-                  ? `${snapshot.overdueBookings} overdue`
-                  : 'Reservations still waiting to be completed'}
-              </small>
-              <Link className="text-button" to={`/spaces/${space.id}/pos`}>
-                Open bookings →
-              </Link>
-            </article>
-
-            {snapshot.marketplace && (
-              <article className="summary-card">
-                <span>Seller payouts waiting</span>
-                <strong>{snapshot.sellerPayouts}</strong>
-                <small>
-                  {snapshot.sellerPayouts
-                    ? `${formatMoney(snapshot.payoutWaitingMinor, space.currency)} waiting across seller wallets`
-                    : 'No positive seller wallet balances waiting'}
-                </small>
-                <Link className="text-button" to={`/spaces/${space.id}/pos`}>
-                  Open seller payouts →
-                </Link>
-              </article>
-            )}
-          </div>
-
-          {attentionTotal === 0 && (
-            <div className="empty-inline">
-              No POS action needs attention right now.
-            </div>
-          )}
-        </>
+      {warning && (
+        <div className="notice warning compact-notice">
+          {warning}
+        </div>
       )}
 
-      {warning && <div className="notice warning">{warning}</div>}
+      {!loading && attentionTotal > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+          }}
+        >
+          {snapshot.lowStock > 0 && (
+            <Link
+              className="button secondary compact"
+              to={`/spaces/${space.id}/pos`}
+              title="Open inventory"
+            >
+              <span>Low stock</span>
+              <span className="type-badge">
+                {snapshot.lowStock}
+              </span>
+              <small>Open inventory</small>
+            </Link>
+          )}
+
+          {snapshot.openBookings > 0 && (
+            <Link
+              className="button secondary compact"
+              to={`/spaces/${space.id}/pos`}
+              title="Open bookings"
+            >
+              <span>Open bookings</span>
+              <span className="type-badge">
+                {snapshot.openBookings}
+              </span>
+              <small>
+                {snapshot.overdueBookings > 0
+                  ? `${snapshot.overdueBookings} overdue`
+                  : 'Open bookings'}
+              </small>
+            </Link>
+          )}
+
+          {snapshot.marketplace
+            && snapshot.sellerPayouts > 0 && (
+              <Link
+                className="button secondary compact"
+                to={`/spaces/${space.id}/pos`}
+                title={`Seller payouts waiting: ${formatMoney(
+                  snapshot.payoutWaitingMinor,
+                  space.currency,
+                )}`}
+              >
+                <span>Seller payouts waiting</span>
+                <span className="type-badge">
+                  {snapshot.sellerPayouts}
+                </span>
+                <small>Open seller payouts</small>
+              </Link>
+            )}
+        </div>
+      )}
     </section>
   );
 }

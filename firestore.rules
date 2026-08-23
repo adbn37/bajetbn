@@ -588,6 +588,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /spaceWorkItems/{itemId} {
+      allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
+      allow create, update, delete: if false;
+    }
+
     match /tripItineraryItems/{itemId} {
       allow read: if signedIn() && isSpaceMember(resource.data.spaceId);
       allow create, update, delete: if false;

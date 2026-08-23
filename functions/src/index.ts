@@ -7280,6 +7280,7 @@ export const manageSpaceLifecycle = onCall({ region }, async (request) => {
       queryHasDocuments(db.collection('spaceInvitations').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('tripItineraryItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('tripTasks').where('spaceId', '==', spaceId)),
+      queryHasDocuments(db.collection('spaceWorkItems').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('tripBookings').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spaceAnnouncements').where('spaceId', '==', spaceId)),
       queryHasDocuments(db.collection('spacePolls').where('spaceId', '==', spaceId)),
@@ -9589,7 +9590,7 @@ async function queueSharedBillAssignmentAnonymization(input: {
 async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proofPaths: Set<string>) {
   const collections = [
     'transactions', 'budgets', 'goals', 'commitments', 'sharedBillAssignments', 'sharedBillPayments',
-    'sharedBillPaymentReversals', 'spaceActivities', 'tripItineraryItems', 'tripTasks', 'tripBookings', 'sharedExpenses', 'sharedExpenseShares',
+    'sharedBillPaymentReversals', 'spaceActivities', 'tripItineraryItems', 'tripTasks', 'tripBookings', 'spaceWorkItems', 'sharedExpenses', 'sharedExpenseShares',
     'sharedExpensePayments', 'spaceFundContributions', 'spaceInvitations', 'spaceMembers',
     'userNotifications', 'reminderHistory', 'recurringTransactionTemplates', 'recurringTransactionRuns',
     'transactionAttachments', 'collectionItems', 'collectionItemMovements', 'smePosAccess', 'smePosProducts', 'smePosCustomers',
@@ -9600,6 +9601,10 @@ async function queueOwnedSpaceDeletion(plan: MutationPlan, spaceId: string, proo
     for (const row of rows) {
       const rowData = row.data();
       addProofPath(proofPaths, rowData);
+      if (collectionName === 'spaceWorkItems' && rowData.photoPath) {
+        const workPhotoPath = String(rowData.photoPath || '');
+        if (workPhotoPath.startsWith('spaces/' + spaceId + '/work-items/')) proofPaths.add(workPhotoPath);
+      }
       if (collectionName === 'collectionItems' && Array.isArray(rowData.photos)) {
         for (const photo of rowData.photos as unknown[]) {
           if (!photo || typeof photo !== 'object') continue;
@@ -9816,6 +9821,9 @@ async function finalizeAccountDeletion(uid: string) {
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'assigneeUid', uid, updates: () => ({ assigneeUid: anonymousId, assigneeName: deletedMemberName, assigneeEmail: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'tripTasks', field: 'completedBy', uid, updates: () => ({ completedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceWorkItems', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceWorkItems', field: 'assigneeUid', uid, updates: () => ({ assigneeUid: anonymousId, assigneeName: deletedMemberName, assigneeEmail: '', ...anonymizedReferenceUpdates(anonymousId, now) }) });
+    await queueFieldAnonymization({ plan, collectionName: 'spaceWorkItems', field: 'completedBy', uid, updates: () => ({ completedBy: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spaceAnnouncements', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spacePolls', field: 'createdBy', uid, updates: () => ({ createdBy: anonymousId, createdByName: deletedMemberName, ...anonymizedReferenceUpdates(anonymousId, now) }) });
     await queueFieldAnonymization({ plan, collectionName: 'spacePollVotes', field: 'uid', uid, updates: () => ({ uid: anonymousId, ...anonymizedReferenceUpdates(anonymousId, now) }) });
@@ -9917,3 +9925,1532 @@ export const processAccountDeletionRequests = onSchedule({
     catch (error) { console.error(`Scheduled deletion retry failed for ${request.id}.`, error); }
   }
 });
+
+
+/* =========================================================
+   v1.8.0 Slice 2A - Household / SME Tasks + To-Buy
+   ========================================================= */
+
+type SpaceWorkActor = {
+  space: DocumentData;
+  member: DocumentData;
+};
+
+async function requireSpaceWorkActor(
+  spaceId: string,
+  uid: string,
+): Promise<SpaceWorkActor> {
+  const [spaceSnapshot, memberSnapshot] = await Promise.all([
+    db.collection('spaces').doc(spaceId).get(),
+    db.collection('spaceMembers').doc(spaceId + '_' + uid).get(),
+  ]);
+
+  if (!spaceSnapshot.exists) {
+    throw new HttpsError('not-found', 'Space was not found.');
+  }
+
+  const space = spaceSnapshot.data() || {};
+
+  if (space.archivedAt) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Archived Spaces cannot change Tasks or To-Buy items.',
+    );
+  }
+
+  if (!['household', 'sme'].includes(String(space.type || ''))) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Tasks and To-Buy in this workflow are available for Household and SME Spaces.',
+    );
+  }
+
+  if (
+    !memberSnapshot.exists
+    || (
+      memberSnapshot.data()?.status
+      && memberSnapshot.data()?.status !== 'active'
+    )
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'An active Space membership is required.',
+    );
+  }
+
+  return {
+    space,
+    member: memberSnapshot.data() || {},
+  };
+}
+
+function canManageSpaceWork(member: DocumentData) {
+  return ['owner', 'admin', 'contributor'].includes(
+    String(member.role || ''),
+  );
+}
+
+function spaceWorkOptionalText(
+  value: unknown,
+  label: string,
+  maxLength: number,
+): string | null {
+  const result = String(value || '').trim();
+
+  if (!result) return null;
+
+  if (result.length > maxLength) {
+    throw new HttpsError(
+      'invalid-argument',
+      label + ' is too long.',
+    );
+  }
+
+  return result;
+}
+
+function spaceWorkDate(
+  value: unknown,
+  label: string,
+): string | null {
+  const result = spaceWorkOptionalText(value, label, 10);
+
+  if (!result) return null;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(result)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose a valid ' + label.toLowerCase() + '.',
+    );
+  }
+
+  return result;
+}
+
+function spaceWorkMinor(
+  value: unknown,
+  label: string,
+  required = false,
+): number | null {
+  if (
+    value === undefined
+    || value === null
+    || value === ''
+  ) {
+    if (required) {
+      throw new HttpsError(
+        'invalid-argument',
+        label + ' is required.',
+      );
+    }
+
+    return null;
+  }
+
+  const result = Number(value);
+
+  if (
+    !Number.isSafeInteger(result)
+    || result < 0
+    || result > 99_999_999_999
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose a valid ' + label.toLowerCase() + '.',
+    );
+  }
+
+  return result;
+}
+
+function spaceWorkQuantity(value: unknown) {
+  const result = Number(value ?? 1);
+
+  if (
+    !Number.isFinite(result)
+    || result <= 0
+    || result > 1_000_000
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose a valid quantity.',
+    );
+  }
+
+  return result;
+}
+
+function spaceWorkPriority(value: unknown) {
+  const result = String(value || 'normal');
+
+  if (!['low', 'normal', 'high', 'urgent'].includes(result)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose a valid priority.',
+    );
+  }
+
+  return result;
+}
+
+export const saveSpaceWorkItem = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+    const itemId = spaceWorkOptionalText(
+      request.data?.itemId,
+      'Item ID',
+      80,
+    );
+    const kind = stringValue(
+      request.data?.kind,
+      'Item type',
+      20,
+    );
+
+    if (!['task', 'buy'].includes(kind)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose Task or To-Buy.',
+      );
+    }
+
+    const title = stringValue(
+      request.data?.title,
+      kind === 'task' ? 'Task title' : 'Item name',
+      120,
+    );
+
+    const actor = await requireSpaceWorkActor(
+      spaceId,
+      uid,
+    );
+
+    if (!canManageSpaceWork(actor.member)) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only a Space manager or contributor can add or edit this item.',
+      );
+    }
+
+    const assigneeUid = spaceWorkOptionalText(
+      request.data?.assigneeUid,
+      'Assignee ID',
+      128,
+    );
+
+    const assignee = assigneeUid
+      ? await requireActiveSpaceMember(
+          spaceId,
+          assigneeUid,
+        )
+      : null;
+
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const ref = itemId
+      ? db.collection('spaceWorkItems').doc(itemId)
+      : db.collection('spaceWorkItems').doc();
+
+    const commandRef = db
+      .collection('collaborationCommands')
+      .doc(commandId(uid, key));
+
+    return db.runTransaction(async (transaction) => {
+      const command = await transaction.get(commandRef);
+
+      if (command.exists) {
+        return command.data()?.result;
+      }
+
+      const existing = itemId
+        ? await transaction.get(ref)
+        : null;
+
+      if (itemId && !existing?.exists) {
+        throw new HttpsError(
+          'not-found',
+          'Task or To-Buy item was not found.',
+        );
+      }
+
+      if (
+        existing?.exists
+        && String(existing.data()?.spaceId || '') !== spaceId
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'This item belongs to another Space.',
+        );
+      }
+
+      if (
+        existing?.exists
+        && String(existing.data()?.kind || '') !== kind
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Task and To-Buy item types cannot be changed.',
+        );
+      }
+
+      const previousAssigneeUid = String(
+        existing?.data()?.assigneeUid || '',
+      );
+
+      const now = FieldValue.serverTimestamp();
+
+      const data = {
+        spaceId,
+        spaceType: String(actor.space.type),
+        kind,
+        title,
+
+        brand:
+          kind === 'buy'
+            ? spaceWorkOptionalText(
+                request.data?.brand,
+                'Brand',
+                100,
+              )
+            : null,
+
+        model:
+          kind === 'buy'
+            ? spaceWorkOptionalText(
+                request.data?.model,
+                'Model',
+                100,
+              )
+            : null,
+
+        size:
+          kind === 'buy'
+            ? spaceWorkOptionalText(
+                request.data?.size,
+                'Size',
+                100,
+              )
+            : null,
+
+        unit:
+          kind === 'buy'
+            ? spaceWorkOptionalText(
+                request.data?.unit,
+                'Unit',
+                40,
+              )
+            : null,
+
+        quantity:
+          kind === 'buy'
+            ? spaceWorkQuantity(request.data?.quantity)
+            : 1,
+
+        targetPriceMinor:
+          kind === 'buy'
+            ? spaceWorkMinor(
+                request.data?.targetPriceMinor,
+                'Target price',
+              )
+            : null,
+
+        preferredPlace:
+          kind === 'buy'
+            ? spaceWorkOptionalText(
+                request.data?.preferredPlace,
+                'Preferred place',
+                160,
+              )
+            : null,
+
+        assigneeUid,
+        assigneeName:
+          assignee?.displayName || null,
+        assigneeEmail:
+          assignee?.email || null,
+
+        priority: spaceWorkPriority(
+          request.data?.priority,
+        ),
+
+        dueDate: spaceWorkDate(
+          request.data?.dueDate,
+          'Due date',
+        ),
+
+        note: spaceWorkOptionalText(
+          request.data?.note,
+          'Note',
+          500,
+        ),
+
+        updatedAt: now,
+      };
+
+      if (existing?.exists) {
+        transaction.update(ref, data);
+      } else {
+        transaction.create(ref, {
+          displayId: displayId(
+            kind === 'task' ? 'WTK' : 'WBY',
+          ),
+          ...data,
+          status: 'open',
+          actualPriceMinor: null,
+          actualPlace: null,
+          purchasedOn: null,
+          photoPath: null,
+          linkedTransactionId: null,
+          createdBy: uid,
+          completedBy: null,
+          completedAt: null,
+          archivedAt: null,
+          createdAt: now,
+        });
+      }
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          actor.member.displayName
+          || actor.member.email
+          || 'Member',
+        action:
+          kind === 'task'
+            ? existing?.exists
+              ? 'space_task_updated'
+              : 'space_task_created'
+            : existing?.exists
+              ? 'space_buy_updated'
+              : 'space_buy_created',
+        targetType:
+          kind === 'task'
+            ? 'space_task'
+            : 'space_buy_item',
+        targetId: ref.id,
+        summary:
+          (existing?.exists ? 'Updated ' : 'Added ')
+          + (kind === 'task' ? 'Task: ' : 'To-Buy item: ')
+          + title
+          + '.',
+        now,
+      });
+
+      if (
+        assigneeUid
+        && assigneeUid !== uid
+        && assigneeUid !== previousAssigneeUid
+      ) {
+        createNotification(transaction, {
+          uid: assigneeUid,
+          spaceId,
+          type:
+            kind === 'task'
+              ? 'space_task_assigned'
+              : 'space_buy_assigned',
+          title:
+            kind === 'task'
+              ? 'A Task was assigned to you'
+              : 'A To-Buy item was assigned to you',
+          message:
+            data.dueDate
+              ? title + ' is due on ' + data.dueDate + '.'
+              : title,
+          targetPath:
+            '/spaces/'
+            + spaceId
+            + '?tab=overview#space-work',
+          actionLabel:
+            kind === 'task'
+              ? 'Open Tasks'
+              : 'Open To-Buy',
+          now,
+        });
+      }
+
+      const result = { itemId: ref.id };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'save_space_work_item',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    });
+  },
+);
+
+export const setSpaceWorkItemStatus = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+    const itemId = stringValue(
+      request.data?.itemId,
+      'Item ID',
+      80,
+    );
+    const status = stringValue(
+      request.data?.status,
+      'Task status',
+      20,
+    );
+
+    if (!['open', 'completed'].includes(status)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose Open or Completed.',
+      );
+    }
+
+    const actor = await requireSpaceWorkActor(
+      spaceId,
+      uid,
+    );
+
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const ref = db
+      .collection('spaceWorkItems')
+      .doc(itemId);
+
+    const commandRef = db
+      .collection('collaborationCommands')
+      .doc(commandId(uid, key));
+
+    return db.runTransaction(async (transaction) => {
+      const command = await transaction.get(commandRef);
+
+      if (command.exists) {
+        return command.data()?.result;
+      }
+
+      const snapshot = await transaction.get(ref);
+
+      if (
+        !snapshot.exists
+        || String(snapshot.data()?.spaceId || '') !==
+          spaceId
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Task was not found.',
+        );
+      }
+
+      const item = snapshot.data() || {};
+
+      if (item.kind !== 'task') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Only Tasks use the Complete action.',
+        );
+      }
+
+      if (
+        !canManageSpaceWork(actor.member)
+        && String(item.assigneeUid || '') !== uid
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the assignee or a Space manager can change this Task.',
+        );
+      }
+
+      const now = FieldValue.serverTimestamp();
+
+      transaction.update(ref, {
+        status,
+        completedBy:
+          status === 'completed' ? uid : null,
+        completedAt:
+          status === 'completed' ? now : null,
+        updatedAt: now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          actor.member.displayName
+          || actor.member.email
+          || 'Member',
+        action:
+          status === 'completed'
+            ? 'space_task_completed'
+            : 'space_task_reopened',
+        targetType: 'space_task',
+        targetId: itemId,
+        summary:
+          (status === 'completed'
+            ? 'Completed Task: '
+            : 'Reopened Task: ')
+          + String(item.title || 'Task')
+          + '.',
+        now,
+      });
+
+      const result = { itemId, status };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'set_space_work_item_status',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    });
+  },
+);
+
+export const markSpaceWorkItemBought = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+    const itemId = stringValue(
+      request.data?.itemId,
+      'Item ID',
+      80,
+    );
+
+    const actualPriceMinor = spaceWorkMinor(
+      request.data?.actualPriceMinor,
+      'Actual price',
+      true,
+    );
+
+    const actualPlace = stringValue(
+      request.data?.actualPlace,
+      'Actual shop or vendor',
+      160,
+    );
+
+    const purchasedOn = spaceWorkDate(
+      request.data?.purchasedOn,
+      'Purchase date',
+    );
+
+    if (!purchasedOn) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Purchase date is required.',
+      );
+    }
+
+    const actor = await requireSpaceWorkActor(
+      spaceId,
+      uid,
+    );
+
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const ref = db
+      .collection('spaceWorkItems')
+      .doc(itemId);
+
+    const commandRef = db
+      .collection('collaborationCommands')
+      .doc(commandId(uid, key));
+
+    return db.runTransaction(async (transaction) => {
+      const command = await transaction.get(commandRef);
+
+      if (command.exists) {
+        return command.data()?.result;
+      }
+
+      const snapshot = await transaction.get(ref);
+
+      if (
+        !snapshot.exists
+        || String(snapshot.data()?.spaceId || '') !==
+          spaceId
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'To-Buy item was not found.',
+        );
+      }
+
+      const item = snapshot.data() || {};
+
+      if (item.kind !== 'buy') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Only To-Buy items can be marked bought.',
+        );
+      }
+
+      if (
+        !canManageSpaceWork(actor.member)
+        && String(item.assigneeUid || '') !== uid
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the assignee or a Space manager can record this purchase.',
+        );
+      }
+
+      const now = FieldValue.serverTimestamp();
+
+      transaction.update(ref, {
+        status: 'bought',
+        actualPriceMinor,
+        actualPlace,
+        purchasedOn,
+        completedBy: uid,
+        completedAt: now,
+        updatedAt: now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          actor.member.displayName
+          || actor.member.email
+          || 'Member',
+        action: 'space_buy_completed',
+        targetType: 'space_buy_item',
+        targetId: itemId,
+        summary:
+          'Bought '
+          + String(item.title || 'item')
+          + ' at '
+          + actualPlace
+          + '.',
+        now,
+      });
+
+      const result = {
+        itemId,
+        status: 'bought',
+      };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'mark_space_work_item_bought',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    });
+  },
+);
+
+export const archiveSpaceWorkItem = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+    const itemId = stringValue(
+      request.data?.itemId,
+      'Item ID',
+      80,
+    );
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const actor = await requireSpaceWorkActor(
+      spaceId,
+      uid,
+    );
+
+    if (!canManageSpaceWork(actor.member)) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only a Space manager or contributor can archive this item.',
+      );
+    }
+
+    const ref = db
+      .collection('spaceWorkItems')
+      .doc(itemId);
+
+    const commandRef = db
+      .collection('collaborationCommands')
+      .doc(commandId(uid, key));
+
+    return db.runTransaction(async (transaction) => {
+      const command = await transaction.get(commandRef);
+
+      if (command.exists) {
+        return command.data()?.result;
+      }
+
+      const snapshot = await transaction.get(ref);
+
+      if (
+        !snapshot.exists
+        || String(snapshot.data()?.spaceId || '') !==
+          spaceId
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Task or To-Buy item was not found.',
+        );
+      }
+
+      const now = FieldValue.serverTimestamp();
+
+      transaction.update(ref, {
+        archivedAt: now,
+        updatedAt: now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          actor.member.displayName
+          || actor.member.email
+          || 'Member',
+        action: 'space_work_item_archived',
+        targetType:
+          snapshot.data()?.kind === 'task'
+            ? 'space_task'
+            : 'space_buy_item',
+        targetId: itemId,
+        summary:
+          'Archived '
+          + String(
+            snapshot.data()?.title
+            || 'Space item',
+          )
+          + '.',
+        now,
+      });
+
+      const result = {
+        itemId,
+        archived: true,
+      };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'archive_space_work_item',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    });
+  },
+);
+
+
+/* =========================================================
+   v1.8.0 Slice 2B - Work item photos + financial link
+   ========================================================= */
+
+export const setSpaceWorkItemPhoto = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+
+    const itemId = stringValue(
+      request.data?.itemId,
+      'Item ID',
+      80,
+    );
+
+    const storagePath = stringValue(
+      request.data?.storagePath,
+      'Photo path',
+      500,
+    );
+
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const actor = await requireSpaceWorkActor(
+      spaceId,
+      uid,
+    );
+
+    if (!canManageSpaceWork(actor.member)) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only a Space manager or contributor can change the item photo.',
+      );
+    }
+
+    const expectedPrefix =
+      'spaces/'
+      + spaceId
+      + '/work-items/'
+      + itemId
+      + '/';
+
+    if (!storagePath.startsWith(expectedPrefix)) {
+      throw new HttpsError(
+        'permission-denied',
+        'Item photo path is invalid.',
+      );
+    }
+
+    const bucket = getStorage().bucket();
+    const fileHandle = bucket.file(storagePath);
+
+    const [exists] = await fileHandle.exists();
+
+    if (!exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Upload the item photo before saving it.',
+      );
+    }
+
+    const [metadata] = await fileHandle.getMetadata();
+
+    const contentType = String(
+      metadata.contentType || '',
+    );
+
+    const sizeBytes = Number(metadata.size || 0);
+
+    if (
+      !contentType.startsWith('image/')
+      || !Number.isFinite(sizeBytes)
+      || sizeBytes <= 0
+      || sizeBytes >= 5 * 1024 * 1024
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Item photo must be an image smaller than 5 MB.',
+      );
+    }
+
+    const itemRef =
+      db.collection('spaceWorkItems').doc(itemId);
+
+    const commandRef =
+      db
+        .collection('collaborationCommands')
+        .doc(commandId(uid, key));
+
+    const result = await db.runTransaction(
+      async (transaction) => {
+        const [command, itemSnapshot] =
+          await Promise.all([
+            transaction.get(commandRef),
+            transaction.get(itemRef),
+          ]);
+
+        if (command.exists) {
+          return command.data()?.result;
+        }
+
+        if (
+          !itemSnapshot.exists
+          || String(
+            itemSnapshot.data()?.spaceId || '',
+          ) !== spaceId
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'To-Buy item was not found.',
+          );
+        }
+
+        if (itemSnapshot.data()?.kind !== 'buy') {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only To-Buy items use item photos.',
+          );
+        }
+
+        const previousPhotoPath = String(
+          itemSnapshot.data()?.photoPath || '',
+        );
+
+        const now = FieldValue.serverTimestamp();
+
+        transaction.update(itemRef, {
+          photoPath: storagePath,
+          updatedAt: now,
+        });
+
+        createActivity(transaction, {
+          spaceId,
+          actorUid: uid,
+          actorName:
+            actor.member.displayName
+            || actor.member.email
+            || 'Member',
+          action: 'space_buy_photo_updated',
+          targetType: 'space_buy_item',
+          targetId: itemId,
+          summary:
+            'Updated photo for '
+            + String(
+              itemSnapshot.data()?.title
+              || 'To-Buy item',
+            )
+            + '.',
+          now,
+        });
+
+        const commandResult = {
+          photoPath: storagePath,
+          previousPhotoPath,
+        };
+
+        transaction.create(commandRef, {
+          uid,
+          kind: 'set_space_work_item_photo',
+          idempotencyKey: key,
+          result: commandResult,
+          createdAt: now,
+        });
+
+        return commandResult;
+      },
+    );
+
+    const previousPhotoPath = String(
+      result?.previousPhotoPath || '',
+    );
+
+    if (
+      previousPhotoPath
+      && previousPhotoPath !== storagePath
+      && previousPhotoPath.startsWith(
+        'spaces/'
+        + spaceId
+        + '/work-items/'
+        + itemId
+        + '/',
+      )
+    ) {
+      await bucket
+        .file(previousPhotoPath)
+        .delete({ ignoreNotFound: true });
+    }
+
+    return {
+      photoPath: storagePath,
+    };
+  },
+);
+
+export const removeSpaceWorkItemPhoto = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+
+    const itemId = stringValue(
+      request.data?.itemId,
+      'Item ID',
+      80,
+    );
+
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const actor = await requireSpaceWorkActor(
+      spaceId,
+      uid,
+    );
+
+    if (!canManageSpaceWork(actor.member)) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only a Space manager or contributor can remove the item photo.',
+      );
+    }
+
+    const itemRef =
+      db.collection('spaceWorkItems').doc(itemId);
+
+    const commandRef =
+      db
+        .collection('collaborationCommands')
+        .doc(commandId(uid, key));
+
+    const result = await db.runTransaction(
+      async (transaction) => {
+        const [command, itemSnapshot] =
+          await Promise.all([
+            transaction.get(commandRef),
+            transaction.get(itemRef),
+          ]);
+
+        if (command.exists) {
+          return command.data()?.result;
+        }
+
+        if (
+          !itemSnapshot.exists
+          || String(
+            itemSnapshot.data()?.spaceId || '',
+          ) !== spaceId
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'To-Buy item was not found.',
+          );
+        }
+
+        const photoPath = String(
+          itemSnapshot.data()?.photoPath || '',
+        );
+
+        const now = FieldValue.serverTimestamp();
+
+        transaction.update(itemRef, {
+          photoPath: null,
+          updatedAt: now,
+        });
+
+        createActivity(transaction, {
+          spaceId,
+          actorUid: uid,
+          actorName:
+            actor.member.displayName
+            || actor.member.email
+            || 'Member',
+          action: 'space_buy_photo_removed',
+          targetType: 'space_buy_item',
+          targetId: itemId,
+          summary:
+            'Removed photo from '
+            + String(
+              itemSnapshot.data()?.title
+              || 'To-Buy item',
+            )
+            + '.',
+          now,
+        });
+
+        const commandResult = {
+          itemId,
+          photoPath,
+        };
+
+        transaction.create(commandRef, {
+          uid,
+          kind: 'remove_space_work_item_photo',
+          idempotencyKey: key,
+          result: commandResult,
+          createdAt: now,
+        });
+
+        return commandResult;
+      },
+    );
+
+    const photoPath = String(
+      result?.photoPath || '',
+    );
+
+    if (
+      photoPath
+      && photoPath.startsWith(
+        'spaces/'
+        + spaceId
+        + '/work-items/'
+        + itemId
+        + '/',
+      )
+    ) {
+      await getStorage()
+        .bucket()
+        .file(photoPath)
+        .delete({ ignoreNotFound: true });
+    }
+
+    return {
+      itemId,
+      removed: true,
+    };
+  },
+);
+
+export const recordSpaceWorkPurchaseExpense = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+
+    const itemId = stringValue(
+      request.data?.itemId,
+      'Item ID',
+      80,
+    );
+
+    const accountId = stringValue(
+      request.data?.accountId,
+      'Account',
+      80,
+    );
+
+    const categoryId = stringValue(
+      request.data?.categoryId,
+      'Category ID',
+      80,
+    );
+
+    const {
+      paymentMethod,
+      paymentMethodLabel,
+    } = paymentMethodValues(
+      request.data || {},
+    );
+
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const actor = await requireSpaceWorkActor(
+      spaceId,
+      uid,
+    );
+
+    if (actor.member.canUseAccounts !== true) {
+      throw new HttpsError(
+        'permission-denied',
+        'Your Space access does not allow financial transactions.',
+      );
+    }
+
+    const itemRef =
+      db.collection('spaceWorkItems').doc(itemId);
+
+    const accountRef =
+      db.collection('accounts').doc(accountId);
+
+    const customCategoryRef =
+      categoryId.startsWith('custom-')
+        ? db.collection('categories').doc(categoryId)
+        : null;
+
+    const commandRef =
+      db
+        .collection('financialCommands')
+        .doc(commandId(uid, key));
+
+    const budgetCandidateRefs =
+      (
+        await db
+          .collection('budgets')
+          .where('ownerId', '==', uid)
+          .where('spaceId', '==', spaceId)
+          .get()
+      ).docs.map((item) => item.ref);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const command =
+          await transaction.get(commandRef);
+
+        if (command.exists) {
+          return command.data()?.result;
+        }
+
+        const [
+          itemSnapshot,
+          accountSnapshot,
+          customCategorySnapshot,
+          budgetSnapshots,
+        ] = await Promise.all([
+          transaction.get(itemRef),
+          transaction.get(accountRef),
+          customCategoryRef
+            ? transaction.get(customCategoryRef)
+            : Promise.resolve(null),
+          Promise.all(
+            budgetCandidateRefs.map(
+              (ref) => transaction.get(ref),
+            ),
+          ),
+        ]);
+
+        if (
+          !itemSnapshot.exists
+          || String(
+            itemSnapshot.data()?.spaceId || '',
+          ) !== spaceId
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'Purchased To-Buy item was not found.',
+          );
+        }
+
+        const item = itemSnapshot.data() || {};
+
+        if (
+          item.kind !== 'buy'
+          || item.status !== 'bought'
+          || item.archivedAt
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Mark this item bought before recording the expense.',
+          );
+        }
+
+        if (item.linkedTransactionId) {
+          throw new HttpsError(
+            'already-exists',
+            'This purchase is already linked to money activity.',
+          );
+        }
+
+        if (
+          !canManageSpaceWork(actor.member)
+          && String(item.assigneeUid || '') !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Only the assignee or a Space manager can record this purchase.',
+          );
+        }
+
+        const amountMinor =
+          positiveMoney(item.actualPriceMinor);
+
+        const transactionDate = localDate(
+          item.purchasedOn,
+          'Purchase date',
+        );
+
+        const actualPlace = stringValue(
+          item.actualPlace,
+          'Purchase place',
+          160,
+        );
+
+        const account = assertAccount(
+          accountSnapshot.data(),
+          uid,
+          'Account',
+        );
+
+        const spaceCurrency = String(
+          actor.space.currency || 'BND',
+        );
+
+        if (account.currency !== spaceCurrency) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Account and Space currencies must match.',
+          );
+        }
+
+        const selectedScope =
+          String(actor.space.type) === 'sme'
+            ? 'business'
+            : 'personal';
+
+        const category =
+          categorySnapshotFromData({
+            categoryId,
+            requiredKind: 'expense',
+            selectedScope,
+            uid,
+            customData:
+              customCategorySnapshot?.data(),
+          });
+
+        const budgetIds =
+          matchingBudgetIds(
+            budgetSnapshots,
+            {
+              spaceId,
+              categoryId: category.id,
+              transactionDate,
+            },
+          );
+
+        const transactionRef =
+          db.collection('transactions').doc();
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const delta = accountEffect(
+          account.type,
+          'out',
+          amountMinor,
+        );
+
+        updateAccountBalance(
+          transaction,
+          accountRef,
+          account,
+          delta,
+        );
+
+        const ledgerEntryId =
+          createLedgerEntry(transaction, {
+            accountId,
+            ownerId: uid,
+            spaceId,
+            transactionId: transactionRef.id,
+            entryType: 'space_work_purchase',
+            amountMinor: delta,
+            currency: account.currency,
+            idempotencyKey: key,
+            now,
+          });
+
+        if (budgetIds.length) {
+          updateBudgetsSpent(
+            transaction,
+            budgetSnapshots,
+            budgetIds,
+            amountMinor,
+          );
+        }
+
+        transaction.create(transactionRef, {
+          displayId: displayId('TXN'),
+          ownerId: uid,
+          createdBy: uid,
+          type: 'expense',
+          status: 'posted',
+          spaceId,
+          accountId,
+          destinationAccountId: null,
+          amountMinor,
+          currency: account.currency,
+          category: category.name,
+          categoryId: category.id,
+          categoryIcon: category.icon,
+          categoryColor: category.color,
+          categoryScope: category.scope,
+          categoryIsSystem: category.isSystem,
+          counterparty: actualPlace,
+          note:
+            'Purchased from To-Buy: '
+            + String(item.title || 'Item'),
+          paymentMethod,
+          paymentMethodLabel,
+          transactionDate,
+          reversalOf: null,
+          reversedBy: null,
+          budgetIds,
+          commitmentId: null,
+          commitmentPaymentId: null,
+          spaceWorkItemId: itemId,
+          createdAt: now,
+          postedAt: now,
+          updatedAt: now,
+        });
+
+        transaction.update(itemRef, {
+          linkedTransactionId:
+            transactionRef.id,
+          updatedAt: now,
+        });
+
+        createActivity(transaction, {
+          spaceId,
+          actorUid: uid,
+          actorName:
+            actor.member.displayName
+            || actor.member.email
+            || 'Member',
+          action:
+            String(actor.space.type) === 'sme'
+              ? 'space_buy_sme_purchase_recorded'
+              : 'space_buy_household_expense_recorded',
+          targetType: 'space_buy_item',
+          targetId: itemId,
+          summary:
+            'Recorded '
+            + String(item.title || 'purchase')
+            + ' as money activity.',
+          now,
+        });
+
+        const result = {
+          transactionId:
+            transactionRef.id,
+          ledgerEntryId,
+          itemId,
+        };
+
+        transaction.create(commandRef, {
+          uid,
+          kind: 'record_space_work_purchase_expense',
+          idempotencyKey: key,
+          result,
+          createdAt: now,
+        });
+
+        return result;
+      },
+    );
+  },
+);
