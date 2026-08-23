@@ -4897,7 +4897,7 @@ export const unregisterPushDevice = onCall({ region }, async (request) => {
   return { enabled: false };
 });
 
-type BackgroundReminderItemType = 'bill' | 'instalment' | 'goal';
+type BackgroundReminderItemType = 'bill' | 'instalment' | 'goal' | 'debt';
 type BackgroundReminderKind = 'due_soon' | 'due_today' | 'late';
 
 interface PreparedBackgroundReminder {
@@ -4941,8 +4941,21 @@ function backgroundReminderCopy(input: {
   dueDate: string;
   days: number;
 }): { kind: BackgroundReminderKind; title: string; message: string; targetPath: string } {
-  const label = input.itemType === 'goal' ? 'Goal' : input.itemType === 'bill' ? 'Bill' : 'Instalment';
-  const targetPath = input.itemType === 'goal' ? '/goals' : '/bills';
+  const label =
+    input.itemType === 'goal'
+      ? 'Goal'
+      : input.itemType === 'debt'
+        ? 'Debt'
+        : input.itemType === 'bill'
+          ? 'Bill'
+          : 'Instalment';
+
+  const targetPath =
+    input.itemType === 'goal'
+      ? '/goals'
+      : input.itemType === 'debt'
+        ? '/debt'
+        : '/bills';
   if (input.days < 0) return {
     kind: 'late',
     title: input.itemType === 'goal' ? 'Goal date has passed' : `${label} is late`,
@@ -5724,9 +5737,10 @@ async function processBackgroundRemindersForUser(
   const result: BackgroundReminderResult = { checked: 0, created: 0, pushSent: 0, duplicates: 0, today };
   if (profile.notificationsEnabled === false || profile.backgroundRemindersEnabled === false) return result;
   const reminderDaysBefore = Math.min(30, Math.max(0, Number.isFinite(profile.reminderDaysBefore) ? Math.round(profile.reminderDaysBefore) : 3));
-  const [commitments, goals] = await Promise.all([
+  const [commitments, goals, debts] = await Promise.all([
     db.collection('commitments').where('ownerId', '==', uid).get(),
     db.collection('goals').where('ownerId', '==', uid).get(),
+    db.collection('debts').where('ownerId', '==', uid).get(),
   ]);
   const candidates: Array<{
     uid: string;
@@ -5777,6 +5791,59 @@ async function processBackgroundRemindersForUser(
     });
   }
 
+
+  for (const row of debts.docs) {
+    const item = row.data();
+
+    if (
+      item.status !== 'active'
+      || item.archivedAt
+      || item.reminderEnabled === false
+      || typeof item.dueDate !== 'string'
+    ) {
+      continue;
+    }
+
+    const days =
+      localDateDifference(
+        item.dueDate,
+        today,
+      );
+
+    if (
+      !Number.isFinite(days)
+      || days > reminderDaysBefore
+    ) {
+      continue;
+    }
+
+    if (
+      days >= 0
+      && profile.dueSoonReminders === false
+    ) {
+      continue;
+    }
+
+    if (
+      days < 0
+      && profile.lateReminders === false
+    ) {
+      continue;
+    }
+
+    result.checked += 1;
+
+    candidates.push({
+      uid,
+      spaceId: item.spaceId || null,
+      itemType: 'debt',
+      itemId: row.id,
+      itemName:
+        String(item.counterparty || 'Debt'),
+      dueDate: item.dueDate,
+      days,
+    });
+  }
   candidates.sort((a, b) => Math.abs(a.days) - Math.abs(b.days) || a.dueDate.localeCompare(b.dueDate));
   const created: PreparedBackgroundReminder[] = [];
   for (const candidate of candidates.slice(0, 25)) {
@@ -14288,5 +14355,240 @@ export const reverseDebtPayment = onCall(
     );
 
     return result;
+  },
+);
+
+export const setDebtPaymentProof = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const paymentId =
+      stringValue(
+        request.data?.paymentId,
+        'Debt payment',
+        200,
+      );
+
+    const storagePath =
+      stringValue(
+        request.data?.storagePath,
+        'Payment proof path',
+        500,
+      );
+
+    const fileName =
+      stringValue(
+        request.data?.fileName,
+        'Payment proof file name',
+        180,
+      );
+
+    const contentType =
+      stringValue(
+        request.data?.contentType,
+        'Payment proof content type',
+        120,
+      );
+
+    const sizeBytes =
+      Number(request.data?.sizeBytes);
+
+    const expectedPrefix =
+      `users/${uid}/debt-payment-proofs/${paymentId}/`;
+
+    if (!storagePath.startsWith(expectedPrefix)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Invalid Debt payment proof path.',
+      );
+    }
+
+    if (
+      contentType !== 'application/pdf'
+      && !contentType.startsWith('image/')
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Payment proof must be an image or PDF.',
+      );
+    }
+
+    if (
+      !Number.isSafeInteger(sizeBytes)
+      || sizeBytes <= 0
+      || sizeBytes >= 10 * 1024 * 1024
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Payment proof must be smaller than 10 MB.',
+      );
+    }
+
+    const paymentRef =
+      db.collection('debtPayments').doc(paymentId);
+
+    const paymentSnapshot =
+      await paymentRef.get();
+
+    if (!paymentSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Debt payment not found.',
+      );
+    }
+
+    const payment =
+      paymentSnapshot.data() || {};
+
+    if (payment.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'You cannot attach proof to this payment.',
+      );
+    }
+
+    const bucket = getStorage().bucket();
+    const uploadedFile = bucket.file(storagePath);
+    const [exists] = await uploadedFile.exists();
+
+    if (!exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Uploaded payment proof was not found.',
+      );
+    }
+
+    const [metadata] =
+      await uploadedFile.getMetadata();
+
+    const actualSize =
+      Number(metadata.size || 0);
+
+    const actualType =
+      String(metadata.contentType || '');
+
+    if (
+      actualSize <= 0
+      || actualSize >= 10 * 1024 * 1024
+      || (
+        actualType !== 'application/pdf'
+        && !actualType.startsWith('image/')
+      )
+    ) {
+      await uploadedFile.delete({
+        ignoreNotFound: true,
+      });
+
+      throw new HttpsError(
+        'invalid-argument',
+        'Stored payment proof is not a supported image or PDF.',
+      );
+    }
+
+    const previousPath =
+      typeof payment.proofPath === 'string'
+        ? payment.proofPath
+        : '';
+
+    await paymentRef.update({
+      proofPath: storagePath,
+      proofFileName: fileName,
+      proofContentType: actualType,
+      proofSizeBytes: actualSize,
+    });
+
+    if (
+      previousPath
+      && previousPath !== storagePath
+      && previousPath.startsWith(
+        `users/${uid}/debt-payment-proofs/${paymentId}/`,
+      )
+    ) {
+      try {
+        await bucket
+          .file(previousPath)
+          .delete({
+            ignoreNotFound: true,
+          });
+      } catch {
+        // New proof is already safely linked.
+      }
+    }
+
+    return {
+      paymentId,
+    };
+  },
+);
+
+export const removeDebtPaymentProof = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const paymentId =
+      stringValue(
+        request.data?.paymentId,
+        'Debt payment',
+        200,
+      );
+
+    const paymentRef =
+      db.collection('debtPayments').doc(paymentId);
+
+    const paymentSnapshot =
+      await paymentRef.get();
+
+    if (!paymentSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Debt payment not found.',
+      );
+    }
+
+    const payment =
+      paymentSnapshot.data() || {};
+
+    if (payment.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'You cannot remove proof from this payment.',
+      );
+    }
+
+    const previousPath =
+      typeof payment.proofPath === 'string'
+        ? payment.proofPath
+        : '';
+
+    await paymentRef.update({
+      proofPath: null,
+      proofFileName: null,
+      proofContentType: null,
+      proofSizeBytes: null,
+    });
+
+    if (
+      previousPath
+      && previousPath.startsWith(
+        `users/${uid}/debt-payment-proofs/${paymentId}/`,
+      )
+    ) {
+      try {
+        await getStorage()
+          .bucket()
+          .file(previousPath)
+          .delete({
+            ignoreNotFound: true,
+          });
+      } catch {
+        // Firestore no longer exposes the proof.
+      }
+    }
+
+    return {
+      paymentId,
+    };
   },
 );

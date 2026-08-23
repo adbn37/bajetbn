@@ -13,9 +13,12 @@ import {
   archiveDebt,
   createDebt,
   listDebts,
+  getDebtPaymentProofUrl,
   listDebtPayments,
   recordDebtPayment,
+  removeDebtPaymentProof,
   reverseDebtPayment,
+  uploadDebtPaymentProof,
 } from '../../repositories/debtRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import type {
@@ -763,6 +766,80 @@ function DebtPaymentHistory({
 }) {
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [removeProofId, setRemoveProofId] = useState('');
+
+  async function attachProof(
+    payment: DebtPayment,
+    file: File | undefined,
+  ) {
+    if (!file) return;
+
+    setBusyId(payment.id);
+    setError('');
+    setMessage('');
+
+    try {
+      await uploadDebtPaymentProof({
+        paymentId: payment.id,
+        file,
+      });
+
+      await onChanged();
+      setMessage('Payment proof attached.');
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function openProof(payment: DebtPayment) {
+    if (!payment.proofPath) return;
+
+    setBusyId(payment.id);
+    setError('');
+    setMessage('');
+
+    try {
+      const url =
+        await getDebtPaymentProofUrl(
+          payment.proofPath,
+        );
+
+      window.open(
+        url,
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function removeProof(payment: DebtPayment) {
+    if (!payment.proofPath) return;
+
+    setBusyId(payment.id);
+    setError('');
+    setMessage('');
+
+    try {
+      await removeDebtPaymentProof(
+        payment.id,
+      );
+
+      setRemoveProofId('');
+      await onChanged();
+      setMessage('Payment proof removed.');
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusyId('');
+    }
+  }
 
   async function reverse(payment: DebtPayment) {
     const reason = window.prompt(
@@ -795,6 +872,7 @@ function DebtPaymentHistory({
       onClose={onClose}
     >
       {error && <div className="notice error">{error}</div>}
+      {message && <div className="notice success">{message}</div>}
 
       <div className="debt-payment-history">
         {payments.length === 0 ? (
@@ -829,18 +907,91 @@ function DebtPaymentHistory({
                 )}
               </div>
 
-              {!payment.reversedAt && (
-                <button
-                  type="button"
-                  className="button secondary"
-                  disabled={busyId === payment.id}
-                  onClick={() => void reverse(payment)}
-                >
-                  {busyId === payment.id
-                    ? 'Working…'
-                    : 'Reverse'}
-                </button>
-              )}
+              <div className="debt-payment-actions">
+                {payment.proofPath ? (
+                  <>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={busyId === payment.id}
+                      onClick={() => void openProof(payment)}
+                    >
+                      View proof
+                    </button>
+
+                    {removeProofId === payment.id ? (
+                      <span className="debt-proof-confirm">
+                        <span>Remove this proof?</span>
+
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busyId === payment.id}
+                          onClick={() => void removeProof(payment)}
+                        >
+                          {busyId === payment.id
+                            ? 'Removing…'
+                            : 'Yes, remove'}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busyId === payment.id}
+                          onClick={() => setRemoveProofId('')}
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        disabled={busyId === payment.id}
+                        onClick={() => {
+                          setError('');
+                          setMessage('');
+                          setRemoveProofId(payment.id);
+                        }}
+                      >
+                        Remove proof
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <label
+                    className={`button secondary ${
+                      busyId === payment.id ? 'disabled' : ''
+                    }`}
+                  >
+                    Attach proof
+                    <input
+                      className="visually-hidden"
+                      type="file"
+                      accept="image/*,application/pdf"
+                      disabled={busyId === payment.id}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        void attachProof(payment, file);
+                      }}
+                    />
+                  </label>
+                )}
+
+                {!payment.reversedAt && (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={busyId === payment.id}
+                    onClick={() => void reverse(payment)}
+                  >
+                    {busyId === payment.id
+                      ? 'Working…'
+                      : 'Reverse'}
+                  </button>
+                )}
+              </div>
             </article>
           ))
         )}

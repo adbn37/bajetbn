@@ -814,6 +814,9 @@ export interface DebtPayment {
   transactionId?: string | null;
   ledgerEntryId?: string | null;
   proofPath?: string | null;
+  proofFileName?: string | null;
+  proofContentType?: string | null;
+  proofSizeBytes?: number | null;
   note?: string | null;
   reversedAt?: Timestamp | null;
   reversedBy?: string | null;

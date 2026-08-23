@@ -5,6 +5,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import type {
   DebtDirection,
@@ -181,4 +182,136 @@ export async function reverseDebtPayment(input: {
   });
 
   return result.data;
+}
+
+export async function uploadDebtPaymentProof(input: {
+  paymentId: string;
+  file: File;
+}): Promise<void> {
+  if (!navigator.onLine) {
+    throw new Error(
+      'Connect to the internet before attaching payment proof.',
+    );
+  }
+
+  if (
+    input.file.type !== 'application/pdf'
+    && !input.file.type.startsWith('image/')
+  ) {
+    throw new Error(
+      'Upload an image or PDF as payment proof.',
+    );
+  }
+
+  if (
+    input.file.size <= 0
+    || input.file.size >= 10 * 1024 * 1024
+  ) {
+    throw new Error(
+      'Payment proof must be smaller than 10 MB.',
+    );
+  }
+
+  const {
+    auth,
+    functions,
+    storage,
+  } = requireFirebase();
+
+  const uid = auth.currentUser?.uid;
+
+  if (!uid) {
+    throw new Error(
+      'Your session has ended. Sign in again.',
+    );
+  }
+
+  const proofId = crypto.randomUUID();
+
+  const safeName =
+    input.file.name
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .slice(-120)
+    || 'payment-proof';
+
+  const storagePath =
+    `users/${uid}/debt-payment-proofs/`
+    + `${input.paymentId}/${proofId}-${safeName}`;
+
+  const storageRef =
+    ref(storage, storagePath);
+
+  await uploadBytes(
+    storageRef,
+    input.file,
+    {
+      contentType: input.file.type,
+    },
+  );
+
+  try {
+    const call = httpsCallable<
+      {
+        paymentId: string;
+        storagePath: string;
+        fileName: string;
+        contentType: string;
+        sizeBytes: number;
+      },
+      { paymentId: string }
+    >(
+      functions,
+      'setDebtPaymentProof',
+    );
+
+    await call({
+      paymentId: input.paymentId,
+      storagePath,
+      fileName: input.file.name,
+      contentType: input.file.type,
+      sizeBytes: input.file.size,
+    });
+  } catch (error) {
+    try {
+      await deleteObject(storageRef);
+    } catch {
+      // Server cleanup also protects orphaned user proof files.
+    }
+
+    throw error;
+  }
+}
+
+export async function getDebtPaymentProofUrl(
+  storagePath: string,
+): Promise<string> {
+  const { storage } = requireFirebase();
+
+  return getDownloadURL(
+    ref(storage, storagePath),
+  );
+}
+
+export async function removeDebtPaymentProof(
+  paymentId: string,
+): Promise<void> {
+  if (!navigator.onLine) {
+    throw new Error(
+      'Connect to the internet before removing payment proof.',
+    );
+  }
+
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable<
+    { paymentId: string },
+    { paymentId: string }
+  >(
+    functions,
+    'removeDebtPaymentProof',
+  );
+
+  await call({
+    paymentId,
+  });
 }
