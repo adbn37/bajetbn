@@ -7,6 +7,13 @@ import { PageHeader } from '../../components/PageHeader';
 import { institutionCodeForLabel, institutionDisplay, institutionOptionsForType } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { createAccount, listAllAccounts, updateAccount } from '../../repositories/accountRepository';
+import {
+  ACCOUNT_COLOR_OPTIONS,
+  accountColorClass,
+  getAccountColor,
+  setAccountColor,
+  type AccountColor,
+} from '../../services/accountVisualPreferences';
 import { manageAccount } from '../../repositories/lifecycleRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
 import type { Account, AccountClassification, AccountType, InstitutionCode, Space } from '../../types/models';
@@ -110,7 +117,7 @@ export function AccountsPage() {
 
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {modal === 'create' && profile && <AccountForm currency={profile.currency} spaces={ownedSmeSpaces} onClose={() => setModal(null)} onSubmit={async (values) => { await createAccount(values); setModal(null); await load(); }} />}
-    {modal === 'edit' && selected && <AccountForm currency={selected.currency} spaces={ownedSmeSpaces} initial={selected} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification, spaceId: values.spaceId, posEnabled: values.posEnabled }); setModal(null); await load(); }} />}
+    {modal === 'edit' && selected && <AccountForm currency={selected.currency} spaces={ownedSmeSpaces} initial={selected} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification, spaceId: values.spaceId, posEnabled: values.posEnabled }); if (user) setAccountColor(user.uid, selected.id, values.color); setModal(null); await load(); }} />}
   </main>;
 }
 
@@ -140,9 +147,10 @@ function AccountGroups({ accounts, spaces, busyId, onEdit, onClose, onDelete }: 
 }
 
 function AccountList({ accounts, spaces, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; spaces: Space[]; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
+  const { user } = useAuth();
   const spaceName = (account: Account) => account.spaceId ? spaces.find((space) => space.id === account.spaceId)?.name || 'Business' : 'Unassigned business';
 
-  return <section className="account-list">{accounts.map((account) => <article className="account-card" key={account.id}>
+  return <section className="account-list">{accounts.map((account, index) => <article className={`account-card ${accountColorClass(getAccountColor(user?.uid || '', account.id, index))}`} key={account.id}>
     <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
     <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {account.classification === 'personal' ? 'Personal' : spaceName(account)}{account.classification === 'business' && account.posEnabled ? ' · POS enabled' : ''}</p></div><small>{account.displayId}</small></div>
     <div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div>
@@ -160,10 +168,17 @@ type AccountFormValues = {
   posEnabled?: boolean;
   currency: string;
   openingBalanceMinor: number;
+  color: AccountColor;
 };
 
 function AccountForm({ currency, spaces, initial, onClose, onSubmit }: { currency: string; spaces: Space[]; initial?: Account; onClose: () => void; onSubmit: (values: AccountFormValues) => Promise<void> }) {
+  const { user } = useAuth();
   const [name, setName] = useState(initial?.name || '');
+  const [color, setColor] = useState<AccountColor>(() =>
+    initial
+      ? getAccountColor(user?.uid || '', initial.id, 0)
+      : 'purple',
+  );
   const [institution, setInstitution] = useState(initial?.institution || institutionDisplay(initial || { type: 'bank' }));
   const [type, setType] = useState<AccountType>(initial?.type || 'bank');
   const [classification, setClassification] = useState<AccountClassification>(initial?.classification || 'personal');
@@ -206,6 +221,7 @@ function AccountForm({ currency, spaces, initial, onClose, onSubmit }: { currenc
         posEnabled: classification === 'business' ? posEnabled : false,
         currency,
         openingBalanceMinor: initial ? initial.openingBalanceMinor : toMinorUnits(opening),
+        color,
       });
     } catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusy(false); }
@@ -234,6 +250,33 @@ function AccountForm({ currency, spaces, initial, onClose, onSubmit }: { currenc
       <small>Choose a common Brunei option or type another institution. Existing custom names still work.</small>
     </label>
     <div className="institution-preset-grid span-2" aria-label="Common Brunei institutions">{options.filter((item) => item.code !== 'other').map((item) => <button type="button" className="institution-preset" key={item.code} onClick={() => setInstitution(item.shortLabel)}>{item.shortLabel}</button>)}</div>
+    <fieldset className="account-color-field span-2">
+      <legend>Account colour</legend>
+
+      <div className="account-color-picker">
+        {ACCOUNT_COLOR_OPTIONS.map((option) => (
+          <button
+            type="button"
+            key={option.value}
+            className={`account-color-choice account-color-${option.value} ${color === option.value ? 'active' : ''}`}
+            aria-label={`Use ${option.label} for this account`}
+            aria-pressed={color === option.value}
+            onClick={() => setColor(option.value)}
+          >
+            <span aria-hidden="true" />
+            <small>{option.label}</small>
+          </button>
+        ))}
+      </div>
+
+      {!initial && (
+        <small>
+          New accounts start with this colour automatically.
+          You can change it later from Edit account.
+        </small>
+      )}
+    </fieldset>
+
     <label className="span-2">Opening balance ({currency})<input disabled={Boolean(initial)} inputMode="decimal" value={opening} onChange={(event) => setOpening(event.target.value)} />{initial && <small>The starting balance cannot be changed here. Use Money activity to correct it safely.</small>}</label>
     <div className="modal-actions span-2"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Create account'}</button></div>
   </form></Modal>;
