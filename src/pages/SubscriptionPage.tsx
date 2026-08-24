@@ -66,13 +66,27 @@ function openProofWhatsApp(
     `${window.location.origin}/admin`
     + `?subscriptionRequest=${encodeURIComponent(request.id)}`;
 
+  const submittedText =
+    request.submittedAt
+      ? new Intl.DateTimeFormat(
+          'en-BN',
+          {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: 'Asia/Brunei',
+          },
+        ).format(new Date(request.submittedAt))
+      : 'Just submitted';
+
   const message = [
     'Hi BajetBN, I have uploaded my BajetBN Plus payment proof.',
     '',
-    `Account: ${request.email}`,
+    `Name: ${request.fullName || 'BajetBN customer'}`,
+    `Email: ${request.email}`,
     `Plan: ${request.planLabel}`,
-    `Amount: BND ${(request.amountMinor / 100).toFixed(2)}`,
+    `Amount paid: BND ${(request.amountMinor / 100).toFixed(2)}`,
     `Reference: ${request.reference}`,
+    `Submitted: ${submittedText}`,
     '',
     `Payment proof / admin review: ${adminReviewLink}`,
     '',
@@ -186,7 +200,7 @@ export function SubscriptionPage() {
       await refreshRequests();
 
       setMessage(
-        `Payment proof uploaded. Reference: ${submitted.reference}. Send it to BajetBN via WhatsApp for review.`,
+        `Payment proof uploaded. Reference ${submitted.reference} is now pending admin review.`,
       );
     } catch (nextError) {
       setError(
@@ -198,303 +212,495 @@ export function SubscriptionPage() {
   }
 
   return (
-    <div className="page-stack">
+    <div className="subscription-page">
       <PageHeader
         eyebrow="BajetBN"
         title="Subscription"
-        description="BajetBN Basic stays free forever. Plus increases your limits and unlocks additional collaboration, SME, storage and advanced features."
+        description="Basic stays free forever. Upgrade to Plus when you need more Spaces, collaboration, SME capacity and storage."
       />
 
-      <section className="card stack">
-        <span className="eyebrow">
-          Current plan
-        </span>
+      <section className="subscription-current">
+        <div className="subscription-current-main">
+          <span className="eyebrow">
+            Current plan
+          </span>
 
-        <h2>
-          {entitlement.plusActive
-            ? 'BajetBN Plus'
-            : 'BajetBN Basic'}
-        </h2>
+          <div className="subscription-plan-heading">
+            <div
+              className={
+                entitlement.plusActive
+                  ? 'subscription-plan-icon plus'
+                  : 'subscription-plan-icon'
+              }
+            >
+              {entitlement.plusActive ? '✦' : '○'}
+            </div>
 
-        {entitlement.plusActive
-          && profile?.subscriptionExpiresAt
-          && (
-            <p>
-              Plus expires:{' '}
-              <strong>
-                {formatExpiry(
-                  profile.subscriptionExpiresAt,
+            <div>
+              <h2>
+                BajetBN {entitlement.plusActive ? 'Plus' : 'Basic'}
+              </h2>
+
+              {entitlement.plusActive
+                && profile?.subscriptionExpiresAt
+                && (
+                  <p>
+                    Active until{' '}
+                    <strong>
+                      {formatExpiry(
+                        profile.subscriptionExpiresAt,
+                      )}
+                    </strong>
+                  </p>
                 )}
-              </strong>
-            </p>
-          )}
 
-        {noScheduledExpiry && (
-          <p>
-            Your BajetBN Plus access is active.
-          </p>
-        )}
+              {noScheduledExpiry && (
+                <p>
+                  Lifetime Plus access
+                </p>
+              )}
 
-        {entitlement.expired && (
-          <p>
-            Your previous Plus period has ended.
-            Existing information remains safe and
-            your account is using Basic access.
-          </p>
-        )}
+              {!entitlement.plusActive
+                && !entitlement.expired
+                && (
+                  <p>
+                    Your free plan is active.
+                  </p>
+                )}
+
+              {entitlement.expired && (
+                <p>
+                  Your previous Plus period has ended.
+                  Your information is safe and your account
+                  is now using Basic access.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="subscription-current-badge">
+          <span>
+            {entitlement.plusActive ? 'PLUS' : 'BASIC'}
+          </span>
+          <small>
+            {entitlement.plusActive
+              ? 'Premium access'
+              : 'Free forever'}
+          </small>
+        </div>
       </section>
 
-      <section className="card stack">
-        <span className="eyebrow">
-          Free forever
-        </span>
+      <div className="subscription-overview-grid">
+        <section className="subscription-section">
+          <span className="eyebrow">
+            Basic plan
+          </span>
 
-        <h2>BajetBN Basic</h2>
+          <h2>
+            Everything you need to start
+          </h2>
 
-        <ul>
-          {BAJETBN_BASIC_SPACE_SUMMARY.map(
-            (item) => (
-              <li key={item}>
-                {item}
-              </li>
-            ),
-          )}
+          <p>
+            BajetBN Basic is free forever and keeps the
+            essential budgeting and SME tools available.
+          </p>
 
-          <li>Basic SME POS</li>
-          <li>Up to 20 SME inventory items</li>
-          <li>Up to 10 SME customers</li>
-          <li>Up to 3 SME sellers</li>
-          <li>Owner + 1 additional SME member</li>
-          <li>Up to 2 personal accounts</li>
-        </ul>
-      </section>
+          <div className="subscription-feature-grid">
+            {BAJETBN_BASIC_SPACE_SUMMARY.map(
+              (item) => (
+                <div
+                  className="subscription-feature"
+                  key={item}
+                >
+                  <span>✓</span>
+                  <strong>{item}</strong>
+                </div>
+              ),
+            )}
 
-      {!noScheduledExpiry && (
-        <section className="card stack">
+            {[
+              'Basic SME POS',
+              '20 SME inventory items',
+              '10 SME customers',
+              '3 SME sellers',
+              'Owner + 1 SME member',
+              '2 personal accounts',
+            ].map((item) => (
+              <div
+                className="subscription-feature"
+                key={item}
+              >
+                <span>✓</span>
+                <strong>{item}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="subscription-section subscription-plus-intro">
           <span className="eyebrow">
             BajetBN Plus
           </span>
 
           <h2>
-            {entitlement.plusActive
-              ? 'Extend BajetBN Plus'
-              : 'Choose your Plus plan'}
+            More room when you need it
           </h2>
 
           <p>
-            Choose your plan first. Then make a
-            bank transfer and upload the payment proof.
+            Increase limits and unlock additional
+            collaboration, SME, storage and advanced tools.
           </p>
 
-          <div className="stack">
+          <div className="subscription-plus-points">
+            <span>More Spaces</span>
+            <span>Expanded SME limits</span>
+            <span>More collaboration</span>
+            <span>More storage</span>
+          </div>
+        </section>
+      </div>
+
+      {!noScheduledExpiry && (
+        <section className="subscription-section">
+          <div className="subscription-section-heading">
+            <div>
+              <span className="eyebrow">
+                BajetBN Plus
+              </span>
+
+              <h2>
+                {entitlement.plusActive
+                  ? 'Extend BajetBN Plus'
+                  : 'Choose your Plus plan'}
+              </h2>
+
+              <p>
+                One-time payment. Choose the period that
+                works for you.
+              </p>
+            </div>
+
+            <div className="subscription-secure-note">
+              <span>✓</span>
+              Manual payment review
+            </div>
+          </div>
+
+          <div className="subscription-price-grid">
             {Object.values(
               BAJETBN_PLUS_PRICES,
-            ).map((plan) => (
-              <article
-                className="card stack"
-                key={plan.key}
-              >
-                <strong>
-                  {plan.label}
-                </strong>
+            ).map((plan) => {
+              const selected =
+                selectedPlan?.key === plan.key;
 
-                <h3>
-                  BND {plan.amountBnd.toFixed(2)}
-                </h3>
-
-                <button
-                  type="button"
+              return (
+                <article
                   className={
-                    selectedPlan?.key === plan.key
-                      ? 'primary'
-                      : ''
+                    selected
+                      ? 'subscription-price-card selected'
+                      : 'subscription-price-card'
                   }
-                  onClick={() => {
-                    setSelectedPlan(plan);
-                    setError('');
-                    setMessage('');
-                  }}
+                  key={plan.key}
                 >
-                  {selectedPlan?.key === plan.key
-                    ? 'Selected'
-                    : entitlement.plusActive
-                      ? 'Extend with this plan'
-                      : 'Choose this plan'}
-                </button>
-              </article>
-            ))}
+                  {plan.months === 12 && (
+                    <span className="subscription-popular">
+                      BEST VALUE
+                    </span>
+                  )}
+
+                  <span className="subscription-duration">
+                    {plan.label}
+                  </span>
+
+                  <div className="subscription-price">
+                    <small>BND</small>
+                    <strong>
+                      {plan.amountBnd.toFixed(2)}
+                    </strong>
+                  </div>
+
+                  <small className="subscription-price-note">
+                    One-time payment
+                  </small>
+
+                  <button
+                    type="button"
+                    className={
+                      selected
+                        ? 'button primary full'
+                        : 'button secondary full'
+                    }
+                    onClick={() => {
+                      setSelectedPlan(plan);
+                      setError('');
+                      setMessage('');
+                    }}
+                  >
+                    {selected
+                      ? '✓ Selected'
+                      : entitlement.plusActive
+                        ? 'Extend with this plan'
+                        : 'Choose this plan'}
+                  </button>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}
 
       {selectedPlan && !noScheduledExpiry && (
-        <section className="card stack">
-          <span className="eyebrow">
-            Bank transfer
-          </span>
+        <section className="subscription-section subscription-payment-section">
+          <div className="subscription-section-heading">
+            <div>
+              <span className="eyebrow">
+                Payment
+              </span>
 
-          <h2>
-            Pay BND {selectedPlan.amountBnd.toFixed(2)}
-          </h2>
+              <h2>
+                Pay BND {selectedPlan.amountBnd.toFixed(2)}
+              </h2>
 
-          <p>
-            Make payment to either account:
-          </p>
+              <p>
+                Transfer to either BajetBN bank account,
+                then upload your payment proof.
+              </p>
+            </div>
 
-          {BAJETBN_PAYMENT_ACCOUNTS.map(
-            (account) => (
-              <article
-                className="card"
-                key={account.accountNumber}
-              >
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => {
+                setSelectedPlan(null);
+                setProofFile(null);
+                setMessage('');
+                setError('');
+              }}
+            >
+              Change plan
+            </button>
+          </div>
+
+          <div className="subscription-payment-layout">
+            <div className="subscription-bank-column">
+              <span className="subscription-step-label">
+                1 · Make payment
+              </span>
+
+              <div className="subscription-bank-grid">
+                {BAJETBN_PAYMENT_ACCOUNTS.map(
+                  (account) => (
+                    <article
+                      className="subscription-bank-card"
+                      key={account.accountNumber}
+                    >
+                      <div className="subscription-bank-logo">
+                        {account.bank.charAt(0)}
+                      </div>
+
+                      <div>
+                        <small>
+                          {account.bank}
+                        </small>
+
+                        <strong>
+                          {account.accountNumber}
+                        </strong>
+
+                        <span>
+                          BND account
+                        </span>
+                      </div>
+                    </article>
+                  ),
+                )}
+              </div>
+
+              <div className="notice">
+                Transfer exactly{' '}
                 <strong>
-                  {account.bank}
+                  BND {selectedPlan.amountBnd.toFixed(2)}
+                </strong>
+                {' '}using your banking app before uploading
+                the receipt or transfer confirmation.
+              </div>
+            </div>
+
+            <div className="subscription-proof-column">
+              <span className="subscription-step-label">
+                2 · Upload proof
+              </span>
+
+              <label className="subscription-upload">
+                <span className="subscription-upload-icon">
+                  ↑
+                </span>
+
+                <strong>
+                  {proofFile
+                    ? proofFile.name
+                    : 'Choose payment proof'}
                 </strong>
 
-                <p>
-                  Account number:{' '}
-                  <strong>
-                    {account.accountNumber}
-                  </strong>
-                </p>
-              </article>
-            ),
-          )}
+                <small>
+                  JPG, PNG or PDF · Maximum 10 MB
+                </small>
 
-          <label>
-            Upload payment proof
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              disabled={busy}
-              onChange={(event) =>
-                setProofFile(
-                  event.target.files?.[0]
-                  || null,
-                )
-              }
-            />
-          </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  disabled={busy}
+                  onChange={(event) =>
+                    setProofFile(
+                      event.target.files?.[0]
+                      || null,
+                    )
+                  }
+                />
+              </label>
 
-          <small className="muted">
-            Image or PDF. Maximum 10 MB.
-          </small>
-
-          <button
-            type="button"
-            className="primary"
-            disabled={
-              busy
-              || !proofFile
-            }
-            onClick={() =>
-              void uploadProof()
-            }
-          >
-            {busy
-              ? 'Uploading payment proof…'
-              : 'Upload payment proof'}
-          </button>
+              <button
+                type="button"
+                className="button primary full"
+                disabled={
+                  busy
+                  || !proofFile
+                }
+                onClick={() =>
+                  void uploadProof()
+                }
+              >
+                {busy
+                  ? 'Uploading payment proof…'
+                  : 'Upload payment proof'}
+              </button>
+            </div>
+          </div>
 
           {message && (
-            <p role="status">
+            <div className="notice success">
               {message}
-            </p>
+            </div>
           )}
 
           {error && (
-            <p role="alert">
+            <div className="notice error">
               {error}
-            </p>
+            </div>
           )}
         </section>
       )}
 
       {latestPending && (
-        <section className="card stack">
-          <span className="eyebrow">
-            Payment submitted
-          </span>
+        <section className="subscription-section subscription-pending">
+          <div className="subscription-pending-icon">
+            ✓
+          </div>
 
-          <h2>
-            Pending admin review
-          </h2>
+          <div className="subscription-pending-copy">
+            <span className="eyebrow">
+              Payment submitted
+            </span>
 
-          <p>
-            Plan:{' '}
-            <strong>
-              {latestPending.planLabel}
-            </strong>
-          </p>
+            <h2>
+              Pending admin review
+            </h2>
 
-          <p>
-            Amount:{' '}
-            <strong>
-              BND {(latestPending.amountMinor / 100).toFixed(2)}
-            </strong>
-          </p>
+            <p>
+              Your payment proof has been uploaded.
+              Send the reference through WhatsApp so
+              BajetBN can review it.
+            </p>
 
-          <p>
-            Reference:{' '}
-            <strong>
-              {latestPending.reference}
-            </strong>
-          </p>
+            <div className="subscription-request-summary">
+              <span>
+                <small>Plan</small>
+                <strong>
+                  {latestPending.planLabel}
+                </strong>
+              </span>
 
-          <button
-            type="button"
-            className="primary"
-            onClick={() =>
-              openProofWhatsApp(
-                latestPending,
-              )
-            }
-          >
-            Send proof/reference via WhatsApp
-          </button>
+              <span>
+                <small>Amount</small>
+                <strong>
+                  BND {(latestPending.amountMinor / 100).toFixed(2)}
+                </strong>
+              </span>
 
-          <small className="muted">
-            Opens WhatsApp to +673 717 3791
-            with your payment reference and secure
-            BajetBN admin-review link.
-          </small>
+              <span>
+                <small>Reference</small>
+                <strong>
+                  {latestPending.reference}
+                </strong>
+              </span>
+            </div>
+          </div>
+
+          <div className="subscription-pending-action">
+            <button
+              type="button"
+              className="button primary"
+              onClick={() =>
+                openProofWhatsApp(
+                  latestPending,
+                )
+              }
+            >
+              Send proof/reference via WhatsApp
+            </button>
+
+            <small>
+              Opens WhatsApp to +673 717 3791
+            </small>
+          </div>
         </section>
       )}
 
       {requests.length > 0 && (
-        <section className="card stack">
-          <span className="eyebrow">
-            Request history
-          </span>
+        <section className="subscription-section">
+          <div className="subscription-section-heading">
+            <div>
+              <span className="eyebrow">
+                History
+              </span>
 
-          <h2>
-            Plus payment requests
-          </h2>
+              <h2>
+                Plus payment requests
+              </h2>
+            </div>
+          </div>
 
-          {requests.map((request) => (
-            <article
-              className="card"
-              key={request.id}
-            >
-              <strong>
-                {request.planLabel}
-              </strong>
+          <div className="subscription-history-list">
+            {requests.map((request) => (
+              <article
+                className="subscription-history-row"
+                key={request.id}
+              >
+                <div>
+                  <strong>
+                    {request.planLabel}
+                  </strong>
 
-              <p>
-                BND {(request.amountMinor / 100).toFixed(2)}
-              </p>
+                  <small>
+                    {request.reference}
+                  </small>
+                </div>
 
-              <p>
-                {requestStatus(
-                  request.status,
-                )}
-              </p>
+                <strong>
+                  BND {(request.amountMinor / 100).toFixed(2)}
+                </strong>
 
-              <small>
-                {request.reference}
-              </small>
-            </article>
-          ))}
+                <span
+                  className={`subscription-status ${request.status}`}
+                >
+                  {requestStatus(
+                    request.status,
+                  )}
+                </span>
+              </article>
+            ))}
+          </div>
         </section>
       )}
     </div>

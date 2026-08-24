@@ -150,7 +150,7 @@ export function AdminSubscriptionRequests({
   }
 
   return (
-    <section className="card stack">
+    <section className="panel admin-subscription-requests">
       <span className="eyebrow">
         Plus payment review
       </span>
@@ -159,9 +159,7 @@ export function AdminSubscriptionRequests({
         Payment proof requests
       </h2>
 
-      <button
-        type="button"
-        disabled={loading}
+      <button className="button secondary" type="button" disabled={loading}
         onClick={() => void load()}
       >
         {loading
@@ -187,10 +185,10 @@ export function AdminSubscriptionRequests({
         </p>
       )}
 
-      <div className="stack">
+      <div className="admin-subscription-request-list">
         {requests.map((request) => (
           <article
-            className="card stack"
+            className="panel admin-subscription-requests"
             key={request.id}
           >
             <div>
@@ -235,12 +233,7 @@ export function AdminSubscriptionRequests({
             </p>
 
             {request.proofPath && (
-              <button
-                type="button"
-                disabled={busyId === request.id}
-                onClick={() =>
-                  void openProof(request)
-                }
+              <button className="button secondary" type="button" disabled={busyId === request.id} onClick={() => void openProof(request)}
               >
                 View payment proof
               </button>
@@ -248,10 +241,10 @@ export function AdminSubscriptionRequests({
 
             {request.status
               === 'pending_review' && (
-              <div className="inline-actions">
+              <div className="button-row">
                 <button
                   type="button"
-                  className="primary"
+                  className="button primary"
                   disabled={busyId === request.id}
                   onClick={() =>
                     void decide(
@@ -265,7 +258,7 @@ export function AdminSubscriptionRequests({
 
                 <button
                   type="button"
-                  className="danger"
+                  className="button danger-outline"
                   disabled={busyId === request.id}
                   onClick={() =>
                     void decide(
