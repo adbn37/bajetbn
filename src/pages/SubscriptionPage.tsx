@@ -291,75 +291,131 @@ export function SubscriptionPage() {
         </div>
       </section>
 
-      <div className="subscription-overview-grid">
-        <section className="subscription-section">
-          <span className="eyebrow">
-            Basic plan
-          </span>
+      <section className="subscription-section subscription-comparison">
+        <div className="subscription-section-heading">
+          <div>
+            <span className="eyebrow">
+              Compare plans
+            </span>
 
-          <h2>
-            Everything you need to start
-          </h2>
+            <h2>
+              Basic vs BajetBN Plus
+            </h2>
 
-          <p>
-            BajetBN Basic is free forever and keeps the
-            essential budgeting and SME tools available.
-          </p>
+            <p>
+              See what is included with Basic and what grows
+              when you upgrade to Plus.
+            </p>
+          </div>
 
-          <div className="subscription-feature-grid">
-            {BAJETBN_BASIC_SPACE_SUMMARY.map(
-              (item) => (
-                <div
-                  className="subscription-feature"
-                  key={item}
-                >
-                  <span>✓</span>
-                  <strong>{item}</strong>
-                </div>
-              ),
-            )}
+          <div className="subscription-comparison-legend">
+            <span className="basic">Basic</span>
+            <span className="plus">Plus</span>
+          </div>
+        </div>
 
-            {[
-              'Basic SME POS',
-              '20 SME inventory items',
-              '10 SME customers',
-              '3 SME sellers',
-              'Owner + 1 SME member',
-              '2 personal accounts',
-            ].map((item) => (
+        <div
+          className="subscription-comparison-table"
+          role="table"
+          aria-label="Compare BajetBN Basic and Plus"
+        >
+          <div
+            className="subscription-comparison-header"
+            role="row"
+          >
+            <strong role="columnheader">
+              Feature
+            </strong>
+
+            <strong
+              className="basic"
+              role="columnheader"
+            >
+              Basic
+            </strong>
+
+            <strong
+              className="plus"
+              role="columnheader"
+            >
+              BajetBN Plus
+            </strong>
+          </div>
+
+          {[
+            ['Household Spaces', '1', 'More Spaces'],
+            ['Trip Spaces', '1', 'More Spaces'],
+            ['SME Spaces', '1', 'More Spaces'],
+            ['SME inventory', '20 items', 'Expanded limits'],
+            ['SME customers', '10 customers', 'Expanded limits'],
+            ['SME sellers', '3 sellers', 'Expanded limits'],
+            ['SME team', 'Owner + 1 member', 'More team members'],
+            ['Personal accounts', '2 accounts', 'More accounts'],
+            ['Collaboration', 'Basic sharing', 'Expanded collaboration'],
+            ['Storage', 'Basic storage', 'More storage'],
+            ['Advanced tools', 'Core tools', 'More Plus features'],
+          ].map(([feature, basic, plus]) => (
+            <div
+              className="subscription-comparison-row"
+              role="row"
+              key={feature}
+            >
               <div
-                className="subscription-feature"
-                key={item}
+                className="subscription-comparison-feature"
+                role="cell"
               >
-                <span>✓</span>
-                <strong>{item}</strong>
+                <strong>{feature}</strong>
               </div>
-            ))}
+
+              <div
+                className="subscription-comparison-value basic"
+                role="cell"
+              >
+                <span className="subscription-comparison-check">
+                  ✓
+                </span>
+
+                <span>{basic}</span>
+              </div>
+
+              <div
+                className="subscription-comparison-value plus"
+                role="cell"
+              >
+                <span className="subscription-comparison-plus-icon">
+                  ✦
+                </span>
+
+                <strong>{plus}</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="subscription-comparison-foot">
+          <div>
+            <strong>
+              Basic is free forever.
+            </strong>
+
+            <span>
+              Ideal for getting started with personal,
+              household and small SME budgeting.
+            </span>
           </div>
-        </section>
 
-        <section className="subscription-section subscription-plus-intro">
-          <span className="eyebrow">
-            BajetBN Plus
-          </span>
+          <div className="plus">
+            <strong>
+              Plus grows with you.
+            </strong>
 
-          <h2>
-            More room when you need it
-          </h2>
-
-          <p>
-            Increase limits and unlock additional
-            collaboration, SME, storage and advanced tools.
-          </p>
-
-          <div className="subscription-plus-points">
-            <span>More Spaces</span>
-            <span>Expanded SME limits</span>
-            <span>More collaboration</span>
-            <span>More storage</span>
+            <span>
+              Best when you need more Spaces, records,
+              members, storage and collaboration.
+            </span>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       {!noScheduledExpiry && (
         <section className="subscription-section">
@@ -534,13 +590,13 @@ export function SubscriptionPage() {
 
               <label className="subscription-upload">
                 <span className="subscription-upload-icon">
-                  ↑
+                  +
                 </span>
 
                 <strong>
                   {proofFile
                     ? proofFile.name
-                    : 'Choose payment proof'}
+                    : '+ Upload payment proof'}
                 </strong>
 
                 <small>
