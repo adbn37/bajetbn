@@ -444,17 +444,13 @@ export function AppShell() {
             <small>Alerts</small>
           </NavLink>
 
-          <button
-            type="button"
-            className={mobileOpen ? 'active' : ''}
-            onClick={() => {
-              setMoreToolsOpen(true);
-              setMobileOpen(true);
-            }}
+          <NavLink
+            to="/more"
+            className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">☰</span>
+            <span aria-hidden="true">☷</span>
             <small>More</small>
-          </button>
+          </NavLink>
         </nav>
         {menuCustomizerOpen && (
           <SidebarCustomizer
