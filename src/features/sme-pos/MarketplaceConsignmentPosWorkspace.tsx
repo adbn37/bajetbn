@@ -58,7 +58,7 @@ interface Props {
   onChanged: () => Promise<void> | void;
 }
 
-type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'bookings' | 'sales' | 'balance';
+type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'bookings' | 'sales' | 'reports' | 'balance';
 type ConfirmPayload =
   | { kind: 'seller'; id: string }
   | { kind: 'listing'; id: string; action?: 'archive' | 'delete'  }
@@ -117,6 +117,7 @@ const tabLabels: Record<MarketplaceTab, string> = {
   customers: 'Customers',
   bookings: 'Bookings',
   sales: 'Sales',
+  reports: 'Reports',
   balance: 'My balance',
 };
 
@@ -126,14 +127,48 @@ function today() {
   }).format(new Date());
 }
 
+type SellerReportRange = 'day' | 'week' | 'month' | 'year' | 'custom';
+
+function sellerReportWindow(
+  range: SellerReportRange,
+  customFrom: string,
+  customTo: string,
+) {
+  const current = today();
+  let from = current;
+  let to = current;
+
+  if (range === 'week') {
+    const anchor = new Date(`${current}T00:00:00+08:00`);
+    const dayFromMonday = (anchor.getDay() + 6) % 7;
+    anchor.setDate(anchor.getDate() - dayFromMonday);
+    from = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Brunei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(anchor);
+  } else if (range === 'month') {
+    from = `${current.slice(0, 7)}-01`;
+  } else if (range === 'year') {
+    from = `${current.slice(0, 4)}-01-01`;
+  } else if (range === 'custom') {
+    from = customFrom || current;
+    to = customTo || from;
+  }
+
+  return from <= to ? { from, to } : { from: to, to: from };
+}
+
 function tabsForRole(role: SmePosRole, hasSellerProfile: boolean): MarketplaceTab[] {
   let tabs: MarketplaceTab[] = [];
-  if (role === 'owner' || role === 'manager') tabs = ['register', 'sellers', 'listings', 'customers', 'bookings', 'sales'];
-  else if (role === 'cashier') tabs = ['register', 'customers', 'bookings', 'sales'];
+  if (role === 'owner' || role === 'manager') tabs = ['register', 'sellers', 'listings', 'customers', 'bookings', 'sales', 'reports'];
+  else if (role === 'cashier') tabs = ['register', 'listings', 'customers', 'bookings', 'sales'];
   else if (role === 'stock_staff') tabs = ['listings'];
   else if (role === 'seller') tabs = [];
   else if (role === 'viewer') tabs = ['listings', 'customers'];
   if (hasSellerProfile && !tabs.includes('balance')) tabs.push('balance');
+  if (hasSellerProfile && !tabs.includes('reports')) tabs.push('reports');
   return tabs;
 }
 
@@ -224,14 +259,20 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [discount, setDiscount] = useState('0.00');
   const [saleDate, setSaleDate] = useState(today());
   const [checkoutNote, setCheckoutNote] = useState('');
+  const [sellerReportRange, setSellerReportRange] = useState<SellerReportRange>('month');
+  const [sellerReportSellerId, setSellerReportSellerId] = useState('all');
+  const [sellerReportFrom, setSellerReportFrom] = useState(`${today().slice(0, 7)}-01`);
+  const [sellerReportTo, setSellerReportTo] = useState(today());
 
   const canManageSellers = role === 'owner' || role === 'manager';
   const canManageListings = role === 'owner' || role === 'manager';
-  const canManageStock = ['owner', 'manager', 'stock_staff'].includes(role);
+  const canViewAllSellerInventory = ['owner', 'manager', 'cashier', 'stock_staff'].includes(role);
+  const sellerInventoryEnabled = Boolean(mySeller?.inventoryManagementEnabled);
+  const canManageStock = ['owner', 'manager', 'cashier', 'stock_staff'].includes(role);
   const canManageCustomers = ['owner', 'manager', 'cashier'].includes(role);
   const canDeleteCustomers = role === 'owner';
   const canDeleteSellers = role === 'owner';
-  const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role) || Boolean(mySeller);
+  const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role) || Boolean(mySeller && sellerInventoryEnabled);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
   const canManageReturns = role === 'owner' || role === 'manager';
   const canVoidSales = role === 'owner';
@@ -239,8 +280,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const canViewReports = role === 'owner' || role === 'manager';
   const canViewSales = ['owner', 'manager', 'cashier', 'seller'].includes(role) || Boolean(mySeller);
   const isOwnSellerListing = (listing: SmePosListing) => Boolean(mySeller && listing.sellerId === mySeller.id);
-  const canEditListing = (listing: SmePosListing) => canManageListings || isOwnSellerListing(listing);
-  const canUpdateListingStock = (listing: SmePosListing) => canManageStock || isOwnSellerListing(listing);
+  const canEditListing = (listing: SmePosListing) =>
+    canManageListings || (sellerInventoryEnabled && isOwnSellerListing(listing));
+  const canUpdateListingStock = (listing: SmePosListing) =>
+    canManageStock || (sellerInventoryEnabled && isOwnSellerListing(listing));
 
   async function load() {
     setLoading(true);
@@ -277,8 +320,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     if (!availableTabs.includes(tab)) setTab(initialTab(role));
   }, [availableTabs, role, tab]);
   useEffect(() => {
-    if (mySeller && !canManageListings) setInventoryScope('mine');
-  }, [mySeller?.id, canManageListings]);
+    if (mySeller && !canViewAllSellerInventory) setInventoryScope('mine');
+    else if (canViewAllSellerInventory) setInventoryScope('all');
+  }, [mySeller?.id, canViewAllSellerInventory]);
   useEffect(() => {
     if (!settings.defaultPaymentAccountId) return;
     setPaymentRows((current) => current.map((row, index) => index === 0 && !row.accountId ? { ...row, accountId: settings.defaultPaymentAccountId || '' } : row));
@@ -319,6 +363,148 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const monthCommission = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + (item.marketplaceCommissionMinor || item.profitMinor), 0);
   const sellerMoneyWaiting = sellers.reduce((sum, item) => sum + item.balanceMinor, 0);
   const lowStock = listings.filter((item) => Math.max(0, item.quantityOnHand - (item.reservedQuantity || 0)) <= item.lowStockLevel).length;
+
+  const sellerReportDateWindow = sellerReportWindow(
+    sellerReportRange,
+    sellerReportFrom,
+    sellerReportTo,
+  );
+
+  const selectedSellerReportId = canViewReports
+    ? sellerReportSellerId
+    : mySeller?.id || '';
+
+  const sellerReportSalesSource = canViewReports ? sales : mySellerSales;
+
+  const sellerReportSales = sellerReportSalesSource.filter(
+    (sale) =>
+      sale.status !== 'voided'
+      && sale.saleDate >= sellerReportDateWindow.from
+      && sale.saleDate <= sellerReportDateWindow.to,
+  );
+
+  const sellerReportItemMap = new Map<string, {
+    key: string;
+    name: string;
+    sellerId: string;
+    sellerName: string;
+    quantity: number;
+    returnedQuantity: number;
+    grossMinor: number;
+    returnedMinor: number;
+    commissionMinor: number;
+    sellerEarningsMinor: number;
+  }>();
+
+  let sellerReportQuantity = 0;
+  let sellerReportReturnedQuantity = 0;
+  let sellerReportGrossMinor = 0;
+  let sellerReportReturnedMinor = 0;
+  let sellerReportCommissionMinor = 0;
+  let sellerReportEarningsMinor = 0;
+
+  for (const sale of sellerReportSales) {
+    for (const item of sale.items) {
+      if (
+        selectedSellerReportId !== 'all'
+        && item.sellerId !== selectedSellerReportId
+      ) continue;
+
+      const quantity = Number(item.quantity || 0);
+      const returnedQuantity = Number(item.returnedQuantity || 0);
+      const grossMinor = Number(item.netLineMinor ?? item.lineTotalMinor ?? 0);
+      const returnedMinor = Number(item.returnedMinor || 0);
+
+      const commissionMinor = Math.max(
+        0,
+        Number(item.commissionMinor || 0)
+          - Number(item.commissionReturnedMinor || 0),
+      );
+
+      const sellerEarningsMinor = Math.max(
+        0,
+        Number(item.sellerEarningMinor || 0)
+          - Number(item.sellerEarningReturnedMinor || 0),
+      );
+
+      sellerReportQuantity += quantity;
+      sellerReportReturnedQuantity += returnedQuantity;
+      sellerReportGrossMinor += grossMinor;
+      sellerReportReturnedMinor += returnedMinor;
+      sellerReportCommissionMinor += commissionMinor;
+      sellerReportEarningsMinor += sellerEarningsMinor;
+
+      const itemSellerId = item.sellerId || mySeller?.id || '';
+      const key = `${itemSellerId}:${item.listingId || item.productId || item.productName}`;
+      const current = sellerReportItemMap.get(key);
+
+      if (current) {
+        current.quantity += quantity;
+        current.returnedQuantity += returnedQuantity;
+        current.grossMinor += grossMinor;
+        current.returnedMinor += returnedMinor;
+        current.commissionMinor += commissionMinor;
+        current.sellerEarningsMinor += sellerEarningsMinor;
+      } else {
+        sellerReportItemMap.set(key, {
+          key,
+          name: item.productName,
+          sellerId: itemSellerId,
+          sellerName:
+            item.sellerName
+            || sellers.find((seller) => seller.id === itemSellerId)?.name
+            || mySeller?.name
+            || 'Seller',
+          quantity,
+          returnedQuantity,
+          grossMinor,
+          returnedMinor,
+          commissionMinor,
+          sellerEarningsMinor,
+        });
+      }
+    }
+  }
+
+  const sellerReportItems = Array.from(sellerReportItemMap.values())
+    .sort(
+      (a, b) =>
+        (b.quantity - b.returnedQuantity)
+        - (a.quantity - a.returnedQuantity),
+    );
+
+  const sellerReportPayoutSource = canViewReports ? payouts : mySellerPayouts;
+
+  const sellerReportPayoutRows = sellerReportPayoutSource.filter(
+    (payout) =>
+      (selectedSellerReportId === 'all'
+        || payout.sellerId === selectedSellerReportId)
+      && payout.payoutDate >= sellerReportDateWindow.from
+      && payout.payoutDate <= sellerReportDateWindow.to,
+  );
+
+  const sellerReportPayoutMinor = sellerReportPayoutRows.reduce(
+    (sum, payout) => sum + payout.amountMinor,
+    0,
+  );
+
+  const sellerReportBalanceMinor = selectedSellerReportId === 'all'
+    ? sellers.reduce(
+        (sum, seller) => sum + Math.max(0, seller.balanceMinor),
+        0,
+      )
+    : Math.max(
+        0,
+        sellers.find((seller) => seller.id === selectedSellerReportId)?.balanceMinor
+          ?? mySeller?.balanceMinor
+          ?? 0,
+      );
+
+  const sellerReportTitle = selectedSellerReportId === 'all'
+    ? 'All Sellers'
+    : sellers.find((seller) => seller.id === selectedSellerReportId)?.name
+      || mySeller?.name
+      || 'My Seller Profile';
 
   function requireOnline() {
     if (navigator.onLine) return true;
@@ -426,6 +612,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         email: String(form.get('email') || ''),
         note: String(form.get('note') || ''),
         linkedUid: String(form.get('linkedUid') || '') || null,
+        inventoryManagementEnabled: form.get('inventoryManagementEnabled') === 'on',
         defaultCommissionType: commissionType,
         defaultCommissionRateBps: commissionType === 'percentage' ? Math.round(rate * 100) : 0,
         defaultCommissionMinor: commissionType === 'fixed_per_item' ? toMinorUnits(String(form.get('commissionFixed') || '0')) : 0,
@@ -1017,7 +1204,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           type="button"
           className={tab === item ? 'active' : ''}
           onClick={() => {
-            if (item === 'listings' && mySeller && !canManageListings) setInventoryScope('mine');
+            if (item === 'listings' && mySeller && !canViewAllSellerInventory) setInventoryScope('mine');
             setTab(item);
             setError('');
             setSuccess('');
@@ -1030,14 +1217,16 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
               ? 'My register sales'
               : item === 'sales' && role === 'seller'
                 ? 'My sales'
-                : tabLabels[item]}
+                : item === 'reports' && mySeller && !canViewReports
+                  ? 'My Reports'
+                  : tabLabels[item]}
         </button>
       ))}
     </div>
 
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>Sellers</h3><p>Manage each seller's stock, commission, seller wallet and payouts. A seller profile does not automatically give the person BajetBN login access. For Seller-only access, invite them from Members and choose Seller. If they already have another staff role, link that team member to the seller profile so they can manage their own stock and view their own earnings.</p></div><button className="button primary" type="button" aria-label="Add seller profile" onClick={() => openSellerForm('new')}>Add seller</button></div>
+        <div className="panel-heading"><div><h3>Sellers</h3><p>Manage each seller's stock, commission, seller wallet and payouts. A seller profile does not automatically give the person BajetBN login access. For Seller-only access, invite them from Members and choose Seller. If they already have another staff role, link that team member to the seller profile. Inventory management stays off by default and can be enabled separately while their main staff role remains unchanged.</p></div><button className="button primary" type="button" aria-label="Add seller profile" onClick={() => openSellerForm('new')}>Add seller</button></div>
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card" key={seller.id}>
           <div><span className="type-badge">{seller.id === mySeller?.id ? `You · ${roleLabel(role)} + Seller` : 'Seller'}</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
@@ -1049,17 +1238,23 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </section>}
 
       {tab === 'listings' && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>{mySeller && !canManageListings ? 'My inventory' : 'Seller listings and stock'}</h3><p>{mySeller && !canManageListings ? 'Manage your own seller stock here. All shop stock remains available from the register according to your staff role.' : 'Every listing or stock batch keeps its own seller, price, condition, quantity and commission.'}</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!inventoryListings.some((item) => item.barcode)} onClick={() => setLabelItems(inventoryListings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}{mySeller && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add my stock</button>}</div></div>
-        {(mySeller || canManageListings) && <div className="marketplace-inventory-filter"><label>Inventory view<select value={inventoryScope} onChange={(event) => setInventoryScope(event.target.value)}><option value="all">All stock</option>{mySeller && <option value="mine">My stock · {mySeller.name}</option>}{canManageListings && sellers.filter((seller) => seller.id !== mySeller?.id).map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label></div>}
+        <div className="panel-heading"><div><h3>{mySeller && !canViewAllSellerInventory ? 'My inventory' : 'Seller listings and stock'}</h3><p>{mySeller && !canViewAllSellerInventory ? 'Manage your own seller stock here. All shop stock remains available from the register according to your staff role.' : 'Every listing or stock batch keeps its own seller, price, condition, quantity and commission.'}</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!inventoryListings.some((item) => item.barcode)} onClick={() => setLabelItems(inventoryListings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}{role === 'cashier' && <button className="button primary" type="button" onClick={() => openManualListingForm(null)} disabled={!sellers.length}>+ Register seller stock</button>}{mySeller && sellerInventoryEnabled && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add my stock</button>}</div></div>
+        {(mySeller || canViewAllSellerInventory) && <div className="marketplace-inventory-filter"><label>Inventory view<select value={inventoryScope} onChange={(event) => setInventoryScope(event.target.value)}><option value="all">All stock</option>{mySeller && <option value="mine">My stock · {mySeller.name}</option>}{canViewAllSellerInventory && sellers.filter((seller) => seller.id !== mySeller?.id).map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label></div>}
         <SmePosBarcodeInventoryPanel
           itemLabel="listing"
           items={inventoryListings}
-          canCreate={(canManageListings && sellers.length > 0) || Boolean(mySeller)}
-          onCreate={canManageListings && sellers.length > 0 ? (barcode) => openListingForm('new', barcode) : mySeller ? (barcode) => openManualListingForm(mySeller.id, barcode) : undefined}
-          onOpen={(canManageListings || mySeller) ? (listing) => { if (canEditListing(listing)) openListingForm(listing); } : undefined}
-          onReceive={(canManageStock || mySeller) ? (listing) => { if (canUpdateListingStock(listing)) setReceiveForm(listing); } : undefined}
-          onStocktake={(canManageStock || mySeller) ? (listing) => { if (canUpdateListingStock(listing)) setStocktakeForm(listing); } : undefined}
-          onPrintLabel={(canManageStock || mySeller) ? (listing) => { if (canUpdateListingStock(listing)) setLabelItems([listing]); } : undefined}
+          canCreate={(canManageListings && sellers.length > 0) || role === 'cashier' || Boolean(mySeller && sellerInventoryEnabled)}
+          onCreate={canManageListings && sellers.length > 0
+            ? (barcode) => openListingForm('new', barcode)
+            : role === 'cashier'
+              ? (barcode) => openManualListingForm(null, barcode)
+              : mySeller && sellerInventoryEnabled
+                ? (barcode) => openManualListingForm(mySeller.id, barcode)
+                : undefined}
+          onOpen={(canManageListings || (mySeller && sellerInventoryEnabled)) ? (listing) => { if (canEditListing(listing)) openListingForm(listing); } : undefined}
+          onReceive={(canManageStock || (mySeller && sellerInventoryEnabled)) ? (listing) => { if (canUpdateListingStock(listing)) setReceiveForm(listing); } : undefined}
+          onStocktake={(canManageStock || (mySeller && sellerInventoryEnabled)) ? (listing) => { if (canUpdateListingStock(listing)) setStocktakeForm(listing); } : undefined}
+          onPrintLabel={(canManageStock || (mySeller && sellerInventoryEnabled)) ? (listing) => { if (canUpdateListingStock(listing)) setLabelItems([listing]); } : undefined}
         />
         <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, category, condition, SKU or barcode" />
         <div className="sme-pos-product-grid">{inventoryListings.map((listing) => {
@@ -1140,7 +1335,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
                     Archive
                   </button>
                 )}
-                {(role === 'owner' || ownListing) && (
+                {(role === 'owner' || (sellerInventoryEnabled && ownListing)) && (
                   <button
                     className="button ghost danger small"
                     type="button"
@@ -1228,22 +1423,22 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
             <div>
               <span className="eyebrow">Stock</span>
               <h3>My inventory</h3>
-              <p>Your seller items are kept here instead of appearing as a separate cashier page.</p>
+              <p>{sellerInventoryEnabled ? 'You can manage your own seller inventory.' : 'Your inventory is read-only. The shop or cashier manages your stock unless inventory permission is enabled for your seller profile.'}</p>
             </div>
             <div className="button-row">
-              <button className="button secondary" type="button" disabled={!mySellerListings.some((item) => item.barcode)} onClick={() => setLabelItems(mySellerListings)}>Print barcode labels</button>
-              <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add stock</button>
+              {sellerInventoryEnabled && <button className="button secondary" type="button" disabled={!mySellerListings.some((item) => item.barcode)} onClick={() => setLabelItems(mySellerListings)}>Print barcode labels</button>}
+              {sellerInventoryEnabled && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add stock</button>}
             </div>
           </div>
           <SmePosBarcodeInventoryPanel
             itemLabel="listing"
             items={mySellerListings}
-            canCreate={true}
-            onCreate={(barcode) => openManualListingForm(mySeller.id, barcode)}
-            onOpen={(listing) => { if (canEditListing(listing)) openListingForm(listing); }}
-            onReceive={(listing) => { if (canUpdateListingStock(listing)) setReceiveForm(listing); }}
-            onStocktake={(listing) => { if (canUpdateListingStock(listing)) setStocktakeForm(listing); }}
-            onPrintLabel={(listing) => { if (canUpdateListingStock(listing)) setLabelItems([listing]); }}
+            canCreate={sellerInventoryEnabled}
+            onCreate={sellerInventoryEnabled ? (barcode) => openManualListingForm(mySeller.id, barcode) : undefined}
+            onOpen={sellerInventoryEnabled ? (listing) => { if (canEditListing(listing)) openListingForm(listing); } : undefined}
+            onReceive={sellerInventoryEnabled ? (listing) => { if (canUpdateListingStock(listing)) setReceiveForm(listing); } : undefined}
+            onStocktake={sellerInventoryEnabled ? (listing) => { if (canUpdateListingStock(listing)) setStocktakeForm(listing); } : undefined}
+            onPrintLabel={sellerInventoryEnabled ? (listing) => { if (canUpdateListingStock(listing)) setLabelItems([listing]); } : undefined}
           />
           <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search my item, category, condition, SKU or barcode" />
           <div className="sme-pos-product-grid">{mySellerListings.filter((listing) => {
@@ -1326,7 +1521,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
                       Archive
                     </button>
                   )}
-                  {(role === 'owner' || mySeller?.id === listing.sellerId) && (
+                  {(role === 'owner' || (sellerInventoryEnabled && mySeller?.id === listing.sellerId)) && (
                     <button
                       className="button ghost danger small"
                       type="button"
@@ -1359,6 +1554,117 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         <section className="panel"><div className="panel-heading"><div><h3>My payouts</h3><p>You can see where each payout came from, but not the business account balance.</p></div></div><div className="sme-pos-sales-list">{mySellerPayouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.payoutDate}</strong><small>{payout.payments?.length ? payout.payments.map((payment) => `${space.name} — ${payment.accountName}: ${formatMoney(payment.amountMinor, payout.currency)}`).join(' · ') : (payout.paymentSourceLabel || `${space.name} — ${payout.paymentAccountName}`)}</small>{payout.reference && <small>Ref {payout.reference}</small>}{payout.createdByName && <small>Processed by {payout.createdByName}</small>}</div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Wallet {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!mySellerPayouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>
       </div>}
 
+      {tab === 'reports' && (canViewReports || mySeller) && <div className="sme-pos-sales-section">
+        <section className="panel sme-pos-module-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">{canViewReports ? 'Seller Reports' : 'My Reports'}</span>
+              <h3>{sellerReportTitle}</h3>
+              <p>Items sold, returns, commission, seller earnings and payouts for the selected period.</p>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            {canViewReports && <label>Seller
+              <select value={sellerReportSellerId} onChange={(event) => setSellerReportSellerId(event.target.value)}>
+                <option value="all">All Sellers</option>
+                {sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}
+              </select>
+            </label>}
+
+            <label>Period
+              <select value={sellerReportRange} onChange={(event) => setSellerReportRange(event.target.value as SellerReportRange)}>
+                <option value="day">Today</option>
+                <option value="week">This week</option>
+                <option value="month">This month</option>
+                <option value="year">This year</option>
+                <option value="custom">Custom dates</option>
+              </select>
+            </label>
+
+            {sellerReportRange === 'custom' && <>
+              <label>From<input type="date" value={sellerReportFrom} onChange={(event) => setSellerReportFrom(event.target.value)} /></label>
+              <label>To<input type="date" value={sellerReportTo} onChange={(event) => setSellerReportTo(event.target.value)} /></label>
+            </>}
+          </div>
+
+          <small>{sellerReportDateWindow.from} – {sellerReportDateWindow.to}</small>
+        </section>
+
+        <div className="summary-grid sme-pos-report-grid">
+          <article className="summary-card featured">
+            <span>Items sold</span>
+            <strong>{Math.max(0, sellerReportQuantity - sellerReportReturnedQuantity)}</strong>
+            <small>{sellerReportQuantity} sold · {sellerReportReturnedQuantity} returned</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Gross sales</span>
+            <strong>{formatMoney(sellerReportGrossMinor, settings.currency)}</strong>
+            <small>Before returns</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Returns</span>
+            <strong>{formatMoney(sellerReportReturnedMinor, settings.currency)}</strong>
+            <small>Returned / refunded items</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Net sales</span>
+            <strong>{formatMoney(Math.max(0, sellerReportGrossMinor - sellerReportReturnedMinor), settings.currency)}</strong>
+            <small>Gross less returns</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Shop commission</span>
+            <strong>{formatMoney(sellerReportCommissionMinor, settings.currency)}</strong>
+            <small>Net commission after returns</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Seller earnings</span>
+            <strong>{formatMoney(sellerReportEarningsMinor, settings.currency)}</strong>
+            <small>Net earnings during this period</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Payouts</span>
+            <strong>{formatMoney(sellerReportPayoutMinor, settings.currency)}</strong>
+            <small>{sellerReportPayoutRows.length} payout record(s)</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Current seller balance</span>
+            <strong>{formatMoney(sellerReportBalanceMinor, settings.currency)}</strong>
+            <small>Current outstanding seller balance</small>
+          </article>
+        </div>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Items sold</h3>
+              <p>Sold items grouped by Seller and inventory item.</p>
+            </div>
+          </div>
+
+          <div className="sme-pos-sales-list">
+            {sellerReportItems.map((item) => <div className="marketplace-ledger-row" key={item.key}>
+              <div>
+                <strong>{item.name}</strong>
+                <small>{item.sellerName}</small>
+                <small>{item.quantity} sold · {item.returnedQuantity} returned · {Math.max(0, item.quantity - item.returnedQuantity)} net</small>
+              </div>
+
+              <strong>{formatMoney(Math.max(0, item.grossMinor - item.returnedMinor), settings.currency)}</strong>
+              <small>Commission {formatMoney(item.commissionMinor, settings.currency)} · Seller earns {formatMoney(item.sellerEarningsMinor, settings.currency)}</small>
+            </div>)}
+          </div>
+
+          {!sellerReportItems.length && <div className="empty-inline">No seller items were sold during this period.</div>}
+        </section>
+      </div>}
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
         {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller money waiting</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
         {canManageReturns && <SmePosBarcodeReturnScanner itemLabel="listing" items={listings} sales={sales.filter((sale) => sale.status !== 'voided')} getSaleItemId={(item) => item.listingId || item.productId} onSelectSale={openReturnForm} />}
@@ -1412,6 +1718,17 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   : item.email && item.email !== item.uid
     ? `${item.email} · ${item.role.replace('_', ' ')}`
     : `Team member · ${item.role.replace('_', ' ')}`}</option>)}</select><small>A Manager, Cashier, Stock Staff, Viewer or Seller-only user can also own this seller profile. Their main POS role stays unchanged.</small></label>
+      <label className="pos-item-type-option">
+        <input
+          type="checkbox"
+          name="inventoryManagementEnabled"
+          defaultChecked={sellerForm === 'new' ? false : Boolean(sellerForm.inventoryManagementEnabled)}
+        />
+        <span>
+          <strong>Allow seller to manage inventory</strong>
+          <small>Off by default. When enabled, the linked seller can add, edit, receive and count only their own inventory. Their normal staff role remains separate.</small>
+        </span>
+      </label>
       <fieldset className="pos-item-type-fieldset"><legend>Default shop commission</legend><label className={`pos-item-type-option ${sellerCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={sellerCommissionType === 'percentage'} onChange={() => setSellerCommissionType('percentage')} /><span><strong>Percentage</strong><small>The shop keeps a percentage of the final selling amount.</small></span></label><label className={`pos-item-type-option ${sellerCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={sellerCommissionType === 'fixed_per_item'} onChange={() => setSellerCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>The shop keeps the same amount for every unit sold.</small></span></label></fieldset>
       {sellerCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={sellerForm === 'new' ? '3' : (sellerForm.defaultCommissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={sellerForm === 'new' ? '0.00' : (sellerForm.defaultCommissionMinor / 100).toFixed(2)} required /></label>}
       <label>Note<textarea name="note" rows={3} defaultValue={sellerForm === 'new' ? '' : sellerForm.note || ''} maxLength={300} /></label>

@@ -53,7 +53,7 @@ import { SpaceAvatarSettings } from './SpaceAvatarSettings';
 import type { CustomSpaceModule } from '../../types/models';
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
 type SpaceOverviewSection = 'money' | 'budgets' | 'goals' | 'bills' | 'reports' | 'calendar';
-type SpaceReportRange = 'week' | 'month' | 'year' | 'custom';
+type SpaceReportRange = 'day' | 'week' | 'month' | 'year' | 'custom';
 
 function localIsoDate(value: Date) {
   const year = value.getFullYear();
@@ -73,7 +73,9 @@ function reportWindow(range: SpaceReportRange, customFrom: string, customTo: str
   let from = '';
   let to = localIsoDate(now);
 
-  if (range === 'week') {
+  if (range === 'day') {
+    from = to;
+  } else if (range === 'week') {
     const dayFromMonday = (now.getDay() + 6) % 7;
     from = localIsoDate(addDays(now, -dayFromMonday));
   } else if (range === 'month') {
@@ -587,8 +589,24 @@ function SpaceOverview({
     space.type === 'custom'
       ? normalizeCustomSpaceModules(space.customModules)
       : DEFAULT_CUSTOM_SPACE_MODULES;
-  const [section, setSection] = useState<SpaceOverviewSection | null>(null);
+  const [overviewSearchParams] = useSearchParams();
+  const requestedSection = overviewSearchParams.get('section');
+  const requestedOverviewSection =
+    requestedSection
+    && ['money', 'budgets', 'goals', 'bills', 'reports', 'calendar'].includes(requestedSection)
+      ? requestedSection as SpaceOverviewSection
+      : null;
+
+  const [section, setSection] = useState<SpaceOverviewSection | null>(
+    requestedOverviewSection,
+  );
   const [reportRange, setReportRange] = useState<SpaceReportRange>('month');
+
+  useEffect(() => {
+    if (requestedOverviewSection) {
+      setSection(requestedOverviewSection);
+    }
+  }, [requestedOverviewSection]);
   const today = localIsoDate(new Date());
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 8)}01`);
   const [customTo, setCustomTo] = useState(today);
@@ -720,7 +738,7 @@ function SpaceOverview({
     ['sme', 'household', 'trip']
   ).includes(space.type);
 
-  if (usesCompactActionHome) {
+  if (usesCompactActionHome && !section) {
     return null;
   }
 
@@ -828,6 +846,7 @@ function SpaceOverview({
           <div className="space-report-controls">
             <label>Period
               <select value={reportRange} onChange={(event) => setReportRange(event.target.value as SpaceReportRange)}>
+                <option value="day">Today</option>
                 <option value="week">This week</option>
                 <option value="month">This month</option>
                 <option value="year">This year</option>

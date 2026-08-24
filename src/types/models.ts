@@ -133,6 +133,7 @@ export interface SmePosSeller {
   email?: string;
   note?: string;
   linkedUid?: string | null;
+  inventoryManagementEnabled?: boolean;
   defaultCommissionType: SmePosCommissionType;
   defaultCommissionRateBps: number;
   defaultCommissionMinor: number;

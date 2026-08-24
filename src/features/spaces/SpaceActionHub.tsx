@@ -264,6 +264,11 @@ export function SpaceActionHub({
 
             {canViewSmeFinancials && (
               <>
+                <ShortcutLink
+                  to={`/spaces/${space.id}?section=reports`}
+                  label="Reports"
+                />
+
                 <ShortcutLink to="/accounts" label="Accounts" />
 
                 <ShortcutButton

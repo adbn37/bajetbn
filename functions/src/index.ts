@@ -3661,6 +3661,7 @@ export const saveMarketplaceSeller = onCall({ region }, async (request) => {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid email address.');
   const note = optionalString(request.data?.note, 300);
   const linkedUid = optionalString(request.data?.linkedUid, 128) || null;
+  const inventoryManagementEnabled = request.data?.inventoryManagementEnabled === true;
   const commission = marketplaceCommissionValues(request.data || {});
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
@@ -3706,7 +3707,7 @@ export const saveMarketplaceSeller = onCall({ region }, async (request) => {
 
     transaction.set(sellerRef, {
       displayId: existing.displayId || displayId('SEL'), spaceId, ownerId: context.settings.ownerId,
-      name, phone, email, note, linkedUid,
+      name, phone, email, note, linkedUid, inventoryManagementEnabled,
       defaultCommissionType: commission.commissionType,
       defaultCommissionRateBps: commission.commissionRateBps,
       defaultCommissionMinor: commission.commissionMinor,
@@ -3890,8 +3891,13 @@ export const saveMarketplaceListing = onCall({ region, cpu: 'gcf_gen1', concurre
     if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.archivedAt || seller.data()?.deletedAt) throw new HttpsError('failed-precondition', 'Choose an active seller.');
     const existing = current.data() || {};
     if (!canManageAnySellerListing) {
-      if (!current.exists || existing.sellerId !== sellerId || seller.data()?.linkedUid !== uid) {
-        throw new HttpsError('permission-denied', 'You can edit only stock linked to your own seller profile.');
+      if (
+        !current.exists
+        || existing.sellerId !== sellerId
+        || seller.data()?.linkedUid !== uid
+        || seller.data()?.inventoryManagementEnabled !== true
+      ) {
+        throw new HttpsError('permission-denied', 'Seller inventory management is not enabled for this seller profile.');
       }
     }
     assertUniqueSmePosBarcode(spaceListings.docs, listingRef.id, barcodeKey, 'Marketplace listing');
@@ -3970,8 +3976,14 @@ export const registerExistingMarketplaceListing = onCall({ region, cpu: 'gcf_gen
     if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.archivedAt || seller.data()?.deletedAt) {
       throw new HttpsError('failed-precondition', 'Choose an active seller.');
     }
-    if (!['owner', 'manager', 'cashier'].includes(context.role) && seller.data()?.linkedUid !== uid) {
-      throw new HttpsError('permission-denied', 'You can add stock only to your own linked seller profile.');
+    if (
+      !['owner', 'manager', 'cashier'].includes(context.role)
+      && (
+        seller.data()?.linkedUid !== uid
+        || seller.data()?.inventoryManagementEnabled !== true
+      )
+    ) {
+      throw new HttpsError('permission-denied', 'Seller inventory management is not enabled for this seller profile.');
     }
     assertUniqueSmePosBarcode(spaceListings.docs, listingRef.id, barcodeKey, 'Marketplace listing');
 
@@ -4059,9 +4071,9 @@ export const updateMarketplaceListingStock = onCall({ region, cpu: 'gcf_gen1', c
     const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
     if (command.exists) return command.data()?.result;
     if (!listing.exists || listing.data()?.spaceId !== spaceId || listing.data()?.archivedAt) throw new HttpsError('not-found', 'Active listing not found.');
-    if (!['owner', 'manager', 'stock_staff'].includes(context.role)) {
+    if (!['owner', 'manager', 'cashier', 'stock_staff'].includes(context.role)) {
       const seller = await transaction.get(db.collection('smePosSellers').doc(String(listing.data()?.sellerId || '')));
-      if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.linkedUid !== uid || seller.data()?.archivedAt || seller.data()?.deletedAt) {
+      if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.linkedUid !== uid || seller.data()?.inventoryManagementEnabled !== true || seller.data()?.archivedAt || seller.data()?.deletedAt) {
         throw new HttpsError('permission-denied', 'You can update stock only for your own linked seller stock.');
       }
     }
@@ -4104,9 +4116,9 @@ export const receiveMarketplaceListingStock = onCall({ region, cpu: 'gcf_gen1', 
     const [command, listing] = await Promise.all([transaction.get(commandRef), transaction.get(listingRef)]);
     if (command.exists) return command.data()?.result;
     if (!listing.exists || listing.data()?.spaceId !== spaceId || listing.data()?.archivedAt) throw new HttpsError('not-found', 'Active listing not found.');
-    if (!['owner', 'manager', 'stock_staff'].includes(context.role)) {
+    if (!['owner', 'manager', 'cashier', 'stock_staff'].includes(context.role)) {
       const seller = await transaction.get(db.collection('smePosSellers').doc(String(listing.data()?.sellerId || '')));
-      if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.linkedUid !== uid || seller.data()?.archivedAt || seller.data()?.deletedAt) {
+      if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.linkedUid !== uid || seller.data()?.inventoryManagementEnabled !== true || seller.data()?.archivedAt || seller.data()?.deletedAt) {
         throw new HttpsError('permission-denied', 'You can receive stock only for your own linked seller stock.');
       }
     }
@@ -4145,7 +4157,7 @@ export const setMarketplaceListingArchived = onCall({ region, cpu: 'gcf_gen1', c
     if (!listing.exists || listing.data()?.spaceId !== spaceId) throw new HttpsError('not-found', 'Listing not found.');
     if (!['owner', 'manager'].includes(context.role)) {
       const seller = await transaction.get(db.collection('smePosSellers').doc(String(listing.data()?.sellerId || '')));
-      if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.linkedUid !== uid || seller.data()?.archivedAt || seller.data()?.deletedAt) {
+      if (!seller.exists || seller.data()?.spaceId !== spaceId || seller.data()?.linkedUid !== uid || seller.data()?.inventoryManagementEnabled !== true || seller.data()?.archivedAt || seller.data()?.deletedAt) {
         throw new HttpsError('permission-denied', 'You can archive or restore only your own linked seller stock.');
       }
     }
@@ -4240,6 +4252,7 @@ export const deleteMarketplaceListingPermanently = onCall(
         !authorizationSeller.exists
         || authorizationSeller.data()?.spaceId !== spaceId
         || authorizationSeller.data()?.linkedUid !== uid
+        || authorizationSeller.data()?.inventoryManagementEnabled !== true
         || authorizationSeller.data()?.archivedAt
         || authorizationSeller.data()?.deletedAt
       ) {
@@ -4372,6 +4385,7 @@ export const deleteMarketplaceListingPermanently = onCall(
           !seller.exists
           || seller.data()?.spaceId !== spaceId
           || seller.data()?.linkedUid !== uid
+          || seller.data()?.inventoryManagementEnabled !== true
           || seller.data()?.archivedAt
           || seller.data()?.deletedAt
         ) {

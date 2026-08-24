@@ -441,6 +441,7 @@ export async function saveMarketplaceSeller(input: {
   email?: string;
   note?: string;
   linkedUid?: string | null;
+  inventoryManagementEnabled?: boolean;
   defaultCommissionType: SmePosCommissionType;
   defaultCommissionRateBps: number;
   defaultCommissionMinor: number;
