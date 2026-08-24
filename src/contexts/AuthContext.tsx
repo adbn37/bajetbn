@@ -15,7 +15,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { firebaseConfigured, requireFirebase } from '../services/firebase';
 import { BAJETBN_SUBSCRIPTION_ADMIN_EMAIL } from '../config/subscription';
-import { getUserProfile } from '../repositories/userRepository';
+import { getUserProfile, subscribeToUserProfile } from '../repositories/userRepository';
 import type { UserProfile } from '../types/models';
 
 interface AuthContextValue {
@@ -157,6 +157,103 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
   }, []);
+
+  // Live subscription/profile refresh.
+  // This lets an already signed-in customer receive
+  // Plus activation without signing out or reloading.
+  useEffect(() => {
+    if (
+      !firebaseConfigured
+      || !user
+    ) {
+      return undefined;
+    }
+
+    return subscribeToUserProfile(
+      user.uid,
+      (nextProfile) => {
+        setProfile(nextProfile);
+        writeCachedProfile(
+          nextProfile,
+          user.uid,
+        );
+      },
+      (nextError) => {
+        if (navigator.onLine) {
+          console.error(
+            'Unable to refresh the BajetBN profile.',
+            nextError,
+          );
+        }
+      },
+    );
+  }, [user?.uid]);
+
+  // Re-render at the exact paid-plan expiry boundary.
+  // No backend mutation is required: entitlements evaluate
+  // the expiry timestamp against the current time.
+  useEffect(() => {
+    const expiry =
+      profile?.subscriptionExpiresAt;
+
+    if (
+      profile?.subscriptionPlan !== 'plus'
+      || profile.subscriptionStatus !== 'active'
+      || !expiry
+    ) {
+      return undefined;
+    }
+
+    const expiryMillis =
+      expiry.toMillis();
+
+    let cancelled = false;
+    let timer:
+      | number
+      | undefined;
+
+    const schedule = () => {
+      if (cancelled) return;
+
+      const remaining =
+        expiryMillis - Date.now();
+
+      if (remaining <= 0) {
+        setProfile((current) =>
+          current
+            ? { ...current }
+            : current,
+        );
+        return;
+      }
+
+      const wait =
+        Math.min(
+          remaining + 250,
+          2_000_000_000,
+        );
+
+      timer =
+        window.setTimeout(
+          schedule,
+          wait,
+        );
+    };
+
+    schedule();
+
+    return () => {
+      cancelled = true;
+
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [
+    profile?.subscriptionPlan,
+    profile?.subscriptionStatus,
+    profile?.subscriptionExpiresAt,
+  ]);
 
   const value: AuthContextValue = {
     user,

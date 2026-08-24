@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { requireFirebase } from '../services/firebase';
 import type { Appearance, Language, TextSize, UserProfile } from '../types/models';
 
@@ -60,4 +60,32 @@ export async function updateUserPreferences(uid: string, input: UserPreferenceUp
     reminderDaysBefore,
     updatedAt: serverTimestamp(),
   });
+}
+
+
+export function subscribeToUserProfile(
+  uid: string,
+  onChange: (
+    profile: UserProfile | null,
+  ) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const { db } = requireFirebase();
+
+  return onSnapshot(
+    doc(db, 'users', uid),
+    (snapshot) => {
+      onChange(
+        snapshot.exists()
+          ? ({
+              uid: snapshot.id,
+              ...snapshot.data(),
+            } as UserProfile)
+          : null,
+      );
+    },
+    (error) => {
+      onError?.(error);
+    },
+  );
 }

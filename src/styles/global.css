@@ -7483,3 +7483,375 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     width: 100%;
   }
 }
+
+
+/* v1.9.0 admin scale and payment history */
+
+.admin-user-toolbar {
+  display: grid;
+  grid-template-columns:
+    minmax(260px, 1fr)
+    minmax(150px, .3fr)
+    minmax(100px, .2fr);
+  gap: .65rem;
+  margin-bottom: .8rem;
+}
+
+.admin-user-toolbar label,
+.admin-history-search,
+.admin-review-note {
+  display: grid;
+  gap: .3rem;
+}
+
+.admin-user-toolbar label > span,
+.admin-history-search > span,
+.admin-review-note > span {
+  color: var(--muted);
+  font-size: .64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.admin-user-toolbar input,
+.admin-user-toolbar select,
+.admin-history-search input,
+.admin-review-note input {
+  width: 100%;
+  min-height: 40px;
+  padding: .55rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: #07111f;
+  font: inherit;
+}
+
+.admin-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.admin-subscription-table,
+.admin-payment-history-table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: .74rem;
+}
+
+.admin-subscription-table th,
+.admin-payment-history-table th {
+  padding: .65rem .7rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  text-align: left;
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .055em;
+}
+
+.admin-subscription-table td,
+.admin-payment-history-table td {
+  padding: .62rem .7rem;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.admin-subscription-table tbody tr:hover,
+.admin-payment-history-table tbody tr:hover {
+  background: rgba(255, 255, 255, .018);
+}
+
+.admin-subscription-table tbody tr.selected {
+  background: rgba(45, 212, 191, .045);
+}
+
+.admin-subscription-table td:first-child strong,
+.admin-subscription-table td:first-child small,
+.admin-payment-history-table td:first-child strong,
+.admin-payment-history-table td:first-child small {
+  display: block;
+}
+
+.admin-subscription-table td:first-child small,
+.admin-payment-history-table td:first-child small {
+  margin-top: .1rem;
+  color: var(--muted);
+  font-size: .65rem;
+}
+
+.button.compact {
+  min-height: 32px;
+  padding: .38rem .62rem;
+  font-size: .69rem;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  margin-top: .65rem;
+}
+
+.admin-pagination > span {
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.admin-pagination > div {
+  display: flex;
+  gap: .4rem;
+}
+
+.admin-manage-panel {
+  display: grid;
+  gap: .8rem;
+  margin-top: .9rem;
+  padding: 1rem;
+  border: 1px solid rgba(45, 212, 191, .25);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(45, 212, 191, .05),
+      var(--surface-2) 50%
+    );
+}
+
+.admin-manage-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.admin-manage-heading h3 {
+  margin: .15rem 0;
+}
+
+.admin-manage-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.admin-manage-summary {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: .5rem;
+}
+
+.admin-manage-summary > span {
+  padding: .6rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #07111f;
+}
+
+.admin-manage-summary small,
+.admin-manage-summary strong {
+  display: block;
+}
+
+.admin-manage-summary small {
+  color: var(--muted);
+  font-size: .6rem;
+  text-transform: uppercase;
+}
+
+.admin-manage-summary strong {
+  margin-top: .15rem;
+  font-size: .73rem;
+}
+
+.admin-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+
+.admin-payment-queue {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+}
+
+.admin-payment-request-card.pending {
+  display: grid;
+  gap: .7rem;
+  padding: .9rem;
+  border: 1px solid rgba(45, 212, 191, .25);
+  border-radius: 13px;
+  background: var(--surface-2);
+}
+
+.admin-payment-request-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .6rem;
+}
+
+.admin-payment-request-head strong,
+.admin-payment-request-head small {
+  display: block;
+}
+
+.admin-payment-request-head small {
+  margin-top: .12rem;
+  color: var(--muted);
+  font-size: .67rem;
+}
+
+.admin-payment-meta {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: .45rem;
+}
+
+.admin-payment-meta > span {
+  padding: .55rem .6rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #07111f;
+}
+
+.admin-payment-meta small,
+.admin-payment-meta strong {
+  display: block;
+}
+
+.admin-payment-meta small {
+  color: var(--muted);
+  font-size: .58rem;
+  text-transform: uppercase;
+}
+
+.admin-payment-meta strong {
+  margin-top: .1rem;
+  overflow-wrap: anywhere;
+  font-size: .7rem;
+}
+
+.admin-payment-history-section {
+  display: grid;
+  gap: .7rem;
+  margin-top: .9rem;
+  padding-top: .9rem;
+  border-top: 1px solid var(--border);
+}
+
+.admin-history-toggle {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: .6rem;
+  padding: .7rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-history-toggle strong {
+  min-width: 28px;
+  padding: .2rem .4rem;
+  border-radius: 999px;
+  color: var(--accent-2);
+  background: rgba(45, 212, 191, .09);
+  text-align: center;
+}
+
+.admin-history-toggle span:last-child {
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.admin-payment-history {
+  display: grid;
+  gap: .65rem;
+}
+
+.admin-history-status {
+  display: inline-block;
+  padding: .25rem .45rem;
+  border-radius: 999px;
+  font-size: .61rem;
+  font-weight: 900;
+}
+
+.admin-history-status.approved {
+  color: var(--accent-2);
+  background: rgba(45, 212, 191, .09);
+}
+
+.admin-history-status.rejected {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, .09);
+}
+
+.admin-payment-history-table td small {
+  display: block;
+  margin-top: .2rem;
+  max-width: 220px;
+  color: var(--muted);
+  font-size: .62rem;
+}
+
+@media (max-width: 900px) {
+  .admin-user-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-search-box {
+    grid-column: 1 / -1;
+  }
+
+  .admin-payment-queue {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-manage-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-user-toolbar,
+  .admin-manage-summary,
+  .admin-payment-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-search-box {
+    grid-column: auto;
+  }
+
+  .admin-pagination,
+  .admin-manage-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-pagination > div,
+  .admin-manage-actions {
+    width: 100%;
+  }
+
+  .admin-pagination .button,
+  .admin-manage-actions .button,
+  .admin-review-actions .button {
+    flex: 1;
+  }
+}

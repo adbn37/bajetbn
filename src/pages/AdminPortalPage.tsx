@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 import { PageHeader } from '../components/PageHeader';
@@ -21,15 +22,21 @@ import {
 } from '../services/entitlements';
 import { getErrorMessage } from '../utils/errors';
 
+type UserFilter =
+  | 'all'
+  | 'basic'
+  | 'plus'
+  | 'cancelled';
+
 function displayDate(
   value: string | null,
 ): string {
-  if (!value) return '—';
+  if (!value) return '-';
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return '—';
+    return '-';
   }
 
   return new Intl.DateTimeFormat(
@@ -41,16 +48,26 @@ function displayDate(
   ).format(date);
 }
 
+function displaySource(
+  value: string | null,
+): string {
+  if (!value) return '-';
+
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase(),
+    );
+}
+
 export function AdminPortalPage() {
   const { profile } = useAuth();
 
-  const [users, setUsers] = useState<
-    AdminSubscriptionUser[]
-  >([]);
+  const [users, setUsers] =
+    useState<AdminSubscriptionUser[]>([]);
 
-  const [audit, setAudit] = useState<
-    AdminSubscriptionAudit[]
-  >([]);
+  const [audit, setAudit] =
+    useState<AdminSubscriptionAudit[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -60,6 +77,21 @@ export function AdminPortalPage() {
 
   const [cancelUid, setCancelUid] =
     useState<string | null>(null);
+
+  const [manageUid, setManageUid] =
+    useState<string | null>(null);
+
+  const [search, setSearch] =
+    useState('');
+
+  const [filter, setFilter] =
+    useState<UserFilter>('all');
+
+  const [page, setPage] =
+    useState(1);
+
+  const [pageSize, setPageSize] =
+    useState(25);
 
   const [message, setMessage] =
     useState('');
@@ -92,6 +124,10 @@ export function AdminPortalPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filter, pageSize]);
 
   async function changeSubscription(
     uid: string,
@@ -150,6 +186,82 @@ export function AdminPortalPage() {
 
   const basicCount =
     users.length - plusCount;
+
+  const filteredUsers =
+    useMemo(() => {
+      const query =
+        search.trim().toLowerCase();
+
+      return [...users]
+        .filter((user) => {
+          if (
+            filter === 'basic'
+            && user.effectivePlan !== 'basic'
+          ) {
+            return false;
+          }
+
+          if (
+            filter === 'plus'
+            && user.effectivePlan !== 'plus'
+          ) {
+            return false;
+          }
+
+          if (
+            filter === 'cancelled'
+            && user.subscriptionStatus
+              .toLowerCase() !== 'cancelled'
+          ) {
+            return false;
+          }
+
+          if (!query) return true;
+
+          return [
+            user.fullName,
+            user.email,
+            user.subscriptionStatus,
+            user.subscriptionSource || '',
+          ].some((value) =>
+            value
+              .toLowerCase()
+              .includes(query),
+          );
+        })
+        .sort((a, b) =>
+          (
+            a.fullName
+            || a.email
+          ).localeCompare(
+            b.fullName
+            || b.email,
+          ),
+        );
+    }, [users, search, filter]);
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filteredUsers.length / pageSize,
+      ),
+    );
+
+  const safePage =
+    Math.min(page, totalPages);
+
+  const visibleUsers =
+    filteredUsers.slice(
+      (safePage - 1) * pageSize,
+      safePage * pageSize,
+    );
+
+  const managedUser =
+    users.find(
+      (user) =>
+        user.uid === manageUid,
+    ) || null;
 
   return (
     <div className="admin-portal-page">
@@ -245,8 +357,9 @@ export function AdminPortalPage() {
         <span>i</span>
 
         <p>
-          When Plus expires, access automatically returns
-          to Basic. Existing user data remains preserved.
+          Plus access updates automatically after approval.
+          When a paid period expires, the customer returns
+          to Basic automatically while their data remains safe.
         </p>
       </div>
 
@@ -280,289 +393,450 @@ export function AdminPortalPage() {
             </h2>
 
             <p>
-              Review each user's current plan and manage
-              BajetBN Plus access.
+              Compact customer management for larger
+              BajetBN user lists.
             </p>
           </div>
 
           <span className="admin-record-count">
-            {users.length} users
+            {filteredUsers.length} shown
           </span>
+        </div>
+
+        <div className="admin-user-toolbar">
+          <label className="admin-search-box">
+            <span>Search</span>
+
+            <input
+              type="search"
+              value={search}
+              placeholder="Name, email, status..."
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+            />
+          </label>
+
+          <label>
+            <span>Plan</span>
+
+            <select
+              value={filter}
+              onChange={(event) =>
+                setFilter(
+                  event.target.value as UserFilter,
+                )
+              }
+            >
+              <option value="all">
+                All users
+              </option>
+
+              <option value="basic">
+                Basic
+              </option>
+
+              <option value="plus">
+                Plus
+              </option>
+
+              <option value="cancelled">
+                Cancelled
+              </option>
+            </select>
+          </label>
+
+          <label>
+            <span>Rows</span>
+
+            <select
+              value={pageSize}
+              onChange={(event) =>
+                setPageSize(
+                  Number(event.target.value),
+                )
+              }
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </label>
         </div>
 
         {loading && users.length === 0 ? (
           <div className="admin-empty-state">
             Loading users...
           </div>
-        ) : users.length === 0 ? (
+        ) : filteredUsers.length === 0 ? (
           <div className="admin-empty-state">
-            No BajetBN users found.
+            No users match this search or filter.
           </div>
         ) : (
-          <div className="admin-user-grid">
-            {users.map((user) => {
-              const busy =
-                busyUid === user.uid;
+          <>
+            <div className="admin-table-scroll">
+              <table className="admin-subscription-table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Expires</th>
+                    <th>Source</th>
+                    <th>Role</th>
+                    <th />
+                  </tr>
+                </thead>
 
-              const confirmingCancel =
-                cancelUid === user.uid;
+                <tbody>
+                  {visibleUsers.map((user) => {
+                    const isPlus =
+                      user.effectivePlan === 'plus';
 
-              const isPlus =
-                user.effectivePlan === 'plus';
+                    const isLifetime =
+                      isPlus
+                      && !user.subscriptionExpiresAt;
 
-              const isLifetime =
-                isPlus
-                && !user.subscriptionExpiresAt;
-
-              return (
-                <article
-                  className={
-                    isPlus
-                      ? 'admin-user-card plus'
-                      : 'admin-user-card'
-                  }
-                  key={user.uid}
-                >
-                  <div className="admin-user-card-header">
-                    <div>
-                      <strong className="admin-user-name">
-                        {user.fullName
-                          || user.email
-                          || 'BajetBN user'}
-                      </strong>
-
-                      <span className="admin-user-email">
-                        {user.email}
-                      </span>
-                    </div>
-
-                    <span
-                      className={
-                        isPlus
-                          ? 'admin-plan-badge plus'
-                          : 'admin-plan-badge'
-                      }
-                    >
-                      {isPlus
-                        ? 'PLUS'
-                        : 'BASIC'}
-                    </span>
-                  </div>
-
-                  <div className="admin-user-meta-grid">
-                    <div>
-                      <small>
-                        Status
-                      </small>
-
-                      <strong>
-                        {user.subscriptionStatus}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <small>
-                        Expires
-                      </small>
-
-                      <strong>
-                        {isLifetime
-                          ? 'Lifetime'
-                          : displayDate(
-                              user.subscriptionExpiresAt,
-                            )}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {user.platformRole === 'platform_admin' && (
-                    <div className="admin-role-badge">
-                      Platform administrator
-                    </div>
-                  )}
-
-                  <div className="admin-user-actions">
-                    {!isLifetime && (
-                      <button
-                        type="button"
-                        className="button secondary"
-                        disabled={busy}
-                        onClick={() =>
-                          void changeSubscription(
-                            user.uid,
-                            'lifetime',
-                            undefined,
-                            'internal',
-                          )
+                    return (
+                      <tr
+                        key={user.uid}
+                        className={
+                          manageUid === user.uid
+                            ? 'selected'
+                            : undefined
                         }
                       >
-                        Grant Lifetime
-                      </button>
+                        <td>
+                          <strong>
+                            {user.fullName
+                              || user.email
+                              || 'BajetBN user'}
+                          </strong>
+
+                          <small>
+                            {user.email}
+                          </small>
+                        </td>
+
+                        <td>
+                          <span
+                            className={
+                              isPlus
+                                ? 'admin-plan-badge plus'
+                                : 'admin-plan-badge'
+                            }
+                          >
+                            {isPlus
+                              ? 'PLUS'
+                              : 'BASIC'}
+                          </span>
+                        </td>
+
+                        <td>
+                          {user.subscriptionStatus}
+                        </td>
+
+                        <td>
+                          {isLifetime
+                            ? 'Lifetime'
+                            : displayDate(
+                                user.subscriptionExpiresAt,
+                              )}
+                        </td>
+
+                        <td>
+                          {displaySource(
+                            user.subscriptionSource,
+                          )}
+                        </td>
+
+                        <td>
+                          {user.platformRole
+                            === 'platform_admin'
+                            ? 'Admin'
+                            : 'User'}
+                        </td>
+
+                        <td>
+                          <button
+                            type="button"
+                            className="button secondary compact"
+                            onClick={() =>
+                              setManageUid(
+                                manageUid === user.uid
+                                  ? null
+                                  : user.uid,
+                              )
+                            }
+                          >
+                            {manageUid === user.uid
+                              ? 'Close'
+                              : 'Manage'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-pagination">
+              <span>
+                Page {safePage} of {totalPages}
+              </span>
+
+              <div>
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  disabled={safePage <= 1}
+                  onClick={() =>
+                    setPage(
+                      Math.max(1, safePage - 1),
+                    )
+                  }
+                >
+                  Previous
+                </button>
+
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  disabled={safePage >= totalPages}
+                  onClick={() =>
+                    setPage(
+                      Math.min(
+                        totalPages,
+                        safePage + 1,
+                      ),
+                    )
+                  }
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {managedUser && (() => {
+          const busy =
+            busyUid === managedUser.uid;
+
+          const isPlus =
+            managedUser.effectivePlan === 'plus';
+
+          const isLifetime =
+            isPlus
+            && !managedUser.subscriptionExpiresAt;
+
+          const confirmingCancel =
+            cancelUid === managedUser.uid;
+
+          return (
+            <div className="admin-manage-panel">
+              <div className="admin-manage-heading">
+                <div>
+                  <span className="eyebrow">
+                    Manage subscription
+                  </span>
+
+                  <h3>
+                    {managedUser.fullName
+                      || managedUser.email}
+                  </h3>
+
+                  <p>
+                    {managedUser.email}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  onClick={() =>
+                    setManageUid(null)
+                  }
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="admin-manage-summary">
+                <span>
+                  <small>Plan</small>
+                  <strong>
+                    {isPlus
+                      ? 'BajetBN Plus'
+                      : 'BajetBN Basic'}
+                  </strong>
+                </span>
+
+                <span>
+                  <small>Status</small>
+                  <strong>
+                    {managedUser.subscriptionStatus}
+                  </strong>
+                </span>
+
+                <span>
+                  <small>Expires</small>
+                  <strong>
+                    {isLifetime
+                      ? 'Lifetime'
+                      : displayDate(
+                          managedUser.subscriptionExpiresAt,
+                        )}
+                  </strong>
+                </span>
+
+                <span>
+                  <small>Source</small>
+                  <strong>
+                    {displaySource(
+                      managedUser.subscriptionSource,
                     )}
+                  </strong>
+                </span>
+              </div>
 
-                    {isLifetime && (
-                      <div className="admin-lifetime-badge">
-                        Lifetime Plus active
-                      </div>
-                    )}
+              <div className="admin-manage-actions">
+                {!isLifetime && (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void changeSubscription(
+                        managedUser.uid,
+                        'lifetime',
+                        undefined,
+                        'internal',
+                      )
+                    }
+                  >
+                    Grant Lifetime
+                  </button>
+                )}
 
-                    {isPlus ? (
-                      <>
+                {isPlus ? (
+                  <>
+                    {([1, 3, 6, 12] as const)
+                      .map((months) => (
                         <button
+                          key={months}
                           type="button"
                           className="button secondary"
                           disabled={busy}
                           onClick={() =>
                             void changeSubscription(
-                              user.uid,
+                              managedUser.uid,
                               'extend',
-                              1,
+                              months,
                             )
                           }
                         >
-                          Extend 1 month
+                          Extend {months === 12
+                            ? '1 year'
+                            : months + ' month'
+                              + (months > 1 ? 's' : '')}
                         </button>
+                      ))}
 
+                    {!isLifetime && (
+                      !confirmingCancel ? (
                         <button
                           type="button"
-                          className="button secondary"
+                          className="button danger-outline"
                           disabled={busy}
                           onClick={() =>
-                            void changeSubscription(
-                              user.uid,
-                              'extend',
-                              3,
+                            setCancelUid(
+                              managedUser.uid,
                             )
                           }
                         >
-                          Extend 3 months
+                          Cancel Plus
                         </button>
-
-                        <button
-                          type="button"
-                          className="button secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            void changeSubscription(
-                              user.uid,
-                              'extend',
-                              12,
-                            )
-                          }
-                        >
-                          Extend 1 year
-                        </button>
-
-                        {!confirmingCancel ? (
+                      ) : (
+                        <>
                           <button
                             type="button"
                             className="button danger-outline"
                             disabled={busy}
                             onClick={() =>
-                              setCancelUid(user.uid)
+                              void changeSubscription(
+                                managedUser.uid,
+                                'cancel',
+                              )
                             }
                           >
-                            Cancel Plus
+                            Confirm cancellation
                           </button>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              className="button danger-outline"
-                              disabled={busy}
-                              onClick={() =>
-                                void changeSubscription(
-                                  user.uid,
-                                  'cancel',
-                                )
-                              }
-                            >
-                              Confirm cancellation
-                            </button>
 
-                            <button
-                              type="button"
-                              className="button secondary"
-                              disabled={busy}
-                              onClick={() =>
-                                setCancelUid(null)
-                              }
-                            >
-                              Keep Plus
-                            </button>
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="button primary"
-                          disabled={busy}
-                          onClick={() =>
-                            void changeSubscription(
-                              user.uid,
-                              'activate',
-                              1,
-                            )
-                          }
-                        >
-                          Activate 1 month
-                        </button>
-
-                        <button
-                          type="button"
-                          className="button secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            void changeSubscription(
-                              user.uid,
-                              'activate',
-                              3,
-                            )
-                          }
-                        >
-                          Activate 3 months
-                        </button>
-
-                        <button
-                          type="button"
-                          className="button secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            void changeSubscription(
-                              user.uid,
-                              'activate',
-                              12,
-                            )
-                          }
-                        >
-                          Activate 1 year
-                        </button>
-
-                        <button
-                          type="button"
-                          className="button secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            void changeSubscription(
-                              user.uid,
-                              'activate',
-                              1,
-                              'complimentary',
-                            )
-                          }
-                        >
-                          Complimentary 1 month
-                        </button>
-                      </>
+                          <button
+                            type="button"
+                            className="button secondary"
+                            disabled={busy}
+                            onClick={() =>
+                              setCancelUid(null)
+                            }
+                          >
+                            Keep Plus
+                          </button>
+                        </>
+                      )
                     )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+                  </>
+                ) : (
+                  <>
+                    {([1, 3, 6, 12] as const)
+                      .map((months) => (
+                        <button
+                          key={months}
+                          type="button"
+                          className={
+                            months === 1
+                              ? 'button primary'
+                              : 'button secondary'
+                          }
+                          disabled={busy}
+                          onClick={() =>
+                            void changeSubscription(
+                              managedUser.uid,
+                              'activate',
+                              months,
+                            )
+                          }
+                        >
+                          Activate {months === 12
+                            ? '1 year'
+                            : months + ' month'
+                              + (months > 1 ? 's' : '')}
+                        </button>
+                      ))}
+
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        void changeSubscription(
+                          managedUser.uid,
+                          'activate',
+                          1,
+                          'complimentary',
+                        )
+                      }
+                    >
+                      Complimentary 1 month
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
       <AdminSubscriptionRequests
