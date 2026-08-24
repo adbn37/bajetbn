@@ -86,19 +86,67 @@ check(
   'AppShell must continue using personalized navigation.',
 );
 
-const spacesIndex = shell.indexOf('<small>Spaces</small>');
-const posIndex = shell.indexOf('<small>POS</small>');
-const homeIndex = shell.indexOf('<small>Home</small>');
-const alertsIndex = shell.indexOf('<small>Alerts</small>');
-const moreIndex = shell.indexOf('<small>More</small>');
+const mobileNavStart = shell.indexOf(
+  '<nav className="mobile-bottom-nav"',
+);
+const mobileNavEnd = shell.indexOf(
+  '</nav>',
+  mobileNavStart,
+);
 
 check(
-  spacesIndex >= 0
-    && spacesIndex < posIndex
-    && posIndex < homeIndex
-    && homeIndex < alertsIndex
+  mobileNavStart >= 0 && mobileNavEnd > mobileNavStart,
+  'Mobile navigation section is missing.',
+);
+
+const mobileNavigation = shell.slice(
+  mobileNavStart,
+  mobileNavEnd,
+);
+
+const homeIndex = mobileNavigation.indexOf('<small>Home</small>');
+const activityIndex = mobileNavigation.indexOf('<small>Activity</small>');
+const addIndex = mobileNavigation.indexOf('mobile-bottom-add');
+const alertsIndex = mobileNavigation.indexOf('<small>Alerts</small>');
+const moreIndex = mobileNavigation.indexOf('<small>More</small>');
+
+check(
+  homeIndex >= 0
+    && homeIndex < activityIndex
+    && activityIndex < addIndex
+    && addIndex < alertsIndex
     && alertsIndex < moreIndex,
-  'Mobile navigation order must remain Spaces, POS, Home, Alerts, More.',
+  'Mobile navigation order must remain Home, Activity, Add, Alerts, More.',
+);
+
+check(
+  mobileNavigation.includes('to="/transactions"'),
+  'Mobile Activity destination is missing.',
+);
+
+check(
+  mobileNavigation.includes("navigate('/?quick=1')"),
+  'Mobile Add action must open the Home money activity shortcut.',
+);
+
+check(
+  mobileNavigation.includes('to="/notifications"'),
+  'Mobile Alerts destination is missing.',
+);
+
+check(
+  mobileNavigation.includes('<NotificationBellIcon />'),
+  'Mobile Alerts must retain the notification bell.',
+);
+
+check(
+  mobileNavigation.includes('unreadNotifications > 0'),
+  'Mobile Alerts must retain the unread badge.',
+);
+
+check(
+  shell.includes('openPosShortcut'),
+  'POS shortcut support must remain available.',
 );
 
 console.log(`Global navigation cleanup checks passed (${checks} checks).`);

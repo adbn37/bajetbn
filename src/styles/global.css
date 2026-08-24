@@ -7855,3 +7855,378 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     flex: 1;
   }
 }
+
+/* BAJETBN V1.10 MOBILE HOME */
+
+.home-v110 {
+  width: min(100%, 920px);
+  margin-inline: auto;
+  padding-bottom: 7.5rem;
+}
+
+.home-v110-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.home-v110-header h1 {
+  margin: .12rem 0 0;
+  font-size: clamp(1.55rem, 5vw, 2.2rem);
+  line-height: 1.05;
+}
+
+.home-v110-kicker {
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.home-v110-alert {
+  width: 2.8rem;
+  height: 2.8rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1.35rem;
+}
+
+.home-v110-balance-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.65rem;
+  padding: 1.35rem;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 10%, rgba(255,255,255,.22), transparent 26%),
+    linear-gradient(145deg, #5838c7 0%, #3d247f 58%, #27174f 100%);
+  box-shadow: 0 18px 44px rgba(29, 18, 73, .22);
+}
+
+.home-v110-balance-card::after {
+  content: "";
+  position: absolute;
+  right: -3rem;
+  bottom: -5rem;
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.15);
+}
+
+.home-v110-balance-top,
+.home-v110-balance-stats {
+  position: relative;
+  z-index: 1;
+}
+
+.home-v110-balance-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.home-v110-balance-top > div {
+  display: grid;
+  gap: .18rem;
+}
+
+.home-v110-balance-top span {
+  font-weight: 750;
+}
+
+.home-v110-balance-top small {
+  color: rgba(255,255,255,.68);
+  text-transform: capitalize;
+}
+
+.home-v110-balance-top a {
+  color: #fff;
+  font-size: .78rem;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 999px;
+  padding: .38rem .72rem;
+  background: rgba(255,255,255,.08);
+}
+
+.home-v110-balance-value {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: .18rem;
+  margin: 2rem 0 1.7rem;
+}
+
+.home-v110-balance-value small {
+  color: rgba(255,255,255,.7);
+}
+
+.home-v110-balance-value strong {
+  font-size: clamp(2rem, 8vw, 3.2rem);
+  letter-spacing: -.045em;
+}
+
+.home-v110-balance-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+}
+
+.home-v110-balance-stats > div {
+  display: grid;
+  gap: .15rem;
+  padding: .8rem .9rem;
+  border-radius: 1rem;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(10px);
+}
+
+.home-v110-balance-stats span,
+.home-v110-balance-stats small {
+  color: rgba(255,255,255,.68);
+  font-size: .75rem;
+}
+
+.home-v110-balance-stats strong {
+  font-size: 1rem;
+}
+
+.home-v110-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .7rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.home-v110-shortcuts > a {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: .36rem;
+  padding: .85rem .35rem;
+  border: 1px solid var(--border);
+  border-radius: 1.15rem;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  text-align: center;
+}
+
+.home-v110-shortcuts > a > span {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: .82rem;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 1.15rem;
+}
+
+.home-v110-shortcuts strong {
+  font-size: .78rem;
+}
+
+.home-v110-shortcuts small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-v110-section {
+  border: 1px solid var(--border);
+  border-radius: 1.35rem;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.home-v110-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.05rem 1.05rem .8rem;
+}
+
+.home-v110-section-heading span {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.home-v110-section-heading h2 {
+  margin: .08rem 0 0;
+  font-size: 1.05rem;
+}
+
+.home-v110-section-heading a {
+  color: var(--accent);
+  font-size: .78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.home-v110-activity-list {
+  display: grid;
+}
+
+.home-v110-activity-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .78rem;
+  padding: .9rem 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+  border-top: 1px solid var(--border);
+}
+
+.home-v110-activity-icon {
+  width: 2.45rem;
+  height: 2.45rem;
+  display: grid;
+  place-items: center;
+  border-radius: .82rem;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-weight: 800;
+}
+
+.home-v110-activity-copy {
+  min-width: 0;
+  display: grid;
+  gap: .15rem;
+}
+
+.home-v110-activity-copy strong {
+  font-size: .88rem;
+}
+
+.home-v110-activity-copy small {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.home-v110-activity-row > b {
+  font-size: .82rem;
+  white-space: nowrap;
+}
+
+.home-v110-activity-row > b.income {
+  color: var(--success, #1d925b);
+}
+
+.home-v110-activity-row > b.expense {
+  color: var(--danger, #d55151);
+}
+
+.home-v110-empty {
+  display: grid;
+  justify-items: center;
+  gap: .45rem;
+  padding: 2rem 1.15rem 2.2rem;
+  text-align: center;
+}
+
+.home-v110-empty > span {
+  font-size: 2rem;
+  color: var(--muted);
+}
+
+.home-v110-empty p {
+  max-width: 24rem;
+  margin: 0 0 .65rem;
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.home-v110-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .7rem;
+  margin-top: 1rem;
+}
+
+.home-v110-secondary-grid a {
+  display: grid;
+  gap: .35rem;
+  padding: .9rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.home-v110-secondary-grid span {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.home-v110-secondary-grid strong {
+  font-size: .95rem;
+}
+
+.mobile-bottom-nav .mobile-bottom-add {
+  position: relative;
+  transform: translateY(-.85rem);
+}
+
+.mobile-bottom-nav .mobile-bottom-add > span {
+  width: 3.45rem;
+  height: 3.45rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: .3rem solid var(--background, var(--surface));
+  box-shadow: 0 .4rem 1.15rem rgba(0, 0, 0, .2);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.mobile-bottom-nav .mobile-bottom-add small {
+  margin-top: -.1rem;
+}
+
+@media (max-width: 560px) {
+  .home-v110 {
+    padding-inline: .85rem;
+  }
+
+  .home-v110-shortcuts {
+    gap: .45rem;
+  }
+
+  .home-v110-shortcuts > a {
+    border-radius: 1rem;
+    padding-inline: .2rem;
+  }
+
+  .home-v110-balance-card {
+    padding: 1.15rem;
+    border-radius: 1.45rem;
+  }
+
+  .home-v110-secondary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 761px) {
+  .home-v110 {
+    padding-bottom: 2rem;
+  }
+}
+
+/* END BAJETBN V1.10 MOBILE HOME */

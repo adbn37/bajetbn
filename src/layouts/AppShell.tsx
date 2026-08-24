@@ -405,39 +405,31 @@ export function AppShell() {
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
           <NavLink
-            to="/spaces"
-            className={() =>
-              location.pathname.startsWith('/spaces') && !currentPosPath
-                ? 'active'
-                : ''
-            }
-          >
-            <span aria-hidden="true">▦</span>
-            <small>Spaces</small>
-          </NavLink>
-
-          <button
-            type="button"
-            className={currentPosPath ? 'active' : ''}
-            onClick={() => void openPosShortcut()}
-            aria-label="Open point of sale"
-            aria-busy={posPickerLoading}
-            disabled={posPickerLoading}
-          >
-            <span aria-hidden="true">▣</span>
-            <small>POS</small>
-          </button>
-
-          <NavLink
             to="/"
             end
-            className={({ isActive }) =>
-              `mobile-bottom-primary ${isActive ? 'active' : ''}`
-            }
+            className={({ isActive }) => isActive ? 'active' : ''}
           >
             <span aria-hidden="true">⌂</span>
             <small>Home</small>
           </NavLink>
+
+          <NavLink
+            to="/transactions"
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span aria-hidden="true">↕</span>
+            <small>Activity</small>
+          </NavLink>
+
+          <button
+            type="button"
+            className="mobile-bottom-add"
+            onClick={() => navigate('/?quick=1')}
+            aria-label="Add income or expense"
+          >
+            <span aria-hidden="true">+</span>
+            <small>Add</small>
+          </button>
 
           <NavLink
             to="/notifications"
@@ -454,6 +446,7 @@ export function AppShell() {
 
           <button
             type="button"
+            className={mobileOpen ? 'active' : ''}
             onClick={() => {
               setMoreToolsOpen(true);
               setMobileOpen(true);
@@ -463,7 +456,6 @@ export function AppShell() {
             <small>More</small>
           </button>
         </nav>
-
         {menuCustomizerOpen && (
           <SidebarCustomizer
             settings={personalisation}
