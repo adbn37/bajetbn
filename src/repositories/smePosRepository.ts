@@ -173,6 +173,26 @@ export async function setSmePosProductArchived(spaceId: string, productId: strin
   return call({ spaceId, productId, archived, idempotencyKey: crypto.randomUUID() });
 }
 
+export async function deleteSmePosProductPermanently(
+  spaceId: string,
+  productId: string,
+): Promise<{ data: { productId: string; deleted: boolean; photoPath: string } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'deleteSmePosProductPermanently');
+
+  return call({
+    spaceId,
+    productId,
+    idempotencyKey: crypto.randomUUID(),
+  }) as Promise<{
+    data: {
+      productId: string;
+      deleted: boolean;
+      photoPath: string;
+    };
+  }>;
+}
+
 export async function updateSmePosProductStock(input: {
   spaceId: string;
   productId: string;
@@ -520,6 +540,26 @@ export async function setMarketplaceListingArchived(spaceId: string, listingId: 
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'setMarketplaceListingArchived');
   return call({ spaceId, listingId, archived, idempotencyKey: crypto.randomUUID() });
+}
+
+export async function deleteMarketplaceListingPermanently(
+  spaceId: string,
+  listingId: string,
+): Promise<{ data: { listingId: string; deleted: boolean; photoPath: string } }> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'deleteMarketplaceListingPermanently');
+
+  return call({
+    spaceId,
+    listingId,
+    idempotencyKey: crypto.randomUUID(),
+  }) as Promise<{
+    data: {
+      listingId: string;
+      deleted: boolean;
+      photoPath: string;
+    };
+  }>;
 }
 
 export async function checkoutMarketplacePos(input: {

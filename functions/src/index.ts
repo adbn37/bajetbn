@@ -3021,6 +3021,173 @@ export const setSmePosProductArchived = onCall({ region }, async (request) => {
   });
 });
 
+export const deleteSmePosProductPermanently = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+    const productId = stringValue(
+      request.data?.productId,
+      'Product ID',
+      80,
+    );
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const context = await requireSmePosActor(
+      spaceId,
+      uid,
+      ['owner'],
+    );
+
+    const productRef = db
+      .collection('smePosProducts')
+      .doc(productId);
+
+    const commandRef = db
+      .collection('smePosCommands')
+      .doc(commandId(uid, key));
+
+    const [salesSnapshot, reservationsSnapshot] =
+      await Promise.all([
+        db
+          .collection('smePosSales')
+          .where('spaceId', '==', spaceId)
+          .get(),
+
+        db
+          .collection('smePosReservations')
+          .where('spaceId', '==', spaceId)
+          .get(),
+      ]);
+
+    const hasSaleHistory = salesSnapshot.docs.some((sale) => {
+      const items = Array.isArray(sale.data().items)
+        ? sale.data().items
+        : [];
+
+      return items.some((item: DocumentData) =>
+        String(
+          item?.productId
+          || item?.itemId
+          || '',
+        ) === productId
+      );
+    });
+
+    if (hasSaleHistory) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This product has sales history and cannot be permanently deleted. Archive it instead.',
+      );
+    }
+
+    const hasReservationHistory =
+      reservationsSnapshot.docs.some((reservation) => {
+        const items = Array.isArray(reservation.data().items)
+          ? reservation.data().items
+          : [];
+
+        return items.some((item: DocumentData) =>
+          String(
+            item?.itemId
+            || item?.productId
+            || '',
+          ) === productId
+        );
+      });
+
+    if (hasReservationHistory) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This product has booking history and cannot be permanently deleted. Archive it instead.',
+      );
+    }
+
+    return db.runTransaction(async (transaction) => {
+      const [command, product] = await Promise.all([
+        transaction.get(commandRef),
+        transaction.get(productRef),
+      ]);
+
+      if (command.exists) {
+        return command.data()?.result;
+      }
+
+      if (
+        !product.exists
+        || product.data()?.spaceId !== spaceId
+        || product.data()?.ownerId !== context.settings.ownerId
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Product not found.',
+        );
+      }
+
+      const data = product.data() || {};
+
+      if (Number(data.reservedQuantity || 0) > 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This product has active booked quantity. Complete or cancel the booking before deleting it.',
+        );
+      }
+
+      if (
+        Number(data.salesRevenueMinor || 0) > 0
+        || Number(data.soldQuantity || 0) > 0
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This product has recorded sales history and cannot be permanently deleted. Archive it instead.',
+        );
+      }
+
+      const now = FieldValue.serverTimestamp();
+
+      const result = {
+        productId,
+        deleted: true,
+        photoPath: String(data.photoPath || ''),
+      };
+
+      transaction.delete(productRef);
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'delete_sme_pos_product_permanently',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          context.member.displayName
+          || context.member.email,
+        action: 'pos_product_deleted_permanently',
+        targetType: 'sme_pos_product',
+        targetId: productId,
+        summary:
+          `Permanently deleted inventory product ${String(data.name || productId)}.`,
+        now,
+      });
+
+      return result;
+    });
+  },
+);
+
 export const saveSmePosCustomer = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
@@ -3997,6 +4164,200 @@ export const setMarketplaceListingArchived = onCall({ region, cpu: 'gcf_gen1', c
     return result;
   });
 });
+
+export const deleteMarketplaceListingPermanently = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+    const listingId = stringValue(
+      request.data?.listingId,
+      'Listing ID',
+      80,
+    );
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const context = await requireSmePosActor(
+      spaceId,
+      uid,
+      ['owner'],
+    );
+
+    requireMarketplaceSettings(context);
+
+    const listingRef = db
+      .collection('smePosListings')
+      .doc(listingId);
+
+    const commandRef = db
+      .collection('smePosCommands')
+      .doc(commandId(uid, key));
+
+    const [
+      salesSnapshot,
+      reservationsSnapshot,
+      ledgerSnapshot,
+    ] = await Promise.all([
+      db
+        .collection('smePosSales')
+        .where('spaceId', '==', spaceId)
+        .get(),
+
+      db
+        .collection('smePosReservations')
+        .where('spaceId', '==', spaceId)
+        .get(),
+
+      db
+        .collection('smePosSellerLedger')
+        .where('spaceId', '==', spaceId)
+        .get(),
+    ]);
+
+    const hasSaleHistory = salesSnapshot.docs.some((sale) => {
+      const items = Array.isArray(sale.data().items)
+        ? sale.data().items
+        : [];
+
+      return items.some((item: DocumentData) =>
+        String(
+          item?.listingId
+          || item?.productId
+          || item?.itemId
+          || '',
+        ) === listingId
+      );
+    });
+
+    if (hasSaleHistory) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This inventory item has sales history and cannot be permanently deleted. Archive it instead.',
+      );
+    }
+
+    const hasReservationHistory =
+      reservationsSnapshot.docs.some((reservation) => {
+        const items = Array.isArray(reservation.data().items)
+          ? reservation.data().items
+          : [];
+
+        return items.some((item: DocumentData) =>
+          String(
+            item?.itemId
+            || item?.listingId
+            || item?.productId
+            || '',
+          ) === listingId
+        );
+      });
+
+    if (hasReservationHistory) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This inventory item has booking history and cannot be permanently deleted. Archive it instead.',
+      );
+    }
+
+    const hasLedgerHistory = ledgerSnapshot.docs.some((entry) =>
+      String(
+        entry.data()?.listingId
+        || entry.data()?.itemId
+        || '',
+      ) === listingId
+    );
+
+    if (hasLedgerHistory) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This inventory item has seller ledger history and cannot be permanently deleted. Archive it instead.',
+      );
+    }
+
+    return db.runTransaction(async (transaction) => {
+      const [command, listing] = await Promise.all([
+        transaction.get(commandRef),
+        transaction.get(listingRef),
+      ]);
+
+      if (command.exists) {
+        return command.data()?.result;
+      }
+
+      if (
+        !listing.exists
+        || listing.data()?.spaceId !== spaceId
+        || listing.data()?.ownerId !== context.settings.ownerId
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Inventory item not found.',
+        );
+      }
+
+      const data = listing.data() || {};
+
+      if (Number(data.reservedQuantity || 0) > 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This inventory item has active booked quantity. Complete or cancel the booking before deleting it.',
+        );
+      }
+
+      if (
+        Number(data.salesRevenueMinor || 0) > 0
+        || Number(data.soldQuantity || 0) > 0
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This inventory item has recorded sales history and cannot be permanently deleted. Archive it instead.',
+        );
+      }
+
+      const now = FieldValue.serverTimestamp();
+
+      const result = {
+        listingId,
+        deleted: true,
+        photoPath: String(data.photoPath || ''),
+      };
+
+      transaction.delete(listingRef);
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'delete_marketplace_listing_permanently',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          context.member.displayName
+          || context.member.email,
+        action: 'pos_listing_deleted_permanently',
+        targetType: 'sme_pos_listing',
+        targetId: listingId,
+        summary:
+          `Permanently deleted inventory item ${String(data.name || listingId)}.`,
+        now,
+      });
+
+      return result;
+    });
+  },
+);
 
 export const checkoutMarketplacePos = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);

@@ -12,6 +12,7 @@ import { SmePosCreateReservationModal, SmePosReservationsPanel } from '../../com
 import {
   checkoutStandardPos,
   deleteSmePosCustomer,
+  deleteSmePosProductPermanently,
   deleteSmePosItemPhoto,
   getSmePosStaffWorkspace,
   listSmePosCustomers,
@@ -53,7 +54,7 @@ interface Props {
 type WorkspaceTab = 'products' | 'customers' | 'register' | 'bookings' | 'sales';
 type ProductStockMode = 'physical' | 'unlimited';
 type ConfirmPayload =
-  | { kind: 'product'; id: string }
+  | { kind: 'product'; id: string; action?: 'archive' | 'delete' }
   | { kind: 'customer'; id: string };
 
 interface ReturnFormState {
@@ -450,8 +451,26 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     setSuccess('');
     try {
       if (confirm.payload.kind === 'product') {
-        await setSmePosProductArchived(space.id, confirm.payload.id, true);
-        setSuccess('Product moved to archived records.');
+        if (confirm.payload.action === 'delete') {
+          const result = await deleteSmePosProductPermanently(
+            space.id,
+            confirm.payload.id,
+          );
+
+          if (result.data.photoPath) {
+            await deleteSmePosItemPhoto(result.data.photoPath).catch(() => undefined);
+          }
+
+          setSuccess('Product permanently deleted.');
+        } else {
+          await setSmePosProductArchived(
+            space.id,
+            confirm.payload.id,
+            true,
+          );
+
+          setSuccess('Product moved to archived records.');
+        }
       } else {
         const result = await deleteSmePosCustomer(space.id, confirm.payload.id);
         setSuccess(result.data.preservedHistory ? 'Customer deleted. Historical sales and receipts were preserved.' : 'Customer deleted.');
@@ -788,7 +807,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
             <div><span className="type-badge">{product.category || 'Product'}</span><h3>{product.name}</h3><small>{product.sku || product.displayId}</small>{product.barcode && <small>Barcode · {product.barcode}</small>}</div>
             <strong>{formatMoney(product.sellingPriceMinor, product.currency)}</strong>
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{product.trackStock ? outOfStock ? `${product.reservedQuantity || 0 ? 'Fully reserved' : 'Out of stock'}` : `${available} available${product.reservedQuantity ? ` · ${product.reservedQuantity} reserved` : ''}${low ? ' · Low stock' : ''}` : 'Service or unlimited item'}</p>
-            {canManageProducts && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openProductForm(product)}>Edit</button>{product.trackStock && <button className="button primary small" type="button" onClick={() => setReceiveForm(product)}>Receive stock</button>}{product.trackStock && <button className="button secondary small" type="button" onClick={() => setStocktakeForm(product)}>Count stock</button>}{product.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([product])}>Label</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'product', id: product.id }, title: 'Archive this product?', description: 'It will leave the active product list but its sales history will stay.', note: 'You can restore it from Archived POS records.', confirmLabel: 'Archive product' })}>Archive</button></div>}
+            {canManageProducts && <div className="button-row"><button className="button secondary small" type="button" onClick={() => openProductForm(product)}>Edit</button>{product.trackStock && <button className="button primary small" type="button" onClick={() => setReceiveForm(product)}>Receive stock</button>}{product.trackStock && <button className="button secondary small" type="button" onClick={() => setStocktakeForm(product)}>Count stock</button>}{product.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([product])}>Label</button>}<button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'product', id: product.id }, title: 'Archive this product?', description: 'It will leave the active product list but its sales history will stay.', note: 'You can restore it from Archived POS records.', confirmLabel: 'Archive product' })}>Archive</button>{role === 'owner' && <button className="button ghost danger small" type="button" onClick={() => setConfirm({ payload: { kind: 'product', id: product.id, action: 'delete' }, title: 'Delete this product permanently?', description: 'This permanently removes the inventory product. This cannot be undone.', note: 'If this product has sales, bookings or other protected history, BajetBN will stop the deletion and ask you to archive it instead.', confirmLabel: 'Delete permanently', tone: 'danger' })}>Delete permanently</button>}</div>}
             {!canManageProducts && canManageStock && product.trackStock && <div className="button-row"><button className="button primary small" type="button" onClick={() => setReceiveForm(product)}>Receive stock</button><button className="button secondary small" type="button" onClick={() => setStocktakeForm(product)}>Count stock</button><button className="button secondary small" type="button" onClick={() => setStockForm(product)}>Update stock</button>{product.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([product])}>Label</button>}</div>}
           </article>;
         })}</div>

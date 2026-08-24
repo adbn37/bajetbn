@@ -13,6 +13,7 @@ import { SmePosCreateReservationModal, SmePosReservationsPanel } from '../../com
 import {
   checkoutMarketplacePos,
   deleteMarketplaceSeller,
+  deleteMarketplaceListingPermanently,
   deleteSmePosCustomer,
   deleteSmePosItemPhoto,
   getMarketplacePosWorkspace,
@@ -60,7 +61,7 @@ interface Props {
 type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'bookings' | 'sales' | 'balance';
 type ConfirmPayload =
   | { kind: 'seller'; id: string }
-  | { kind: 'listing'; id: string }
+  | { kind: 'listing'; id: string; action?: 'archive' | 'delete'  }
   | { kind: 'customer'; id: string };
 
 interface ReturnFormState {
@@ -625,8 +626,27 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         const result = await deleteMarketplaceSeller(space.id, confirm.payload.id);
         setSuccess(result.data.preservedHistory ? 'Seller deleted. Historical sales, commission and payout records were preserved.' : 'Seller deleted.');
       } else if (confirm.payload.kind === 'listing') {
-        await setMarketplaceListingArchived(space.id, confirm.payload.id, true);
-        setSuccess('Listing archived.');
+        if (confirm.payload.action === 'delete') {
+          const result = await deleteMarketplaceListingPermanently(
+            space.id,
+            confirm.payload.id,
+          );
+
+          if (result.data.photoPath) {
+            await deleteSmePosItemPhoto(result.data.photoPath)
+              .catch(() => undefined);
+          }
+
+          setSuccess('Inventory item permanently deleted.');
+        } else {
+          await setMarketplaceListingArchived(
+            space.id,
+            confirm.payload.id,
+            true,
+          );
+
+          setSuccess('Listing archived.');
+        }
       } else {
         const result = await deleteSmePosCustomer(space.id, confirm.payload.id);
         setSuccess(result.data.preservedHistory ? 'Customer deleted. Historical sales and receipts were preserved.' : 'Customer deleted.');
@@ -1055,7 +1075,93 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
             {role !== 'stock_staff' || ownListing ? <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong> : null}
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? `${listing.reservedQuantity || 0 ? 'Fully reserved' : 'Out of stock'}` : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}${low ? ' · Low stock' : ''}`}</p>
             {(canManageListings || ownListing || role === 'seller') && <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>}
-            {(mayEdit || mayStock) && <div className="button-row">{mayEdit && <button className="button secondary small" type="button" onClick={() => openListingForm(listing)}>Edit</button>}{mayStock && <button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button>}{mayStock && <button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button>}{mayStock && <button className="button secondary small" type="button" onClick={() => setStockForm(listing)}>Update stock</button>}{mayStock && listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}{mayEdit && <button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'listing', id: listing.id }, title: 'Archive this listing?', description: 'It will leave the active register while its sales and seller wallet history stay unchanged.', note: 'You can restore it from Archived Records if your role allows it.', confirmLabel: 'Archive listing' })}>Archive</button>}</div>}
+            {(mayEdit || mayStock) && (
+              <div className="button-row">
+                {mayEdit && (
+                  <button
+                    className="button secondary small"
+                    type="button"
+                    onClick={() => openListingForm(listing)}
+                  >
+                    Edit
+                  </button>
+                )}
+                {mayStock && (
+                  <button
+                    className="button primary small"
+                    type="button"
+                    onClick={() => setReceiveForm(listing)}
+                  >
+                    Receive stock
+                  </button>
+                )}
+                {mayStock && (
+                  <button
+                    className="button secondary small"
+                    type="button"
+                    onClick={() => setStocktakeForm(listing)}
+                  >
+                    Count stock
+                  </button>
+                )}
+                {mayStock && (
+                  <button
+                    className="button secondary small"
+                    type="button"
+                    onClick={() => setStockForm(listing)}
+                  >
+                    Update stock
+                  </button>
+                )}
+                {mayStock && listing.barcode && (
+                  <button
+                    className="button secondary small"
+                    type="button"
+                    onClick={() => setLabelItems([listing])}
+                  >
+                    Label
+                  </button>
+                )}
+                {mayEdit && (
+                  <button
+                    className="button ghost small"
+                    type="button"
+                    onClick={() => setConfirm({
+                      payload: {
+                        kind: 'listing',
+                        id: listing.id,
+                      },
+                      title: 'Archive this listing?',
+                      description: 'It will leave the active register while its sales and seller wallet history stay unchanged.',
+                      note: 'You can restore it from Archived Records if your role allows it.',
+                      confirmLabel: 'Archive listing',
+                    })}
+                  >
+                    Archive
+                  </button>
+                )}
+                {role === 'owner' && (
+                  <button
+                    className="button ghost danger small"
+                    type="button"
+                    onClick={() => setConfirm({
+                      payload: {
+                        kind: 'listing',
+                        id: listing.id,
+                        action: 'delete',
+                      },
+                      title: 'Delete this inventory item permanently?',
+                      description: 'This permanently removes the inventory listing. This cannot be undone.',
+                      note: 'If this item has sales, bookings, seller ledger or other protected history, BajetBN will stop the deletion and ask you to archive it instead.',
+                      confirmLabel: 'Delete permanently',
+                      tone: 'danger',
+                    })}
+                  >
+                    Delete permanently
+                  </button>
+                )}
+              </div>
+            )}
           </article>;
         })}</div>
         {!inventoryListings.length && <div className="empty-inline">{inventoryScope === 'mine' ? 'No stock in your seller inventory yet. Use Add my stock to register your first item.' : 'No active seller listings found.'}</div>}
@@ -1155,7 +1261,93 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
               <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong>
               <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? `${listing.reservedQuantity || 0 ? 'Fully reserved' : 'Out of stock'}` : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}${low ? ' · Low stock' : ''}`}</p>
               <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>
-              {(mayEdit || mayStock) && <div className="button-row">{mayEdit && <button className="button secondary small" type="button" onClick={() => openListingForm(listing)}>Edit</button>}{mayStock && <button className="button primary small" type="button" onClick={() => setReceiveForm(listing)}>Receive stock</button>}{mayStock && <button className="button secondary small" type="button" onClick={() => setStocktakeForm(listing)}>Count stock</button>}{mayStock && <button className="button secondary small" type="button" onClick={() => setStockForm(listing)}>Update stock</button>}{mayStock && listing.barcode && <button className="button secondary small" type="button" onClick={() => setLabelItems([listing])}>Label</button>}{mayEdit && <button className="button ghost small" type="button" onClick={() => setConfirm({ payload: { kind: 'listing', id: listing.id }, title: 'Archive this listing?', description: 'It will leave the active register while its sales and seller wallet history stay unchanged.', note: 'You can restore it from Archived Records if your role allows it.', confirmLabel: 'Archive listing' })}>Archive</button>}</div>}
+              {(mayEdit || mayStock) && (
+                <div className="button-row">
+                  {mayEdit && (
+                    <button
+                      className="button secondary small"
+                      type="button"
+                      onClick={() => openListingForm(listing)}
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {mayStock && (
+                    <button
+                      className="button primary small"
+                      type="button"
+                      onClick={() => setReceiveForm(listing)}
+                    >
+                      Receive stock
+                    </button>
+                  )}
+                  {mayStock && (
+                    <button
+                      className="button secondary small"
+                      type="button"
+                      onClick={() => setStocktakeForm(listing)}
+                    >
+                      Count stock
+                    </button>
+                  )}
+                  {mayStock && (
+                    <button
+                      className="button secondary small"
+                      type="button"
+                      onClick={() => setStockForm(listing)}
+                    >
+                      Update stock
+                    </button>
+                  )}
+                  {mayStock && listing.barcode && (
+                    <button
+                      className="button secondary small"
+                      type="button"
+                      onClick={() => setLabelItems([listing])}
+                    >
+                      Label
+                    </button>
+                  )}
+                  {mayEdit && (
+                    <button
+                      className="button ghost small"
+                      type="button"
+                      onClick={() => setConfirm({
+                        payload: {
+                          kind: 'listing',
+                          id: listing.id,
+                        },
+                        title: 'Archive this listing?',
+                        description: 'It will leave the active register while its sales and seller wallet history stay unchanged.',
+                        note: 'You can restore it from Archived Records if your role allows it.',
+                        confirmLabel: 'Archive listing',
+                      })}
+                    >
+                      Archive
+                    </button>
+                  )}
+                  {role === 'owner' && (
+                    <button
+                      className="button ghost danger small"
+                      type="button"
+                      onClick={() => setConfirm({
+                        payload: {
+                          kind: 'listing',
+                          id: listing.id,
+                          action: 'delete',
+                        },
+                        title: 'Delete this inventory item permanently?',
+                        description: 'This permanently removes the inventory listing. This cannot be undone.',
+                        note: 'If this item has sales, bookings, seller ledger or other protected history, BajetBN will stop the deletion and ask you to archive it instead.',
+                        confirmLabel: 'Delete permanently',
+                        tone: 'danger',
+                      })}
+                    >
+                      Delete permanently
+                    </button>
+                  )}
+                </div>
+              )}
             </article>;
           })}</div>
           {!mySellerListings.length && <div className="empty-inline">No stock in your seller inventory yet. Use Add stock to register your first item.</div>}
