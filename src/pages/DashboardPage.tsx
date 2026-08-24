@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { listAccounts } from '../repositories/accountRepository';
+import {
+  accountColorClass,
+  getAccountColor,
+  getPreferredHomeAccountId,
+  setPreferredHomeAccountId,
+} from '../services/accountVisualPreferences';
 import { listAllCustomCategories } from '../repositories/categoryRepository';
 import { listBudgets } from '../repositories/budgetRepository';
 import { listCommitments } from '../repositories/commitmentRepository';
@@ -49,6 +55,8 @@ export function DashboardPage() {
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(true);
   const [dataUnavailable, setDataUnavailable] = useState(false);
+  const [activeAccountIndex, setActiveAccountIndex] = useState(0);
+  const accountCarouselRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -107,12 +115,10 @@ export function DashboardPage() {
 
   const currency = profile?.currency || 'BND';
 
-  const total = accounts
-    .filter((item) => item.type !== 'credit_card')
-    .reduce((sum, item) => sum + item.ledgerBalanceMinor, 0);
-
-  const primaryAccount =
-    accounts.find((item) => item.type !== 'credit_card') || accounts[0];
+  const homeAccounts = useMemo(
+    () => accounts,
+    [accounts],
+  );
 
   const month = monthPrefix();
 
@@ -122,13 +128,83 @@ export function DashboardPage() {
       && item.transactionDate.startsWith(month),
   );
 
-  const income = monthPosted
-    .filter((item) => item.type === 'income')
-    .reduce((sum, item) => sum + item.amountMinor, 0);
+  useEffect(() => {
+    if (!user || homeAccounts.length === 0) {
+      setActiveAccountIndex(0);
+      return;
+    }
 
-  const expenses = monthPosted
-    .filter((item) => item.type === 'expense')
-    .reduce((sum, item) => sum + item.amountMinor, 0);
+    const preferredId =
+      getPreferredHomeAccountId(user.uid);
+
+    const preferredIndex =
+      homeAccounts.findIndex(
+        (account) => account.id === preferredId,
+      );
+
+    const nextIndex =
+      preferredIndex >= 0
+        ? preferredIndex
+        : 0;
+
+    setActiveAccountIndex(nextIndex);
+
+    const frame =
+      window.requestAnimationFrame(() => {
+        const carousel =
+          accountCarouselRef.current;
+
+        if (!carousel) {
+          return;
+        }
+
+        carousel.scrollTo({
+          left:
+            nextIndex
+            * (carousel.clientWidth + 12),
+          behavior: 'auto',
+        });
+      });
+
+    return () =>
+      window.cancelAnimationFrame(frame);
+  }, [user, homeAccounts]);
+
+  const accountMonthSummary = (
+    accountId: string,
+  ) => {
+    const accountTransactions =
+      monthPosted.filter(
+        (transaction) =>
+          transaction.accountId === accountId,
+      );
+
+    return {
+      income:
+        accountTransactions
+          .filter(
+            (transaction) =>
+              transaction.type === 'income',
+          )
+          .reduce(
+            (sum, transaction) =>
+              sum + transaction.amountMinor,
+            0,
+          ),
+
+      expenses:
+        accountTransactions
+          .filter(
+            (transaction) =>
+              transaction.type === 'expense',
+          )
+          .reduce(
+            (sum, transaction) =>
+              sum + transaction.amountMinor,
+            0,
+          ),
+    };
+  };
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -173,6 +249,83 @@ export function DashboardPage() {
     }
   }
 
+  function selectHomeAccount(
+    index: number,
+    behavior: ScrollBehavior = 'smooth',
+  ) {
+    if (homeAccounts.length === 0) {
+      return;
+    }
+
+    const boundedIndex = Math.min(
+      homeAccounts.length - 1,
+      Math.max(0, index),
+    );
+
+    const account =
+      homeAccounts[boundedIndex];
+
+    setActiveAccountIndex(boundedIndex);
+
+    if (user) {
+      setPreferredHomeAccountId(
+        user.uid,
+        account.id,
+      );
+    }
+
+    const carousel =
+      accountCarouselRef.current;
+
+    if (carousel) {
+      carousel.scrollTo({
+        left:
+          boundedIndex
+          * (carousel.clientWidth + 12),
+        behavior,
+      });
+    }
+  }
+
+  function handleAccountCarouselScroll() {
+    const carousel =
+      accountCarouselRef.current;
+
+    if (
+      !carousel
+      || homeAccounts.length <= 1
+    ) {
+      return;
+    }
+
+    const pageWidth =
+      carousel.clientWidth + 12;
+
+    const nextIndex = Math.min(
+      homeAccounts.length - 1,
+      Math.max(
+        0,
+        Math.round(
+          carousel.scrollLeft
+          / Math.max(1, pageWidth),
+        ),
+      ),
+    );
+
+    if (nextIndex === activeAccountIndex) {
+      return;
+    }
+
+    setActiveAccountIndex(nextIndex);
+
+    if (user) {
+      setPreferredHomeAccountId(
+        user.uid,
+        homeAccounts[nextIndex].id,
+      );
+    }
+  }
+
   const firstName =
     profile?.fullName?.trim().split(/\s+/)[0]
     || 'there';
@@ -207,112 +360,170 @@ export function DashboardPage() {
         </div>
       )}
 
-      <section className="home-v110-balance-card">
-        <div className="home-v110-balance-top">
-          <div>
-            <span>
-              {primaryAccount?.name || 'Your money'}
-            </span>
+      {homeAccounts.length > 0 ? (
+        <section className="home-v110-carousel-section">
+          <div
+            ref={accountCarouselRef}
+            className="home-v110-account-carousel"
+            onScroll={handleAccountCarouselScroll}
+          >
+            {homeAccounts.map(
+              (account, index) => {
+                const summary =
+                  accountMonthSummary(account.id);
 
-            <small>
-              {primaryAccount
-                ? primaryAccount.institution
-                  || primaryAccount.type.replace('_', ' ')
-                : 'Add an account to get started'}
-            </small>
+                const accountSpace =
+                  account.spaceId
+                    ? spaces.find(
+                        (space) =>
+                          space.id === account.spaceId,
+                      )
+                    : null;
+
+                const accountSubtitle = [
+                  account.institution
+                    || account.type.replace('_', ' '),
+                  account.classification === 'business'
+                    ? accountSpace?.name || 'Business'
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+
+                return (
+                  <article
+                    key={account.id}
+                    className={`home-v110-balance-card home-v110-account-slide ${accountColorClass(
+                      getAccountColor(
+                        user?.uid || '',
+                        account.id,
+                        index,
+                      ),
+                    )}`}
+                  >
+                    <div className="home-v110-balance-top">
+                      <div>
+                        <span>{account.name}</span>
+                        <small>
+                          {accountSubtitle}
+                        </small>
+                      </div>
+
+                      <Link to="/accounts">
+                        Accounts
+                      </Link>
+                    </div>
+
+                    <Link
+                      className="home-v110-balance-open"
+                      to={`/transactions?accountId=${encodeURIComponent(
+                        account.id,
+                      )}`}
+                      aria-label={`View ${account.name} activity`}
+                    >
+                      <small>Current balance</small>
+
+                      <strong>
+                        {loading
+                          ? '—'
+                          : formatMoney(
+                              account.ledgerBalanceMinor,
+                              account.currency,
+                            )}
+                      </strong>
+                    </Link>
+
+                    <div className="home-v110-balance-stats">
+                      <div>
+                        <span>Money in</span>
+
+                        <strong>
+                          {loading
+                            ? '—'
+                            : formatMoney(
+                                summary.income,
+                                account.currency,
+                              )}
+                        </strong>
+
+                        <small>This month</small>
+                      </div>
+
+                      <div>
+                        <span>Money out</span>
+
+                        <strong>
+                          {loading
+                            ? '—'
+                            : formatMoney(
+                                summary.expenses,
+                                account.currency,
+                              )}
+                        </strong>
+
+                        <small>This month</small>
+                      </div>
+                    </div>
+                  </article>
+                );
+              },
+            )}
           </div>
 
-          <Link to="/accounts">
-            Accounts
-          </Link>
-        </div>
-
-        <div className="home-v110-balance-value">
-          <small>Total available</small>
-          <strong>
-            {loading
-              ? '—'
-              : formatMoney(total, currency)}
-          </strong>
-        </div>
-
-        <div className="home-v110-balance-stats">
-          <div>
-            <span>Money in</span>
-            <strong>
-              {loading
-                ? '—'
-                : formatMoney(income, currency)}
-            </strong>
-            <small>This month</small>
-          </div>
-
-          <div>
-            <span>Money out</span>
-            <strong>
-              {loading
-                ? '—'
-                : formatMoney(expenses, currency)}
-            </strong>
-            <small>This month</small>
-          </div>
-        </div>
-      </section>
-
-      <section className="home-v110-accounts">
-        <div className="home-v110-section-heading home-v110-accounts-heading">
-          <div>
-            <span>Accounts</span>
-            <h2>Your money</h2>
-          </div>
-
-          <Link to="/accounts">
-            View all
-          </Link>
-        </div>
-
-        <div className="overview-account-grid home-v110-account-grid">
-          {accounts.slice(0, 4).map((account) => (
-            <Link
-              key={account.id}
-              className={`overview-account-tile ${account.type}`}
-              to={`/transactions?accountId=${encodeURIComponent(account.id)}`}
-              aria-label={`View ${account.name} money activity`}
+          {homeAccounts.length > 1 && (
+            <div
+              className="home-v110-carousel-dots"
+              aria-label="Choose account"
             >
-              <span className={`account-symbol ${account.type}`}>
-                {account.name.charAt(0)}
-              </span>
+              {homeAccounts.map(
+                (account, index) => (
+                  <button
+                    type="button"
+                    key={account.id}
+                    className={
+                      index === activeAccountIndex
+                        ? 'active'
+                        : ''
+                    }
+                    aria-label={`Show ${account.name}`}
+                    aria-current={
+                      index === activeAccountIndex
+                        ? 'true'
+                        : undefined
+                    }
+                    onClick={() =>
+                      selectHomeAccount(index)
+                    }
+                  />
+                ),
+              )}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="home-v110-balance-card home-v110-empty-account-card">
+          <div className="home-v110-balance-top">
+            <div>
+              <span>No account yet</span>
+              <small>
+                Add your first money account
+              </small>
+            </div>
+          </div>
 
-              <div className="overview-account-copy">
-                <strong title={account.name}>
-                  {account.name}
-                </strong>
-                <small>
-                  {account.institution || account.type.replace('_', ' ')}
-                </small>
-                <b>
-                  {formatMoney(
-                    account.ledgerBalanceMinor,
-                    account.currency,
-                  )}
-                </b>
-              </div>
-            </Link>
-          ))}
+          <div className="home-v110-balance-value">
+            <small>Current balance</small>
+            <strong>{formatMoney(0, currency)}</strong>
+          </div>
 
           <Link
-            className="overview-account-tile add-account-tile"
+            className="button primary"
             to="/accounts"
           >
-            <span className="add-account-symbol">+</span>
-
-            <div className="overview-account-copy">
-              <strong>Add account</strong>
-              <small>Bank, cash, e-wallet or card</small>
-            </div>
+            Add account
           </Link>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="home-v110-shortcuts">
         <Link to="/bills">

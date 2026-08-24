@@ -8908,3 +8908,227 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 /* END BAJETBN V1.10 CONTEXTUAL HELP */
+/* BAJETBN V1.10 ACCOUNT CAROUSEL COLORS */
+
+.home-v110-carousel-section {
+  min-width: 0;
+}
+
+.home-v110-account-carousel {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.home-v110-account-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.home-v110-account-slide {
+  flex: 0 0 100%;
+  min-width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  background:
+    linear-gradient(
+      145deg,
+      var(--account-card-start),
+      var(--account-card-end)
+    );
+}
+
+.home-v110-balance-open {
+  display: block;
+  margin-top: 28px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-v110-balance-open small,
+.home-v110-balance-open strong {
+  display: block;
+}
+
+.home-v110-balance-open small {
+  margin-bottom: 10px;
+  opacity: 0.78;
+}
+
+.home-v110-balance-open strong {
+  font-size: clamp(2.1rem, 8vw, 3.2rem);
+  letter-spacing: -0.05em;
+}
+
+.home-v110-carousel-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 30px;
+  padding-top: 10px;
+}
+
+.home-v110-carousel-dots button {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.35;
+  cursor: pointer;
+  transition:
+    width 140ms ease,
+    opacity 140ms ease;
+}
+
+.home-v110-carousel-dots button.active {
+  width: 22px;
+  opacity: 0.95;
+  background: var(--accent);
+}
+
+.home-v110-empty-account-card {
+  --account-card-start:
+    color-mix(in srgb, var(--surface) 90%, var(--accent));
+  --account-card-end:
+    color-mix(in srgb, var(--surface) 96%, black);
+}
+
+.account-color-purple {
+  --account-card-start: #6547d9;
+  --account-card-end: #31206f;
+  --account-card-accent: #8b6cff;
+}
+
+.account-color-blue {
+  --account-card-start: #2563c7;
+  --account-card-end: #15386f;
+  --account-card-accent: #4d8df7;
+}
+
+.account-color-teal {
+  --account-card-start: #087f82;
+  --account-card-end: #064a50;
+  --account-card-accent: #18a9aa;
+}
+
+.account-color-green {
+  --account-card-start: #2c8153;
+  --account-card-end: #17472f;
+  --account-card-accent: #48a96f;
+}
+
+.account-color-orange {
+  --account-card-start: #b86522;
+  --account-card-end: #713c15;
+  --account-card-accent: #de8439;
+}
+
+.account-color-rose {
+  --account-card-start: #a33f6d;
+  --account-card-end: #642440;
+  --account-card-accent: #cd618e;
+}
+
+.account-color-slate {
+  --account-card-start: #526071;
+  --account-card-end: #2e3743;
+  --account-card-accent: #748399;
+}
+
+.account-card[class*="account-color-"] {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--account-card-accent) 38%,
+      var(--border)
+    );
+}
+
+.account-card[class*="account-color-"]
+.account-symbol {
+  background:
+    var(--account-card-accent);
+  color: #fff;
+}
+
+.account-color-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.account-color-field > legend {
+  margin-bottom: 9px;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.account-color-picker {
+  display: grid;
+  grid-template-columns:
+    repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.account-color-choice {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.account-color-choice > span {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgb(255 255 255 / 0.35);
+  border-radius: 999px;
+  background: var(--account-card-accent);
+  box-shadow: 0 1px 5px rgb(0 0 0 / 0.18);
+}
+
+.account-color-choice > small {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.61rem;
+  text-overflow: ellipsis;
+}
+
+.account-color-choice.active {
+  border-color: var(--account-card-accent);
+  background:
+    color-mix(
+      in srgb,
+      var(--account-card-accent) 10%,
+      var(--surface)
+    );
+  color: var(--text);
+}
+
+.account-color-choice.active > span {
+  outline: 2px solid var(--account-card-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .account-color-picker {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* END BAJETBN V1.10 ACCOUNT CAROUSEL COLORS */

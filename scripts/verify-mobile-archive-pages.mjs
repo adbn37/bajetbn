@@ -33,8 +33,8 @@ expect(goals.includes('to="/goals/archived"'), 'Previous Goals button is missing
 expect(bills.includes('to="/bills/archived"'), 'Stopped Items button is missing.');
 expect(transactions.includes('to="/categories/archived"'), 'Hidden Categories button is missing.');
 
-expect(dashboard.includes('overview-account-grid'), 'Overview compact account grid is missing.');
-expect(dashboard.includes('add-account-tile'), 'Overview Add Account tile is missing.');
+expect(dashboard.includes('home-v110-account-carousel'), 'Overview account carousel is missing.');
+expect(!dashboard.includes('home-v110-accounts') && !dashboard.includes('add-account-tile'), 'Legacy duplicate Overview account strip still exists.');
 expect(dashboard.includes('transactions?accountId='), 'Overview account tiles do not open filtered money activity.');
 expect(transactions.includes('useSearchParams'), 'Money activity does not read the account query parameter.');
 expect(transactions.includes('accounts={activeAccounts}'), 'Closed accounts may still appear in new money activity forms.');
