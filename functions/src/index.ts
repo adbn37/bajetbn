@@ -4188,7 +4188,7 @@ export const deleteMarketplaceListingPermanently = onCall(
     const context = await requireSmePosActor(
       spaceId,
       uid,
-      ['owner'],
+      ['owner', 'manager', 'cashier', 'stock_staff', 'seller', 'viewer'],
     );
 
     requireMarketplaceSettings(context);
@@ -4200,6 +4200,55 @@ export const deleteMarketplaceListingPermanently = onCall(
     const commandRef = db
       .collection('smePosCommands')
       .doc(commandId(uid, key));
+
+    /*
+     * Owner can delete any eligible listing.
+     * Other POS roles can delete only a listing belonging
+     * to the seller profile linked to their own login.
+     */
+    const authorizationListing = await listingRef.get();
+
+    if (
+      !authorizationListing.exists
+      || authorizationListing.data()?.spaceId !== spaceId
+      || authorizationListing.data()?.ownerId !== context.settings.ownerId
+    ) {
+      throw new HttpsError(
+        'not-found',
+        'Inventory item not found.',
+      );
+    }
+
+    if (context.role !== 'owner') {
+      const sellerId = String(
+        authorizationListing.data()?.sellerId || '',
+      );
+
+      if (!sellerId) {
+        throw new HttpsError(
+          'permission-denied',
+          'You can permanently delete only inventory linked to your own seller profile.',
+        );
+      }
+
+      const authorizationSeller = await db
+        .collection('smePosSellers')
+        .doc(sellerId)
+        .get();
+
+      if (
+        !authorizationSeller.exists
+        || authorizationSeller.data()?.spaceId !== spaceId
+        || authorizationSeller.data()?.linkedUid !== uid
+        || authorizationSeller.data()?.archivedAt
+        || authorizationSeller.data()?.deletedAt
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'You can permanently delete only inventory linked to your own seller profile.',
+        );
+      }
+    }
 
     const [
       salesSnapshot,
@@ -4304,6 +4353,34 @@ export const deleteMarketplaceListingPermanently = onCall(
       }
 
       const data = listing.data() || {};
+
+      if (context.role !== 'owner') {
+        const sellerId = String(data.sellerId || '');
+
+        if (!sellerId) {
+          throw new HttpsError(
+            'permission-denied',
+            'You can permanently delete only inventory linked to your own seller profile.',
+          );
+        }
+
+        const seller = await transaction.get(
+          db.collection('smePosSellers').doc(sellerId),
+        );
+
+        if (
+          !seller.exists
+          || seller.data()?.spaceId !== spaceId
+          || seller.data()?.linkedUid !== uid
+          || seller.data()?.archivedAt
+          || seller.data()?.deletedAt
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'You can permanently delete only inventory linked to your own seller profile.',
+          );
+        }
+      }
 
       if (Number(data.reservedQuantity || 0) > 0) {
         throw new HttpsError(

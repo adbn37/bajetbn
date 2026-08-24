@@ -1140,7 +1140,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
                     Archive
                   </button>
                 )}
-                {role === 'owner' && (
+                {(role === 'owner' || ownListing) && (
                   <button
                     className="button ghost danger small"
                     type="button"
@@ -1326,7 +1326,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
                       Archive
                     </button>
                   )}
-                  {role === 'owner' && (
+                  {(role === 'owner' || mySeller?.id === listing.sellerId) && (
                     <button
                       className="button ghost danger small"
                       type="button"
