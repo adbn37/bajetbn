@@ -82,19 +82,62 @@ need((personalisation.match(/^\s*inbox:\s*'[^']+',\s*$/gm) || []).length === 3, 
 need(css.includes('/* v1.7.0 My Inbox */'), 'My Inbox CSS marker missing.');
 
 const shell = read('src/layouts/AppShell.tsx');
-const spacesIndex = shell.indexOf('<small>Spaces</small>');
-const posIndex = shell.indexOf('<small>POS</small>');
-const homeIndex = shell.indexOf('<small>Home</small>');
-const alertsIndex = shell.indexOf('<small>Alerts</small>');
-const moreIndex = shell.indexOf('<small>More</small>');
+const mobileNavStart = shell.indexOf(
+  '<nav className="mobile-bottom-nav"',
+);
+const mobileNavEnd = shell.indexOf(
+  '</nav>',
+  mobileNavStart,
+);
 
 need(
-  spacesIndex >= 0
-    && spacesIndex < posIndex
-    && posIndex < homeIndex
-    && homeIndex < alertsIndex
+  mobileNavStart >= 0 && mobileNavEnd > mobileNavStart,
+  'Mobile bottom navigation section is missing.',
+);
+
+const mobileNavigation = shell.slice(
+  mobileNavStart,
+  mobileNavEnd,
+);
+
+const homeIndex = mobileNavigation.indexOf('<small>Home</small>');
+const activityIndex = mobileNavigation.indexOf('<small>Activity</small>');
+const addIndex = mobileNavigation.indexOf('mobile-bottom-add');
+const alertsIndex = mobileNavigation.indexOf('<small>Alerts</small>');
+const moreIndex = mobileNavigation.indexOf('<small>More</small>');
+
+need(
+  homeIndex >= 0
+    && homeIndex < activityIndex
+    && activityIndex < addIndex
+    && addIndex < alertsIndex
     && alertsIndex < moreIndex,
-  'Mobile bottom navigation must remain Spaces, POS, Home, Alerts, More.',
+  'Mobile bottom navigation must remain Home, Activity, Add, Alerts, More.',
+);
+
+need(
+  mobileNavigation.includes('to="/transactions"'),
+  'Mobile Activity destination is missing.',
+);
+
+need(
+  mobileNavigation.includes("navigate('/?quick=1')"),
+  'Mobile Add action must open money activity.',
+);
+
+need(
+  mobileNavigation.includes('to="/notifications"'),
+  'Mobile Alerts destination is missing.',
+);
+
+need(
+  mobileNavigation.includes('<NotificationBellIcon />'),
+  'Mobile Alerts bell is missing.',
+);
+
+need(
+  mobileNavigation.includes('unreadNotifications > 0'),
+  'Mobile unread notification badge is missing.',
 );
 
 need(!shell.includes('<small>My Inbox</small>'), 'My Inbox must not replace the fixed mobile bottom navigation.');

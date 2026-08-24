@@ -43,6 +43,7 @@ const ReportsPage = lazy(() => import('../features/reports/ReportsPage').then((m
 const CalendarPage = lazy(() => import('../features/calendar/CalendarPage').then((module) => ({ default: module.CalendarPage })));
 const SearchPage = lazy(() => import('../features/search/SearchPage').then((module) => ({ default: module.SearchPage })));
 const DashboardPage = lazy(() => import('../pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
+const MorePage = lazy(() => import('../pages/MorePage').then((module) => ({ default: module.MorePage })));
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })));
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const NotificationsPage = lazy(() => import('../pages/NotificationsPage').then((module) => ({ default: module.NotificationsPage })));
@@ -70,6 +71,7 @@ export default function App() {
                 <Route path="/onboarding" element={<OnboardingPage />} />
                 <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
                   <Route index element={<DashboardPage />} />
+                  <Route path="more" element={<MorePage />} />
                   <Route path="spaces" element={<SpacesPage />} />
                   <Route path="spaces/archived" element={<ArchivedSpacesPage />} />
                   <Route path="spaces/:spaceId" element={<SpaceDetailsPage />} />

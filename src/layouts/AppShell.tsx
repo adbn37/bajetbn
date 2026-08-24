@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
+import { ContextualHelp } from '../components/ContextualHelp';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
@@ -402,42 +403,35 @@ export function AppShell() {
           </button>
         )}
         <Outlet />
+        <ContextualHelp />
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
           <NavLink
-            to="/spaces"
-            className={() =>
-              location.pathname.startsWith('/spaces') && !currentPosPath
-                ? 'active'
-                : ''
-            }
-          >
-            <span aria-hidden="true">▦</span>
-            <small>Spaces</small>
-          </NavLink>
-
-          <button
-            type="button"
-            className={currentPosPath ? 'active' : ''}
-            onClick={() => void openPosShortcut()}
-            aria-label="Open point of sale"
-            aria-busy={posPickerLoading}
-            disabled={posPickerLoading}
-          >
-            <span aria-hidden="true">▣</span>
-            <small>POS</small>
-          </button>
-
-          <NavLink
             to="/"
             end
-            className={({ isActive }) =>
-              `mobile-bottom-primary ${isActive ? 'active' : ''}`
-            }
+            className={({ isActive }) => isActive ? 'active' : ''}
           >
             <span aria-hidden="true">⌂</span>
             <small>Home</small>
           </NavLink>
+
+          <NavLink
+            to="/transactions"
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span aria-hidden="true">↕</span>
+            <small>Activity</small>
+          </NavLink>
+
+          <button
+            type="button"
+            className="mobile-bottom-add"
+            onClick={() => navigate('/?quick=1')}
+            aria-label="Add income or expense"
+          >
+            <span aria-hidden="true">+</span>
+            <small>Add</small>
+          </button>
 
           <NavLink
             to="/notifications"
@@ -452,18 +446,14 @@ export function AppShell() {
             <small>Alerts</small>
           </NavLink>
 
-          <button
-            type="button"
-            onClick={() => {
-              setMoreToolsOpen(true);
-              setMobileOpen(true);
-            }}
+          <NavLink
+            to="/more"
+            className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">☰</span>
+            <span aria-hidden="true">☷</span>
             <small>More</small>
-          </button>
+          </NavLink>
         </nav>
-
         {menuCustomizerOpen && (
           <SidebarCustomizer
             settings={personalisation}
