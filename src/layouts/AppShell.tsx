@@ -225,7 +225,7 @@ export function AppShell() {
     } catch {
       setPosSpaces([]);
       setPosPickerError(
-        'Your SME Spaces could not be loaded. Open Spaces and try again.',
+        'Your Business Spaces could not be loaded. Open Spaces and try again.',
       );
       setPosPickerOpen(true);
     } finally {
@@ -406,7 +406,17 @@ export function AppShell() {
         <ContextualHelp />
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
-          <NavLink
+                    <button
+            type="button"
+            className={currentPosPath ? 'active' : ''}
+            onClick={() => void openPosShortcut()}
+            aria-label="Open POS"
+          >
+            <span aria-hidden="true">POS</span>
+            <small>POS</small>
+          </button>
+
+<NavLink
             to="/"
             end
             className={({ isActive }) => isActive ? 'active' : ''}
@@ -415,13 +425,7 @@ export function AppShell() {
             <small>Home</small>
           </NavLink>
 
-          <NavLink
-            to="/transactions"
-            className={({ isActive }) => isActive ? 'active' : ''}
-          >
-            <span aria-hidden="true">↕</span>
-            <small>Activity</small>
-          </NavLink>
+
 
           <button
             type="button"
@@ -464,14 +468,14 @@ export function AppShell() {
 
         {posPickerOpen && (
           <Modal
-            title="Choose an SME POS"
+            title="Choose a Business POS"
             onClose={() => {
               setPosPickerOpen(false);
               setPosPickerError('');
             }}
           >
             <div className="pos-space-picker">
-              <p>Which SME would you like to open?</p>
+              <p>Which Business would you like to open?</p>
 
               {posPickerError && (
                 <div className="notice error">{posPickerError}</div>
@@ -488,7 +492,7 @@ export function AppShell() {
                     >
                       <span>
                         <strong>{space.name}</strong>
-                        <small>SME Space · {space.currency}</small>
+                        <small>Business Space · {space.currency}</small>
                       </span>
                       <b>Open POS</b>
                     </button>

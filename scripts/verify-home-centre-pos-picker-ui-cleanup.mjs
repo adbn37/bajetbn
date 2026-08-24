@@ -29,11 +29,11 @@ function walk(root) {
 const shell = read('src/layouts/AppShell.tsx');
 
 for (const required of [
-  "title=\"Choose an SME POS\"",
+  "title=\"Choose a Business POS\"",
   'const smeSpaces = accessibleSpaces.filter',
   "space.type === 'sme' && !space.archivedAt",
-  'Which SME would you like to open?',
-  'mobile-bottom-primary',
+  'Which Business would you like to open?',
+  'mobile-bottom-add',
 ]) {
   if (!shell.includes(required)) {
     fail(`AppShell is missing: ${required}`);
@@ -47,22 +47,22 @@ if (
   fail('The old dynamic Money/POS centre navigation still exists.');
 }
 
-const spacesIndex = shell.indexOf('<small>Spaces</small>');
 const posIndex = shell.indexOf('<small>POS</small>');
 const homeIndex = shell.indexOf('<small>Home</small>');
+const addIndex = shell.indexOf('<small>Add</small>');
 const alertsIndex = shell.indexOf('<small>Alerts</small>');
 const moreIndex = shell.indexOf('<small>More</small>');
 
 if (
   !(
-    spacesIndex >= 0
-    && spacesIndex < posIndex
+    posIndex >= 0
     && posIndex < homeIndex
-    && homeIndex < alertsIndex
+    && homeIndex < addIndex
+    && addIndex < alertsIndex
     && alertsIndex < moreIndex
   )
 ) {
-  fail('Mobile navigation order must be Spaces, POS, Home, Alerts, More.');
+  fail('Mobile navigation order must be POS, Home, Add, Alerts, More.');
 }
 
 const css = read('src/styles/global.css');
@@ -117,5 +117,5 @@ if (offenders.length) {
 }
 
 console.log(
-  'Home-centred navigation, SME POS chooser, UID safety and encoding verification passed.',
+  'POS-first navigation, Business POS chooser, UID safety and encoding verification passed.',
 );

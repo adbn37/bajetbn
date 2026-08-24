@@ -104,24 +104,30 @@ const mobileNavigation = shell.slice(
   mobileNavEnd,
 );
 
+const posIndex = mobileNavigation.indexOf('<small>POS</small>');
 const homeIndex = mobileNavigation.indexOf('<small>Home</small>');
-const activityIndex = mobileNavigation.indexOf('<small>Activity</small>');
 const addIndex = mobileNavigation.indexOf('mobile-bottom-add');
 const alertsIndex = mobileNavigation.indexOf('<small>Alerts</small>');
 const moreIndex = mobileNavigation.indexOf('<small>More</small>');
 
 check(
-  homeIndex >= 0
-    && homeIndex < activityIndex
-    && activityIndex < addIndex
+  posIndex >= 0
+    && posIndex < homeIndex
+    && homeIndex < addIndex
     && addIndex < alertsIndex
     && alertsIndex < moreIndex,
-  'Mobile navigation order must remain Home, Activity, Add, Alerts, More.',
+  'Mobile navigation order must remain POS, Home, Add, Alerts, More.',
 );
 
 check(
-  mobileNavigation.includes('to="/transactions"'),
-  'Mobile Activity destination is missing.',
+  !mobileNavigation.includes('<small>Activity</small>')
+    && !mobileNavigation.includes('to="/transactions"'),
+  'Mobile Activity shortcut must remain removed.',
+);
+
+check(
+  mobileNavigation.includes('openPosShortcut'),
+  'Mobile POS shortcut is missing.',
 );
 
 check(
