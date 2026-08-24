@@ -152,86 +152,154 @@ export function AdminPortalPage() {
     users.length - plusCount;
 
   return (
-    <div className="page-stack">
+    <div className="admin-portal-page">
       <PageHeader
         eyebrow="BajetBN Platform Admin"
         title="Admin Portal"
-        description="Manage BajetBN users and subscriptions."
+        description="Manage BajetBN users, Plus access and payment reviews."
       />
 
-      <section className="card stack">
-        <span className="eyebrow">
-          Administrator
-        </span>
+      <section className="admin-overview-grid">
+        <article className="panel admin-summary-card admin-summary-admin">
+          <span className="eyebrow">
+            Administrator
+          </span>
 
-        <h2>
-          {profile?.email
-            || 'Platform administrator'}
-        </h2>
+          <div className="admin-summary-heading">
+            <div className="admin-summary-icon">
+              A
+            </div>
 
-        <p>
-          Subscription administrator:{' '}
-          <strong>
-            {BAJETBN_SUBSCRIPTION_ADMIN_EMAIL}
+            <div>
+              <h2>
+                {profile?.email
+                  || 'Platform administrator'}
+              </h2>
+
+              <p>
+                Subscription administrator
+              </p>
+
+              <strong>
+                {BAJETBN_SUBSCRIPTION_ADMIN_EMAIL}
+              </strong>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            {loading
+              ? 'Refreshing...'
+              : 'Refresh data'}
+          </button>
+        </article>
+
+        <article className="panel admin-summary-card">
+          <span className="eyebrow">
+            BajetBN Plus
+          </span>
+
+          <strong className="admin-stat-number">
+            {plusCount}
           </strong>
-        </p>
 
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
+          <span className="admin-stat-label">
+            Plus users
+          </span>
+        </article>
+
+        <article className="panel admin-summary-card">
+          <span className="eyebrow">
+            BajetBN Basic
+          </span>
+
+          <strong className="admin-stat-number">
+            {basicCount}
+          </strong>
+
+          <span className="admin-stat-label">
+            Basic users
+          </span>
+        </article>
+
+        <article className="panel admin-summary-card">
+          <span className="eyebrow">
+            Total users
+          </span>
+
+          <strong className="admin-stat-number">
+            {users.length}
+          </strong>
+
+          <span className="admin-stat-label">
+            BajetBN accounts
+          </span>
+        </article>
+      </section>
+
+      <div className="admin-plan-note">
+        <span>i</span>
+
+        <p>
+          When Plus expires, access automatically returns
+          to Basic. Existing user data remains preserved.
+        </p>
+      </div>
+
+      {message && (
+        <div
+          className="notice success"
+          role="status"
         >
-          {loading
-            ? 'Refreshing…'
-            : 'Refresh users'}
-        </button>
-      </section>
+          {message}
+        </div>
+      )}
 
-      <section className="card stack">
-        <span className="eyebrow">
-          Subscription overview
-        </span>
+      {error && (
+        <div
+          className="notice error"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
 
-        <h2>
-          {plusCount} Plus · {basicCount} Basic
-        </h2>
+      <section className="panel admin-users-panel">
+        <div className="admin-section-heading">
+          <div>
+            <span className="eyebrow">
+              Users
+            </span>
 
-        <p>
-          {users.length} total BajetBN users.
-        </p>
+            <h2>
+              Subscriptions
+            </h2>
 
-        <p>
-          When Plus expires, effective access returns
-          to Basic automatically. Existing user data
-          remains preserved.
-        </p>
+            <p>
+              Review each user's current plan and manage
+              BajetBN Plus access.
+            </p>
+          </div>
 
-        {message && (
-          <p role="status">
-            {message}
-          </p>
-        )}
-
-        {error && (
-          <p role="alert">
-            {error}
-          </p>
-        )}
-      </section>
-
-      <section className="card stack">
-        <span className="eyebrow">
-          Users
-        </span>
-
-        <h2>Subscriptions</h2>
+          <span className="admin-record-count">
+            {users.length} users
+          </span>
+        </div>
 
         {loading && users.length === 0 ? (
-          <p>Loading users…</p>
+          <div className="admin-empty-state">
+            Loading users...
+          </div>
         ) : users.length === 0 ? (
-          <p>No BajetBN users found.</p>
+          <div className="admin-empty-state">
+            No BajetBN users found.
+          </div>
         ) : (
-          <div className="stack">
+          <div className="admin-user-grid">
             {users.map((user) => {
               const busy =
                 busyUid === user.uid;
@@ -239,60 +307,85 @@ export function AdminPortalPage() {
               const confirmingCancel =
                 cancelUid === user.uid;
 
+              const isPlus =
+                user.effectivePlan === 'plus';
+
+              const isLifetime =
+                isPlus
+                && !user.subscriptionExpiresAt;
+
               return (
                 <article
-                  className="card stack"
+                  className={
+                    isPlus
+                      ? 'admin-user-card plus'
+                      : 'admin-user-card'
+                  }
                   key={user.uid}
                 >
-                  <div>
-                    <strong>
-                      {user.fullName
-                        || user.email
-                        || 'BajetBN user'}
-                    </strong>
+                  <div className="admin-user-card-header">
+                    <div>
+                      <strong className="admin-user-name">
+                        {user.fullName
+                          || user.email
+                          || 'BajetBN user'}
+                      </strong>
 
-                    <p className="muted">
-                      {user.email}
-                    </p>
+                      <span className="admin-user-email">
+                        {user.email}
+                      </span>
+                    </div>
+
+                    <span
+                      className={
+                        isPlus
+                          ? 'admin-plan-badge plus'
+                          : 'admin-plan-badge'
+                      }
+                    >
+                      {isPlus
+                        ? 'PLUS'
+                        : 'BASIC'}
+                    </span>
                   </div>
 
-                  <p>
-                    Plan:{' '}
-                    <strong>
-                      {user.effectivePlan
-                        === 'plus'
-                        ? 'BajetBN Plus'
-                        : 'BajetBN Basic'}
-                    </strong>
-                  </p>
+                  <div className="admin-user-meta-grid">
+                    <div>
+                      <small>
+                        Status
+                      </small>
 
-                  <p>
-                    Status:{' '}
-                    {user.subscriptionStatus}
-                  </p>
+                      <strong>
+                        {user.subscriptionStatus}
+                      </strong>
+                    </div>
 
-                  <p>
-                    Expires:{' '}
-                    {user.effectivePlan === 'plus'
-                      && !user.subscriptionExpiresAt
-                      ? 'Lifetime'
-                      : displayDate(
-                          user.subscriptionExpiresAt,
-                        )}
-                  </p>
+                    <div>
+                      <small>
+                        Expires
+                      </small>
 
-                  {user.effectivePlan === 'plus'
-                    && !user.subscriptionExpiresAt
-                    ? (
-                      <p>
-                        <strong>
-                          Lifetime Plus
-                        </strong>
-                      </p>
-                    )
-                    : (
+                      <strong>
+                        {isLifetime
+                          ? 'Lifetime'
+                          : displayDate(
+                              user.subscriptionExpiresAt,
+                            )}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {user.platformRole === 'platform_admin' && (
+                    <div className="admin-role-badge">
+                      Platform administrator
+                    </div>
+                  )}
+
+                  <div className="admin-user-actions">
+                    {!isLifetime && (
                       <button
                         type="button"
+                        className="button secondary"
                         disabled={busy}
                         onClick={() =>
                           void changeSubscription(
@@ -303,144 +396,168 @@ export function AdminPortalPage() {
                           )
                         }
                       >
-                        Grant Lifetime Plus
+                        Grant Lifetime
                       </button>
                     )}
 
-                  {user.platformRole
-                    === 'platform_admin' && (
-                    <p>
-                      Platform administrator
-                    </p>
-                  )}
+                    {isLifetime && (
+                      <div className="admin-lifetime-badge">
+                        Lifetime Plus active
+                      </div>
+                    )}
 
-                  {user.effectivePlan === 'plus' ? (
-                    <div className="inline-actions">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void changeSubscription(
-                            user.uid,
-                            'extend',
-                            1,
-                          )
-                        }
-                      >
-                        +1 month
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void changeSubscription(
-                            user.uid,
-                            'extend',
-                            3,
-                          )
-                        }
-                      >
-                        +3 months
-                      </button>
-
-                      {!confirmingCancel ? (
+                    {isPlus ? (
+                      <>
                         <button
                           type="button"
+                          className="button secondary"
                           disabled={busy}
                           onClick={() =>
-                            setCancelUid(user.uid)
+                            void changeSubscription(
+                              user.uid,
+                              'extend',
+                              1,
+                            )
                           }
                         >
-                          Cancel Plus
+                          Extend 1 month
                         </button>
-                      ) : (
-                        <>
+
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void changeSubscription(
+                              user.uid,
+                              'extend',
+                              3,
+                            )
+                          }
+                        >
+                          Extend 3 months
+                        </button>
+
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void changeSubscription(
+                              user.uid,
+                              'extend',
+                              12,
+                            )
+                          }
+                        >
+                          Extend 1 year
+                        </button>
+
+                        {!confirmingCancel ? (
                           <button
                             type="button"
+                            className="button danger-outline"
                             disabled={busy}
                             onClick={() =>
-                              void changeSubscription(
-                                user.uid,
-                                'cancel',
-                              )
+                              setCancelUid(user.uid)
                             }
                           >
-                            Confirm cancellation
+                            Cancel Plus
                           </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="button danger-outline"
+                              disabled={busy}
+                              onClick={() =>
+                                void changeSubscription(
+                                  user.uid,
+                                  'cancel',
+                                )
+                              }
+                            >
+                              Confirm cancellation
+                            </button>
 
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() =>
-                              setCancelUid(null)
-                            }
-                          >
-                            Keep Plus
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="inline-actions">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void changeSubscription(
-                            user.uid,
-                            'activate',
-                            1,
-                          )
-                        }
-                      >
-                        Plus 1 month
-                      </button>
+                            <button
+                              type="button"
+                              className="button secondary"
+                              disabled={busy}
+                              onClick={() =>
+                                setCancelUid(null)
+                              }
+                            >
+                              Keep Plus
+                            </button>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="button primary"
+                          disabled={busy}
+                          onClick={() =>
+                            void changeSubscription(
+                              user.uid,
+                              'activate',
+                              1,
+                            )
+                          }
+                        >
+                          Activate 1 month
+                        </button>
 
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void changeSubscription(
-                            user.uid,
-                            'activate',
-                            3,
-                          )
-                        }
-                      >
-                        Plus 3 months
-                      </button>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void changeSubscription(
+                              user.uid,
+                              'activate',
+                              3,
+                            )
+                          }
+                        >
+                          Activate 3 months
+                        </button>
 
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void changeSubscription(
-                            user.uid,
-                            'activate',
-                            12,
-                          )
-                        }
-                      >
-                        Plus 1 year
-                      </button>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void changeSubscription(
+                              user.uid,
+                              'activate',
+                              12,
+                            )
+                          }
+                        >
+                          Activate 1 year
+                        </button>
 
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void changeSubscription(
-                            user.uid,
-                            'activate',
-                            1,
-                            'complimentary',
-                          )
-                        }
-                      >
-                        Complimentary 1 month
-                      </button>
-                    </div>
-                  )}
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void changeSubscription(
+                              user.uid,
+                              'activate',
+                              1,
+                              'complimentary',
+                            )
+                          }
+                        >
+                          Complimentary 1 month
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </article>
               );
             })}
@@ -452,67 +569,102 @@ export function AdminPortalPage() {
         onChanged={load}
       />
 
-      <section className="card stack">
-        <span className="eyebrow">
-          BajetBN Basic
-        </span>
+      <div className="admin-bottom-grid">
+        <section className="panel admin-limits-panel">
+          <span className="eyebrow">
+            BajetBN Basic
+          </span>
 
-        <h2>Default limits</h2>
+          <h2>
+            Default limits
+          </h2>
 
-        <ul>
-          <li>1 Household Space</li>
-          <li>1 Trip Space</li>
-          <li>1 SME Space</li>
+          <div className="admin-limit-grid">
+            <div>
+              <span>Household Spaces</span>
+              <strong>1</strong>
+            </div>
 
-          <li>
-            {BASIC_PLAN_LIMITS.smeInventoryItems}
-            {' '}SME inventory items
-          </li>
+            <div>
+              <span>Trip Spaces</span>
+              <strong>1</strong>
+            </div>
 
-          <li>
-            {BASIC_PLAN_LIMITS.smeCustomers}
-            {' '}SME customers
-          </li>
+            <div>
+              <span>SME Spaces</span>
+              <strong>1</strong>
+            </div>
 
-          <li>
-            {BASIC_PLAN_LIMITS.smeSellers}
-            {' '}SME sellers
-          </li>
+            <div>
+              <span>Inventory items</span>
+              <strong>
+                {BASIC_PLAN_LIMITS.smeInventoryItems}
+              </strong>
+            </div>
 
-          <li>
-            Owner +{' '}
-            {BASIC_PLAN_LIMITS.smeAdditionalMembers}
-            {' '}additional SME member
-          </li>
-        </ul>
-      </section>
+            <div>
+              <span>SME customers</span>
+              <strong>
+                {BASIC_PLAN_LIMITS.smeCustomers}
+              </strong>
+            </div>
 
-      <section className="card stack">
-        <span className="eyebrow">
-          Audit
-        </span>
+            <div>
+              <span>SME sellers</span>
+              <strong>
+                {BASIC_PLAN_LIMITS.smeSellers}
+              </strong>
+            </div>
 
-        <h2>Recent subscription changes</h2>
+            <div>
+              <span>Extra SME member</span>
+              <strong>
+                {BASIC_PLAN_LIMITS.smeAdditionalMembers}
+              </strong>
+            </div>
+          </div>
+        </section>
 
-        {audit.length === 0 ? (
-          <p>No subscription changes yet.</p>
-        ) : (
-          <ul>
-            {audit.map((entry) => (
-              <li key={entry.id}>
-                <strong>
-                  {entry.targetEmail
-                    || entry.targetUid}
-                </strong>
-                {' — '}
-                {entry.action}
-                {' — '}
-                {displayDate(entry.createdAt)}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="panel admin-audit-panel">
+          <span className="eyebrow">
+            Audit
+          </span>
+
+          <h2>
+            Recent subscription changes
+          </h2>
+
+          {audit.length === 0 ? (
+            <div className="admin-empty-state">
+              No subscription changes yet.
+            </div>
+          ) : (
+            <div className="admin-audit-list">
+              {audit.map((entry) => (
+                <div
+                  className="admin-audit-row"
+                  key={entry.id}
+                >
+                  <div>
+                    <strong>
+                      {entry.targetEmail
+                        || entry.targetUid}
+                    </strong>
+
+                    <span>
+                      {entry.action}
+                    </span>
+                  </div>
+
+                  <time>
+                    {displayDate(entry.createdAt)}
+                  </time>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

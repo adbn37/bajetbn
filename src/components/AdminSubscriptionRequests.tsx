@@ -150,14 +150,22 @@ export function AdminSubscriptionRequests({
   }
 
   return (
-    <section className="panel admin-subscription-requests">
+    <section className="panel admin-subscription-requests admin-payment-review">
       <span className="eyebrow">
         Plus payment review
       </span>
 
-      <h2>
-        Payment proof requests
-      </h2>
+      <div className="admin-section-heading">
+        <div>
+          <h2>
+            Payment proof requests
+          </h2>
+
+          <p>
+            Review customer Plus payments before activating access.
+          </p>
+        </div>
+      </div>
 
       <button className="button secondary" type="button" disabled={loading}
         onClick={() => void load()}
@@ -188,7 +196,7 @@ export function AdminSubscriptionRequests({
       <div className="admin-subscription-request-list">
         {requests.map((request) => (
           <article
-            className="panel admin-subscription-requests"
+            className="admin-payment-request-card"
             key={request.id}
           >
             <div>
@@ -241,7 +249,7 @@ export function AdminSubscriptionRequests({
 
             {request.status
               === 'pending_review' && (
-              <div className="button-row">
+              <div className="admin-review-actions">
                 <button
                   type="button"
                   className="button primary"
