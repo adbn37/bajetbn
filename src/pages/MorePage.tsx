@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { planLabel } from '../services/entitlements';
+import { resetContextualHelp } from '../services/contextualHelp';
 
 interface MoreTool {
   path: string;
@@ -105,8 +106,13 @@ const GROUPS: MoreGroup[] = [
 ];
 
 export function MorePage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const currentPlan = planLabel(profile);
+
+  const replayTips = () => {
+    if (!user) return;
+    resetContextualHelp(user.uid);
+  };
 
   return (
     <main className="page more-v110">
@@ -175,6 +181,31 @@ export function MorePage() {
           </div>
         </section>
       ))}
+
+      <section className="more-v110-help">
+        <div className="more-v110-help-copy">
+          <span className="more-v110-help-icon" aria-hidden="true">
+            ?
+          </span>
+
+          <div>
+            <h2>Help & tips</h2>
+            <p>
+              Want to see the first-use guidance again?
+              Replay the tips as you move through BajetBN.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="button secondary"
+          onClick={replayTips}
+          disabled={!user}
+        >
+          Replay tips
+        </button>
+      </section>
 
       <section className="more-v110-account">
         <h2>Account</h2>

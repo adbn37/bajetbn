@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
+import { ContextualHelp } from '../components/ContextualHelp';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
@@ -402,6 +403,7 @@ export function AppShell() {
           </button>
         )}
         <Outlet />
+        <ContextualHelp />
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
           <NavLink
