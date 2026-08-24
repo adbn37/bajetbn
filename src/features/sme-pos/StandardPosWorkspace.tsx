@@ -22,6 +22,7 @@ import {
   receiveSmePosProductStock,
   registerExistingSmePosProduct,
   returnSmePosSale,
+  deleteSmePosSalePermanently,
   voidSmePosSale,  saveSmePosCustomer,
   saveSmePosProduct,
   setSmePosProductArchived,
@@ -67,6 +68,12 @@ interface VoidSaleFormState {
   sale: SmePosSale;
   voidDate: string;
   reason: string;
+}
+
+interface DeleteSaleFormState {
+  sale: SmePosSale;
+  reason: string;
+  confirmation: string;
 }
 interface StandardQuickCartItem {
   clientId: string;
@@ -137,7 +144,8 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const [customerForm, setCustomerForm] = useState<SmePosCustomer | 'new' | null>(null);
   const [receipt, setReceipt] = useState<SmePosSale | null>(null);
   const [returnForm, setReturnForm] = useState<ReturnFormState | null>(null);
-  const [voidForm, setVoidForm] = useState<VoidSaleFormState | null>(null);  const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
+  const [voidForm, setVoidForm] = useState<VoidSaleFormState | null>(null);
+  const [deleteSaleForm, setDeleteSaleForm] = useState<DeleteSaleFormState | null>(null);  const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [quickItems, setQuickItems] = useState<StandardQuickCartItem[]>([]);
@@ -156,7 +164,8 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
   const canRegisterExistingStock = ['owner', 'manager', 'cashier'].includes(role);
   const canCheckout = ['owner', 'manager', 'cashier'].includes(role);
   const canManageReturns = role === 'owner' || role === 'manager';
-  const canVoidSales = role === 'owner';  const canViewReports = ['owner', 'manager'].includes(role);
+  const canVoidSales = role === 'owner';
+  const canDeleteSales = role === 'owner';  const canViewReports = ['owner', 'manager'].includes(role);
   const canViewSales = ['owner', 'manager', 'cashier'].includes(role);
 
   async function load() {
@@ -642,6 +651,102 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
       setBusy(false);
     }
   }
+
+  function openPermanentDeleteForm(
+    sale: SmePosSale,
+  ) {
+    if (!canDeleteSales) return;
+
+    setDeleteSaleForm({
+      sale,
+      reason: '',
+      confirmation: '',
+    });
+
+    setError('');
+    setSuccess('');
+  }
+
+  async function submitPermanentDelete(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      !deleteSaleForm
+      || !canDeleteSales
+      || !requireOnline()
+    ) {
+      return;
+    }
+
+    const reason =
+      deleteSaleForm.reason.trim();
+
+    if (!reason) {
+      setError(
+        'Enter a reason for permanently deleting this sale.',
+      );
+      return;
+    }
+
+    if (
+      deleteSaleForm.confirmation.trim()
+        .toUpperCase() !== 'DELETE'
+    ) {
+      setError(
+        'Type DELETE to confirm permanent deletion.',
+      );
+      return;
+    }
+
+    const sale = deleteSaleForm.sale;
+
+    setBusy(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const alreadyFinanciallyReversed =
+        sale.status === 'voided'
+        || sale.status === 'refunded'
+        || sale.returnedMinor >= sale.totalMinor;
+
+      if (!alreadyFinanciallyReversed) {
+        await voidSmePosSale({
+          spaceId: space.id,
+          saleId: sale.id,
+          voidDate: today(),
+          reason:
+            `Permanent deletion requested: ${reason}`,
+        });
+      }
+
+      await deleteSmePosSalePermanently({
+        spaceId: space.id,
+        saleId: sale.id,
+        reason,
+        confirmation: 'DELETE',
+      });
+
+      setDeleteSaleForm(null);
+      setReceipt(null);
+
+      setSuccess(
+        `Sale ${sale.receiptNumber} permanently deleted.`,
+      );
+
+      await load();
+      await onChanged();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(nextError),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (role === 'seller') {
     return <section className="panel"><span className="eyebrow">Seller access</span><h2>Marketplace seller workspace</h2><p>Seller listings, balances, and payouts are added in the Marketplace Consignment POS phase.</p></section>;
   }
@@ -825,8 +930,105 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
         <button className="button secondary" type="button" onClick={() => window.print()}>Print</button>
         {canManageReturns && !['refunded', 'voided'].includes(receipt.status) && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
         {canVoidSales && !['refunded', 'voided'].includes(receipt.status) && receipt.totalMinor > receipt.returnedMinor && <button className="button ghost danger" type="button" onClick={() => openVoidForm(receipt)}>Void sale</button>}
+        {canDeleteSales && <button className="button ghost danger" type="button" onClick={() => openPermanentDeleteForm(receipt)}>Delete permanently</button>}
         <button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button>
       </div>
+    </Modal>}
+
+    {deleteSaleForm && <Modal
+      title={`Delete permanently · ${deleteSaleForm.sale.receiptNumber}`}
+      onClose={() => !busy && setDeleteSaleForm(null)}
+    >
+      <form
+        className="form-stack"
+        onSubmit={submitPermanentDelete}
+      >
+        <div className="notice warning">
+          <strong>
+            Permanent deletion cannot be undone.
+          </strong>
+          <br />
+          If the sale is still active, BajetBN first performs
+          the normal audited financial reversal. After that,
+          the POS sale/receipt is permanently removed.
+        </div>
+
+        <p>
+          Stock, customer totals, payments and seller balances
+          are reversed safely before an active sale can be deleted.
+        </p>
+
+        <label>
+          Deletion reason
+          <textarea
+            rows={3}
+            maxLength={500}
+            value={deleteSaleForm.reason}
+            onChange={(event) =>
+              setDeleteSaleForm(
+                (current) =>
+                  current
+                    ? {
+                        ...current,
+                        reason: event.target.value,
+                      }
+                    : current,
+              )
+            }
+            placeholder="Example: Duplicate or invalid sale record"
+            required
+          />
+        </label>
+
+        <label>
+          Type DELETE to confirm
+          <input
+            value={deleteSaleForm.confirmation}
+            onChange={(event) =>
+              setDeleteSaleForm(
+                (current) =>
+                  current
+                    ? {
+                        ...current,
+                        confirmation: event.target.value,
+                      }
+                    : current,
+              )
+            }
+            autoComplete="off"
+            required
+          />
+        </label>
+
+        <div className="modal-actions">
+          <button
+            className="button secondary"
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              setDeleteSaleForm(null)
+            }
+          >
+            Cancel
+          </button>
+
+          <button
+            className="button danger"
+            type="submit"
+            disabled={
+              busy
+              || !deleteSaleForm.reason.trim()
+              || deleteSaleForm.confirmation
+                .trim()
+                .toUpperCase() !== 'DELETE'
+            }
+          >
+            {busy
+              ? 'Deleting sale…'
+              : 'Delete permanently'}
+          </button>
+        </div>
+      </form>
     </Modal>}
 
     {voidForm && <Modal title={`Void sale · ${voidForm.sale.receiptNumber}`} onClose={() => !busy && setVoidForm(null)}>

@@ -324,7 +324,7 @@ export function AppShell() {
         </nav>
         <div className="sidebar-footer">
           <NavLink
-            to="/settings/subscription"
+            to="/subscription"
             className="sidebar-plan-link"
             onClick={() => setMobileOpen(false)}
           >

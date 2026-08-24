@@ -578,6 +578,36 @@ export async function voidSmePosSale(input: {
   }>;
 }
 
+
+export async function deleteSmePosSalePermanently(input: {
+  spaceId: string;
+  saleId: string;
+  reason: string;
+  confirmation: 'DELETE';
+}): Promise<{
+  data: {
+    saleId: string;
+    deleted: boolean;
+  };
+}> {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'deleteSmePosSalePermanently',
+  );
+
+  return call({
+    ...input,
+    idempotencyKey: crypto.randomUUID(),
+  }) as Promise<{
+    data: {
+      saleId: string;
+      deleted: boolean;
+    };
+  }>;
+}
+
 export async function recordMarketplaceSellerPayout(input: {
   spaceId: string;
   sellerId: string;

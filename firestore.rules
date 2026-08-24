@@ -232,6 +232,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /subscriptionRequests/{requestId} {
+      allow read: if signedIn()
+        && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /smePosDeletionAudit/{auditId} {
+      allow read, write: if false;
+    }
+
     match /accountDeletionRequests/{uid} {
       allow read: if isSelf(uid);
       allow create, update, delete: if false;

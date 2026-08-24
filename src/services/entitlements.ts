@@ -131,7 +131,7 @@ export function upgradeToPlusCopy(
       detail?.trim()
       || `${feature} has reached the BajetBN Basic limit. Your existing information stays safe. Upgrade to Plus to keep adding and unlock the full experience.`,
     actionLabel: 'View Plus',
-    path: '/settings/subscription',
+    path: '/subscription',
   };
 }
 

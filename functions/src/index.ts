@@ -11939,6 +11939,7 @@ export const adminUpdateSubscription = onCall(
         'activate',
         'extend',
         'cancel',
+        'lifetime',
       ] as const,
       'subscription action',
     );
@@ -11964,6 +11965,55 @@ export const adminUpdateSubscription = onCall(
     const now =
       FieldValue.serverTimestamp();
 
+    if (action === 'lifetime') {
+      await userRef.set(
+        {
+          subscriptionPlan: 'plus',
+          subscriptionStatus: 'active',
+          subscriptionStartedAt:
+            current.subscriptionStartedAt
+            || Timestamp.now(),
+          subscriptionExpiresAt: null,
+          subscriptionLifetime: true,
+          subscriptionSource: source,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+
+      await db
+        .collection('subscriptionAudit')
+        .add({
+          targetUid,
+          targetEmail:
+            String(current.email || ''),
+          action: 'lifetime',
+          previousPlan:
+            current.subscriptionPlan
+            || 'basic',
+          previousStatus:
+            current.subscriptionStatus
+            || 'basic',
+          previousExpiresAt:
+            current.subscriptionExpiresAt
+            || null,
+          nextPlan: 'plus',
+          nextStatus: 'active',
+          nextExpiresAt: null,
+          source,
+          adminUid,
+          createdAt: now,
+        });
+
+      return {
+        uid: targetUid,
+        effectivePlan: 'plus',
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: null,
+        lifetime: true,
+      };
+    }
+
     if (action === 'cancel') {
       await userRef.set(
         {
@@ -11972,6 +12022,7 @@ export const adminUpdateSubscription = onCall(
             'cancelled',
           subscriptionExpiresAt:
             Timestamp.now(),
+          subscriptionLifetime: false,
           subscriptionSource: source,
           updatedAt: now,
         },
@@ -12035,6 +12086,7 @@ export const adminUpdateSubscription = onCall(
           startedAt,
         subscriptionExpiresAt:
           expiryTimestamp,
+        subscriptionLifetime: false,
         subscriptionSource:
           source,
         updatedAt: now,
@@ -15021,5 +15073,966 @@ export const removeDebtPaymentProof = onCall(
     return {
       paymentId,
     };
+  },
+);
+
+
+/* ==================================================
+ * v1.9.0 Plus payment proof workflow
+ * ================================================== */
+
+const bajetBnPlusRequestPlans = {
+  monthly: {
+    label: '1 Month',
+    months: 1,
+    amountMinor: 490,
+  },
+  threeMonths: {
+    label: '3 Months',
+    months: 3,
+    amountMinor: 1300,
+  },
+  sixMonths: {
+    label: '6 Months',
+    months: 6,
+    amountMinor: 2400,
+  },
+  yearly: {
+    label: '12 Months',
+    months: 12,
+    amountMinor: 4200,
+  },
+} as const;
+
+type BajetBnPlusRequestPlanKey =
+  keyof typeof bajetBnPlusRequestPlans;
+
+function subscriptionRequestResponse(
+  snapshot: FirebaseFirestore.DocumentSnapshot,
+) {
+  const data = snapshot.data() || {};
+
+  return {
+    id: snapshot.id,
+    reference:
+      String(data.reference || snapshot.id),
+    uid:
+      String(data.uid || ''),
+    email:
+      String(data.email || ''),
+    fullName:
+      String(data.fullName || ''),
+    planKey:
+      String(data.planKey || ''),
+    planLabel:
+      String(data.planLabel || ''),
+    months:
+      Number(data.months || 0),
+    amountMinor:
+      Number(data.amountMinor || 0),
+    currency: 'BND' as const,
+    status:
+      String(data.status || 'awaiting_payment'),
+    proofPath:
+      data.proofPath
+        ? String(data.proofPath)
+        : null,
+    createdAt:
+      timestampToIso(data.createdAt),
+    submittedAt:
+      timestampToIso(data.submittedAt),
+    reviewedAt:
+      timestampToIso(data.reviewedAt),
+    reviewedBy:
+      data.reviewedBy
+        ? String(data.reviewedBy)
+        : null,
+    reviewNote:
+      data.reviewNote
+        ? String(data.reviewNote)
+        : null,
+  };
+}
+
+export const createSubscriptionRequest = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(request.auth?.uid);
+
+    const planKey = oneOf(
+      request.data?.planKey,
+      [
+        'monthly',
+        'threeMonths',
+        'sixMonths',
+        'yearly',
+      ] as const,
+      'Plus plan',
+    ) as BajetBnPlusRequestPlanKey;
+
+    const plan =
+      bajetBnPlusRequestPlans[planKey];
+
+    const userSnapshot =
+      await db
+        .collection('users')
+        .doc(uid)
+        .get();
+
+    if (!userSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'BajetBN user profile not found.',
+      );
+    }
+
+    const user =
+      userSnapshot.data() || {};
+
+    const requestRef =
+      db.collection(
+        'subscriptionRequests',
+      ).doc();
+
+    const reference =
+      `BBN-${Date.now().toString(36).toUpperCase()}-${requestRef.id.slice(0, 6).toUpperCase()}`;
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    await requestRef.create({
+      reference,
+      uid,
+      email:
+        String(user.email || ''),
+      fullName:
+        String(user.fullName || ''),
+      planKey,
+      planLabel: plan.label,
+      months: plan.months,
+      amountMinor: plan.amountMinor,
+      currency: 'BND',
+      status: 'awaiting_payment',
+      proofPath: null,
+      createdAt: now,
+      submittedAt: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      reviewNote: null,
+      updatedAt: now,
+    });
+
+    const snapshot =
+      await requestRef.get();
+
+    return {
+      request:
+        subscriptionRequestResponse(
+          snapshot,
+        ),
+    };
+  },
+);
+
+export const submitSubscriptionPaymentProof = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(request.auth?.uid);
+
+    const requestId =
+      stringValue(
+        request.data?.requestId,
+        'Subscription request',
+        128,
+      );
+
+    const proofPath =
+      stringValue(
+        request.data?.proofPath,
+        'Payment proof',
+        500,
+      );
+
+    const expectedPrefix =
+      `subscription-proofs/${uid}/${requestId}/`;
+
+    if (
+      !proofPath.startsWith(
+        expectedPrefix,
+      )
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'The payment proof path is invalid.',
+      );
+    }
+
+    const requestRef =
+      db.collection(
+        'subscriptionRequests',
+      ).doc(requestId);
+
+    await db.runTransaction(
+      async (transaction) => {
+        const snapshot =
+          await transaction.get(
+            requestRef,
+          );
+
+        if (!snapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Subscription request not found.',
+          );
+        }
+
+        const data =
+          snapshot.data() || {};
+
+        if (data.uid !== uid) {
+          throw new HttpsError(
+            'permission-denied',
+            'This subscription request belongs to another user.',
+          );
+        }
+
+        if (
+          data.status
+          !== 'awaiting_payment'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This subscription request has already been submitted.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.update(
+          requestRef,
+          {
+            proofPath,
+            status: 'pending_review',
+            submittedAt: now,
+            updatedAt: now,
+          },
+        );
+      },
+    );
+
+    return {
+      request:
+        subscriptionRequestResponse(
+          await requestRef.get(),
+        ),
+    };
+  },
+);
+
+export const listMySubscriptionRequests = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(request.auth?.uid);
+
+    const snapshot =
+      await db
+        .collection(
+          'subscriptionRequests',
+        )
+        .where('uid', '==', uid)
+        .limit(50)
+        .get();
+
+    const requests =
+      snapshot.docs
+        .sort(
+          (a, b) =>
+            (
+              b.data().createdAt
+                ?.toMillis?.()
+              || 0
+            )
+            - (
+              a.data().createdAt
+                ?.toMillis?.()
+              || 0
+            ),
+        )
+        .map(
+          subscriptionRequestResponse,
+        );
+
+    return { requests };
+  },
+);
+
+export const adminListSubscriptionRequests = onCall(
+  { region },
+  async (request) => {
+    await requirePlatformAdmin(
+      request,
+    );
+
+    const snapshot =
+      await db
+        .collection(
+          'subscriptionRequests',
+        )
+        .orderBy(
+          'createdAt',
+          'desc',
+        )
+        .limit(100)
+        .get();
+
+    return {
+      requests:
+        snapshot.docs.map(
+          subscriptionRequestResponse,
+        ),
+    };
+  },
+);
+
+export const adminReviewSubscriptionRequest = onCall(
+  { region },
+  async (request) => {
+    const adminUid =
+      await requirePlatformAdmin(
+        request,
+      );
+
+    const requestId =
+      stringValue(
+        request.data?.requestId,
+        'Subscription request',
+        128,
+      );
+
+    const decision =
+      oneOf(
+        request.data?.decision,
+        [
+          'approve',
+          'reject',
+        ] as const,
+        'Review decision',
+      );
+
+    const note =
+      optionalString(
+        request.data?.note,
+        500,
+      );
+
+    const requestRef =
+      db.collection(
+        'subscriptionRequests',
+      ).doc(requestId);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const requestSnapshot =
+          await transaction.get(
+            requestRef,
+          );
+
+        if (!requestSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Subscription request not found.',
+          );
+        }
+
+        const paymentRequest =
+          requestSnapshot.data() || {};
+
+        if (
+          paymentRequest.status
+          !== 'pending_review'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This payment request is no longer waiting for review.',
+          );
+        }
+
+        if (
+          !paymentRequest.proofPath
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This payment request has no proof attached.',
+          );
+        }
+
+        const targetUid =
+          stringValue(
+            paymentRequest.uid,
+            'User',
+            128,
+          );
+
+        const userRef =
+          db.collection('users')
+            .doc(targetUid);
+
+        const userSnapshot =
+          await transaction.get(
+            userRef,
+          );
+
+        if (!userSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'The BajetBN user was not found.',
+          );
+        }
+
+        const current =
+          userSnapshot.data() || {};
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        if (decision === 'reject') {
+          transaction.update(
+            requestRef,
+            {
+              status: 'rejected',
+              reviewedAt: now,
+              reviewedBy: adminUid,
+              reviewNote: note || null,
+              updatedAt: now,
+            },
+          );
+
+          const auditRef =
+            db.collection(
+              'subscriptionAudit',
+            ).doc();
+
+          transaction.create(
+            auditRef,
+            {
+              targetUid,
+              targetEmail:
+                String(
+                  current.email || '',
+                ),
+              action:
+                'payment_request_rejected',
+              previousPlan:
+                current.subscriptionPlan
+                || 'basic',
+              previousStatus:
+                current.subscriptionStatus
+                || 'basic',
+              nextPlan:
+                current.subscriptionPlan
+                || 'basic',
+              nextStatus:
+                current.subscriptionStatus
+                || 'basic',
+              source:
+                'whatsapp_manual',
+              adminUid,
+              subscriptionRequestId:
+                requestId,
+              createdAt: now,
+            },
+          );
+
+          return {
+            requestId,
+            decision,
+          };
+        }
+
+        if (
+          current.subscriptionPlan
+            === 'plus'
+          && current.subscriptionStatus
+            === 'active'
+          && current.subscriptionExpiresAt
+            == null
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This user already has non-expiring Plus access.',
+          );
+        }
+
+        const expiresAt =
+          current.subscriptionExpiresAt;
+
+        const currentlyPlus =
+          current.subscriptionPlan
+            === 'plus'
+          && current.subscriptionStatus
+            === 'active'
+          && (
+            !(expiresAt instanceof Timestamp)
+            || expiresAt.toMillis()
+              > Date.now()
+          );
+
+        const months =
+          integerBetween(
+            paymentRequest.months,
+            'Subscription months',
+            1,
+            12,
+          );
+
+        if (
+          ![1, 3, 6, 12].includes(
+            months,
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The requested Plus duration is invalid.',
+          );
+        }
+
+        const expiry =
+          subscriptionExpiryFromInput(
+            {
+              action:
+                currentlyPlus
+                  ? 'extend'
+                  : 'activate',
+              months,
+            },
+            current.subscriptionExpiresAt,
+          );
+
+        const expiryTimestamp =
+          Timestamp.fromDate(expiry);
+
+        transaction.set(
+          userRef,
+          {
+            subscriptionPlan: 'plus',
+            subscriptionStatus:
+              'active',
+            subscriptionStartedAt:
+              currentlyPlus
+              && current.subscriptionStartedAt
+                ? current.subscriptionStartedAt
+                : Timestamp.now(),
+            subscriptionExpiresAt:
+              expiryTimestamp,
+            subscriptionLifetime: false,
+            subscriptionSource:
+              'whatsapp_manual',
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+
+        transaction.update(
+          requestRef,
+          {
+            status: 'approved',
+            reviewedAt: now,
+            reviewedBy: adminUid,
+            reviewNote: note || null,
+            approvedExpiresAt:
+              expiryTimestamp,
+            updatedAt: now,
+          },
+        );
+
+        const auditRef =
+          db.collection(
+            'subscriptionAudit',
+          ).doc();
+
+        transaction.create(
+          auditRef,
+          {
+            targetUid,
+            targetEmail:
+              String(
+                current.email || '',
+              ),
+            action:
+              currentlyPlus
+                ? 'extend'
+                : 'activate',
+            previousPlan:
+              current.subscriptionPlan
+              || 'basic',
+            previousStatus:
+              current.subscriptionStatus
+              || 'basic',
+            previousExpiresAt:
+              current.subscriptionExpiresAt
+              || null,
+            nextPlan: 'plus',
+            nextStatus: 'active',
+            nextExpiresAt:
+              expiryTimestamp,
+            source:
+              'whatsapp_manual',
+            adminUid,
+            subscriptionRequestId:
+              requestId,
+            createdAt: now,
+          },
+        );
+
+        return {
+          requestId,
+          decision,
+          subscriptionExpiresAt:
+            expiry.toISOString(),
+        };
+      },
+    );
+  },
+);
+
+/* ==================================================
+ * v1.9.0 permanent POS sale deletion
+ * ================================================== */
+
+export const deleteSmePosSalePermanently = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(request.auth?.uid);
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Space ID',
+        80,
+      );
+
+    const saleId =
+      stringValue(
+        request.data?.saleId,
+        'Sale ID',
+        80,
+      );
+
+    const reason =
+      stringValue(
+        request.data?.reason,
+        'Deletion reason',
+        500,
+      );
+
+    const confirmation =
+      stringValue(
+        request.data?.confirmation,
+        'Deletion confirmation',
+        20,
+      );
+
+    if (
+      confirmation !== 'DELETE'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Type DELETE to confirm permanent deletion.',
+      );
+    }
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const context =
+      await requireSmePosActor(
+        spaceId,
+        uid,
+        ['owner'],
+      );
+
+    const saleRef =
+      db.collection(
+        'smePosSales',
+      ).doc(saleId);
+
+    const auditRef =
+      db.collection(
+        'smePosDeletionAudit',
+      ).doc(saleId);
+
+    const commandRef =
+      db.collection(
+        'smePosCommands',
+      ).doc(
+        commandId(uid, key),
+      );
+
+    const previousAudit =
+      await auditRef.get();
+
+    if (previousAudit.exists) {
+      const audit =
+        previousAudit.data() || {};
+
+      if (
+        audit.spaceId === spaceId
+        && audit.ownerId
+          === context.settings.ownerId
+      ) {
+        return {
+          saleId,
+          deleted: true,
+        };
+      }
+    }
+
+    const initialSale =
+      await saleRef.get();
+
+    if (!initialSale.exists) {
+      throw new HttpsError(
+        'not-found',
+        'POS sale not found.',
+      );
+    }
+
+    const initialData =
+      initialSale.data() || {};
+
+    if (
+      initialData.spaceId !== spaceId
+      || initialData.ownerId
+        !== context.settings.ownerId
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'This sale belongs to another shop.',
+      );
+    }
+
+    const totalMinor =
+      nonNegativeMoney(
+        initialData.totalMinor || 0,
+      );
+
+    const returnedMinor =
+      nonNegativeMoney(
+        initialData.returnedMinor || 0,
+      );
+
+    const safelyReversed =
+      initialData.status === 'voided'
+      || initialData.status === 'refunded'
+      || returnedMinor >= totalMinor;
+
+    if (!safelyReversed) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Void the remaining sale before permanently deleting it.',
+      );
+    }
+
+    const [
+      sellerLedgerSnapshot,
+      activitySnapshot,
+    ] = await Promise.all([
+      db.collection(
+        'smePosSellerLedger',
+      )
+        .where(
+          'saleId',
+          '==',
+          saleId,
+        )
+        .limit(100)
+        .get(),
+
+      db.collection(
+        'spaceActivities',
+      )
+        .where(
+          'targetId',
+          '==',
+          saleId,
+        )
+        .limit(100)
+        .get(),
+    ]);
+
+    if (
+      sellerLedgerSnapshot.size >= 100
+      || activitySnapshot.size >= 100
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This sale has unusually large related history. Contact the platform administrator before deleting it.',
+      );
+    }
+
+    return db.runTransaction(
+      async (transaction) => {
+        const [
+          command,
+          tombstone,
+          saleSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            commandRef,
+          ),
+          transaction.get(
+            auditRef,
+          ),
+          transaction.get(
+            saleRef,
+          ),
+        ]);
+
+        if (command.exists) {
+          return command.data()
+            ?.result;
+        }
+
+        if (tombstone.exists) {
+          const result = {
+            saleId,
+            deleted: true,
+          };
+
+          transaction.create(
+            commandRef,
+            {
+              uid,
+              kind:
+                'delete_sme_pos_sale_permanently',
+              idempotencyKey: key,
+              result,
+              createdAt:
+                FieldValue.serverTimestamp(),
+            },
+          );
+
+          return result;
+        }
+
+        if (!saleSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'POS sale not found.',
+          );
+        }
+
+        const sale =
+          saleSnapshot.data() || {};
+
+        if (
+          sale.spaceId !== spaceId
+          || sale.ownerId
+            !== context.settings.ownerId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'This sale belongs to another shop.',
+          );
+        }
+
+        const saleTotal =
+          nonNegativeMoney(
+            sale.totalMinor || 0,
+          );
+
+        const saleReturned =
+          nonNegativeMoney(
+            sale.returnedMinor || 0,
+          );
+
+        if (
+          sale.status !== 'voided'
+          && sale.status !== 'refunded'
+          && saleReturned < saleTotal
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The sale is not fully reversed.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.delete(
+          saleRef,
+        );
+
+        sellerLedgerSnapshot.docs
+          .forEach((document) => {
+            transaction.delete(
+              document.ref,
+            );
+          });
+
+        activitySnapshot.docs
+          .filter(
+            (document) =>
+              document.data()?.spaceId
+                === spaceId
+              && document.data()
+                ?.targetType
+                === 'sme_pos_sale',
+          )
+          .forEach((document) => {
+            transaction.delete(
+              document.ref,
+            );
+          });
+
+        transaction.create(
+          auditRef,
+          {
+            saleId,
+            receiptNumber:
+              String(
+                sale.receiptNumber
+                || saleId,
+              ),
+            spaceId,
+            ownerId:
+              context.settings.ownerId,
+            deletedBy: uid,
+            deletionReason:
+              reason,
+            deletedAt: now,
+          },
+        );
+
+        const result = {
+          saleId,
+          deleted: true,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'delete_sme_pos_sale_permanently',
+            idempotencyKey: key,
+            result,
+            createdAt: now,
+          },
+        );
+
+        return result;
+      },
+    );
   },
 );

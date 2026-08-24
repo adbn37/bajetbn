@@ -4,6 +4,7 @@ import {
   useState,
 } from 'react';
 import { PageHeader } from '../components/PageHeader';
+import { AdminSubscriptionRequests } from '../components/AdminSubscriptionRequests';
 import {
   BAJETBN_SUBSCRIPTION_ADMIN_EMAIL,
 } from '../config/subscription';
@@ -97,7 +98,8 @@ export function AdminPortalPage() {
     action:
       | 'activate'
       | 'extend'
-      | 'cancel',
+      | 'cancel'
+      | 'lifetime',
     months?: 1 | 3 | 6 | 12,
     source:
       | 'whatsapp_manual'
@@ -121,11 +123,13 @@ export function AdminPortalPage() {
       setMessage(
         action === 'cancel'
           ? 'Subscription cancelled. The user now has Basic access.'
-          : action === 'extend'
-            ? 'Subscription extended.'
-            : source === 'complimentary'
-              ? 'Complimentary BajetBN Plus activated.'
-              : 'BajetBN Plus activated.',
+          : action === 'lifetime'
+            ? 'Lifetime BajetBN Plus granted.'
+            : action === 'extend'
+              ? 'Subscription extended.'
+              : source === 'complimentary'
+                ? 'Complimentary BajetBN Plus activated.'
+                : 'BajetBN Plus activated.',
       );
 
       await load();
@@ -269,10 +273,39 @@ export function AdminPortalPage() {
 
                   <p>
                     Expires:{' '}
-                    {displayDate(
-                      user.subscriptionExpiresAt,
-                    )}
+                    {user.effectivePlan === 'plus'
+                      && !user.subscriptionExpiresAt
+                      ? 'Lifetime'
+                      : displayDate(
+                          user.subscriptionExpiresAt,
+                        )}
                   </p>
+
+                  {user.effectivePlan === 'plus'
+                    && !user.subscriptionExpiresAt
+                    ? (
+                      <p>
+                        <strong>
+                          Lifetime Plus
+                        </strong>
+                      </p>
+                    )
+                    : (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void changeSubscription(
+                            user.uid,
+                            'lifetime',
+                            undefined,
+                            'internal',
+                          )
+                        }
+                      >
+                        Grant Lifetime Plus
+                      </button>
+                    )}
 
                   {user.platformRole
                     === 'platform_admin' && (
@@ -414,6 +447,10 @@ export function AdminPortalPage() {
           </div>
         )}
       </section>
+
+      <AdminSubscriptionRequests
+        onChanged={load}
+      />
 
       <section className="card stack">
         <span className="eyebrow">

@@ -71,6 +71,21 @@ service firebase.storage {
       return isSmeSpaceOwner(spaceId) || hasActiveSmePosAccess(spaceId);
     }
 
+    match /subscription-proofs/{uid}/{requestId}/{fileName} {
+      allow read: if signedIn()
+        && (
+          request.auth.uid == uid
+          || request.auth.token.platformAdmin == true
+        );
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && isImageOrPdf()
+        && underTenMb();
+
+      allow update, delete: if false;
+    }
+
     match /users/{uid}/{allPaths=**} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, update: if signedIn() && request.auth.uid == uid && isImageOrPdf() && underTenMb();

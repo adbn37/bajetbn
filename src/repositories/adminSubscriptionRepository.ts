@@ -49,7 +49,8 @@ export interface AdminSubscriptionUpdateInput {
   action:
     | 'activate'
     | 'extend'
-    | 'cancel';
+    | 'cancel'
+    | 'lifetime';
   months?: 1 | 3 | 6 | 12;
   customExpiresAt?: string;
   source?:

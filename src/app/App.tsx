@@ -103,6 +103,10 @@ export default function App() {
                   <Route path="offline-sync" element={<OfflineSyncPage />} />
                   <Route path="subscription" element={<SubscriptionPage />} />
                   <Route
+                    path="settings/subscription"
+                    element={<Navigate to="/subscription" replace />}
+                  />
+                  <Route
                     path="admin"
                     element={
                       <PlatformAdminRoute>
