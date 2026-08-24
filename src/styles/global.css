@@ -8467,3 +8467,274 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 /* END BAJETBN V1.10 MORE PAGE */
+/* BAJETBN V1.10 MOBILE REPORTS */
+
+.reports-v110 {
+  width: min(100%, 900px);
+  margin-inline: auto;
+  padding-bottom: 112px;
+}
+
+.reports-v110-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.reports-v110-header h1 {
+  margin: 2px 0 4px;
+  font-size: clamp(1.85rem, 7vw, 2.55rem);
+  letter-spacing: -0.045em;
+}
+
+.reports-v110-header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.reports-v110-kicker {
+  display: block;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.reports-v110-filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.reports-v110-filter-button.active {
+  border-color:
+    color-mix(in srgb, var(--accent) 45%, var(--border));
+  background:
+    color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent);
+}
+
+.reports-v110-period-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.reports-v110-period-tabs button {
+  min-width: 0;
+  min-height: 38px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.reports-v110-period-tabs button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.07);
+}
+
+.reports-v110-period-nav {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.reports-v110-period-nav > button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.45rem;
+  cursor: pointer;
+}
+
+.reports-v110-period-nav > div {
+  min-width: 0;
+  text-align: center;
+}
+
+.reports-v110-period-nav small,
+.reports-v110-period-nav strong {
+  display: block;
+}
+
+.reports-v110-period-nav small {
+  margin-bottom: 1px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.reports-v110-period-nav strong {
+  overflow: hidden;
+  font-size: 0.96rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reports-v110-filters {
+  margin-bottom: 14px;
+}
+
+.reports-v110-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.reports-v110-summary-card {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 19px;
+  background: var(--surface);
+}
+
+.reports-v110-summary-card > span,
+.reports-v110-summary-card > strong,
+.reports-v110-summary-card > small {
+  display: block;
+}
+
+.reports-v110-summary-card > span {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.reports-v110-summary-card > strong {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.05rem, 3vw, 1.45rem);
+  letter-spacing: -0.035em;
+}
+
+.reports-v110-summary-card > small {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.reports-v110-summary-card.money-in {
+  border-color:
+    color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.reports-v110-summary-card.money-left {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--accent) 11%, var(--surface)),
+      var(--surface)
+    );
+}
+
+.reports-v110-summary-card.money-left.negative {
+  border-color:
+    color-mix(in srgb, #ef4444 45%, var(--border));
+}
+
+.reports-v110-activity-strip {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.reports-v110-activity-strip > span:last-child {
+  min-width: 0;
+  text-align: right;
+}
+
+.reports-v110-activity-strip small,
+.reports-v110-activity-strip strong {
+  display: block;
+}
+
+.reports-v110-activity-strip small {
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.reports-v110-activity-strip strong {
+  overflow: hidden;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .reports-v110-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reports-v110-summary-card.money-left {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .reports-v110-header {
+    align-items: center;
+  }
+
+  .reports-v110-header p {
+    max-width: 220px;
+    font-size: 0.82rem;
+  }
+
+  .reports-v110-filter-button {
+    padding-inline: 11px;
+  }
+
+  .reports-v110-period-tabs button {
+    font-size: 0.7rem;
+  }
+
+  .reports-v110-summary-card {
+    padding: 13px;
+  }
+}
+
+/* END BAJETBN V1.10 MOBILE REPORTS */
