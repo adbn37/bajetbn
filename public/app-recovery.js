@@ -8,44 +8,21 @@
   // old BajetBN service workers ignore it because it was never precached.
   const FRESH_SHELL_PATH = '/__bajetbn_fresh_shell__';
 
-  const RECOVERY_HANDOFF_PATH = '/recovery-handoff.html';
-  const PRODUCTION_HOSTS = new Set([
-    'bajetbn.com',
-    'www.bajetbn.com',
-  ]);
   let memoryAttemptAt = 0;
 
-  function alternateProductionOrigin() {
-    if (!PRODUCTION_HOSTS.has(window.location.hostname)) {
-      return null;
-    }
-
-    return window.location.hostname === 'bajetbn.com'
-      ? 'https://www.bajetbn.com'
-      : 'https://bajetbn.com';
-  }
-
   function recoveryDestination(now) {
+    // Stay on the same origin. The current stale worker is unregistered first,
+    // then this clean navigation carries the recovery flag. app-recovery.js is
+    // network-only, so the next document receives the newest recovery logic
+    // even if an old application shell briefly answers the navigation.
     const returnUrl = new URL(window.location.href);
-    returnUrl.searchParams.set(RECOVERY_PARAM, String(now));
 
-    const alternateOrigin = alternateProductionOrigin();
-
-    if (!alternateOrigin) {
-      return returnUrl.toString();
-    }
-
-    const handoffUrl = new URL(
-      RECOVERY_HANDOFF_PATH,
-      alternateOrigin,
+    returnUrl.searchParams.set(
+      RECOVERY_PARAM,
+      String(now),
     );
 
-    handoffUrl.searchParams.set(
-      'returnTo',
-      returnUrl.toString(),
-    );
-
-    return handoffUrl.toString();
+    return returnUrl.toString();
   }
 
   function messageFor(value) {
