@@ -2,6 +2,12 @@
   const RECOVERY_KEY = 'bajetbn:deployment-recovery';
   const RECOVERY_PARAM = '__bajetbn_reload';
   const RECOVERY_WINDOW_MS = 60_000;
+
+  // This path intentionally does not exist as a physical build file.
+  // Cloudflare's SPA fallback serves the newest index.html for it, while
+  // old BajetBN service workers ignore it because it was never precached.
+  const FRESH_SHELL_PATH = '/__bajetbn_fresh_shell__';
+
   const RECOVERY_HANDOFF_PATH = '/recovery-handoff.html';
   const PRODUCTION_HOSTS = new Set([
     'bajetbn.com',
@@ -79,6 +85,102 @@
     } catch {
       // Ignore storage restrictions.
     }
+  }
+
+  function replaceWithFreshNetworkShell() {
+    const currentUrl = new URL(window.location.href);
+
+    if (!currentUrl.searchParams.has(RECOVERY_PARAM)) {
+      return false;
+    }
+
+    try {
+      const shellUrl = new URL(
+        FRESH_SHELL_PATH,
+        window.location.origin,
+      );
+
+      shellUrl.searchParams.set(
+        'fresh',
+        String(Date.now()),
+      );
+
+      // Synchronous XHR is intentional here. This runs only during deployment
+      // recovery and blocks the old HTML parser before it can execute stale
+      // lazy-loaded module references.
+      //
+      // The special pathname is not in the service-worker precache, so even an
+      // old controlling worker lets this request reach Cloudflare.
+      const request = new XMLHttpRequest();
+
+      request.open(
+        'GET',
+        shellUrl.toString(),
+        false,
+      );
+
+      request.setRequestHeader(
+        'Cache-Control',
+        'no-cache',
+      );
+
+      request.send(null);
+
+      if (
+        request.status < 200
+        || request.status >= 300
+      ) {
+        throw new Error(
+          `Fresh shell HTTP ${request.status}`,
+        );
+      }
+
+      const html = String(
+        request.responseText || '',
+      );
+
+      if (
+        !html.includes('<div id="root"></div>')
+        || !html.includes('type="module"')
+      ) {
+        throw new Error(
+          'Fresh shell response was not BajetBN index.html.',
+        );
+      }
+
+      currentUrl.searchParams.delete(
+        RECOVERY_PARAM,
+      );
+
+      clearAttempt();
+
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+      );
+
+      document.open();
+      document.write(html);
+      document.close();
+
+      return true;
+    } catch (error) {
+      console.warn(
+        '[BajetBN] Fresh application shell recovery failed.',
+        error,
+      );
+
+      // Allow the normal deployment recovery path to try once if the direct
+      // fresh-shell replacement could not complete.
+      clearAttempt();
+
+      return false;
+    }
+  }
+
+  if (replaceWithFreshNetworkShell()) {
+    return;
   }
 
   async function clearStaleApplicationShell() {
