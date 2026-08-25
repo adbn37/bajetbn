@@ -43,6 +43,34 @@
     }
   }
 
+  async function clearStaleApplicationShell() {
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(
+          registrations
+            .filter((registration) => registration.scope.startsWith(`${window.location.origin}/`))
+            .map((registration) => registration.unregister()),
+        );
+      }
+    } catch (error) {
+      console.warn('[BajetBN] Could not unregister stale service worker.', error);
+    }
+
+    try {
+      if ('caches' in window) {
+        const keys = await window.caches.keys();
+        await Promise.all(
+          keys
+            .filter((key) => key.startsWith('bajetbn-shell-'))
+            .map((key) => window.caches.delete(key)),
+        );
+      }
+    } catch (error) {
+      console.warn('[BajetBN] Could not clear stale application cache.', error);
+    }
+  }
+
   function recover(value) {
     if (!isDeploymentAssetError(value)) return false;
 
@@ -54,9 +82,15 @@
     }
 
     rememberAttempt(now);
-    const url = new URL(window.location.href);
-    url.searchParams.set(RECOVERY_PARAM, String(now));
-    window.location.replace(url.toString());
+
+    void (async () => {
+      await clearStaleApplicationShell();
+
+      const url = new URL(window.location.href);
+      url.searchParams.set(RECOVERY_PARAM, String(now));
+      window.location.replace(url.toString());
+    })();
+
     return true;
   }
 

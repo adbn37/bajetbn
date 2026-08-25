@@ -34,6 +34,10 @@ const cacheableUrls = allFiles
   .filter((file) => !file.endsWith('.map'))
   .filter((file) => CACHEABLE_EXTENSIONS.has(extname(file).toLowerCase()))
   .map(toUrl)
+  // app-recovery.js must always come from the network. If an old application
+  // shell breaks after a deployment, the recovery code itself must not be
+  // trapped inside that old service-worker cache.
+  .filter((url) => url !== '/app-recovery.js')
   .sort();
 
 const indexHtml = await readFile(join(DIST_DIR, 'index.html'), 'utf8');
