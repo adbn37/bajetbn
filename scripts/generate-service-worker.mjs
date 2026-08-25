@@ -38,6 +38,8 @@ const cacheableUrls = allFiles
   // shell breaks after a deployment, the recovery code itself must not be
   // trapped inside that old service-worker cache.
   .filter((url) => url !== '/app-recovery.js')
+  .filter((url) => url !== '/recovery-handoff.html')
+  .filter((url) => url !== '/recovery-handoff.js')
   .sort();
 
 const indexHtml = await readFile(join(DIST_DIR, 'index.html'), 'utf8');

@@ -2,7 +2,45 @@
   const RECOVERY_KEY = 'bajetbn:deployment-recovery';
   const RECOVERY_PARAM = '__bajetbn_reload';
   const RECOVERY_WINDOW_MS = 60_000;
+  const RECOVERY_HANDOFF_PATH = '/recovery-handoff.html';
+  const PRODUCTION_HOSTS = new Set([
+    'bajetbn.com',
+    'www.bajetbn.com',
+  ]);
   let memoryAttemptAt = 0;
+
+  function alternateProductionOrigin() {
+    if (!PRODUCTION_HOSTS.has(window.location.hostname)) {
+      return null;
+    }
+
+    return window.location.hostname === 'bajetbn.com'
+      ? 'https://www.bajetbn.com'
+      : 'https://bajetbn.com';
+  }
+
+  function recoveryDestination(now) {
+    const returnUrl = new URL(window.location.href);
+    returnUrl.searchParams.set(RECOVERY_PARAM, String(now));
+
+    const alternateOrigin = alternateProductionOrigin();
+
+    if (!alternateOrigin) {
+      return returnUrl.toString();
+    }
+
+    const handoffUrl = new URL(
+      RECOVERY_HANDOFF_PATH,
+      alternateOrigin,
+    );
+
+    handoffUrl.searchParams.set(
+      'returnTo',
+      returnUrl.toString(),
+    );
+
+    return handoffUrl.toString();
+  }
 
   function messageFor(value) {
     if (value && typeof value === 'object' && 'message' in value) {
@@ -86,9 +124,9 @@
     void (async () => {
       await clearStaleApplicationShell();
 
-      const url = new URL(window.location.href);
-      url.searchParams.set(RECOVERY_PARAM, String(now));
-      window.location.replace(url.toString());
+      window.location.replace(
+        recoveryDestination(now),
+      );
     })();
 
     return true;
