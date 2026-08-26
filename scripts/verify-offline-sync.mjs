@@ -49,8 +49,8 @@ const checks = [
   ['public/recovery-handoff.js', "target.origin === window.location.origin", 'recovery loop guard'],
   ['public/_headers', '/recovery-handoff.html', 'recovery handoff no-store header'],
   ['scripts/generate-service-worker.mjs', "url !== '/recovery-handoff.html'", 'recovery handoff excluded from precache'],
-  ['src/main.tsx', "navigator.serviceWorker.addEventListener('controllerchange'", 'service-worker update reload'],
-  ['src/main.tsx', 'hadServiceWorkerController', 'first-install reload guard'],
+  ['src/main.tsx', "navigator.serviceWorker.register('/sw.js'", 'service-worker registration'],
+  ['src/main.tsx', 'await registration.update()', 'service-worker update check'],
   ['src/app/App.tsx', 'path="offline-sync"', 'offline route'],
   ['src/services/personalisation.ts', "id: 'offline-sync', path: '/offline-sync', label: 'Offline & sync'", 'offline navigation'],
   ['src/services/i18n.ts', "'Offline & sync': 'Luar talian & segerak'", 'Malay navigation wording'],
@@ -61,6 +61,20 @@ const checks = [
 for (const [file, token, label] of checks) {
   assert.equal(read(file).includes(token), true, `${label} is missing from ${file}`);
 }
+
+const mainEntry = read('src/main.tsx');
+
+assert.equal(
+  mainEntry.includes("controllerchange"),
+  false,
+  'Service-worker controllerchange automatic reload must remain disabled.',
+);
+
+assert.equal(
+  mainEntry.includes('window.location.reload()'),
+  false,
+  'Service-worker automatic page reload must remain disabled.',
+);
 
 const offlineItem = audit.items.find((item) => item.id === 'pwa.offline_mutations');
 assert.ok(offlineItem, 'Offline sync is missing from the pre-v1 scope register.');
