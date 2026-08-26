@@ -123,6 +123,55 @@ function optionalString(value: unknown, max = 120): string {
   return value.trim();
 }
 
+function transactionLabels(value: unknown): string[] {
+  if (value == null) return [];
+
+  if (!Array.isArray(value)) {
+    throw new HttpsError('invalid-argument', 'Labels must be a list.');
+  }
+
+  if (value.length > 8) {
+    throw new HttpsError('invalid-argument', 'Use up to 8 labels.');
+  }
+
+  const labels: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of value) {
+    if (typeof raw !== 'string') {
+      throw new HttpsError(
+        'invalid-argument',
+        'Each label must be text.',
+      );
+    }
+
+    const label = raw
+      .trim()
+      .replace(/^#+/, '')
+      .replace(/\s+/g, '');
+
+    if (
+      !label
+      || label.length > 32
+      || !/^[a-zA-Z0-9._-]+$/.test(label)
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Labels may use letters, numbers, dots, dashes or underscores and must be 32 characters or fewer.',
+      );
+    }
+
+    const key = label.toLowerCase();
+
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    labels.push(label);
+  }
+
+  return labels;
+}
+
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
   if (typeof value !== 'string' || !allowed.includes(value as T)) throw new HttpsError('invalid-argument', `Invalid ${field}.`);
   return value as T;
@@ -693,6 +742,7 @@ export const postTransaction = onCall({ region }, async (request) => {
   const categoryId = type === 'transfer' ? 'system-transfer' : stringValue(request.data?.categoryId, 'Category ID', 80);
   const counterparty = optionalString(request.data?.counterparty, 120);
   const note = optionalString(request.data?.note, 500);
+  const labels = transactionLabels(request.data?.labels);
   const { paymentMethod, paymentMethodLabel } = paymentMethodValues(request.data || {});
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
 
@@ -818,6 +868,7 @@ export const postTransaction = onCall({ region }, async (request) => {
       categoryIsSystem: category.isSystem,
       counterparty,
       note,
+      labels,
       paymentMethod,
       paymentMethodLabel,
       transactionDate,

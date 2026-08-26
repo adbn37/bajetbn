@@ -17,6 +17,7 @@ export interface OfflineTransactionPayload {
   categoryScope?: CategoryScope;
   counterparty?: string;
   note?: string;
+  labels?: string[];
   paymentMethod?: PaymentMethodCode;
   paymentMethodLabel?: string;
 }

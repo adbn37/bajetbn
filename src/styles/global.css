@@ -9503,3 +9503,85 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 /* END BAJETBN V1.10 MONEY ACTIVITY MULTI ACCOUNT */
+/* BAJETBN V1.10.3 TRANSACTION LABELS */
+
+.transaction-label-editor {
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.transaction-label-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .75rem;
+}
+
+.transaction-label-editor-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+
+.transaction-label-editor-heading small,
+.transaction-label-editor > small,
+.transaction-label-suggestions > small {
+  color: var(--muted);
+}
+
+.transaction-label-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.transaction-label-list.compact {
+  margin-top: .35rem;
+}
+
+.transaction-label-chip,
+.transaction-label-suggestion {
+  display: inline-flex;
+  align-items: center;
+  min-height: 27px;
+  padding: .3rem .55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.transaction-label-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+.transaction-label-suggestions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.transaction-label-suggestion {
+  cursor: pointer;
+  background: transparent;
+}
+
+.transaction-label-suggestion:hover {
+  border-color: var(--accent);
+}
+
+.transaction-label-suggestion:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* END BAJETBN V1.10.3 TRANSACTION LABELS */

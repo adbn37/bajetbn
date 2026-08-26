@@ -516,6 +516,7 @@ export interface FinancialTransaction {
   categoryScope?: CategoryScope;
   counterparty?: string;
   note?: string;
+  labels?: string[];
   paymentMethod?: PaymentMethodCode | null;
   paymentMethodLabel?: string | null;
   transactionDate: string;

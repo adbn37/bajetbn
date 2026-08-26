@@ -93,6 +93,42 @@ function accountEffectForPreview(account: Account, type: PrimaryType, amountMino
   return account.type === 'credit_card' ? -assetEffect : assetEffect;
 }
 
+const MAX_TRANSACTION_LABELS = 8;
+const MAX_TRANSACTION_LABEL_LENGTH = 32;
+
+function normalizeTransactionLabel(value: string): string {
+  return value
+    .trim()
+    .replace(/^#+/, '')
+    .replace(/\s+/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '')
+    .slice(0, MAX_TRANSACTION_LABEL_LENGTH);
+}
+
+function parseTransactionLabels(value: string): string[] {
+  const labels: string[] = [];
+  const seen = new Set<string>();
+
+  value.split(',').forEach((part) => {
+    const label = normalizeTransactionLabel(part);
+
+    if (!label) return;
+
+    const key = label.toLowerCase();
+
+    if (seen.has(key)) return;
+
+    seen.add(key);
+    labels.push(label);
+  });
+
+  return labels.slice(0, MAX_TRANSACTION_LABELS);
+}
+
+function transactionLabelText(label: string): string {
+  return `#${label}`;
+}
+
 export function TransactionsPage() {
   const { user, profile } = useAuth();
   const { online, lastCompletedAt } = useOfflineSync();
@@ -120,6 +156,7 @@ export function TransactionsPage() {
     initialAccountFilter ? [initialAccountFilter] : null,
   );
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [labelFilter, setLabelFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   const load = async () => {
@@ -166,6 +203,27 @@ export function TransactionsPage() {
   const accountMap = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
   const activeAccounts = useMemo(() => accounts.filter((account) => !account.archivedAt && !account.closedAt), [accounts]);
   const spaceMap = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
+
+  const availableLabels = useMemo(() => {
+    const byKey = new Map<string, string>();
+
+    transactions.forEach((item) => {
+      (item.labels || []).forEach((rawLabel) => {
+        const label = normalizeTransactionLabel(rawLabel);
+
+        if (!label) return;
+
+        const key = label.toLowerCase();
+
+        if (!byKey.has(key)) {
+          byKey.set(key, label);
+        }
+      });
+    });
+
+    return [...byKey.values()]
+      .sort((a, b) => a.localeCompare(b));
+  }, [transactions]);
 
   const selectedAccountNames = selectedAccountIds === null
     ? []
@@ -259,14 +317,41 @@ export function TransactionsPage() {
     if (spaceFilter !== 'all' && item.spaceId !== spaceFilter) return false;
     if (!accountMatchesFilter(item)) return false;
     if (categoryFilter !== 'all' && item.categoryId !== categoryFilter && `legacy-${item.category}` !== categoryFilter) return false;
+
+    if (
+      labelFilter !== 'all'
+      && !(item.labels || []).some(
+        (label) =>
+          label.toLowerCase() === labelFilter.toLowerCase(),
+      )
+    ) {
+      return false;
+    }
+
     const needle = search.trim().toLowerCase();
     if (!needle) return true;
     const source = accountMap.get(item.accountId)?.name || '';
     const destination = item.destinationAccountId ? accountMap.get(item.destinationAccountId)?.name || '' : '';
     const method = paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel);
     const space = spaceMap.get(item.spaceId)?.name || '';
-    return [item.displayId, item.category, item.counterparty, item.note, source, destination, space, method]
-      .some((value) => value?.toLowerCase().includes(needle));
+    const labels = (item.labels || [])
+      .map(transactionLabelText)
+      .join(' ');
+
+    return [
+      item.displayId,
+      item.category,
+      item.counterparty,
+      item.note,
+      source,
+      destination,
+      space,
+      method,
+      labels,
+    ].some(
+      (value) =>
+        value?.toLowerCase().includes(needle),
+    );
   });
 
   const updateAttachmentCount = (transactionId: string, count: number) => {
@@ -357,7 +442,7 @@ export function TransactionsPage() {
         <div className="segmented-control" role="group" aria-label="Transaction type filter">
           {(['all', 'income', 'expense', 'transfer'] as const).map((value) => <button key={value} type="button" className={typeFilter === value ? 'active' : ''} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All' : typeLabels[value]}</button>)}
         </div>
-        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, Space, Account, payee…" />
+        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, Space, Account, payee…" />
         <div className="transaction-filter-grid">
           <label>Period<select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}><option value="current_month">This month</option><option value="all">All time</option></select></label>
           <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Saved</option><option value="reversed">Undone</option></select></label>
@@ -419,6 +504,7 @@ export function TransactionsPage() {
             </details>
           </div>
           <label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{allCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+          <label>Label<select value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}><option value="all">All labels</option>{availableLabels.map((label) => <option key={label.toLowerCase()} value={label}>{transactionLabelText(label)}</option>)}</select></label>
         </div>
       </section>
 
@@ -436,7 +522,24 @@ export function TransactionsPage() {
             return <article className={`transaction-row ${item.status === 'reversed' ? 'reversed' : ''}`} key={item.id}>
               <span className={`category-icon category-${category.color}`}>{categoryIconGlyph(category.icon)}</span>
               <div className="transaction-main">
-                <div><h2>{item.category || typeLabels[item.type]}</h2><p>{item.counterparty || item.note || typeLabels[item.type]}</p></div>
+                <div>
+                  <h2>{item.category || typeLabels[item.type]}</h2>
+                  <p>{item.counterparty || item.note || typeLabels[item.type]}</p>
+
+                  {(item.labels || []).length > 0 && (
+                    <div className="transaction-label-list compact">
+                      {(item.labels || []).map((label) => (
+                        <span
+                          className="transaction-label-chip"
+                          key={`${item.id}-${label.toLowerCase()}`}
+                        >
+                          {transactionLabelText(label)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <small>{item.displayId}</small>
               </div>
               <div className="transaction-context">
@@ -466,6 +569,7 @@ export function TransactionsPage() {
         accounts={activeAccounts}
         spaces={spaces}
         categories={allCategories}
+        labelSuggestions={availableLabels}
         onCategoriesChanged={refreshCategories}
         timezone={profile.timezone}
         online={online}
@@ -522,6 +626,7 @@ export function MoneyActivityModal({
   accounts,
   spaces,
   categories,
+  labelSuggestions,
   timezone,
   online,
   initialType,
@@ -534,6 +639,7 @@ export function MoneyActivityModal({
   accounts: Account[];
   spaces: Space[];
   categories: TransactionCategory[];
+  labelSuggestions?: string[];
   timezone: string;
   online: boolean;
   initialType?: Exclude<PrimaryType, 'transfer'>;
@@ -562,6 +668,7 @@ export function MoneyActivityModal({
   const [amount, setAmount] = useState('');
   const [transactionDate, setTransactionDate] = useState(dateInTimezone(timezone));
   const [categoryId, setCategoryId] = useState('');
+  const [labelDraft, setLabelDraft] = useState('');
   const [counterparty, setCounterparty] = useState('');
   const [note, setNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(suggestedPaymentMethod(accounts[0]));
@@ -707,6 +814,8 @@ export function MoneyActivityModal({
         throw new Error('Reconnect to upload the selected attachments, or remove them and save this money activity offline.');
       }
 
+      const labels = parseTransactionLabels(labelDraft);
+
       const outcome = await onSubmit({
         type,
         accountId,
@@ -722,6 +831,7 @@ export function MoneyActivityModal({
         categoryScope: selectedCategory?.scope,
         counterparty,
         note,
+        labels,
         paymentMethod,
         paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined,
       });
@@ -816,6 +926,85 @@ export function MoneyActivityModal({
         <span className={`category-icon category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span>{!category.isSystem && <small>Custom</small>}
       </button>)}
     </div></fieldset>}
+
+    <section className="transaction-label-editor">
+      <div className="transaction-label-editor-heading">
+        <div>
+          <strong>Labels <span>Optional</span></strong>
+          <small>Category stays your main financial classification. Labels help you filter and find records.</small>
+        </div>
+
+        <span>{parseTransactionLabels(labelDraft).length}/{MAX_TRANSACTION_LABELS}</span>
+      </div>
+
+      <input
+        value={labelDraft}
+        onChange={(event) => setLabelDraft(event.target.value)}
+        placeholder="#Rimba, #RentalHouse"
+        maxLength={280}
+        aria-label="Transaction labels"
+      />
+
+      {parseTransactionLabels(labelDraft).length > 0 && (
+        <div className="transaction-label-list">
+          {parseTransactionLabels(labelDraft).map((label) => (
+            <span
+              className="transaction-label-chip"
+              key={label.toLowerCase()}
+            >
+              {transactionLabelText(label)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {(labelSuggestions || []).length > 0 && (
+        <div className="transaction-label-suggestions">
+          <small>Previously used</small>
+
+          <div>
+            {(labelSuggestions || [])
+              .filter(
+                (label) =>
+                  !parseTransactionLabels(labelDraft).some(
+                    (selected) =>
+                      selected.toLowerCase() === label.toLowerCase(),
+                  ),
+              )
+              .slice(0, 8)
+              .map((label) => (
+                <button
+                  type="button"
+                  className="transaction-label-suggestion"
+                  key={label.toLowerCase()}
+                  disabled={
+                    parseTransactionLabels(labelDraft).length
+                    >= MAX_TRANSACTION_LABELS
+                  }
+                  onClick={() => {
+                    const next = parseTransactionLabels(
+                      `${labelDraft},${label}`,
+                    );
+
+                    setLabelDraft(
+                      next
+                        .map(transactionLabelText)
+                        .join(', '),
+                    );
+                  }}
+                >
+                  {transactionLabelText(label)}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
+      <small>
+        Use up to 8 labels. Example:
+        #Rimba, #KualaBalai, #RentalHouse.
+      </small>
+    </section>
 
     <div className="form-grid">
       {type !== 'transfer' && <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} placeholder="Optional" maxLength={120} /></label>}
@@ -961,6 +1150,20 @@ function TransactionDetails({ item, source, destination, space, category, online
       <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ` → ${destination.name}` : ''}</Detail>
       <Detail label={item.type === 'income' ? 'Money from' : 'Paid to'}>{item.counterparty || '—'}</Detail>
       <Detail label="Payment method">{paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel)}</Detail>
+      {(item.labels || []).length > 0 && (
+        <Detail label="Labels">
+          <div className="transaction-label-list">
+            {(item.labels || []).map((label) => (
+              <span
+                className="transaction-label-chip"
+                key={label.toLowerCase()}
+              >
+                {transactionLabelText(label)}
+              </span>
+            ))}
+          </div>
+        </Detail>
+      )}
       <Detail label="Note">{item.note || '—'}</Detail>
       {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
       {item.commitmentId && <Detail label="Bill or instalment">Linked bill or instalment</Detail>}
