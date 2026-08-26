@@ -4,6 +4,8 @@ const read = (file) => fs.readFileSync(file, 'utf8');
 const navigation = read('src/services/personalisation.ts');
 const customizer = read('src/components/SidebarCustomizer.tsx');
 const shell = read('src/layouts/AppShell.tsx');
+const morePage = read('src/pages/MorePage.tsx');
+const styles = read('src/styles/global.css');
 
 let checks = 0;
 
@@ -52,50 +54,71 @@ check(
 
 check(
   navigation.includes("id: 'overview'")
-    && navigation.match(/id:\s*'overview'[\s\S]*?protected:\s*true/),
+    && navigation.match(
+      /id:\s*'overview'[\s\S]*?protected:\s*true/,
+    ),
   'Overview must remain protected.',
 );
 
 check(
   navigation.includes("id: 'spaces'")
-    && navigation.match(/id:\s*'spaces'[\s\S]*?protected:\s*true/),
+    && navigation.match(
+      /id:\s*'spaces'[\s\S]*?protected:\s*true/,
+    ),
   'Spaces must remain protected.',
 );
 
 check(
-  navigation.includes('orderSource = Array.isArray(value?.navigationOrder)'),
+  navigation.includes(
+    'orderSource = Array.isArray(value?.navigationOrder)',
+  ),
   'Saved navigation order must remain respected.',
 );
 
 check(
-  navigation.includes('hiddenSource = Array.isArray(value?.hiddenNavigation)'),
+  navigation.includes(
+    'hiddenSource = Array.isArray(value?.hiddenNavigation)',
+  ),
   'Saved hidden navigation must remain respected.',
 );
 
-check(customizer.includes('toggleHidden'), 'Hide/show support was removed.');
-check(customizer.includes('togglePinned'), 'Pin support was removed.');
-check(customizer.includes('dropOn'), 'Drag/reorder support was removed.');
-check(customizer.includes('Reset menu'), 'Reset menu was removed.');
 check(
-  customizer.includes('recommended simple layout'),
-  'Recommended reset explanation is missing.',
+  customizer.includes('toggleHidden'),
+  'Hide/show support was removed.',
+);
+
+check(
+  customizer.includes('togglePinned'),
+  'Pin support was removed.',
+);
+
+check(
+  customizer.includes('dropOn'),
+  'Drag/reorder support was removed.',
+);
+
+check(
+  customizer.includes('Reset menu'),
+  'Reset menu was removed.',
 );
 
 check(
   shell.includes('orderedNavigation'),
-  'AppShell must continue using personalized navigation.',
+  'Desktop AppShell must continue using personalized navigation.',
 );
 
 const mobileNavStart = shell.indexOf(
   '<nav className="mobile-bottom-nav"',
 );
+
 const mobileNavEnd = shell.indexOf(
   '</nav>',
   mobileNavStart,
 );
 
 check(
-  mobileNavStart >= 0 && mobileNavEnd > mobileNavStart,
+  mobileNavStart >= 0
+    && mobileNavEnd > mobileNavStart,
   'Mobile navigation section is missing.',
 );
 
@@ -104,35 +127,72 @@ const mobileNavigation = shell.slice(
   mobileNavEnd,
 );
 
-const posIndex = mobileNavigation.indexOf('<small>POS</small>');
-const homeIndex = mobileNavigation.indexOf('<small>Home</small>');
-const addIndex = mobileNavigation.indexOf('mobile-bottom-add');
-const alertsIndex = mobileNavigation.indexOf('<small>Alerts</small>');
-const moreIndex = mobileNavigation.indexOf('<small>More</small>');
+const businessIndex =
+  mobileNavigation.indexOf('<small>{businessPickerLoading');
+
+const homeIndex =
+  mobileNavigation.indexOf('<small>Home</small>');
+
+const addIndex =
+  mobileNavigation.indexOf('mobile-bottom-add');
+
+const alertsIndex =
+  mobileNavigation.indexOf('<small>Alerts</small>');
+
+const moreIndex =
+  mobileNavigation.indexOf('<small>More</small>');
 
 check(
-  posIndex >= 0
-    && posIndex < homeIndex
+  businessIndex >= 0
+    && businessIndex < homeIndex
     && homeIndex < addIndex
     && addIndex < alertsIndex
     && alertsIndex < moreIndex,
-  'Mobile navigation order must remain POS, Home, Add, Alerts, More.',
+  'Mobile navigation order must remain Business, Home, Add, Alerts, More.',
 );
 
 check(
-  !mobileNavigation.includes('<small>Activity</small>')
-    && !mobileNavigation.includes('to="/transactions"'),
-  'Mobile Activity shortcut must remain removed.',
+  mobileNavigation.includes('openBusinessShortcut'),
+  'Mobile Business shortcut is missing.',
 );
 
 check(
-  mobileNavigation.includes('openPosShortcut'),
-  'Mobile POS shortcut is missing.',
+  !mobileNavigation.includes('<small>POS</small>'),
+  'POS must not remain as a global mobile navigation item.',
+);
+
+check(
+  !shell.includes('openPosShortcut'),
+  'Old global POS shortcut implementation must be removed.',
+);
+
+check(
+  shell.includes("space.type === 'sme'"),
+  'Business shortcut must target SME Business Spaces.',
+);
+
+check(
+  shell.includes('smeSpaces.length === 1')
+    && shell.includes(
+      'navigate(`/spaces/${smeSpaces[0].id}`)',
+    ),
+  'A single Business must open directly.',
+);
+
+check(
+  shell.includes('mobile-business-picker')
+    && shell.includes('businessSpaces.map'),
+  'Multiple Businesses must use the mobile drop-up picker.',
+);
+
+check(
+  !shell.includes('aria-label="Open menu"'),
+  'The mobile top hamburger menu must remain removed.',
 );
 
 check(
   mobileNavigation.includes("navigate('/?quick=1')"),
-  'Mobile Add action must open the Home money activity shortcut.',
+  'Mobile Add must keep opening the quick money action.',
 );
 
 check(
@@ -151,8 +211,48 @@ check(
 );
 
 check(
-  shell.includes('openPosShortcut'),
-  'POS shortcut support must remain available.',
+  mobileNavigation.includes('to="/more"'),
+  'Mobile More destination is missing.',
 );
 
-console.log(`Global navigation cleanup checks passed (${checks} checks).`);
+check(
+  morePage.includes('orderedNavigation(personalisation)')
+    && morePage.includes('visibleNavigation.map'),
+  'More must show the personalized main navigation.',
+);
+
+check(
+  morePage.includes('secondaryNavigation(personalisation)')
+    && morePage.includes('secondaryTools.map'),
+  'More must show hidden More tools.',
+);
+
+check(
+  morePage.includes('<SidebarCustomizer')
+    && morePage.includes('Customize menu'),
+  'More must provide menu customization.',
+);
+
+check(
+  morePage.includes('void logOut()')
+    && morePage.includes('Sign out'),
+  'More must provide account sign out.',
+);
+
+check(
+  morePage.includes('to="/settings"')
+    && morePage.includes('to="/subscription"'),
+  'More must provide Settings and Subscription.',
+);
+
+check(
+  styles.includes('mobile-business-picker')
+    && styles.includes(
+      'BAJETBN V1.9.8 MOBILE BUSINESS NAV',
+    ),
+  'Mobile Business drop-up styles are missing.',
+);
+
+console.log(
+  `Global navigation cleanup checks passed (${checks} checks).`,
+);

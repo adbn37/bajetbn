@@ -100,19 +100,21 @@ const mobileNavigation = shell.slice(
   mobileNavEnd,
 );
 
-const posIndex = mobileNavigation.indexOf('<small>POS</small>');
+const businessIndex = mobileNavigation.indexOf(
+  '<small>{businessPickerLoading',
+);
 const homeIndex = mobileNavigation.indexOf('<small>Home</small>');
 const addIndex = mobileNavigation.indexOf('mobile-bottom-add');
 const alertsIndex = mobileNavigation.indexOf('<small>Alerts</small>');
 const moreIndex = mobileNavigation.indexOf('<small>More</small>');
 
 need(
-  posIndex >= 0
-    && posIndex < homeIndex
+  businessIndex >= 0
+    && businessIndex < homeIndex
     && homeIndex < addIndex
     && addIndex < alertsIndex
     && alertsIndex < moreIndex,
-  'Mobile bottom navigation must remain POS, Home, Add, Alerts, More.',
+  'Mobile bottom navigation must remain Business, Home, Add, Alerts, More.',
 );
 
 need(
@@ -122,8 +124,8 @@ need(
 );
 
 need(
-  mobileNavigation.includes('openPosShortcut'),
-  'Mobile POS shortcut must remain available.',
+  mobileNavigation.includes('openBusinessShortcut'),
+  'Mobile Business shortcut must remain available.',
 );
 
 need(

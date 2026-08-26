@@ -1,113 +1,111 @@
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { Link } from 'react-router-dom';
+import { SidebarCustomizer } from '../components/SidebarCustomizer';
 import { useAuth } from '../contexts/AuthContext';
 import { planLabel } from '../services/entitlements';
 import { resetContextualHelp } from '../services/contextualHelp';
+import {
+  PERSONALISATION_EVENT,
+  applyPersonalisation,
+  defaultPersonalisation,
+  loadPersonalisation,
+  navigationIcon,
+  orderedNavigation,
+  secondaryNavigation,
+  savePersonalisation,
+  type NavigationId,
+  type PersonalisationSettings,
+} from '../services/personalisation';
 
-interface MoreTool {
-  path: string;
-  icon: string;
-  title: string;
-  description: string;
-}
-
-interface MoreGroup {
-  title: string;
-  tools: MoreTool[];
-}
-
-const GROUPS: MoreGroup[] = [
-  {
-    title: 'Money',
-    tools: [
-      {
-        path: '/accounts',
-        icon: '◉',
-        title: 'Accounts',
-        description: 'Bank, cash, e-wallet and card balances',
-      },
-      {
-        path: '/bills',
-        icon: '◷',
-        title: 'Bills',
-        description: 'Bills, instalments and upcoming commitments',
-      },
-      {
-        path: '/debt',
-        icon: '⇄',
-        title: 'Debt',
-        description: 'Track money you owe or are owed',
-      },
-      {
-        path: '/recurring',
-        icon: '↻',
-        title: 'Recurring',
-        description: 'Repeat income and expenses',
-      },
-    ],
-  },
-  {
-    title: 'Plan',
-    tools: [
-      {
-        path: '/budgets',
-        icon: '▤',
-        title: 'Budgets',
-        description: 'Set spending limits and stay on track',
-      },
-      {
-        path: '/goals',
-        icon: '◇',
-        title: 'Goals',
-        description: 'Save towards something important',
-      },
-      {
-        path: '/calendar',
-        icon: '▦',
-        title: 'Calendar',
-        description: 'See important money dates',
-      },
-      {
-        path: '/spaces',
-        icon: '◫',
-        title: 'Spaces',
-        description: 'Household, Trip, SME and shared spaces',
-      },
-    ],
-  },
-  {
-    title: 'Insights & tools',
-    tools: [
-      {
-        path: '/reports',
-        icon: '⌁',
-        title: 'Reports',
-        description: 'Understand where your money is going',
-      },
-      {
-        path: '/inbox',
-        icon: '✓',
-        title: 'Needs Attention',
-        description: 'Items that need your action',
-      },
-      {
-        path: '/search',
-        icon: '⌕',
-        title: 'Search',
-        description: 'Find money activity and records',
-      },
-      {
-        path: '/offline-sync',
-        icon: '⇅',
-        title: 'Offline & Sync',
-        description: 'Check pending or synced changes',
-      },
-    ],
-  },
-];
+const NAVIGATION_DESCRIPTIONS: Record<NavigationId, string> = {
+  overview: 'Your main money overview',
+  spaces: 'Personal, Household, Trip, Business and shared Spaces',
+  inbox: 'Items that need your attention',
+  accounts: 'Bank, cash, e-wallet and card balances',
+  transactions: 'Income, expenses and transfers',
+  recurring: 'Repeat income and expenses',
+  budgets: 'Set spending limits and stay on track',
+  goals: 'Save towards something important',
+  bills: 'Bills, instalments and upcoming commitments',
+  debt: 'Track money you owe or are owed',
+  calendar: 'Important money dates',
+  search: 'Find money activity and records',
+  'offline-sync': 'Pending and synced offline changes',
+  reports: 'Understand where your money is going',
+};
 
 export function MorePage() {
-  const { profile, user } = useAuth();
+  const { profile, user, logOut } = useAuth();
   const currentPlan = planLabel(profile);
+
+  const [personalisation, setPersonalisation] =
+    useState<PersonalisationSettings>(
+      defaultPersonalisation(),
+    );
+
+  const [menuCustomizerOpen, setMenuCustomizerOpen] =
+    useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      const defaults = defaultPersonalisation();
+      setPersonalisation(defaults);
+      applyPersonalisation(defaults);
+      return;
+    }
+
+    const initial = loadPersonalisation(user.uid);
+    setPersonalisation(initial);
+    applyPersonalisation(initial);
+
+    const handlePersonalisation = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          uid: string;
+          settings: PersonalisationSettings;
+        }>
+      ).detail;
+
+      if (!detail || detail.uid !== user.uid) return;
+      setPersonalisation(detail.settings);
+    };
+
+    window.addEventListener(
+      PERSONALISATION_EVENT,
+      handlePersonalisation,
+    );
+
+    return () => {
+      window.removeEventListener(
+        PERSONALISATION_EVENT,
+        handlePersonalisation,
+      );
+    };
+  }, [user]);
+
+  const visibleNavigation = useMemo(
+    () => orderedNavigation(personalisation),
+    [personalisation],
+  );
+
+  const secondaryTools = useMemo(
+    () => secondaryNavigation(personalisation),
+    [personalisation],
+  );
+
+  function updatePersonalisation(
+    next: PersonalisationSettings,
+  ) {
+    if (!user) return;
+
+    setPersonalisation(
+      savePersonalisation(user.uid, next),
+    );
+  }
 
   const replayTips = () => {
     if (!user) return;
@@ -118,9 +116,15 @@ export function MorePage() {
     <main className="page more-v110">
       <header className="more-v110-header">
         <div>
-          <span className="more-v110-kicker">BajetBN</span>
+          <span className="more-v110-kicker">
+            BajetBN
+          </span>
+
           <h1>More</h1>
-          <p>Everything else, kept in one simple place.</p>
+
+          <p>
+            Your navigation, tools and account in one place.
+          </p>
         </div>
 
         <Link
@@ -134,7 +138,9 @@ export function MorePage() {
 
       <Link
         to="/subscription"
-        className={`more-v110-plan ${currentPlan === 'Plus' ? 'plus' : ''}`}
+        className={`more-v110-plan ${
+          currentPlan === 'Plus' ? 'plus' : ''
+        }`}
       >
         <span className="more-v110-plan-icon">
           {currentPlan === 'Plus' ? '✦' : '○'}
@@ -153,46 +159,99 @@ export function MorePage() {
         <b aria-hidden="true">›</b>
       </Link>
 
-      {GROUPS.map((group) => (
-        <section className="more-v110-group" key={group.title}>
-          <h2>{group.title}</h2>
+      <section className="more-v110-group">
+        <h2>Main menu</h2>
+
+        <div className="more-v110-grid">
+          {visibleNavigation.map((item) => (
+            <Link
+              to={item.path}
+              className="more-v110-tool"
+              key={item.path}
+            >
+              <span
+                className="more-v110-tool-icon"
+                aria-hidden="true"
+              >
+                {navigationIcon(
+                  personalisation.iconPack,
+                  item.id,
+                  item.icon,
+                )}
+              </span>
+
+              <span className="more-v110-tool-copy">
+                <strong>{item.label}</strong>
+                <small>
+                  {NAVIGATION_DESCRIPTIONS[item.id]}
+                </small>
+              </span>
+
+              <span
+                className="more-v110-tool-arrow"
+                aria-hidden="true"
+              >
+                ›
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {secondaryTools.length > 0 && (
+        <section className="more-v110-group">
+          <h2>More tools</h2>
 
           <div className="more-v110-grid">
-            {group.tools.map((tool) => (
+            {secondaryTools.map((item) => (
               <Link
-                to={tool.path}
+                to={item.path}
                 className="more-v110-tool"
-                key={tool.path}
+                key={`secondary-${item.path}`}
               >
-                <span className="more-v110-tool-icon" aria-hidden="true">
-                  {tool.icon}
+                <span
+                  className="more-v110-tool-icon"
+                  aria-hidden="true"
+                >
+                  {navigationIcon(
+                    personalisation.iconPack,
+                    item.id,
+                    item.icon,
+                  )}
                 </span>
 
                 <span className="more-v110-tool-copy">
-                  <strong>{tool.title}</strong>
-                  <small>{tool.description}</small>
+                  <strong>{item.label}</strong>
+                  <small>
+                    {NAVIGATION_DESCRIPTIONS[item.id]}
+                  </small>
                 </span>
 
-                <span className="more-v110-tool-arrow" aria-hidden="true">
+                <span
+                  className="more-v110-tool-arrow"
+                  aria-hidden="true"
+                >
                   ›
                 </span>
               </Link>
             ))}
           </div>
         </section>
-      ))}
+      )}
 
       <section className="more-v110-help">
         <div className="more-v110-help-copy">
-          <span className="more-v110-help-icon" aria-hidden="true">
+          <span
+            className="more-v110-help-icon"
+            aria-hidden="true"
+          >
             ?
           </span>
 
           <div>
             <h2>Help & tips</h2>
             <p>
-              Want to see the first-use guidance again?
-              Replay the tips as you move through BajetBN.
+              Replay first-use guidance whenever you need it.
             </p>
           </div>
         </div>
@@ -208,28 +267,78 @@ export function MorePage() {
       </section>
 
       <section className="more-v110-account">
-        <h2>Account</h2>
+        <h2>Account & menu</h2>
 
         <div className="more-v110-account-list">
+          <button
+            type="button"
+            className="more-v110-account-action"
+            onClick={() => setMenuCustomizerOpen(true)}
+          >
+            <span>☷</span>
+
+            <span>
+              <strong>Customize menu</strong>
+              <small>
+                Reorder, pin or hide navigation items
+              </small>
+            </span>
+
+            <b>›</b>
+          </button>
+
           <Link to="/settings">
             <span>⚙</span>
+
             <span>
               <strong>Settings</strong>
-              <small>Profile, theme, preferences and security</small>
+              <small>
+                Profile, theme, preferences and security
+              </small>
             </span>
+
             <b>›</b>
           </Link>
 
           <Link to="/subscription">
             <span>✦</span>
+
             <span>
               <strong>Subscription</strong>
-              <small>Plan, expiry and Plus access</small>
+              <small>
+                Plan, expiry and Plus access
+              </small>
             </span>
+
             <b>›</b>
           </Link>
+
+          <button
+            type="button"
+            className="more-v110-account-action more-v110-signout"
+            onClick={() => void logOut()}
+          >
+            <span>↪</span>
+
+            <span>
+              <strong>Sign out</strong>
+              <small>
+                Sign out of this BajetBN account
+              </small>
+            </span>
+
+            <b>›</b>
+          </button>
         </div>
       </section>
+
+      {menuCustomizerOpen && (
+        <SidebarCustomizer
+          settings={personalisation}
+          onChange={updatePersonalisation}
+          onClose={() => setMenuCustomizerOpen(false)}
+        />
+      )}
     </main>
   );
 }

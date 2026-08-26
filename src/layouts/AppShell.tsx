@@ -3,7 +3,6 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
 import { ContextualHelp } from '../components/ContextualHelp';
-import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { subscribeSpaceActivities, subscribeUserNotifications } from '../repositories/collaborationRepository';
@@ -60,10 +59,10 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [posSpaces, setPosSpaces] = useState<Space[]>([]);
-  const [posPickerOpen, setPosPickerOpen] = useState(false);
-  const [posPickerLoading, setPosPickerLoading] = useState(false);
-  const [posPickerError, setPosPickerError] = useState('');
+  const [businessSpaces, setBusinessSpaces] = useState<Space[]>([]);
+  const [businessPickerOpen, setBusinessPickerOpen] = useState(false);
+  const [businessPickerLoading, setBusinessPickerLoading] = useState(false);
+  const [businessPickerError, setBusinessPickerError] = useState('');
   const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
   const [menuCustomizerOpen, setMenuCustomizerOpen] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
@@ -73,8 +72,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const currentPosMatch = location.pathname.match(/^\/spaces\/([^/]+)\/pos(?:\/|$)/);
-  const currentPosPath = currentPosMatch ? `/spaces/${currentPosMatch[1]}/pos` : '';
+
   const visibleNavigation = useMemo(() => orderedNavigation(personalisation), [personalisation]);
   const secondaryTools = useMemo(() => secondaryNavigation(personalisation), [personalisation]);
   const currentPlanLabel = planLabel(profile);
@@ -198,11 +196,12 @@ export function AppShell() {
     return () => { active = false; stop(); };
   }, [navigate, profile?.browserPushEnabled]);
 
-  async function openPosShortcut() {
-    if (!user || posPickerLoading) return;
+  async function openBusinessShortcut() {
+    if (!user || businessPickerLoading) return;
 
-    setPosPickerLoading(true);
-    setPosPickerError('');
+    setBusinessPickerLoading(true);
+    setBusinessPickerError('');
+    setBusinessPickerOpen(false);
 
     try {
       const accessibleSpaces = await listSpaces(user.uid);
@@ -210,35 +209,35 @@ export function AppShell() {
         (space) => space.type === 'sme' && !space.archivedAt,
       );
 
+      setBusinessSpaces(smeSpaces);
+
       if (smeSpaces.length === 0) {
         navigate('/spaces');
         return;
       }
 
       if (smeSpaces.length === 1) {
-        navigate(`/spaces/${smeSpaces[0].id}/pos`);
+        navigate(`/spaces/${smeSpaces[0].id}`);
         return;
       }
 
-      setPosSpaces(smeSpaces);
-      setPosPickerOpen(true);
+      setBusinessPickerOpen(true);
     } catch {
-      setPosSpaces([]);
-      setPosPickerError(
+      setBusinessSpaces([]);
+      setBusinessPickerError(
         'Your Business Spaces could not be loaded. Open Spaces and try again.',
       );
-      setPosPickerOpen(true);
+      setBusinessPickerOpen(true);
     } finally {
-      setPosPickerLoading(false);
+      setBusinessPickerLoading(false);
     }
   }
 
-  function choosePosSpace(space: Space) {
-    setPosPickerOpen(false);
-    setPosPickerError('');
-    navigate(`/spaces/${space.id}/pos`);
+  function chooseBusinessSpace(space: Space) {
+    setBusinessPickerOpen(false);
+    setBusinessPickerError('');
+    navigate(`/spaces/${space.id}`);
   }
-
   function submitSearch(event: FormEvent) {
     event.preventDefault();
     const query = searchText.trim();
@@ -373,7 +372,7 @@ export function AppShell() {
       {mobileOpen && <button className="drawer-backdrop" onClick={() => setMobileOpen(false)} aria-label="Close navigation" />}
       <div className="app-main">
         <header className="mobile-header">
-          <button className="icon-button" onClick={() => setMobileOpen(true)} aria-label="Open menu">☰</button>
+
           <Brand compact />
           <div className="mobile-header-actions"><button className="icon-button" onClick={() => navigate('/search')} aria-label="Search">⌕</button><span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span></div>
         </header>
@@ -406,17 +405,18 @@ export function AppShell() {
         <ContextualHelp />
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
-                    <button
+          <button
             type="button"
-            className={currentPosPath ? 'active' : ''}
-            onClick={() => void openPosShortcut()}
-            aria-label="Open POS"
+            className={businessPickerOpen ? 'active' : ''}
+            onClick={() => void openBusinessShortcut()}
+            aria-label="Open Business"
+            aria-expanded={businessPickerOpen}
           >
-            <span aria-hidden="true">POS</span>
-            <small>POS</small>
+            <span aria-hidden="true">▦</span>
+            <small>{businessPickerLoading ? 'Loading…' : 'Business'}</small>
           </button>
 
-<NavLink
+          <NavLink
             to="/"
             end
             className={({ isActive }) => isActive ? 'active' : ''}
@@ -466,67 +466,88 @@ export function AppShell() {
           />
         )}
 
-        {posPickerOpen && (
-          <Modal
-            title="Choose a Business POS"
-            onClose={() => {
-              setPosPickerOpen(false);
-              setPosPickerError('');
-            }}
-          >
-            <div className="pos-space-picker">
-              <p>Which Business would you like to open?</p>
+        {businessPickerOpen && (
+          <>
+            <button
+              type="button"
+              className="mobile-business-picker-backdrop"
+              aria-label="Close business menu"
+              onClick={() => {
+                setBusinessPickerOpen(false);
+                setBusinessPickerError('');
+              }}
+            />
 
-              {posPickerError && (
-                <div className="notice error">{posPickerError}</div>
-              )}
+            <section
+              className="mobile-business-picker"
+              aria-label="Choose a Business"
+            >
+              <header className="mobile-business-picker-header">
+                <div>
+                  <small>Business</small>
+                  <strong>
+                    {businessPickerError
+                      ? 'Business unavailable'
+                      : 'Choose a Business'}
+                  </strong>
+                </div>
 
-              {!posPickerError && (
-                <div className="pos-space-picker-list">
-                  {posSpaces.map((space) => (
+                <button
+                  type="button"
+                  aria-label="Close business menu"
+                  onClick={() => {
+                    setBusinessPickerOpen(false);
+                    setBusinessPickerError('');
+                  }}
+                >
+                  ×
+                </button>
+              </header>
+
+              {businessPickerError ? (
+                <div className="notice error">
+                  {businessPickerError}
+                </div>
+              ) : (
+                <div className="mobile-business-picker-list">
+                  {businessSpaces.map((space) => (
                     <button
-                      className="pos-space-picker-option"
                       type="button"
                       key={space.id}
-                      onClick={() => choosePosSpace(space)}
+                      className="mobile-business-picker-option"
+                      onClick={() => chooseBusinessSpace(space)}
                     >
+                      <span className="space-icon sme" aria-hidden="true">
+                        B
+                      </span>
+
                       <span>
                         <strong>{space.name}</strong>
-                        <small>Business Space · {space.currency}</small>
+                        <small>
+                          Business Space · {space.currency}
+                        </small>
                       </span>
-                      <b>Open POS</b>
+
+                      <b aria-hidden="true">›</b>
                     </button>
                   ))}
                 </div>
               )}
 
-              <div className="modal-actions">
-                {posPickerError && (
-                  <button
-                    className="button primary"
-                    type="button"
-                    onClick={() => {
-                      setPosPickerOpen(false);
-                      navigate('/spaces');
-                    }}
-                  >
-                    Open Spaces
-                  </button>
-                )}
-
-                <button
-                  className="button secondary"
-                  type="button"
-                  onClick={() => {
-                    setPosPickerOpen(false);
-                    setPosPickerError('');
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </Modal>
+              <button
+                type="button"
+                className="mobile-business-picker-all"
+                onClick={() => {
+                  setBusinessPickerOpen(false);
+                  setBusinessPickerError('');
+                  navigate('/spaces');
+                }}
+              >
+                View all Spaces
+                <span aria-hidden="true">›</span>
+              </button>
+            </section>
+          </>
         )}
       </div>
     </div>

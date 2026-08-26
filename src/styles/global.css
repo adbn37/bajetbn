@@ -9132,3 +9132,185 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 /* END BAJETBN V1.10 ACCOUNT CAROUSEL COLORS */
+/* BAJETBN V1.9.8 MOBILE BUSINESS NAV */
+
+.mobile-business-picker-backdrop,
+.mobile-business-picker {
+  display: none;
+}
+
+.more-v110-account-list > .more-v110-account-action {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 14px 15px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.more-v110-account-list > .more-v110-account-action:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 7%,
+      transparent
+    );
+}
+
+.more-v110-account-list > * + * {
+  border-top: 1px solid var(--border);
+}
+
+.more-v110-account-list > .more-v110-account-action strong,
+.more-v110-account-list > .more-v110-account-action small {
+  display: block;
+}
+
+.more-v110-account-list > .more-v110-account-action strong {
+  font-size: .9rem;
+}
+
+.more-v110-account-list > .more-v110-account-action small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.more-v110-account-list > .more-v110-account-action b {
+  color: var(--muted);
+}
+
+.more-v110-signout strong {
+  color: var(--danger);
+}
+
+@media (max-width: 780px) {
+  .mobile-business-picker-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 23;
+    border: 0;
+    background: rgba(1, 5, 10, .52);
+    backdrop-filter: blur(2px);
+  }
+
+  .mobile-business-picker {
+    display: block;
+    position: fixed;
+    right: .65rem;
+    bottom:
+      calc(
+        5.4rem + env(safe-area-inset-bottom, 0px)
+      );
+    left: .65rem;
+    z-index: 26;
+    max-height: min(58vh, 430px);
+    overflow: auto;
+    padding: .85rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--surface);
+    box-shadow: 0 -18px 55px rgba(0, 0, 0, .38);
+  }
+
+  .mobile-business-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: .7rem;
+    padding: .2rem .2rem .55rem;
+  }
+
+  .mobile-business-picker-header small,
+  .mobile-business-picker-header strong {
+    display: block;
+  }
+
+  .mobile-business-picker-header small {
+    margin-bottom: .15rem;
+    color: var(--accent);
+    font-size: .66rem;
+    font-weight: 850;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .mobile-business-picker-header strong {
+    font-size: 1rem;
+  }
+
+  .mobile-business-picker-header > button {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 1.1rem;
+  }
+
+  .mobile-business-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: .45rem;
+  }
+
+  .mobile-business-picker-option {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    min-height: 62px;
+    padding: .65rem .7rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-2);
+    color: var(--text);
+    text-align: left;
+  }
+
+  .mobile-business-picker-option strong,
+  .mobile-business-picker-option small {
+    display: block;
+  }
+
+  .mobile-business-picker-option strong {
+    font-size: .86rem;
+  }
+
+  .mobile-business-picker-option small {
+    margin-top: .15rem;
+    color: var(--muted);
+    font-size: .68rem;
+  }
+
+  .mobile-business-picker-option > b {
+    color: var(--muted);
+    font-size: 1.15rem;
+  }
+
+  .mobile-business-picker-all {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: .55rem;
+    padding: .7rem .75rem;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--accent-2);
+    font-weight: 800;
+    text-align: left;
+  }
+}
+
+/* END BAJETBN V1.9.8 MOBILE BUSINESS NAV */
