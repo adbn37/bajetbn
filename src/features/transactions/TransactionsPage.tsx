@@ -930,11 +930,11 @@ export function MoneyActivityModal({
     <section className="transaction-label-editor">
       <div className="transaction-label-editor-heading">
         <div>
-          <strong>Labels <span>Optional</span></strong>
-          <small>Category stays your main financial classification. Labels help you filter and find records.</small>
+          <strong>Labels (optional)</strong>
+          <small>Category remains your main financial classification. Labels are optional and help you filter and find records.</small>
         </div>
 
-        <span>{parseTransactionLabels(labelDraft).length}/{MAX_TRANSACTION_LABELS}</span>
+        <span>{parseTransactionLabels(labelDraft).length} of {MAX_TRANSACTION_LABELS} labels</span>
       </div>
 
       <input
@@ -1001,7 +1001,7 @@ export function MoneyActivityModal({
       )}
 
       <small>
-        Use up to 8 labels. Example:
+        Add up to 8 labels to this transaction. Example:
         #Rimba, #KualaBalai, #RentalHouse.
       </small>
     </section>

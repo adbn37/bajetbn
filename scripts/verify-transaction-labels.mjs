@@ -69,7 +69,10 @@ for (const token of [
   'transaction-label-editor',
   'transaction-label-chip',
   'Previously used',
-  'Category stays your main financial classification.',
+  'Category remains your main financial classification.',
+  'Labels (optional)',
+  'of {MAX_TRANSACTION_LABELS} labels',
+  'Add up to 8 labels to this transaction.',
   'labels,',
   'Search category, #label',
 ]) {
@@ -124,6 +127,10 @@ need(
   'Label verifier is not registered.',
 );
 
+need(
+  !page.includes('Use up to 8 labels. Example:'),
+  'Old ambiguous Label helper text is still present.',
+);
 console.log(
   `Transaction Labels checks passed (${checks} checks).`,
 );
