@@ -115,7 +115,10 @@ export function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current_month');
   const [spaceFilter, setSpaceFilter] = useState('all');
-  const [accountFilter, setAccountFilter] = useState(searchParams.get('accountId') || 'all');
+  const initialAccountFilter = searchParams.get('accountId');
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[] | null>(
+    initialAccountFilter ? [initialAccountFilter] : null,
+  );
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -163,11 +166,81 @@ export function TransactionsPage() {
   const accountMap = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
   const activeAccounts = useMemo(() => accounts.filter((account) => !account.archivedAt && !account.closedAt), [accounts]);
   const spaceMap = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
+
+  const selectedAccountNames = selectedAccountIds === null
+    ? []
+    : selectedAccountIds
+      .map((accountId) => accountMap.get(accountId)?.name)
+      .filter((name): name is string => Boolean(name));
+
+  const accountFilterLabel = selectedAccountIds === null
+    ? 'All Accounts'
+    : selectedAccountIds.length === 0
+      ? 'No Accounts'
+      : selectedAccountIds.length === 1
+        ? selectedAccountNames[0] || '1 Account'
+        : `${selectedAccountIds.length} Accounts`;
+
+  const accountMatchesFilter = (item: FinancialTransaction) => {
+    if (selectedAccountIds === null) return true;
+    if (selectedAccountIds.length === 0) return false;
+
+    if (selectedAccountIds.includes(item.accountId)) {
+      return true;
+    }
+
+    return (
+      typeof item.destinationAccountId === 'string'
+      && selectedAccountIds.includes(item.destinationAccountId)
+    );
+  };
+
+  const toggleAccountFilter = (accountId: string) => {
+    setSelectedAccountIds((current) => {
+      if (current === null) {
+        return accounts
+          .map((account) => account.id)
+          .filter((id) => id !== accountId);
+      }
+
+      if (current.includes(accountId)) {
+        return current.filter((id) => id !== accountId);
+      }
+
+      const next = [...current, accountId];
+
+      if (
+        accounts.length > 0
+        && next.length >= accounts.length
+      ) {
+        return null;
+      }
+
+      return next;
+    });
+  };
+
   const currentMonth = monthPrefix(profile?.timezone || 'Asia/Brunei');
-  const monthlyPosted = transactions.filter((item) => item.status === 'posted' && item.transactionDate.startsWith(currentMonth));
-  const income = monthlyPosted.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amountMinor, 0);
-  const expenses = monthlyPosted.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amountMinor, 0);
-  const transferCount = monthlyPosted.filter((item) => item.type === 'transfer').length;
+
+  const monthlyPosted = transactions.filter(
+    (item) => (
+      item.status === 'posted'
+      && item.transactionDate.startsWith(currentMonth)
+      && accountMatchesFilter(item)
+    ),
+  );
+
+  const income = monthlyPosted
+    .filter((item) => item.type === 'income')
+    .reduce((sum, item) => sum + item.amountMinor, 0);
+
+  const expenses = monthlyPosted
+    .filter((item) => item.type === 'expense')
+    .reduce((sum, item) => sum + item.amountMinor, 0);
+
+  const transferCount = monthlyPosted
+    .filter((item) => item.type === 'transfer')
+    .length;
 
   const expenseCategorySummary = useMemo(() => {
     const totals = new Map<string, { category: TransactionCategory; amountMinor: number }>();
@@ -184,7 +257,7 @@ export function TransactionsPage() {
     if (statusFilter !== 'all' && item.status !== statusFilter) return false;
     if (periodFilter === 'current_month' && !item.transactionDate.startsWith(currentMonth)) return false;
     if (spaceFilter !== 'all' && item.spaceId !== spaceFilter) return false;
-    if (accountFilter !== 'all' && item.accountId !== accountFilter && item.destinationAccountId !== accountFilter) return false;
+    if (!accountMatchesFilter(item)) return false;
     if (categoryFilter !== 'all' && item.categoryId !== categoryFilter && `legacy-${item.category}` !== categoryFilter) return false;
     const needle = search.trim().toLowerCase();
     if (!needle) return true;
@@ -262,6 +335,11 @@ export function TransactionsPage() {
         <div><span>Money moves this month</span><strong>{transferCount}</strong></div>
       </section>
 
+      <div className="transaction-account-scope" aria-live="polite">
+        <span>Account view</span>
+        <strong>{accountFilterLabel}</strong>
+      </div>
+
       {expenseCategorySummary.length > 0 && <section className="category-summary-panel">
         <div className="section-heading"><div><span>Where your money went</span><h2>Top categories this month</h2></div><small>{expenseCategorySummary.length} categories</small></div>
         <div className="category-summary-grid">
@@ -284,7 +362,62 @@ export function TransactionsPage() {
           <label>Period<select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}><option value="current_month">This month</option><option value="all">All time</option></select></label>
           <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Saved</option><option value="reversed">Undone</option></select></label>
           <label>Space<select value={spaceFilter} onChange={(event) => setSpaceFilter(event.target.value)}><option value="all">All Spaces</option>{spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label>
-          <label>Account<select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}><option value="all">All Accounts</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+          <div className="transaction-account-filter">
+            <span className="transaction-filter-label">Accounts</span>
+
+            <details>
+              <summary>{accountFilterLabel}</summary>
+
+              <div className="transaction-account-filter-popover">
+                <div className="transaction-account-filter-actions">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAccountIds(null)}
+                  >
+                    Select all
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAccountIds([])}
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <div className="transaction-account-filter-options">
+                  {accounts.map((account) => {
+                    const checked = selectedAccountIds === null
+                      || selectedAccountIds.includes(account.id);
+
+                    return (
+                      <label
+                        className="transaction-account-filter-option"
+                        key={account.id}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAccountFilter(account.id)}
+                        />
+
+                        <span>
+                          <strong>{account.name}</strong>
+                          <small>{account.currency}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {accounts.length === 0 && (
+                  <small className="transaction-account-filter-empty">
+                    No Accounts available.
+                  </small>
+                )}
+              </div>
+            </details>
+          </div>
           <label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{allCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         </div>
       </section>

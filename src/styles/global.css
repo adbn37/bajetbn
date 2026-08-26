@@ -9314,3 +9314,192 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 /* END BAJETBN V1.9.8 MOBILE BUSINESS NAV */
+/* BAJETBN V1.10 MONEY ACTIVITY MULTI ACCOUNT */
+
+.transaction-account-scope {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin: -.35rem 0 1rem;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+.transaction-account-scope strong {
+  color: var(--text);
+}
+
+.transaction-account-filter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  min-width: 0;
+  color: #cdd8e1;
+  font-size: .8rem;
+  font-weight: 750;
+}
+
+.transaction-filter-label {
+  display: block;
+}
+
+.transaction-account-filter details {
+  position: relative;
+  min-width: 0;
+}
+
+.transaction-account-filter summary {
+  position: relative;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: .72rem 2.1rem .72rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #07111f;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.transaction-account-filter summary::-webkit-details-marker {
+  display: none;
+}
+
+.transaction-account-filter summary::after {
+  content: '⌄';
+  position: absolute;
+  right: .75rem;
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.transaction-account-filter details[open] summary {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, .1);
+}
+
+.transaction-account-filter details[open] summary::after {
+  content: '⌃';
+}
+
+.transaction-account-filter-popover {
+  position: absolute;
+  top: calc(100% + .45rem);
+  right: 0;
+  z-index: 70;
+  width: min(360px, calc(100vw - 2rem));
+  max-height: min(430px, 60vh);
+  overflow: auto;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .38);
+}
+
+.transaction-account-filter-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .45rem;
+  padding-bottom: .55rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.transaction-account-filter-actions button {
+  min-height: 34px;
+  padding: .45rem .6rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.transaction-account-filter-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+
+.transaction-account-filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  padding-top: .55rem;
+}
+
+.transaction-account-filter-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: .65rem;
+  width: 100%;
+  min-height: 46px;
+  padding: .5rem .55rem;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.transaction-account-filter-option:hover {
+  background: var(--surface-2);
+}
+
+.transaction-account-filter-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  box-shadow: none;
+}
+
+.transaction-account-filter-option span,
+.transaction-account-filter-option strong,
+.transaction-account-filter-option small {
+  display: block;
+  min-width: 0;
+}
+
+.transaction-account-filter-option strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: .8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-account-filter-option small {
+  margin-top: .1rem;
+  color: var(--muted);
+  font-size: .64rem;
+  font-weight: 500;
+}
+
+.transaction-account-filter-empty {
+  display: block;
+  padding: .8rem .4rem .35rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+:root[data-theme='light'] .transaction-account-filter summary {
+  background: #fff;
+}
+
+@media (max-width: 780px) {
+  .transaction-account-filter-popover {
+    right: auto;
+    left: 0;
+    width: min(420px, calc(100vw - 2rem));
+  }
+
+  .transaction-account-scope {
+    margin-top: -.15rem;
+  }
+}
+
+/* END BAJETBN V1.10 MONEY ACTIVITY MULTI ACCOUNT */
