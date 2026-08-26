@@ -241,6 +241,17 @@ export async function deleteSmePosCustomer(spaceId: string, customerId: string):
   return call({ spaceId, customerId, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { customerId: string; preservedHistory: boolean } }>;
 }
 
+const SME_POS_ITEM_PHOTO_MAX_SOURCE_BYTES =
+  25 * 1024 * 1024;
+
+const SME_POS_ITEM_PHOTO_MAX_UPLOAD_BYTES =
+  8 * 1024 * 1024;
+
+const SME_POS_ITEM_PHOTO_TARGET_BYTES =
+  4 * 1024 * 1024;
+
+const SME_POS_ITEM_PHOTO_MAX_DIMENSION = 2560;
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -269,22 +280,163 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export async function uploadSmePosItemPhoto(
-  spaceId: string,
+function canvasToImageBlob(
+  canvas: HTMLCanvasElement,
+  quality: number,
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(
+            new Error(
+              'The item photo could not be optimized.',
+            ),
+          );
+          return;
+        }
+
+        resolve(blob);
+      },
+      'image/jpeg',
+      quality,
+    );
+  });
+}
+
+async function optimizeSmePosItemPhoto(
   file: File,
-): Promise<{ photoPath: string }> {
+): Promise<File> {
   if (!file.type.startsWith('image/')) {
-    throw new Error('Choose an image for the item photo.');
+    throw new Error(
+      'Choose an image for the item photo.',
+    );
   }
 
   if (
     file.size <= 0
-    || file.size >= 5 * 1024 * 1024
+    || file.size > SME_POS_ITEM_PHOTO_MAX_SOURCE_BYTES
   ) {
-    throw new Error('Item photo must be smaller than 5 MB.');
+    throw new Error(
+      'This photo is too large to process. Choose a photo smaller than 25 MB.',
+    );
   }
 
-  const base64 = await fileToBase64(file);
+  let bitmap: ImageBitmap;
+
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error(
+      'This camera photo format could not be processed. Try taking another photo or choose a JPEG, PNG, or WebP image.',
+    );
+  }
+
+  try {
+    const sourceLongestSide = Math.max(
+      bitmap.width,
+      bitmap.height,
+    );
+
+    const scale = Math.min(
+      1,
+      SME_POS_ITEM_PHOTO_MAX_DIMENSION
+        / sourceLongestSide,
+    );
+
+    const width = Math.max(
+      1,
+      Math.round(bitmap.width * scale),
+    );
+
+    const height = Math.max(
+      1,
+      Math.round(bitmap.height * scale),
+    );
+
+    const canvas = document.createElement('canvas');
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error(
+        'The item photo could not be optimized.',
+      );
+    }
+
+    context.drawImage(
+      bitmap,
+      0,
+      0,
+      width,
+      height,
+    );
+
+    let quality = 0.85;
+
+    let blob = await canvasToImageBlob(
+      canvas,
+      quality,
+    );
+
+    while (
+      blob.size > SME_POS_ITEM_PHOTO_TARGET_BYTES
+      && quality > 0.65
+    ) {
+      quality = Math.max(
+        0.65,
+        quality - 0.05,
+      );
+
+      blob = await canvasToImageBlob(
+        canvas,
+        quality,
+      );
+
+      if (quality === 0.65) break;
+    }
+
+    if (
+      blob.size > SME_POS_ITEM_PHOTO_MAX_UPLOAD_BYTES
+    ) {
+      throw new Error(
+        'This photo is still too large after optimization. Try another photo or reduce the camera resolution.',
+      );
+    }
+
+    const baseName =
+      file.name
+        .replace(/.[^.]+$/, '')
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .slice(0, 140)
+      || 'item-photo';
+
+    return new File(
+      [blob],
+      `${baseName}.jpg`,
+      {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      },
+    );
+  } finally {
+    bitmap.close();
+  }
+}
+
+export async function uploadSmePosItemPhoto(
+  spaceId: string,
+  file: File,
+): Promise<{ photoPath: string }> {
+  const preparedFile =
+    await optimizeSmePosItemPhoto(file);
+
+  const base64 =
+    await fileToBase64(preparedFile);
+
   const { functions } = requireFirebase();
 
   const call = httpsCallable(
@@ -294,8 +446,8 @@ export async function uploadSmePosItemPhoto(
 
   const result = await call({
     spaceId,
-    fileName: file.name,
-    contentType: file.type,
+    fileName: preparedFile.name,
+    contentType: preparedFile.type,
     base64,
   });
 
@@ -307,7 +459,9 @@ export async function uploadSmePosItemPhoto(
     typeof data.photoPath !== 'string'
     || !data.photoPath
   ) {
-    throw new Error('The item photo upload did not finish.');
+    throw new Error(
+      'The item photo upload did not finish.',
+    );
   }
 
   return {

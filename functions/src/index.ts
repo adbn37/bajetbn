@@ -2448,11 +2448,11 @@ export const uploadSmePosItemPhoto = onCall(
     if (
       typeof encoded !== 'string'
       || !encoded
-      || encoded.length > 7_100_000
+      || encoded.length > 11_200_000
     ) {
       throw new HttpsError(
         'invalid-argument',
-        'Item photo must be smaller than 5 MB.',
+        'Optimized item photo must be smaller than 8 MB.',
       );
     }
 
@@ -2463,11 +2463,11 @@ export const uploadSmePosItemPhoto = onCall(
 
     if (
       bytes.length <= 0
-      || bytes.length >= 5 * 1024 * 1024
+      || bytes.length > 8 * 1024 * 1024
     ) {
       throw new HttpsError(
         'invalid-argument',
-        'Item photo must be smaller than 5 MB.',
+        'Optimized item photo must be smaller than 8 MB.',
       );
     }
 

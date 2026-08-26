@@ -77,10 +77,10 @@ need(
 );
 
 need(
-  functions.includes(
-    'bytes.length >= 5 * 1024 * 1024',
-  ),
-  'Backend 5 MB photo limit missing.',
+  functions.includes('encoded.length > 11_200_000')
+    && functions.includes('bytes.length > 8 * 1024 * 1024')
+    && functions.includes('Optimized item photo must be smaller than 8 MB.'),
+  'Backend 8 MB optimized photo limit missing.',
 );
 
 need(
