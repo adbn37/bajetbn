@@ -53,16 +53,12 @@ for (const name of [
 }
 
 need(
-  functions.includes(
-    "'cashier',\n        'stock_staff',\n        'seller',",
-  ),
+  /export const uploadSmePosItemPhoto = onCall[\s\S]*?'cashier',\s*'stock_staff',\s*'seller',[\s\S]*?requireSellerPhotoManagement/.test(functions),
   'Cashier / Stock Staff / Seller photo-role coverage missing.',
 );
 
 need(
-  functions.includes(
-    "'seller',\n        'viewer',",
-  ),
+  /export const getSmePosItemPhotoUrl = onCall[\s\S]*?'seller',\s*'viewer',[\s\S]*?export const deleteSmePosItemPhoto = onCall/.test(functions),
   'Seller / Viewer photo-read coverage missing.',
 );
 
