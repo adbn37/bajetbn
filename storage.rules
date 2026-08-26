@@ -64,7 +64,7 @@ service firebase.storage {
     function canManageSmePosItemPhoto(spaceId) {
       return isSmeSpaceOwner(spaceId)
         || (hasActiveSmePosAccess(spaceId)
-          && firestore.get(/databases/(default)/documents/smePosAccess/$(membershipId(spaceId, request.auth.uid))).data.role in ['manager', 'cashier', 'stock_staff']);
+          && firestore.get(/databases/(default)/documents/smePosAccess/$(membershipId(spaceId, request.auth.uid))).data.role in ['manager', 'cashier', 'stock_staff', 'seller']);
     }
 
     function canReadSmePosItemPhoto(spaceId) {
