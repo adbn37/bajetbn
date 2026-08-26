@@ -2361,6 +2361,324 @@ async function requireSmePosActor(spaceId: string, uid: string, allowed: readonl
   return { role, settings: settingsSnapshot.data() || {}, space, member };
 }
 
+function smePosPhotoLocation(value: unknown): {
+  photoPath: string;
+  spaceId: string;
+} {
+  const photoPath = stringValue(
+    value,
+    'Photo path',
+    500,
+  );
+
+  const match =
+    /^spaces\/([^/]+)\/sme-pos-items\/[^/]+$/
+      .exec(photoPath);
+
+  if (!match) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Invalid SME POS item photo path.',
+    );
+  }
+
+  return {
+    photoPath,
+    spaceId: match[1],
+  };
+}
+
+async function requireSellerPhotoManagement(
+  context: SmePosActorContext,
+  spaceId: string,
+  uid: string,
+) {
+  if (context.role !== 'seller') return;
+
+  const sellers = await db
+    .collection('smePosSellers')
+    .where('spaceId', '==', spaceId)
+    .get();
+
+  const seller = sellers.docs.find((item) => {
+    const data = item.data();
+
+    return (
+      data.linkedUid === uid
+      && data.inventoryManagementEnabled === true
+      && !data.archivedAt
+      && !data.deletedAt
+    );
+  });
+
+  if (!seller) {
+    throw new HttpsError(
+      'permission-denied',
+      'Seller inventory management is not enabled for your seller profile.',
+    );
+  }
+}
+
+export const uploadSmePosItemPhoto = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const spaceId = stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+
+    const contentType = stringValue(
+      request.data?.contentType,
+      'Content type',
+      100,
+    ).toLowerCase();
+
+    if (!/^image\/[a-z0-9.+-]+$/.test(contentType)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose an image for the item photo.',
+      );
+    }
+
+    const encoded = request.data?.base64;
+
+    if (
+      typeof encoded !== 'string'
+      || !encoded
+      || encoded.length > 7_100_000
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Item photo must be smaller than 5 MB.',
+      );
+    }
+
+    const bytes = Buffer.from(
+      encoded,
+      'base64',
+    );
+
+    if (
+      bytes.length <= 0
+      || bytes.length >= 5 * 1024 * 1024
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Item photo must be smaller than 5 MB.',
+      );
+    }
+
+    const context = await requireSmePosActor(
+      spaceId,
+      uid,
+      [
+        'owner',
+        'manager',
+        'cashier',
+        'stock_staff',
+        'seller',
+      ],
+    );
+
+    await requireSellerPhotoManagement(
+      context,
+      spaceId,
+      uid,
+    );
+
+    const originalName =
+      optionalString(
+        request.data?.fileName,
+        160,
+      ) || 'item-photo';
+
+    const safeName =
+      originalName
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .slice(0, 160)
+      || 'item-photo';
+
+    const photoPath =
+      `spaces/${spaceId}/sme-pos-items/`
+      + `${randomBytes(16).toString('hex')}-${safeName}`;
+
+    const downloadToken =
+      randomBytes(16).toString('hex');
+
+    const file = getStorage()
+      .bucket()
+      .file(photoPath);
+
+    await file.save(bytes, {
+      resumable: false,
+      metadata: {
+        contentType,
+        cacheControl: 'private, max-age=3600',
+        metadata: {
+          firebaseStorageDownloadTokens:
+            downloadToken,
+        },
+      },
+    });
+
+    return {
+      photoPath,
+    };
+  },
+);
+
+export const getSmePosItemPhotoUrl = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const {
+      photoPath,
+      spaceId,
+    } = smePosPhotoLocation(
+      request.data?.photoPath,
+    );
+
+    await requireSmePosActor(
+      spaceId,
+      uid,
+      [
+        'owner',
+        'manager',
+        'cashier',
+        'stock_staff',
+        'seller',
+        'viewer',
+      ],
+    );
+
+    const bucket = getStorage().bucket();
+    const file = bucket.file(photoPath);
+
+    let metadata;
+
+    try {
+      [metadata] = await file.getMetadata();
+    } catch (error) {
+      const code =
+        (error as {
+          code?: number | string;
+        })?.code;
+
+      if (
+        code === 404
+        || code === '404'
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Item photo was not found.',
+        );
+      }
+
+      throw new HttpsError(
+        'internal',
+        'Item photo could not be opened.',
+      );
+    }
+
+    let token = String(
+      metadata.metadata
+        ?.firebaseStorageDownloadTokens
+      || '',
+    )
+      .split(',')[0]
+      .trim();
+
+    if (!token) {
+      token =
+        randomBytes(16).toString('hex');
+
+      await file.setMetadata({
+        metadata: {
+          ...(metadata.metadata || {}),
+          firebaseStorageDownloadTokens:
+            token,
+        },
+      });
+    }
+
+    const url =
+      'https://firebasestorage.googleapis.com/v0/b/'
+      + encodeURIComponent(bucket.name)
+      + '/o/'
+      + encodeURIComponent(photoPath)
+      + '?alt=media&token='
+      + encodeURIComponent(token);
+
+    return {
+      url,
+    };
+  },
+);
+
+export const deleteSmePosItemPhoto = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const {
+      photoPath,
+      spaceId,
+    } = smePosPhotoLocation(
+      request.data?.photoPath,
+    );
+
+    const context = await requireSmePosActor(
+      spaceId,
+      uid,
+      [
+        'owner',
+        'manager',
+        'cashier',
+        'stock_staff',
+        'seller',
+      ],
+    );
+
+    await requireSellerPhotoManagement(
+      context,
+      spaceId,
+      uid,
+    );
+
+    const file = getStorage()
+      .bucket()
+      .file(photoPath);
+
+    try {
+      await file.delete();
+    } catch (error) {
+      const code =
+        (error as {
+          code?: number | string;
+        })?.code;
+
+      if (
+        code !== 404
+        && code !== '404'
+      ) {
+        throw new HttpsError(
+          'internal',
+          'Item photo could not be removed.',
+        );
+      }
+    }
+
+    return {
+      photoPath,
+      deleted: true,
+    };
+  },
+);
+
 function smePosQuantity(value: unknown, field: string, maximum = 999_999): number {
   return integerBetween(value, field, 0, maximum);
 }

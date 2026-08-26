@@ -8,7 +8,6 @@ import {
   where,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import type {
   PaymentMethodCode,
@@ -242,25 +241,125 @@ export async function deleteSmePosCustomer(spaceId: string, customerId: string):
   return call({ spaceId, customerId, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { customerId: string; preservedHistory: boolean } }>;
 }
 
-export async function uploadSmePosItemPhoto(spaceId: string, file: File): Promise<{ photoPath: string }> {
-  if (!file.type.startsWith('image/')) throw new Error('Choose an image for the item photo.');
-  if (file.size <= 0 || file.size >= 5 * 1024 * 1024) throw new Error('Item photo must be smaller than 5 MB.');
-  const { storage } = requireFirebase();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'item-photo';
-  const photoPath = `spaces/${spaceId}/sme-pos-items/${crypto.randomUUID()}-${safeName}`;
-  await uploadBytes(ref(storage, photoPath), file, { contentType: file.type });
-  return { photoPath };
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      reject(new Error('The item photo could not be read.'));
+    };
+
+    reader.onload = () => {
+      const result =
+        typeof reader.result === 'string'
+          ? reader.result
+          : '';
+
+      const commaIndex = result.indexOf(',');
+
+      if (commaIndex < 0) {
+        reject(new Error('The item photo could not be prepared.'));
+        return;
+      }
+
+      resolve(result.slice(commaIndex + 1));
+    };
+
+    reader.readAsDataURL(file);
+  });
 }
 
-export async function getSmePosItemPhotoUrl(photoPath: string) {
-  const { storage } = requireFirebase();
-  return getDownloadURL(ref(storage, photoPath));
+export async function uploadSmePosItemPhoto(
+  spaceId: string,
+  file: File,
+): Promise<{ photoPath: string }> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Choose an image for the item photo.');
+  }
+
+  if (
+    file.size <= 0
+    || file.size >= 5 * 1024 * 1024
+  ) {
+    throw new Error('Item photo must be smaller than 5 MB.');
+  }
+
+  const base64 = await fileToBase64(file);
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'uploadSmePosItemPhoto',
+  );
+
+  const result = await call({
+    spaceId,
+    fileName: file.name,
+    contentType: file.type,
+    base64,
+  });
+
+  const data = result.data as {
+    photoPath?: unknown;
+  };
+
+  if (
+    typeof data.photoPath !== 'string'
+    || !data.photoPath
+  ) {
+    throw new Error('The item photo upload did not finish.');
+  }
+
+  return {
+    photoPath: data.photoPath,
+  };
 }
 
-export async function deleteSmePosItemPhoto(photoPath: string) {
+export async function getSmePosItemPhotoUrl(
+  photoPath: string,
+): Promise<string> {
+  if (!photoPath) return '';
+
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'getSmePosItemPhotoUrl',
+  );
+
+  const result = await call({
+    photoPath,
+  });
+
+  const data = result.data as {
+    url?: unknown;
+  };
+
+  if (
+    typeof data.url !== 'string'
+    || !data.url
+  ) {
+    throw new Error('The item photo could not be opened.');
+  }
+
+  return data.url;
+}
+
+export async function deleteSmePosItemPhoto(
+  photoPath: string,
+) {
   if (!photoPath) return;
-  const { storage } = requireFirebase();
-  await deleteObject(ref(storage, photoPath));
+
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'deleteSmePosItemPhoto',
+  );
+
+  await call({
+    photoPath,
+  });
 }
 
 export async function registerExistingSmePosProduct(input: {

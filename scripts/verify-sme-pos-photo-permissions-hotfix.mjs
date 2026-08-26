@@ -75,10 +75,24 @@ need(
 );
 
 need(
-  repository.includes(
-    'spaces/${spaceId}/sme-pos-items/',
-  ),
-  'SME POS repository upload path changed unexpectedly.',
+  repository.includes("'uploadSmePosItemPhoto'")
+    && repository.includes("'getSmePosItemPhotoUrl'")
+    && repository.includes("'deleteSmePosItemPhoto'"),
+  'SME POS repository must delegate item-photo access through callable backend functions.',
+);
+
+need(
+  !repository.includes('uploadBytes(ref(storage')
+    && !repository.includes('deleteObject(ref(storage'),
+  'SME POS repository must not bypass callable photo permission enforcement.',
+);
+
+need(
+  functions.includes('uploadSmePosItemPhoto')
+    && functions.includes('getSmePosItemPhotoUrl')
+    && functions.includes('deleteSmePosItemPhoto')
+    && functions.includes('sme-pos-items'),
+  'SME POS backend photo handlers or Storage path changed unexpectedly.',
 );
 
 need(
