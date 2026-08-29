@@ -5,19 +5,28 @@ import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../compone
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
-import { listAccounts } from '../../repositories/accountRepository';
-import { listBudgets, listBudgetsForSpace } from '../../repositories/budgetRepository';
-import { listCommitments, listCommitmentsForSpace } from '../../repositories/commitmentRepository';
+import { listAccountsForOwnerSpace } from '../../repositories/accountRepository';
+import {
+  listBudgetsForOwnerSpace,
+  listBudgetsForSpace,
+} from '../../repositories/budgetRepository';
+import {
+  listCommitmentsForOwnerSpace,
+  listCommitmentsForSpace,
+} from '../../repositories/commitmentRepository';
 import {
   listSharedBillAssignments,
   listSpaceMembers,
 } from '../../repositories/collaborationRepository';
-import { listGoals } from '../../repositories/goalRepository';
+import { listGoalsForOwnerSpace } from '../../repositories/goalRepository';
 import { listSharedExpenses } from '../../repositories/sharedExpenseRepository';
 import { getMySmePosAccess } from '../../repositories/smePosRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { getSpace, updateSpace } from '../../repositories/spaceRepository';
-import { listTransactions, listTransactionsForSpace } from '../../repositories/transactionRepository';
+import {
+  listTransactionsForOwnerSpace,
+  listTransactionsForSpace,
+} from '../../repositories/transactionRepository';
 import type {
   Account,
   Budget,
@@ -152,84 +161,231 @@ export function SpaceDetailsPage() {
   const [error, setError] = useState('');
 
   const shared = Boolean(space && space.type !== 'personal');
-  const activeTab = tabFromSearch(searchParams.get('tab'), shared);
+  const requestedTab = searchParams.get('tab');
+  const requestedSection = searchParams.get('section');
+  const detailedOverviewRequested =
+    searchParams.get('details') === '1';
+  const activeTab = tabFromSearch(requestedTab, shared);
 
   const load = useCallback(async () => {
     if (!user || !spaceId) return;
+
     setLoading(true);
     setError('');
+
     try {
       const nextSpace = await getSpace(spaceId);
-      setSpace(nextSpace);
-      if (!nextSpace) return;
 
-      const nextPosAccess = nextSpace.type === 'sme'
-        ? await getMySmePosAccess(spaceId, user.uid)
-        : null;
-      const nextSmePosRole: SmePosRole | null = nextSpace.type === 'sme'
-        ? nextSpace.ownerId === user.uid
-          ? 'owner'
-          : nextPosAccess?.status === 'active'
-            ? nextPosAccess.role
-            : null
-        : null;
+      setSpace(nextSpace);
+
+      // Clear tool-specific data whenever the Space/request context changes.
+      setAccounts([]);
+      setTransactions([]);
+      setBudgets([]);
+      setGoals([]);
+      setCommitments([]);
+      setSharedBills([]);
+      setSharedExpenses([]);
+
+      if (!nextSpace) {
+        setMembers([]);
+        setSmePosRole(null);
+        return;
+      }
+
+      const nextPosAccess =
+        nextSpace.type === 'sme'
+          ? await getMySmePosAccess(
+              spaceId,
+              user.uid,
+            )
+          : null;
+
+      const nextSmePosRole: SmePosRole | null =
+        nextSpace.type === 'sme'
+          ? nextSpace.ownerId === user.uid
+            ? 'owner'
+            : nextPosAccess?.status === 'active'
+              ? nextPosAccess.role
+              : null
+          : null;
+
       setSmePosRole(nextSmePosRole);
 
-      const canReadSmeFinancials = nextSpace.type !== 'sme'
+      /*
+       * Member context remains part of the shared Space runtime.
+       * Financial/report datasets are no longer automatically part
+       * of the runtime.
+       */
+      const nextMembers =
+        nextSpace.type !== 'personal'
+          ? await listSpaceMembers(spaceId)
+          : [];
+
+      setMembers(nextMembers);
+
+      const canReadSmeFinancials =
+        nextSpace.type !== 'sme'
         || nextSpace.ownerId === user.uid
         || nextSmePosRole === 'owner'
         || nextSmePosRole === 'manager';
 
-      const [nextAccounts, nextGoals] = await Promise.all([
-        listAccounts(user.uid),
-        listGoals(user.uid),
-      ]);
-      let nextTransactions: FinancialTransaction[] = [];
-      let nextBudgets: Budget[] = [];
-      let nextCommitments: Commitment[] = [];
+      const nextShared =
+        nextSpace.type !== 'personal';
 
-      if (nextSpace.type === 'sme' && nextSpace.ownerId !== user.uid) {
-        if (canReadSmeFinancials) {
-          [nextTransactions, nextBudgets, nextCommitments] = await Promise.all([
-            listTransactionsForSpace(spaceId),
-            listBudgetsForSpace(spaceId),
-            listCommitmentsForSpace(spaceId),
-          ]);
+      const nextActiveTab =
+        tabFromSearch(
+          requestedTab,
+          nextShared,
+        );
+
+      const nextCompactActionHome =
+        nextSpace.type === 'sme'
+        || nextSpace.type === 'household'
+        || nextSpace.type === 'trip';
+
+      /*
+       * Household, Trip and SME launcher pages stay lightweight.
+       *
+       * Detailed financial data is requested only when:
+       * - an overview section/report is opened; or
+       * - Detailed overview is explicitly expanded.
+       *
+       * Other Space types preserve their current overview behavior,
+       * but now use Space-scoped Firestore queries.
+       */
+      const shouldLoadOverviewData =
+        nextActiveTab === 'overview'
+        && (
+          !nextCompactActionHome
+          || Boolean(requestedSection)
+          || detailedOverviewRequested
+        );
+
+      if (
+        shouldLoadOverviewData
+        && canReadSmeFinancials
+      ) {
+        const nextAccountsPromise =
+          listAccountsForOwnerSpace(
+            user.uid,
+            spaceId,
+          );
+
+        const nextGoalsPromise =
+          listGoalsForOwnerSpace(
+            user.uid,
+            spaceId,
+          );
+
+        let nextTransactionsPromise:
+          Promise<FinancialTransaction[]>;
+
+        let nextBudgetsPromise:
+          Promise<Budget[]>;
+
+        let nextCommitmentsPromise:
+          Promise<Commitment[]>;
+
+        /*
+         * Preserve the existing SME manager financial permission.
+         * Managers use Space-authorized queries; owner data remains
+         * owner + Space scoped.
+         */
+        if (
+          nextSpace.type === 'sme'
+          && nextSpace.ownerId !== user.uid
+        ) {
+          nextTransactionsPromise =
+            listTransactionsForSpace(
+              spaceId,
+            );
+
+          nextBudgetsPromise =
+            listBudgetsForSpace(
+              spaceId,
+            );
+
+          nextCommitmentsPromise =
+            listCommitmentsForSpace(
+              spaceId,
+            );
+        } else {
+          nextTransactionsPromise =
+            listTransactionsForOwnerSpace(
+              user.uid,
+              spaceId,
+            );
+
+          nextBudgetsPromise =
+            listBudgetsForOwnerSpace(
+              user.uid,
+              spaceId,
+            );
+
+          nextCommitmentsPromise =
+            listCommitmentsForOwnerSpace(
+              user.uid,
+              spaceId,
+            );
         }
-      } else {
-        [nextTransactions, nextBudgets, nextCommitments] = await Promise.all([
-          listTransactions(user.uid),
-          listBudgets(user.uid),
-          listCommitments(user.uid),
-        ]);
-      }
 
-      setAccounts(nextAccounts);
-      setTransactions(nextTransactions.filter((item) => item.spaceId === spaceId));
-      setBudgets(nextBudgets.filter((item) => item.spaceId === spaceId));
-      setGoals(nextGoals.filter((item) => item.spaceId === spaceId));
-      setCommitments(nextCommitments.filter((item) => item.spaceId === spaceId));
-
-      if (nextSpace.type !== 'personal') {
-        const [nextMembers, nextSharedBills, nextSharedExpenses] = await Promise.all([
-          listSpaceMembers(spaceId),
-          listSharedBillAssignments(spaceId),
-          listSharedExpenses(spaceId),
+        const [
+          nextAccounts,
+          nextGoals,
+          nextTransactions,
+          nextBudgets,
+          nextCommitments,
+        ] = await Promise.all([
+          nextAccountsPromise,
+          nextGoalsPromise,
+          nextTransactionsPromise,
+          nextBudgetsPromise,
+          nextCommitmentsPromise,
         ]);
-        setMembers(nextMembers);
-        setSharedBills(nextSharedBills);
-        setSharedExpenses(nextSharedExpenses);
-      } else {
-        setMembers([]);
-        setSharedBills([]);
-        setSharedExpenses([]);
+
+        setAccounts(nextAccounts);
+        setGoals(nextGoals);
+        setTransactions(nextTransactions);
+        setBudgets(nextBudgets);
+        setCommitments(nextCommitments);
+
+        if (nextShared) {
+          const [
+            nextSharedBills,
+            nextSharedExpenses,
+          ] = await Promise.all([
+            listSharedBillAssignments(
+              spaceId,
+            ),
+            listSharedExpenses(
+              spaceId,
+            ),
+          ]);
+
+          setSharedBills(
+            nextSharedBills,
+          );
+
+          setSharedExpenses(
+            nextSharedExpenses,
+          );
+        }
       }
     } catch (nextError) {
-      setError(getErrorMessage(nextError));
+      setError(
+        getErrorMessage(nextError),
+      );
     } finally {
       setLoading(false);
     }
-  }, [spaceId, user]);
+  }, [
+    detailedOverviewRequested,
+    requestedSection,
+    requestedTab,
+    spaceId,
+    user,
+  ]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -393,6 +549,22 @@ export function SpaceDetailsPage() {
 
     {activeTab === 'overview' && space.type === 'trip' && (
       <details
+        open={detailedOverviewRequested}
+        onToggle={(event) => {
+          const next =
+            new URLSearchParams(searchParams);
+
+          if (event.currentTarget.open) {
+            next.set('details', '1');
+          } else {
+            next.delete('details');
+          }
+
+          setSearchParams(
+            next,
+            { replace: true },
+          );
+        }}
         className="space-home-secondary-details"
         style={{ marginTop: '0.75rem' }}
       >
@@ -407,14 +579,16 @@ export function SpaceDetailsPage() {
         </summary>
 
         <div style={{ marginTop: '0.75rem' }}>
-          <TripCommandCentre
-        space={space}
-        budgets={budgets}
-        members={members}
-        currentMember={currentMember}
-        sharedExpenses={sharedExpenses}
-        onOpenTab={(tab) => chooseTab(tab)}
-      />
+          {detailedOverviewRequested && (
+            <TripCommandCentre
+              space={space}
+              budgets={budgets}
+              members={members}
+              currentMember={currentMember}
+              sharedExpenses={sharedExpenses}
+              onOpenTab={(tab) => chooseTab(tab)}
+            />
+          )}
         </div>
       </details>
     )}
@@ -422,6 +596,22 @@ export function SpaceDetailsPage() {
 
     {activeTab === 'overview' && space.type === 'household' && (
       <details
+        open={detailedOverviewRequested}
+        onToggle={(event) => {
+          const next =
+            new URLSearchParams(searchParams);
+
+          if (event.currentTarget.open) {
+            next.set('details', '1');
+          } else {
+            next.delete('details');
+          }
+
+          setSearchParams(
+            next,
+            { replace: true },
+          );
+        }}
         className="space-home-secondary-details"
         style={{ marginTop: '0.75rem' }}
       >
@@ -436,25 +626,43 @@ export function SpaceDetailsPage() {
         </summary>
 
         <div style={{ marginTop: '0.75rem' }}>
-          <HouseholdCommandCentre
-        space={space}
-        members={members}
-        commitments={commitments}
-        sharedBills={sharedBills}
-        sharedExpenses={sharedExpenses}
-        currentMember={currentMember || null}
-        canManage={
-          currentMember?.role === 'owner'
-          || currentMember?.role === 'admin'
-        }
-        onOpenTab={chooseTab}
-      />
+          {detailedOverviewRequested && (
+            <HouseholdCommandCentre
+              space={space}
+              members={members}
+              commitments={commitments}
+              sharedBills={sharedBills}
+              sharedExpenses={sharedExpenses}
+              currentMember={currentMember || null}
+              canManage={
+                currentMember?.role === 'owner'
+                || currentMember?.role === 'admin'
+              }
+              onOpenTab={chooseTab}
+            />
+          )}
         </div>
       </details>
     )}
 
     {activeTab === 'overview' && space.type === 'sme' && (
       <details
+        open={detailedOverviewRequested}
+        onToggle={(event) => {
+          const next =
+            new URLSearchParams(searchParams);
+
+          if (event.currentTarget.open) {
+            next.set('details', '1');
+          } else {
+            next.delete('details');
+          }
+
+          setSearchParams(
+            next,
+            { replace: true },
+          );
+        }}
         className="space-home-secondary-details"
         style={{ marginTop: '0.75rem' }}
       >
@@ -469,15 +677,17 @@ export function SpaceDetailsPage() {
         </summary>
 
         <div style={{ marginTop: '0.75rem' }}>
-          <SmeOperationsCommandCentre
-            space={space}
-            role={smePosRole}
-            canViewFinancials={canViewSmeFinancials}
-            accounts={accounts}
-            transactions={transactions}
-            commitments={commitments}
-            memberCount={activeMembers.length}
-          />
+          {detailedOverviewRequested && (
+            <SmeOperationsCommandCentre
+              space={space}
+              role={smePosRole}
+              canViewFinancials={canViewSmeFinancials}
+              accounts={accounts}
+              transactions={transactions}
+              commitments={commitments}
+              memberCount={activeMembers.length}
+            />
+          )}
         </div>
       </details>
     )}

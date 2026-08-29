@@ -10,6 +10,29 @@ export async function listAllCommitments(uid: string): Promise<Commitment[]> {
     .sort((a, b) => (a.nextDueDate || '9999-12-31').localeCompare(b.nextDueDate || '9999-12-31'));
 }
 
+export async function listCommitmentsForOwnerSpace(
+  uid: string,
+  spaceId: string,
+): Promise<Commitment[]> {
+  const { db } = requireFirebase();
+
+  const snapshot = await getDocs(query(
+    collection(db, 'commitments'),
+    where('ownerId', '==', uid),
+    where('spaceId', '==', spaceId),
+  ));
+
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as Commitment)
+    .filter((item) => !item.archivedAt && !item.stoppedAt)
+    .sort((a, b) =>
+      (a.nextDueDate || '9999-12-31')
+        .localeCompare(
+          b.nextDueDate || '9999-12-31',
+        ),
+    );
+}
+
 export async function listCommitmentsForSpace(spaceId: string): Promise<Commitment[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'commitments'), where('spaceId', '==', spaceId)));

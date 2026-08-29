@@ -11,6 +11,24 @@ export async function listAllAccounts(uid: string): Promise<Account[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export async function listAccountsForOwnerSpace(
+  uid: string,
+  spaceId: string,
+): Promise<Account[]> {
+  const { db } = requireFirebase();
+
+  const snapshot = await getDocs(query(
+    collection(db, 'accounts'),
+    where('ownerId', '==', uid),
+    where('spaceId', '==', spaceId),
+  ));
+
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as Account)
+    .filter((item) => !item.archivedAt && !item.closedAt)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function createAccount(input: {
   name: string;
   institution?: string;

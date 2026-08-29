@@ -1,7 +1,6 @@
 import {
   type CSSProperties,
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -163,9 +162,12 @@ export function SpaceActionHub({
     }
   }, [space.type, user]);
 
-  useEffect(() => {
-    void loadMoneyOptions();
-  }, [loadMoneyOptions]);
+  async function openMoney(
+    type: 'income' | 'expense',
+  ) {
+    await loadMoneyOptions();
+    setMoneyType(type);
+  }
 
   const allCategories = useMemo(
     () => [
@@ -380,7 +382,7 @@ export function SpaceActionHub({
 
             <ShortcutButton
               label="Add Expense"
-              onClick={() => setMoneyType('expense')}
+              onClick={() => void openMoney('expense')}
             />
 
             <ShortcutButton
@@ -425,13 +427,13 @@ export function SpaceActionHub({
             <ShortcutButton
               label="Add Expense"
               primary={isPrimary('expense')}
-              onClick={() => setMoneyType('expense')}
+              onClick={() => void openMoney('expense')}
             />
 
             <ShortcutButton
               label="Add Income"
               primary={isPrimary('income')}
-              onClick={() => setMoneyType('income')}
+              onClick={() => void openMoney('income')}
             />
 
             {shared && supportsGroupFund && (

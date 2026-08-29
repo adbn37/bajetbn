@@ -10,6 +10,24 @@ export async function listAllGoals(uid: string): Promise<SavingsGoal[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export async function listGoalsForOwnerSpace(
+  uid: string,
+  spaceId: string,
+): Promise<SavingsGoal[]> {
+  const { db } = requireFirebase();
+
+  const snapshot = await getDocs(query(
+    collection(db, 'goals'),
+    where('ownerId', '==', uid),
+    where('spaceId', '==', spaceId),
+  ));
+
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as SavingsGoal)
+    .filter((item) => !item.archivedAt && !item.closedAt)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function listGoalContributions(uid: string): Promise<GoalContribution[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'goalContributions'), where('ownerId', '==', uid)));
