@@ -473,6 +473,57 @@ export interface SmePosUsageCounts {
   sales: number;
 }
 
+export type BusinessIndustry =
+  | 'general'
+  | 'retail'
+  | 'service'
+  | 'marketplace'
+  | 'rental'
+  | 'transport_delivery'
+  | 'other';
+
+export type BusinessContactKind =
+  | 'customer'
+  | 'vendor'
+  | 'both';
+
+export interface BusinessProfile {
+  id: string;
+  spaceId: string;
+  ownerId: string;
+  businessName: string;
+  industry: BusinessIndustry;
+  registrationNumber: string;
+  address: string;
+  phone: string;
+  email: string;
+  fiscalYearStartMonth: number;
+  invoicePrefix: string;
+  taxEnabled: boolean;
+  taxName: string;
+  taxRateBps: number;
+  taxRegistrationNumber: string;
+  payrollEnabled: boolean;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface BusinessContact {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  kind: BusinessContactKind;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export type FinancialTransactionType = 'income' | 'expense' | 'transfer' | 'reversal';
 export type FinancialTransactionStatus = 'posted' | 'reversed';
 export type RecurringTransactionType = 'income' | 'expense';

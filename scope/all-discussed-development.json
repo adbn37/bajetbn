@@ -1,0 +1,64 @@
+{
+  "scopeVersion": "2026-08-29.2",
+  "targetRelease": "BajetBN v1.12.0",
+  "baseCandidate": "55c345b125ee050a28011b02fc45e2c0e087e51c",
+  "policy": {
+    "manualTesting": "Deferred until all development is complete.",
+    "staging": "Keep the accepted v1.11 candidate unchanged until the final v1.12 candidate.",
+    "production": "Production remains untouched until explicit owner approval."
+  },
+  "excluded": [
+    {
+      "id": "android.play_store",
+      "title": "Android / Play Store packaging and publishing",
+      "reason": "Explicitly excluded by owner."
+    }
+  ],
+  "items": [
+    {
+      "id": "v111.completed_scope",
+      "title": "All development completed through the accepted v1.11 Space-First candidate",
+      "status": "complete"
+    },
+    {
+      "id": "business.foundation",
+      "title": "Business profile and reusable customer/vendor contacts",
+      "status": "in_progress"
+    },
+    {
+      "id": "business.invoicing",
+      "title": "Invoices, invoice items, statuses, payments and receipts",
+      "status": "planned"
+    },
+    {
+      "id": "business.accounting",
+      "title": "SME accounting records, income/expense linkage and business financial reports",
+      "status": "planned"
+    },
+    {
+      "id": "business.tax",
+      "title": "Business tax configuration and tax tracking",
+      "status": "planned"
+    },
+    {
+      "id": "business.payroll",
+      "title": "Employees, payroll runs, wage posting and payroll history",
+      "status": "planned"
+    },
+    {
+      "id": "sme.industry_profiles",
+      "title": "Flexible SME profiles for retail, service, marketplace, rental, transport and delivery work",
+      "status": "planned"
+    },
+    {
+      "id": "sme.staff_operations_guide",
+      "title": "In-app staff guide for POS, inventory, barcode, sales, returns and operational workflows",
+      "status": "planned"
+    },
+    {
+      "id": "release.final_audit",
+      "title": "Final all-discussed-development audit and staging candidate",
+      "status": "planned"
+    }
+  ]
+}

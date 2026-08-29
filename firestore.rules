@@ -538,6 +538,156 @@ service cloud.firestore {
     }
 
 
+    match /businessProfiles/{spaceId} {
+      allow read: if signedIn()
+        && isSpaceMember(spaceId);
+
+      allow create: if signedIn()
+        && isSmeSpace(spaceId)
+        && isSpaceOwner(spaceId)
+        && request.resource.data.keys().hasOnly([
+          'spaceId', 'ownerId', 'businessName', 'industry',
+          'registrationNumber', 'address', 'phone', 'email',
+          'fiscalYearStartMonth', 'invoicePrefix',
+          'taxEnabled', 'taxName', 'taxRateBps',
+          'taxRegistrationNumber', 'payrollEnabled',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.spaceId == spaceId
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.businessName is string
+        && request.resource.data.businessName.size() > 0
+        && request.resource.data.businessName.size() <= 160
+        && request.resource.data.industry in [
+          'general', 'retail', 'service', 'marketplace',
+          'rental', 'transport_delivery', 'other'
+        ]
+        && request.resource.data.registrationNumber is string
+        && request.resource.data.registrationNumber.size() <= 100
+        && request.resource.data.address is string
+        && request.resource.data.address.size() <= 800
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 80
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 160
+        && request.resource.data.fiscalYearStartMonth is int
+        && request.resource.data.fiscalYearStartMonth >= 1
+        && request.resource.data.fiscalYearStartMonth <= 12
+        && request.resource.data.invoicePrefix is string
+        && request.resource.data.invoicePrefix.size() > 0
+        && request.resource.data.invoicePrefix.size() <= 12
+        && request.resource.data.taxEnabled is bool
+        && request.resource.data.taxName is string
+        && request.resource.data.taxName.size() <= 80
+        && request.resource.data.taxRateBps is int
+        && request.resource.data.taxRateBps >= 0
+        && request.resource.data.taxRateBps <= 10000
+        && request.resource.data.taxRegistrationNumber is string
+        && request.resource.data.taxRegistrationNumber.size() <= 100
+        && request.resource.data.payrollEnabled is bool
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && isSpaceOwner(spaceId)
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.spaceId == resource.data.spaceId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'businessName', 'industry', 'registrationNumber',
+          'address', 'phone', 'email',
+          'fiscalYearStartMonth', 'invoicePrefix',
+          'taxEnabled', 'taxName', 'taxRateBps',
+          'taxRegistrationNumber', 'payrollEnabled',
+          'updatedAt'
+        ])
+        && request.resource.data.businessName is string
+        && request.resource.data.businessName.size() > 0
+        && request.resource.data.businessName.size() <= 160
+        && request.resource.data.industry in [
+          'general', 'retail', 'service', 'marketplace',
+          'rental', 'transport_delivery', 'other'
+        ]
+        && request.resource.data.fiscalYearStartMonth is int
+        && request.resource.data.fiscalYearStartMonth >= 1
+        && request.resource.data.fiscalYearStartMonth <= 12
+        && request.resource.data.invoicePrefix is string
+        && request.resource.data.invoicePrefix.size() > 0
+        && request.resource.data.invoicePrefix.size() <= 12
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    match /businessContacts/{contactId} {
+      allow read: if signedIn()
+        && isSpaceMember(resource.data.spaceId);
+
+      allow create: if signedIn()
+        && isSmeSpace(request.resource.data.spaceId)
+        && isSpaceOwner(request.resource.data.spaceId)
+        && request.resource.data.keys().hasOnly([
+          'displayId', 'spaceId', 'ownerId', 'kind',
+          'name', 'phone', 'email', 'address', 'notes',
+          'archivedAt', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.displayId is string
+        && request.resource.data.displayId.size() > 0
+        && request.resource.data.displayId.size() <= 80
+        && request.resource.data.kind in [
+          'customer', 'vendor', 'both'
+        ]
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 80
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 160
+        && request.resource.data.address is string
+        && request.resource.data.address.size() <= 500
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 1000
+        && request.resource.data.archivedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && isSpaceOwner(resource.data.spaceId)
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.spaceId == resource.data.spaceId
+        && request.resource.data.displayId == resource.data.displayId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'kind', 'name', 'phone', 'email',
+          'address', 'notes', 'archivedAt', 'updatedAt'
+        ])
+        && request.resource.data.kind in [
+          'customer', 'vendor', 'both'
+        ]
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 80
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 160
+        && request.resource.data.address is string
+        && request.resource.data.address.size() <= 500
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 1000
+        && (
+          request.resource.data.archivedAt == null
+          || request.resource.data.archivedAt is timestamp
+        )
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
     match /spaceInvitations/{invitationId} {
       allow read: if signedIn() && (
         isSpaceManager(resource.data.spaceId)

@@ -648,11 +648,19 @@ export function SpaceActionHub({
                   {canViewSmeFinancials && (
                     <>
                       {space.ownerId === user?.uid && (
-                        <ShortcutLink
-                          to="/accounts"
-                          label="Business Accounts"
-                          onClick={() => setSpaceMoreOpen(false)}
-                        />
+                        <>
+                          <ShortcutLink
+                            to="/accounts"
+                            label="Business Accounts"
+                            onClick={() => setSpaceMoreOpen(false)}
+                          />
+
+                          <ShortcutLink
+                            to={'/spaces/' + space.id + '/business'}
+                            label="Business Admin"
+                            onClick={() => setSpaceMoreOpen(false)}
+                          />
+                        </>
                       )}
 
                       <ShortcutLink
