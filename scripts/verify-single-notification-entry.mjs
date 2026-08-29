@@ -29,6 +29,50 @@ function section(startMarker, endMarker) {
   return app.slice(start, end);
 }
 
+function navigationSection() {
+  const marker =
+    'className="mobile-bottom-nav';
+
+  const markerIndex =
+    app.indexOf(marker);
+
+  if (markerIndex === -1) {
+    failures.push(
+      'Missing mobile bottom navigation class.',
+    );
+
+    return '';
+  }
+
+  const start =
+    app.lastIndexOf(
+      '<nav',
+      markerIndex,
+    );
+
+  const end =
+    app.indexOf(
+      '</nav>',
+      markerIndex,
+    );
+
+  if (
+    start === -1
+    || end === -1
+  ) {
+    failures.push(
+      'Could not resolve mobile bottom navigation boundaries.',
+    );
+
+    return '';
+  }
+
+  return app.slice(
+    start,
+    end + '</nav>'.length,
+  );
+}
+
 const mobileHeader = section(
   '<header className="mobile-header">',
   '</header>',
@@ -39,64 +83,112 @@ const desktopHeader = section(
   '<ConnectivityBanner />',
 );
 
-const mobileNavigation = section(
-  '<nav className="mobile-bottom-nav"',
-  '</nav>',
-);
+const mobileNavigation =
+  navigationSection();
 
 expect(
-  !mobileHeader.includes('/notifications'),
-  'The mobile header must not contain a notification link.',
-);
-
-expect(
-  !mobileHeader.includes('notification-button'),
-  'The duplicate mobile-header notification button remains.',
-);
-
-expect(
-  mobileHeader.includes("navigate('/search')"),
+  mobileHeader.includes(
+    "navigate('/search')",
+  ),
   'The mobile Search action must remain available.',
 );
 
 expect(
-  mobileHeader.includes('environment-badge'),
+  mobileHeader.includes(
+    "navigate('/notifications')",
+  ),
+  'The mobile header notification action is missing.',
+);
+
+expect(
+  mobileHeader.includes(
+    'notification-button',
+  ),
+  'The mobile notification button is missing.',
+);
+
+expect(
+  mobileHeader.includes(
+    '<NotificationBellIcon />',
+  ),
+  'The mobile notification action must use the bell icon.',
+);
+
+expect(
+  mobileHeader.includes(
+    'unreadNotifications > 0',
+  ),
+  'The mobile notification unread badge is missing.',
+);
+
+expect(
+  mobileHeader.includes(
+    'environment-badge',
+  ),
   'The mobile environment badge must remain available.',
 );
 
 expect(
-  desktopHeader.includes("navigate('/notifications')"),
+  desktopHeader.includes(
+    "navigate('/notifications')",
+  ),
   'The desktop notification button is missing.',
 );
 
 expect(
-  desktopHeader.includes('<NotificationBellIcon />'),
+  desktopHeader.includes(
+    '<NotificationBellIcon />',
+  ),
   'The desktop notification button must use the bell icon.',
 );
 
 expect(
-  mobileNavigation.includes('to="/notifications"'),
-  'The mobile Alerts destination is missing.',
+  !mobileNavigation.includes(
+    'to="/notifications"',
+  ),
+  'Notifications must not consume a mobile bottom-nav destination.',
 );
 
 expect(
-  mobileNavigation.includes('<small>Alerts</small>'),
-  'The mobile Alerts label is missing.',
+  !mobileNavigation.includes(
+    '<small>Alerts</small>',
+  ),
+  'The obsolete mobile Alerts tab remains.',
 );
 
 expect(
-  mobileNavigation.includes('<NotificationBellIcon />'),
-  'The mobile Alerts destination must use the bell icon.',
+  mobileNavigation.includes(
+    '<small>Home</small>',
+  ),
+  'The mobile Home destination is missing.',
 );
 
 expect(
-  mobileNavigation.includes('unreadNotifications > 0'),
-  'The mobile unread badge is missing.',
+  mobileNavigation.includes(
+    '<small>Spaces</small>',
+  ),
+  'The mobile Spaces destination is missing.',
+);
+
+expect(
+  mobileNavigation.includes(
+    'mobile-bottom-add',
+  ),
+  'The mobile Add destination is missing.',
+);
+
+expect(
+  mobileNavigation.includes(
+    '<small>More</small>',
+  ),
+  'The mobile More destination is missing.',
 );
 
 expect(
   (
-    app.match(/function NotificationBellIcon\(\)/g)
+    app.match(
+      /function NotificationBellIcon\(\)/g,
+    )
     || []
   ).length === 1,
   'Exactly one reusable notification bell component is required.',
@@ -104,7 +196,11 @@ expect(
 
 if (failures.length) {
   console.error(
-    failures.map((failure) => `- ${failure}`).join('\n'),
+    failures
+      .map(
+        (failure) => `- ${failure}`,
+      )
+      .join('\n'),
   );
 
   process.exit(1);
@@ -112,5 +208,6 @@ if (failures.length) {
 
 console.log(
   'Single notification-entry verification passed: '
-  + 'mobile uses bottom Alerts and desktop uses one header bell.',
+  + 'mobile and desktop use their responsive header bell, '
+  + 'while mobile bottom navigation remains Home, Spaces, Add, More.',
 );

@@ -9585,3 +9585,101 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 /* END BAJETBN V1.10.3 TRANSACTION LABELS */
+
+/* v1.11.0 Global Home + mobile navigation */
+
+.home-v111-account-hint {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: 1.15rem;
+  padding-top: .85rem;
+  border-top: 1px solid rgba(255,255,255,.16);
+  color: rgba(255,255,255,.72);
+}
+
+.home-v111-account-hint span {
+  min-width: 0;
+  font-size: .72rem;
+}
+
+.home-v111-account-hint strong {
+  flex: 0 0 auto;
+  color: #fff;
+  font-size: .72rem;
+}
+
+.home-v111-recent-summary {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr))
+    auto;
+  gap: .65rem;
+  align-items: center;
+  padding: .8rem 1.05rem;
+  border-top: 1px solid var(--border);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 5%,
+      var(--surface)
+    );
+}
+
+.home-v111-recent-summary > span {
+  min-width: 0;
+  display: grid;
+  gap: .12rem;
+}
+
+.home-v111-recent-summary small {
+  color: var(--muted);
+  font-size: .66rem;
+}
+
+.home-v111-recent-summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .84rem;
+}
+
+.home-v111-recent-summary > small {
+  text-align: right;
+}
+
+@media (max-width: 780px) {
+  .mobile-bottom-nav.mobile-bottom-nav-v111 {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+  }
+
+  .mobile-header-actions
+  .notification-button {
+    position: relative;
+  }
+}
+
+@media (max-width: 520px) {
+  .home-v111-recent-summary {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .home-v111-recent-summary > small {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
+
+@media (max-width: 390px) {
+  .mobile-header-actions
+  .environment-badge {
+    display: none;
+  }
+}
+
+/* END v1.11.0 Global Home + mobile navigation */

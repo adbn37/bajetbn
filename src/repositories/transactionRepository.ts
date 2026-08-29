@@ -72,6 +72,65 @@ export async function listTransactions(uid: string): Promise<FinancialTransactio
     });
 }
 
+export async function listTransactionsForOwnerAccount(
+  uid: string,
+  accountId: string,
+): Promise<FinancialTransaction[]> {
+  const { db } = requireFirebase();
+
+  const [
+    sourceSnapshot,
+    destinationSnapshot,
+  ] = await Promise.all([
+    getDocs(query(
+      collection(db, 'transactions'),
+      where('ownerId', '==', uid),
+      where('accountId', '==', accountId),
+    )),
+    getDocs(query(
+      collection(db, 'transactions'),
+      where('ownerId', '==', uid),
+      where('destinationAccountId', '==', accountId),
+    )),
+  ]);
+
+  const merged =
+    new Map<string, FinancialTransaction>();
+
+  for (const snapshot of [
+    sourceSnapshot,
+    destinationSnapshot,
+  ]) {
+    for (const item of snapshot.docs) {
+      merged.set(
+        item.id,
+        {
+          id: item.id,
+          ...item.data(),
+        } as FinancialTransaction,
+      );
+    }
+  }
+
+  return Array.from(
+    merged.values(),
+  ).sort((a, b) => {
+    const dateCompare =
+      b.transactionDate.localeCompare(
+        a.transactionDate,
+      );
+
+    if (dateCompare !== 0) {
+      return dateCompare;
+    }
+
+    return (
+      (b.postedAt?.toMillis() || 0)
+      - (a.postedAt?.toMillis() || 0)
+    );
+  });
+}
+
 export async function listTransactionsForOwnerSpace(
   uid: string,
   spaceId: string,
