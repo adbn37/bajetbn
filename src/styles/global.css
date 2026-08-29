@@ -9881,3 +9881,265 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* v1.12 Business invoicing */
+
+.business-invoices-page {
+  padding-bottom: 7rem;
+}
+
+.invoice-editor,
+.invoice-payment-editor,
+.invoice-print-sheet,
+.invoice-list-panel {
+  margin-top: 1rem;
+}
+
+.invoice-lines {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  background: #07111f;
+}
+
+.invoice-line-editor {
+  display: grid;
+  grid-template-columns:
+    minmax(200px, 1fr)
+    100px
+    150px
+    auto;
+  gap: .75rem;
+  align-items: end;
+  padding: .8rem 0;
+  border-bottom:
+    1px solid rgba(32,48,68,.55);
+}
+
+.invoice-line-editor:last-child {
+  border-bottom: 0;
+}
+
+.business-invoice-list {
+  display: grid;
+  gap: .75rem;
+}
+
+.business-invoice-card {
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 1fr)
+    auto;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #07111f;
+}
+
+.business-invoice-card > .button-row {
+  grid-column: 1 / -1;
+}
+
+.business-invoice-main h3 {
+  margin: .4rem 0 .2rem;
+}
+
+.business-invoice-main p {
+  margin: 0;
+}
+
+.business-invoice-money {
+  text-align: right;
+}
+
+.business-invoice-money strong,
+.business-invoice-money span {
+  display: block;
+}
+
+.business-invoice-money span {
+  color: var(--muted);
+  margin-top: .25rem;
+}
+
+.business-invoice-meta {
+  display: flex;
+  gap: .45rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.business-invoice-meta > span {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.invoice-status {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .2rem .45rem;
+  color: var(--muted);
+}
+
+.invoice-status.paid {
+  color: var(--accent-2);
+  border-color:
+    rgba(45,212,191,.35);
+}
+
+.invoice-status.cancelled {
+  color: var(--danger);
+}
+
+.invoice-document-header,
+.invoice-party-grid {
+  display: grid;
+  grid-template-columns:
+    1fr 1fr;
+  gap: 2rem;
+}
+
+.invoice-document-header {
+  padding-bottom: 1.5rem;
+  border-bottom:
+    1px solid var(--border);
+}
+
+.invoice-number-block {
+  text-align: right;
+}
+
+.invoice-number-block strong,
+.invoice-number-block span {
+  display: block;
+}
+
+.invoice-number-block strong {
+  font-size: 1.45rem;
+}
+
+.invoice-number-block span {
+  color: var(--muted);
+  margin-top: .35rem;
+}
+
+.invoice-party-grid {
+  margin: 1.5rem 0;
+}
+
+.invoice-table-wrap {
+  overflow-x: auto;
+}
+
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.invoice-table th,
+.invoice-table td {
+  padding: .7rem;
+  text-align: left;
+  border-bottom:
+    1px solid var(--border);
+}
+
+.invoice-total-grid {
+  width: min(
+    420px,
+    100%
+  );
+  margin: 1.5rem 0 1.5rem auto;
+  display: grid;
+  grid-template-columns:
+    1fr auto;
+  gap: .6rem 1.5rem;
+}
+
+.invoice-total-grid strong {
+  text-align: right;
+}
+
+.invoice-notes,
+.invoice-payment-history {
+  margin-top: 1.5rem;
+}
+
+.invoice-payment-row {
+  display: grid;
+  grid-template-columns:
+    1fr 1fr auto;
+  gap: 1rem;
+  padding: .65rem 0;
+  border-bottom:
+    1px solid var(--border);
+}
+
+@media (max-width: 760px) {
+  .invoice-line-editor {
+    grid-template-columns:
+      1fr 1fr;
+  }
+
+  .invoice-line-description {
+    grid-column:
+      1 / -1;
+  }
+
+  .business-invoice-card {
+    grid-template-columns:
+      1fr;
+  }
+
+  .business-invoice-money {
+    text-align: left;
+  }
+
+  .invoice-document-header,
+  .invoice-party-grid {
+    grid-template-columns:
+      1fr;
+    gap: 1rem;
+  }
+
+  .invoice-number-block {
+    text-align: left;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .invoice-print-sheet,
+  .invoice-print-sheet * {
+    visibility: visible !important;
+  }
+
+  .invoice-print-sheet {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+
+  .invoice-print-sheet p,
+  .invoice-print-sheet span,
+  .invoice-print-sheet strong,
+  .invoice-print-sheet h2,
+  .invoice-print-sheet th,
+  .invoice-print-sheet td {
+    color: black !important;
+  }
+
+  .invoice-print-actions {
+    display: none !important;
+  }
+}

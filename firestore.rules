@@ -538,6 +538,26 @@ service cloud.firestore {
     }
 
 
+    match /businessInvoices/{invoiceId} {
+      allow read: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && isSpaceOwner(resource.data.spaceId);
+
+      allow create, update, delete: if false;
+    }
+
+    match /businessInvoicePayments/{paymentId} {
+      allow read: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && isSpaceOwner(resource.data.spaceId);
+
+      allow create, update, delete: if false;
+    }
+
+    match /businessInvoiceCounters/{spaceId} {
+      allow read, write: if false;
+    }
+
     match /businessProfiles/{spaceId} {
       allow read: if signedIn()
         && isSpaceMember(spaceId);

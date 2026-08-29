@@ -23,12 +23,12 @@
     {
       "id": "business.foundation",
       "title": "Business profile and reusable customer/vendor contacts",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "id": "business.invoicing",
       "title": "Invoices, invoice items, statuses, payments and receipts",
-      "status": "planned"
+      "status": "complete"
     },
     {
       "id": "business.accounting",

@@ -728,6 +728,247 @@ export const archiveCategory = onCall({ region }, async (request) => {
   });
 });
 
+interface BusinessInvoiceLineRecord {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPriceMinor: number;
+  lineTotalMinor: number;
+}
+
+function businessInvoiceLines(
+  value: unknown,
+): BusinessInvoiceLineRecord[] {
+  if (
+    !Array.isArray(value)
+    || value.length < 1
+    || value.length > 50
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'An invoice needs between 1 and 50 line items.',
+    );
+  }
+
+  return value.map(
+    (raw, index) => {
+      if (
+        !raw
+        || typeof raw !== 'object'
+      ) {
+        throw new HttpsError(
+          'invalid-argument',
+          'Invoice line is invalid.',
+        );
+      }
+
+      const data =
+        raw as Record<string, unknown>;
+
+      const description =
+        stringValue(
+          data.description,
+          'Invoice line description',
+          160,
+        );
+
+      const quantity =
+        integerBetween(
+          data.quantity,
+          'Invoice quantity',
+          1,
+          10000,
+        );
+
+      const unitPriceMinor =
+        nonNegativeMoney(
+          data.unitPriceMinor,
+        );
+
+      const lineTotalMinor =
+        quantity
+        * unitPriceMinor;
+
+      if (
+        !Number.isSafeInteger(
+          lineTotalMinor,
+        )
+        || lineTotalMinor
+          > 99_999_999_999
+      ) {
+        throw new HttpsError(
+          'out-of-range',
+          'Invoice line total is too large.',
+        );
+      }
+
+      return {
+        id:
+          'LINE-'
+          + String(index + 1)
+            .padStart(2, '0'),
+        description,
+        quantity,
+        unitPriceMinor,
+        lineTotalMinor,
+      };
+    },
+  );
+}
+
+function businessInvoiceTotals(
+  lines: BusinessInvoiceLineRecord[],
+  taxRateBps: number,
+) {
+  const subtotalMinor =
+    lines.reduce(
+      (sum, line) =>
+        sum + line.lineTotalMinor,
+      0,
+    );
+
+  if (
+    !Number.isSafeInteger(
+      subtotalMinor,
+    )
+    || subtotalMinor
+      > 99_999_999_999
+  ) {
+    throw new HttpsError(
+      'out-of-range',
+      'Invoice subtotal is too large.',
+    );
+  }
+
+  const taxMinor =
+    Math.round(
+      subtotalMinor
+      * taxRateBps
+      / 10000,
+    );
+
+  const totalMinor =
+    subtotalMinor
+    + taxMinor;
+
+  if (
+    !Number.isSafeInteger(
+      totalMinor,
+    )
+    || totalMinor
+      > 99_999_999_999
+  ) {
+    throw new HttpsError(
+      'out-of-range',
+      'Invoice total is too large.',
+    );
+  }
+
+  return {
+    subtotalMinor,
+    taxMinor,
+    totalMinor,
+  };
+}
+
+function invoiceTaxSnapshot(
+  profile: DocumentData | undefined,
+) {
+  const enabled =
+    profile?.taxEnabled === true;
+
+  const rawRate =
+    profile?.taxRateBps;
+
+  const taxRateBps =
+    enabled
+    && Number.isSafeInteger(rawRate)
+      ? Math.max(
+          0,
+          Math.min(
+            10000,
+            Number(rawRate),
+          ),
+        )
+      : 0;
+
+  return {
+    taxEnabled:
+      enabled
+      && taxRateBps > 0,
+    taxName:
+      enabled
+        ? optionalString(
+            profile?.taxName,
+            80,
+          )
+          || 'Tax'
+        : 'Tax',
+    taxRateBps,
+  };
+}
+
+function assertOwnedInvoiceSpace(
+  data: DocumentData | undefined,
+  uid: string,
+) {
+  if (
+    !data
+    || data.archivedAt
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The SME Space is unavailable.',
+    );
+  }
+
+  if (
+    data.type !== 'sme'
+    || data.ownerId !== uid
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the SME Space owner can manage business invoices.',
+    );
+  }
+
+  return data;
+}
+
+function assertInvoiceCustomer(
+  data: DocumentData | undefined,
+  uid: string,
+  spaceId: string,
+) {
+  if (
+    !data
+    || data.archivedAt
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Choose an active business customer.',
+    );
+  }
+
+  if (
+    data.ownerId !== uid
+    || data.spaceId !== spaceId
+    || ![
+      'customer',
+      'both',
+    ].includes(
+      String(data.kind),
+    )
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'The selected customer does not belong to this business.',
+    );
+  }
+
+  return data;
+}
+
 export const postTransaction = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const type = oneOf(request.data?.type, transactionTypes, 'transaction type');
@@ -894,6 +1135,1236 @@ export const postTransaction = onCall({ region }, async (request) => {
   });
 });
 
+export const createBusinessInvoice = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Space',
+        100,
+      );
+
+    const customerId =
+      stringValue(
+        request.data?.customerId,
+        'Customer',
+        100,
+      );
+
+    const issueDate =
+      localDate(
+        request.data?.issueDate,
+        'Issue date',
+      );
+
+    const dueDate =
+      localDate(
+        request.data?.dueDate,
+        'Due date',
+      );
+
+    if (dueDate < issueDate) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Due date cannot be before the issue date.',
+      );
+    }
+
+    const lines =
+      businessInvoiceLines(
+        request.data?.lines,
+      );
+
+    const notes =
+      optionalString(
+        request.data?.notes,
+        1000,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const spaceRef =
+      db.collection(
+        'spaces',
+      ).doc(spaceId);
+
+    const profileRef =
+      db.collection(
+        'businessProfiles',
+      ).doc(spaceId);
+
+    const customerRef =
+      db.collection(
+        'businessContacts',
+      ).doc(customerId);
+
+    const counterRef =
+      db.collection(
+        'businessInvoiceCounters',
+      ).doc(spaceId);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const [
+          spaceSnapshot,
+          profileSnapshot,
+          customerSnapshot,
+          counterSnapshot,
+        ] = await Promise.all([
+          transaction.get(spaceRef),
+          transaction.get(profileRef),
+          transaction.get(customerRef),
+          transaction.get(counterRef),
+        ]);
+
+        const space =
+          assertOwnedInvoiceSpace(
+            spaceSnapshot.data(),
+            uid,
+          );
+
+        const customer =
+          assertInvoiceCustomer(
+            customerSnapshot.data(),
+            uid,
+            spaceId,
+          );
+
+        const tax =
+          invoiceTaxSnapshot(
+            profileSnapshot.data(),
+          );
+
+        const totals =
+          businessInvoiceTotals(
+            lines,
+            tax.taxRateBps,
+          );
+
+        const prefix =
+          optionalString(
+            profileSnapshot.data()
+              ?.invoicePrefix,
+            12,
+          )
+          || 'INV';
+
+        const currentNext =
+          counterSnapshot.exists
+          && Number.isSafeInteger(
+            counterSnapshot.data()
+              ?.nextNumber,
+          )
+            ? Number(
+                counterSnapshot.data()
+                  ?.nextNumber,
+              )
+            : 1;
+
+        const nextNumber =
+          Math.max(
+            1,
+            currentNext,
+          );
+
+        const invoiceNumber =
+          prefix
+          + '-'
+          + String(
+              nextNumber,
+            ).padStart(
+              5,
+              '0',
+            );
+
+        const invoiceRef =
+          db.collection(
+            'businessInvoices',
+          ).doc();
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const result = {
+          invoiceId:
+            invoiceRef.id,
+          invoiceNumber,
+        };
+
+        transaction.create(
+          invoiceRef,
+          {
+            displayId:
+              displayId('INV'),
+            invoiceNumber,
+            ownerId: uid,
+            spaceId,
+            customerId,
+            customerName:
+              stringValue(
+                customer.name,
+                'Customer name',
+                120,
+              ),
+            customerPhone:
+              optionalString(
+                customer.phone,
+                80,
+              ),
+            customerEmail:
+              optionalString(
+                customer.email,
+                160,
+              ),
+            customerAddress:
+              optionalString(
+                customer.address,
+                500,
+              ),
+            issueDate,
+            dueDate,
+            currency:
+              stringValue(
+                space.currency,
+                'Space currency',
+                10,
+              ),
+            status:
+              'draft',
+            lines,
+            subtotalMinor:
+              totals.subtotalMinor,
+            taxEnabled:
+              tax.taxEnabled,
+            taxName:
+              tax.taxName,
+            taxRateBps:
+              tax.taxRateBps,
+            taxMinor:
+              totals.taxMinor,
+            totalMinor:
+              totals.totalMinor,
+            amountPaidMinor:
+              0,
+            balanceDueMinor:
+              totals.totalMinor,
+            notes,
+            issuedAt:
+              null,
+            cancelledAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.set(
+          counterRef,
+          {
+            nextNumber:
+              nextNumber + 1,
+            updatedAt:
+              now,
+          },
+          { merge: true },
+        );
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'create_business_invoice',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const updateBusinessInvoice = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const invoiceId =
+      stringValue(
+        request.data?.invoiceId,
+        'Invoice',
+        100,
+      );
+
+    const customerId =
+      stringValue(
+        request.data?.customerId,
+        'Customer',
+        100,
+      );
+
+    const issueDate =
+      localDate(
+        request.data?.issueDate,
+        'Issue date',
+      );
+
+    const dueDate =
+      localDate(
+        request.data?.dueDate,
+        'Due date',
+      );
+
+    if (dueDate < issueDate) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Due date cannot be before the issue date.',
+      );
+    }
+
+    const lines =
+      businessInvoiceLines(
+        request.data?.lines,
+      );
+
+    const notes =
+      optionalString(
+        request.data?.notes,
+        1000,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const invoiceRef =
+      db.collection(
+        'businessInvoices',
+      ).doc(invoiceId);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const invoiceSnapshot =
+          await transaction.get(
+            invoiceRef,
+          );
+
+        if (!invoiceSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Invoice not found.',
+          );
+        }
+
+        const invoice =
+          invoiceSnapshot.data()
+          || {};
+
+        if (
+          invoice.ownerId !== uid
+          || invoice.status
+            !== 'draft'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only your draft invoices can be edited.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            invoice.spaceId,
+            'Invoice Space',
+            100,
+          );
+
+        const customerRef =
+          db.collection(
+            'businessContacts',
+          ).doc(customerId);
+
+        const profileRef =
+          db.collection(
+            'businessProfiles',
+          ).doc(spaceId);
+
+        const spaceRef =
+          db.collection(
+            'spaces',
+          ).doc(spaceId);
+
+        const [
+          customerSnapshot,
+          profileSnapshot,
+          spaceSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            customerRef,
+          ),
+          transaction.get(
+            profileRef,
+          ),
+          transaction.get(
+            spaceRef,
+          ),
+        ]);
+
+        assertOwnedInvoiceSpace(
+          spaceSnapshot.data(),
+          uid,
+        );
+
+        const customer =
+          assertInvoiceCustomer(
+            customerSnapshot.data(),
+            uid,
+            spaceId,
+          );
+
+        const tax =
+          invoiceTaxSnapshot(
+            profileSnapshot.data(),
+          );
+
+        const totals =
+          businessInvoiceTotals(
+            lines,
+            tax.taxRateBps,
+          );
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const result = {
+          invoiceId,
+        };
+
+        transaction.update(
+          invoiceRef,
+          {
+            customerId,
+            customerName:
+              stringValue(
+                customer.name,
+                'Customer name',
+                120,
+              ),
+            customerPhone:
+              optionalString(
+                customer.phone,
+                80,
+              ),
+            customerEmail:
+              optionalString(
+                customer.email,
+                160,
+              ),
+            customerAddress:
+              optionalString(
+                customer.address,
+                500,
+              ),
+            issueDate,
+            dueDate,
+            lines,
+            subtotalMinor:
+              totals.subtotalMinor,
+            taxEnabled:
+              tax.taxEnabled,
+            taxName:
+              tax.taxName,
+            taxRateBps:
+              tax.taxRateBps,
+            taxMinor:
+              totals.taxMinor,
+            totalMinor:
+              totals.totalMinor,
+            amountPaidMinor:
+              0,
+            balanceDueMinor:
+              totals.totalMinor,
+            notes,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'update_business_invoice',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const issueBusinessInvoice = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const invoiceId =
+      stringValue(
+        request.data?.invoiceId,
+        'Invoice',
+        100,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const invoiceRef =
+      db.collection(
+        'businessInvoices',
+      ).doc(invoiceId);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const snapshot =
+          await transaction.get(
+            invoiceRef,
+          );
+
+        if (!snapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Invoice not found.',
+          );
+        }
+
+        const invoice =
+          snapshot.data()
+          || {};
+
+        if (
+          invoice.ownerId !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'You do not own this invoice.',
+          );
+        }
+
+        if (
+          invoice.status
+            !== 'draft'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only a draft invoice can be issued.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const result = {
+          invoiceId,
+          status:
+            'issued',
+        };
+
+        transaction.update(
+          invoiceRef,
+          {
+            status:
+              'issued',
+            issuedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'issue_business_invoice',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const cancelBusinessInvoice = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const invoiceId =
+      stringValue(
+        request.data?.invoiceId,
+        'Invoice',
+        100,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const invoiceRef =
+      db.collection(
+        'businessInvoices',
+      ).doc(invoiceId);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const snapshot =
+          await transaction.get(
+            invoiceRef,
+          );
+
+        if (!snapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Invoice not found.',
+          );
+        }
+
+        const invoice =
+          snapshot.data()
+          || {};
+
+        if (
+          invoice.ownerId !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'You do not own this invoice.',
+          );
+        }
+
+        if (
+          ![
+            'draft',
+            'issued',
+          ].includes(
+            String(
+              invoice.status,
+            ),
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This invoice cannot be cancelled.',
+          );
+        }
+
+        if (
+          Number(
+            invoice.amountPaidMinor
+            || 0,
+          ) > 0
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Reverse its invoice payments before cancelling it.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const result = {
+          invoiceId,
+          status:
+            'cancelled',
+        };
+
+        transaction.update(
+          invoiceRef,
+          {
+            status:
+              'cancelled',
+            cancelledAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'cancel_business_invoice',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const recordBusinessInvoicePayment = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const invoiceId =
+      stringValue(
+        request.data?.invoiceId,
+        'Invoice',
+        100,
+      );
+
+    const accountId =
+      stringValue(
+        request.data?.accountId,
+        'Business Account',
+        100,
+      );
+
+    const amountMinor =
+      positiveMoney(
+        request.data?.amountMinor,
+      );
+
+    const paymentDate =
+      localDate(
+        request.data?.paymentDate,
+        'Payment date',
+      );
+
+    const note =
+      optionalString(
+        request.data?.note,
+        500,
+      );
+
+    const {
+      paymentMethod,
+      paymentMethodLabel,
+    } =
+      paymentMethodValues(
+        request.data || {},
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const invoiceRef =
+      db.collection(
+        'businessInvoices',
+      ).doc(invoiceId);
+
+    const accountRef =
+      db.collection(
+        'accounts',
+      ).doc(accountId);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const [
+          invoiceSnapshot,
+          accountSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            invoiceRef,
+          ),
+          transaction.get(
+            accountRef,
+          ),
+        ]);
+
+        if (!invoiceSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Invoice not found.',
+          );
+        }
+
+        const invoice =
+          invoiceSnapshot.data()
+          || {};
+
+        if (
+          invoice.ownerId !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'You do not own this invoice.',
+          );
+        }
+
+        if (
+          ![
+            'issued',
+            'partially_paid',
+          ].includes(
+            String(
+              invoice.status,
+            ),
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only an issued unpaid invoice can receive a payment.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            invoice.spaceId,
+            'Invoice Space',
+            100,
+          );
+
+        const account =
+          assertAccount(
+            accountSnapshot.data(),
+            uid,
+            'Business Account',
+          );
+
+        const accountData =
+          accountSnapshot.data()
+          || {};
+
+        if (
+          accountData.classification
+            !== 'business'
+          || accountData.spaceId
+            !== spaceId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Choose a Business Account belonging to this SME Space.',
+          );
+        }
+
+        if (
+          account.currency
+            !== invoice.currency
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Invoice and Business Account currencies must match.',
+          );
+        }
+
+        const balanceDueMinor =
+          nonNegativeMoney(
+            invoice.balanceDueMinor,
+          );
+
+        if (
+          amountMinor
+          > balanceDueMinor
+        ) {
+          throw new HttpsError(
+            'invalid-argument',
+            'Payment cannot exceed the invoice balance.',
+          );
+        }
+
+        const paymentRef =
+          db.collection(
+            'businessInvoicePayments',
+          ).doc();
+
+        const transactionRef =
+          db.collection(
+            'transactions',
+          ).doc();
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const delta =
+          accountEffect(
+            account.type,
+            'in',
+            amountMinor,
+          );
+
+        updateAccountBalance(
+          transaction,
+          accountRef,
+          account,
+          delta,
+        );
+
+        const ledgerEntryId =
+          createLedgerEntry(
+            transaction,
+            {
+              accountId,
+              ownerId:
+                uid,
+              spaceId,
+              transactionId:
+                transactionRef.id,
+              entryType:
+                'income',
+              amountMinor:
+                delta,
+              currency:
+                account.currency,
+              idempotencyKey:
+                key,
+              now,
+            },
+          );
+
+        const nextPaid =
+          nonNegativeMoney(
+            invoice.amountPaidMinor,
+          )
+          + amountMinor;
+
+        const totalMinor =
+          positiveMoney(
+            invoice.totalMinor,
+          );
+
+        const nextBalance =
+          Math.max(
+            0,
+            totalMinor
+            - nextPaid,
+          );
+
+        const nextStatus =
+          nextBalance === 0
+            ? 'paid'
+            : 'partially_paid';
+
+        transaction.create(
+          paymentRef,
+          {
+            displayId:
+              displayId('PAY'),
+            invoiceId,
+            invoiceNumber:
+              stringValue(
+                invoice.invoiceNumber,
+                'Invoice number',
+                40,
+              ),
+            ownerId:
+              uid,
+            spaceId,
+            accountId,
+            amountMinor,
+            currency:
+              account.currency,
+            paymentDate,
+            paymentMethod,
+            paymentMethodLabel,
+            note,
+            transactionId:
+              transactionRef.id,
+            ledgerEntryId,
+            status:
+              'posted',
+            reversedBy:
+              null,
+            reversedAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.update(
+          invoiceRef,
+          {
+            amountPaidMinor:
+              nextPaid,
+            balanceDueMinor:
+              nextBalance,
+            status:
+              nextStatus,
+            updatedAt:
+              now,
+          },
+        );
+
+        const category =
+          systemCategories.get(
+            'income-sales',
+          );
+
+        if (!category) {
+          throw new HttpsError(
+            'internal',
+            'Sales category is unavailable.',
+          );
+        }
+
+        transaction.create(
+          transactionRef,
+          {
+            displayId:
+              displayId('TXN'),
+            ownerId:
+              uid,
+            createdBy:
+              uid,
+            type:
+              'income',
+            status:
+              'posted',
+            spaceId,
+            accountId,
+            destinationAccountId:
+              null,
+            amountMinor,
+            currency:
+              account.currency,
+            category:
+              category.name,
+            categoryId:
+              category.id,
+            categoryIcon:
+              category.icon,
+            categoryColor:
+              category.color,
+            categoryScope:
+              category.scope,
+            categoryIsSystem:
+              true,
+            counterparty:
+              optionalString(
+                invoice.customerName,
+                120,
+              ),
+            note:
+              note
+              || 'Payment for '
+              + String(
+                  invoice.invoiceNumber,
+                ),
+            labels: [
+              'invoice',
+            ],
+            paymentMethod,
+            paymentMethodLabel,
+            transactionDate:
+              paymentDate,
+            reversalOf:
+              null,
+            reversedBy:
+              null,
+            budgetIds: [],
+            commitmentId:
+              null,
+            commitmentPaymentId:
+              null,
+            businessInvoiceId:
+              invoiceId,
+            businessInvoicePaymentId:
+              paymentRef.id,
+            createdAt:
+              now,
+            postedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        const result = {
+          invoiceId,
+          paymentId:
+            paymentRef.id,
+          transactionId:
+            transactionRef.id,
+          ledgerEntryId,
+          status:
+            nextStatus,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'business_invoice_payment',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
 export const reverseTransaction = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const originalTransactionId = stringValue(request.data?.transactionId, 'Transaction ID');
@@ -930,12 +2401,28 @@ export const reverseTransaction = onCall({ region }, async (request) => {
       : [];
     const paymentRef = original.commitmentPaymentId ? db.collection('commitmentPayments').doc(String(original.commitmentPaymentId)) : null;
     const commitmentRef = original.commitmentId ? db.collection('commitments').doc(String(original.commitmentId)) : null;
-    const [accountSnapshot, destinationSnapshot, budgetSnapshots, paymentSnapshot, commitmentSnapshot] = await Promise.all([
+    const invoicePaymentRef = original.businessInvoicePaymentId
+      ? db.collection('businessInvoicePayments').doc(String(original.businessInvoicePaymentId))
+      : null;
+    const invoiceRef = original.businessInvoiceId
+      ? db.collection('businessInvoices').doc(String(original.businessInvoiceId))
+      : null;
+    const [
+      accountSnapshot,
+      destinationSnapshot,
+      budgetSnapshots,
+      paymentSnapshot,
+      commitmentSnapshot,
+      invoicePaymentSnapshot,
+      invoiceSnapshot,
+    ] = await Promise.all([
       transaction.get(accountRef),
       destinationRef ? transaction.get(destinationRef) : Promise.resolve(null),
       Promise.all(budgetRefs.map((ref) => transaction.get(ref))),
       paymentRef ? transaction.get(paymentRef) : Promise.resolve(null),
       commitmentRef ? transaction.get(commitmentRef) : Promise.resolve(null),
+      invoicePaymentRef ? transaction.get(invoicePaymentRef) : Promise.resolve(null),
+      invoiceRef ? transaction.get(invoiceRef) : Promise.resolve(null),
     ]);
     const account = assertAccount(accountSnapshot.data(), uid, 'Account', true);
     const destination = destinationSnapshot ? assertAccount(destinationSnapshot.data(), uid, 'Destination account', true) : null;
@@ -1008,6 +2495,90 @@ export const reverseTransaction = onCall({ region }, async (request) => {
       });
     }
 
+    if (
+      invoicePaymentRef
+      && invoicePaymentSnapshot?.exists
+      && invoiceRef
+      && invoiceSnapshot?.exists
+    ) {
+      const invoicePayment =
+        invoicePaymentSnapshot.data()
+        || {};
+
+      const invoice =
+        invoiceSnapshot.data()
+        || {};
+
+      if (
+        invoicePayment.ownerId !== uid
+        || invoice.ownerId !== uid
+        || invoicePayment.status !== 'posted'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The linked invoice payment cannot be reversed.',
+        );
+      }
+
+      const restoredPaid =
+        Math.max(
+          0,
+          Number(
+            invoice.amountPaidMinor
+            || 0,
+          )
+          - amountMinor,
+        );
+
+      const invoiceTotal =
+        Number(
+          invoice.totalMinor
+          || 0,
+        );
+
+      const restoredBalance =
+        Math.max(
+          0,
+          invoiceTotal
+          - restoredPaid,
+        );
+
+      const restoredStatus =
+        restoredPaid === 0
+          ? 'issued'
+          : restoredPaid >= invoiceTotal
+            ? 'paid'
+            : 'partially_paid';
+
+      transaction.update(
+        invoicePaymentRef,
+        {
+          status:
+            'reversed',
+          reversedBy:
+            reversalRef.id,
+          reversedAt:
+            now,
+          updatedAt:
+            now,
+        },
+      );
+
+      transaction.update(
+        invoiceRef,
+        {
+          amountPaidMinor:
+            restoredPaid,
+          balanceDueMinor:
+            restoredBalance,
+          status:
+            restoredStatus,
+          updatedAt:
+            now,
+        },
+      );
+    }
+
     transaction.create(reversalRef, {
       displayId: displayId('TXN'),
       ownerId: uid,
@@ -1034,6 +2605,8 @@ export const reverseTransaction = onCall({ region }, async (request) => {
       budgetIds: original.budgetIds ?? [],
       commitmentId: original.commitmentId ?? null,
       commitmentPaymentId: original.commitmentPaymentId ?? null,
+      businessInvoiceId: original.businessInvoiceId ?? null,
+      businessInvoicePaymentId: original.businessInvoicePaymentId ?? null,
       createdAt: now,
       postedAt: now,
       updatedAt: now,

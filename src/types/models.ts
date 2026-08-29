@@ -524,6 +524,75 @@ export interface BusinessContact {
   updatedAt?: Timestamp;
 }
 
+export type BusinessInvoiceStatus =
+  | 'draft'
+  | 'issued'
+  | 'partially_paid'
+  | 'paid'
+  | 'cancelled';
+
+export interface BusinessInvoiceLine {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPriceMinor: number;
+  lineTotalMinor: number;
+}
+
+export interface BusinessInvoice {
+  id: string;
+  displayId: string;
+  invoiceNumber: string;
+  ownerId: string;
+  spaceId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  customerAddress: string;
+  issueDate: string;
+  dueDate: string;
+  currency: string;
+  status: BusinessInvoiceStatus;
+  lines: BusinessInvoiceLine[];
+  subtotalMinor: number;
+  taxEnabled: boolean;
+  taxName: string;
+  taxRateBps: number;
+  taxMinor: number;
+  totalMinor: number;
+  amountPaidMinor: number;
+  balanceDueMinor: number;
+  notes: string;
+  issuedAt?: Timestamp | null;
+  cancelledAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface BusinessInvoicePayment {
+  id: string;
+  displayId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  ownerId: string;
+  spaceId: string;
+  accountId: string;
+  amountMinor: number;
+  currency: string;
+  paymentDate: string;
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  note: string;
+  transactionId: string;
+  ledgerEntryId: string;
+  status: 'posted' | 'reversed';
+  reversedBy?: string | null;
+  reversedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export type FinancialTransactionType = 'income' | 'expense' | 'transfer' | 'reversal';
 export type FinancialTransactionStatus = 'posted' | 'reversed';
 export type RecurringTransactionType = 'income' | 'expense';
@@ -576,6 +645,8 @@ export interface FinancialTransaction {
   budgetIds?: string[];
   commitmentId?: string | null;
   commitmentPaymentId?: string | null;
+  businessInvoiceId?: string | null;
+  businessInvoicePaymentId?: string | null;
   spaceWorkItemId?: string | null;
   sharedBillAssignmentId?: string | null;
   sharedBillPaymentId?: string | null;

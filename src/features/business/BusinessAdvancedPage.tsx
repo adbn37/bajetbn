@@ -550,6 +550,17 @@ export function BusinessAdvancedPage() {
               >
                 Manage Contacts
               </button>
+
+              <Link
+                className="button secondary"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/invoices'
+                }
+              >
+                Invoices
+              </Link>
             </div>
           </section>
         </>
