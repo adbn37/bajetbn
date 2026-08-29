@@ -8,7 +8,6 @@ import {
 } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
 import { Brand } from '../../components/Brand';
-import { ThemeChooser } from '../../components/ThemeChooser';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePreferences } from '../../contexts/PreferencesContext';
 import { requireFirebase } from '../../services/firebase';
@@ -24,9 +23,6 @@ export function OnboardingPage() {
   const preferences = usePreferences();
   const navigate = useNavigate();
 
-  const [step, setStep] =
-    useState<'details' | 'theme'>('details');
-
   const [fullName, setFullName] =
     useState(user?.displayName || '');
 
@@ -34,9 +30,6 @@ export function OnboardingPage() {
     useState<'en' | 'ms'>(
       preferences.language,
     );
-
-  const [initialAppearance] =
-    useState(preferences.appearance);
 
   const currency = 'BND';
 
@@ -57,34 +50,15 @@ export function OnboardingPage() {
     return <Navigate to="/" replace />;
   }
 
-  const uid = user.uid;
-
-  const openThemeStep = (
+  const finishSetup = async (
     event: FormEvent,
   ) => {
     event.preventDefault();
-    setError('');
-    setStep('theme');
-  };
 
-  const finishSetup = async (
-    saveSelectedTheme: boolean,
-  ) => {
     setBusy(true);
     setError('');
 
     try {
-      const selectedAppearance =
-        saveSelectedTheme
-          ? preferences.appearance
-          : initialAppearance;
-
-      if (!saveSelectedTheme) {
-        preferences.setAppearance(
-          initialAppearance,
-        );
-      }
-
       const { functions } =
         requireFirebase();
 
@@ -99,14 +73,15 @@ export function OnboardingPage() {
         language,
         currency,
         timezone,
-        appearance: selectedAppearance,
+        appearance: preferences.appearance,
       });
 
       await refreshProfile();
 
-      navigate('/', {
-        replace: true,
-      });
+      navigate(
+        '/spaces?welcome=1',
+        { replace: true },
+      );
     } catch (nextError) {
       setError(
         getErrorMessage(nextError),
@@ -122,204 +97,135 @@ export function OnboardingPage() {
         <Brand />
       </div>
 
-      <section
-        className={
-          step === 'theme'
-            ? 'onboarding-card onboarding-theme-card'
-            : 'onboarding-card'
-        }
-      >
-        {step === 'details' ? (
-          <>
-            <span className="step-pill">
-              Step 1 of 2
-            </span>
+      <section className="onboarding-card">
+        <span className="step-pill">
+          Personal setup
+        </span>
 
-            <h1>
-              Set up your BajetBN home
-            </h1>
+        <h1>
+          Set up your BajetBN home
+        </h1>
 
-            <p>
-              We will create your private
-              Personal Space. You can add
-              household, business, trip,
-              goal, or other Spaces later.
-            </p>
+        <p>
+          We will create your private Personal Space first.
+          Household, Trip and SME Spaces can be added only
+          when you need separate money or collaboration.
+        </p>
 
-            {error && (
-              <div className="notice error">
-                {error}
-              </div>
-            )}
-
-            <form
-              onSubmit={openThemeStep}
-              className="form-grid"
-            >
-              <label className="span-2">
-                Full name
-
-                <input
-                  required
-                  value={fullName}
-                  onChange={(event) =>
-                    setFullName(
-                      event.target.value,
-                    )
-                  }
-                  placeholder="Your full name"
-                />
-              </label>
-
-              <label>
-                Language
-
-                <select
-                  value={language}
-                  onChange={(event) => {
-                    const next =
-                      event.target.value as 'en' | 'ms';
-
-                    setLanguage(next);
-                    preferences.setLanguage(next);
-                  }}
-                >
-                  <option value="en">
-                    English
-                  </option>
-
-                  <option value="ms">
-                    Bahasa Melayu
-                  </option>
-                </select>
-              </label>
-
-              <label>
-                Currency
-
-                <select
-                  value={currency}
-                  disabled
-                >
-                  <option value="BND">
-                    BND &mdash; Brunei Dollar
-                  </option>
-                </select>
-              </label>
-
-              <label className="span-2">
-                Timezone
-
-                <select
-                  value={timezone}
-                  onChange={(event) =>
-                    setTimezone(
-                      event.target.value,
-                    )
-                  }
-                >
-                  <option value="Asia/Brunei">
-                    Asia/Brunei (UTC+8)
-                  </option>
-                </select>
-              </label>
-
-              <div className="personal-space-preview span-2">
-                <span className="space-icon personal">
-                  P
-                </span>
-
-                <div>
-                  <strong>
-                    Personal Space
-                  </strong>
-
-                  <small>
-                    Private &middot; Owner only
-                    &middot; {currency}
-                  </small>
-                </div>
-
-                <span>
-                  We will create this for you
-                </span>
-              </div>
-
-              <button
-                className="button primary span-2"
-                disabled={busy}
-              >
-                Continue
-              </button>
-            </form>
-          </>
-        ) : (
-          <>
-            <span className="step-pill">
-              Step 2 of 2
-            </span>
-
-            <h1>Choose your theme</h1>
-
-            <p>
-              Preview a look for BajetBN.
-              You can change your theme
-              anytime in Settings.
-            </p>
-
-            {error && (
-              <div className="notice error">
-                {error}
-              </div>
-            )}
-
-            <div className="onboarding-theme-preview">
-              <ThemeChooser />
-            </div>
-
-            <div className="onboarding-theme-actions">
-              <button
-                type="button"
-                className="button secondary"
-                disabled={busy}
-                onClick={() =>
-                  setStep('details')
-                }
-              >
-                Back
-              </button>
-
-              <button
-                type="button"
-                className="button secondary"
-                disabled={busy}
-                onClick={() =>
-                  void finishSetup(false)
-                }
-              >
-                Skip for now
-              </button>
-
-              <button
-                type="button"
-                className="button primary"
-                disabled={busy}
-                onClick={() =>
-                  void finishSetup(true)
-                }
-              >
-                {busy
-                  ? 'Creating your Space...'
-                  : 'Use this theme & continue'}
-              </button>
-            </div>
-
-            <small className="onboarding-theme-note">
-              You can change your theme
-              anytime in Settings.
-            </small>
-          </>
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
         )}
+
+        <form
+          onSubmit={finishSetup}
+          className="form-grid"
+        >
+          <label className="span-2">
+            Full name
+
+            <input
+              required
+              value={fullName}
+              onChange={(event) =>
+                setFullName(
+                  event.target.value,
+                )
+              }
+              placeholder="Your full name"
+            />
+          </label>
+
+          <label>
+            Language
+
+            <select
+              value={language}
+              onChange={(event) => {
+                const next =
+                  event.target.value as
+                    | 'en'
+                    | 'ms';
+
+                setLanguage(next);
+                preferences.setLanguage(next);
+              }}
+            >
+              <option value="en">
+                English
+              </option>
+
+              <option value="ms">
+                Bahasa Melayu
+              </option>
+            </select>
+          </label>
+
+          <label>
+            Currency
+
+            <select
+              value={currency}
+              disabled
+            >
+              <option value="BND">
+                BND — Brunei Dollar
+              </option>
+            </select>
+          </label>
+
+          <label className="span-2">
+            Timezone
+
+            <select
+              value={timezone}
+              onChange={(event) =>
+                setTimezone(
+                  event.target.value,
+                )
+              }
+            >
+              <option value="Asia/Brunei">
+                Asia/Brunei (UTC+8)
+              </option>
+            </select>
+          </label>
+
+          <div className="personal-space-preview span-2">
+            <span className="space-icon personal">
+              P
+            </span>
+
+            <div>
+              <strong>
+                Personal Space
+              </strong>
+
+              <small>
+                Private · Owner only · BND
+              </small>
+            </div>
+
+            <span>
+              Created automatically
+            </span>
+          </div>
+
+          <div className="notice span-2">
+            Your theme can be chosen on the sign-in page
+            and changed later in Settings.
+          </div>
+
+          <button
+            className="button primary span-2"
+            disabled={busy}
+          >
+            {busy
+              ? 'Creating your Personal Space...'
+              : 'Finish setup'}
+          </button>
+        </form>
       </section>
     </main>
   );

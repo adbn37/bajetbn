@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
@@ -32,6 +32,10 @@ type SpaceLifecycleAction = 'archive' | 'delete';
 export function SpacesPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const welcomeFromOnboarding =
+    searchParams.get('welcome') === '1';
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [invitations, setInvitations] = useState<SpaceInvitation[]>([]);
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
@@ -124,6 +128,17 @@ export function SpacesPage() {
   return <main className="page">
     <PageHeader eyebrow="Money groups" title="Spaces" description="Use Spaces to separate personal, household, trip, business, or collection records." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived Spaces <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
     {error && <div className="notice error">{error}</div>}
+    {welcomeFromOnboarding && (
+      <div className="info-banner space-discovery-welcome-v111">
+        <strong>Your Personal Space is ready</strong>
+        <span>
+          Start there for your own money. Create a Household,
+          Trip or SME Space only when you need a separate
+          shared or business workspace.
+        </span>
+      </div>
+    )}
+
     <div className="info-banner"><strong>Safe Space removal</strong><span>Empty Spaces can be deleted. Spaces with members or money history can be archived and restored later.</span></div>
     {pendingInvitations.length > 0 && <section className="panel incoming-invitations-panel"><div className="panel-heading"><div><span className="eyebrow">Invitations for me</span><h2>Spaces you can join</h2></div><span className="type-badge">{pendingInvitations.length}</span></div><div className="incoming-invitation-list">{pendingInvitations.map((invitation) => { const expired = Boolean(invitation.expiresAt?.toDate?.().getTime() && invitation.expiresAt.toDate().getTime() < Date.now()); return <article className="incoming-invitation-row" key={invitation.id}><div><strong>{invitation.spaceName || 'Shared Space'}</strong><span>{invitation.spaceType ? `${labels[invitation.spaceType]} Space` : 'Shared Space'} · Invited by {invitation.invitedByName || 'the Space owner'}</span><small>Access: {invitation.role === 'admin' ? 'Manager' : invitation.role === 'viewer' ? 'View only' : invitation.role === 'payer' ? 'Record payments' : 'Add money records'}{invitation.posRole ? ` · POS: ${invitation.posRole === 'stock_staff' ? 'Stock staff' : invitation.posRole.charAt(0).toUpperCase() + invitation.posRole.slice(1)}` : ''}{expired ? ' · Invite expired' : ''}</small></div><div className="button-row">{expired ? <span className="status-pill">Ask for a new invite</span> : <><button className="button primary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'accept')}>{busyId === invitation.id ? 'Working…' : 'Join Space'}</button><button className="button secondary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'decline')}>Decline</button></>}</div></article>; })}</div></section>}
     {loading ? <div className="loading-panel">Loading Spaces…</div> : active.length === 0 ? <EmptyState title="No active Spaces" description="Add a Space or restore one from the Archived Spaces page." /> : <SpaceGrid spaces={active} busyId={busyId} navigate={navigate} onEdit={openEdit} onArchive={(space) => askLifecycle(space, 'archive')} onDelete={(space) => askLifecycle(space, 'delete')} />}

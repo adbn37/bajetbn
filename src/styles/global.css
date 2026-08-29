@@ -9697,3 +9697,51 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
   }
 }
 /* END v1.11.0 FIVE-SLOT MOBILE NAV LOCK */
+
+
+/* v1.11.0 SPACE-SPECIFIC MORE */
+.space-more-sheet-v111 {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.space-more-context-v111 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface-soft);
+}
+
+.space-more-context-v111 span {
+  max-width: 34rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.space-more-actions-v111 {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .space-more-context-v111 {
+    flex-direction: column;
+  }
+
+  .space-more-context-v111 span {
+    text-align: left;
+  }
+
+  .personal-space-actions-v111,
+  .household-space-actions-v111,
+  .trip-space-actions-v111,
+  .sme-space-actions-v111,
+  .space-more-actions-v111 {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+/* END v1.11.0 SPACE-SPECIFIC MORE */

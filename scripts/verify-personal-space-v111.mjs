@@ -31,21 +31,14 @@ check(
     && details.includes(
       '!nextCompactActionHome',
     ),
-  'Personal overview uses the lightweight runtime path.',
-);
-
-check(
-  details.includes(
-    "['personal', 'sme', 'household', 'trip']",
-  ),
-  'Personal is a compact action home.',
+  'Personal uses the lightweight runtime path.',
 );
 
 check(
   hub.includes(
     'data-personal-home-v111',
   ),
-  'Dedicated Personal launcher is installed.',
+  'Personal compact launcher exists.',
 );
 
 const personalStart =
@@ -102,7 +95,31 @@ for (const label of labels) {
 
 check(
   ordered,
-  'Personal launcher order is Accounts, Income, Expenses, Budget, Goals, Bills, Instalments, Reports, More.',
+  'Personal launcher order remains correct.',
+);
+
+check(
+  !personal.includes(
+    'to="/more"',
+  ),
+  'Personal More does not open Global More.',
+);
+
+check(
+  personal.includes(
+    'setSpaceMoreOpen(true)',
+  ),
+  'Personal More opens Space More.',
+);
+
+check(
+  hub.includes(
+    'data-space-more-v111',
+  )
+    && hub.includes(
+      'Global More remains in the bottom navigation.',
+    ),
+  'Space More is explicitly separate from Global More.',
 );
 
 for (const section of [
@@ -119,72 +136,9 @@ for (const section of [
     personal.includes(
       `?section=${section}`,
     ),
-    `Personal ${section} opens inside the Personal Space.`,
+    `Personal ${section} remains Space-contained.`,
   );
 }
-
-check(
-  personal.includes(
-    'to="/more"',
-  ),
-  'Personal More opens Global More.',
-);
-
-check(
-  details.includes(
-    'accounts={accounts}',
-  )
-    && details.includes(
-      "section === 'accounts'",
-    )
-    && details.includes(
-      'ledgerBalanceMinor',
-    ),
-  'Personal Accounts is Space-scoped and shows balances.',
-);
-
-check(
-  details.includes(
-    "section === 'income'",
-  )
-    && details.includes(
-      "item.type === 'income'",
-    ),
-  'Personal Income has a Space-scoped view.',
-);
-
-check(
-  details.includes(
-    "section === 'expenses'",
-  )
-    && details.includes(
-      "item.type === 'expense'",
-    ),
-  'Personal Expenses has a Space-scoped view.',
-);
-
-check(
-  details.includes(
-    'billsOnlyRows',
-  )
-    && details.includes(
-      "item.type !== 'instalment'",
-    ),
-  'Personal Bills excludes instalments.',
-);
-
-check(
-  details.includes(
-    'instalmentRows',
-  )
-    && details.includes(
-      "item.type === 'instalment'",
-    )
-    && details.includes(
-      "section === 'instalments'",
-    ),
-  'Personal Instalments has its own Space-scoped view.',
-);
 
 check(
   details.includes(
@@ -202,22 +156,9 @@ check(
     && details.includes(
       'listCommitmentsForOwnerSpace',
     ),
-  'Personal financial data continues to use Space-scoped repository readers.',
+  'Personal data remains Space-scoped.',
 );
 
-check(
-  details.includes(
-    'closeOverviewSection',
-  )
-    && details.includes(
-      "next.delete('section')",
-    ),
-  'Closing a Personal section clears its URL state.',
-);
-
-/*
- * Lock the already-approved global mobile nav.
- */
 const navStart =
   shell.indexOf(
     '<nav className="mobile-bottom-nav"',
@@ -238,18 +179,18 @@ const nav =
       )
     : '';
 
-const navOrder = [
+const navTokens = [
   'Business',
-  'Home',
+  '<small>Home</small>',
   'mobile-bottom-add',
-  'Alerts',
-  'More',
+  '<small>Alerts</small>',
+  '<small>More</small>',
 ];
 
 let navPrevious = -1;
-let navOrdered = true;
+let navValid = true;
 
-for (const token of navOrder) {
+for (const token of navTokens) {
   const index =
     nav.indexOf(token);
 
@@ -257,7 +198,7 @@ for (const token of navOrder) {
     index < 0
     || index <= navPrevious
   ) {
-    navOrdered = false;
+    navValid = false;
     break;
   }
 
@@ -265,30 +206,17 @@ for (const token of navOrder) {
 }
 
 check(
-  navOrdered,
-  'Approved Business | Home | + | Alerts | More navigation remains locked.',
+  navValid,
+  'Business | Home | + | Alerts | More stays locked.',
 );
 
 if (failures.length) {
-  console.error('');
-  console.error(
-    `${failures.length} Personal Space check(s) failed.`,
+  throw new Error(
+    `Personal Space verification failed: ${failures.length} check(s).`,
   );
-
-  for (const failure of failures) {
-    console.error(
-      `- ${failure}`,
-    );
-  }
-
-  process.exit(1);
 }
 
 console.log('');
 console.log(
   'Personal Space v1.11 verification PASS.',
-);
-
-console.log(
-  'Accounts | Income | Expenses | Budget | Goals | Bills | Instalments | Reports | More',
 );

@@ -58,17 +58,20 @@ function ShortcutLink({
   label,
   badge,
   primary = false,
+  onClick,
 }: {
   to: string;
   label: string;
   badge?: string | number;
   primary?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <Link
       className={`button ${primary ? 'primary primary-action' : 'secondary'} compact`}
       style={shortcutStyle}
       to={to}
+      onClick={onClick}
     >
       <span>{label}</span>
       {badge !== undefined && badge !== null && (
@@ -138,6 +141,7 @@ export function SpaceActionHub({
   const [customCategories, setCustomCategories] = useState<TransactionCategory[]>([]);
   const [moneyType, setMoneyType] = useState<'income' | 'expense' | null>(null);
   const [tool, setTool] = useState<SpaceTool | null>(null);
+  const [spaceMoreOpen, setSpaceMoreOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
 
@@ -246,12 +250,23 @@ export function SpaceActionHub({
           <div className="notice warning compact-notice">{error}</div>
         )}
 
+
         {space.type === 'sme' ? (
-          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
+          <div
+            className="space-action-buttons sme-space-actions-v111"
+            data-space-launcher="sme"
+            data-secondary-label="Business Space tools"
+            style={shortcutGridStyle}
+          >
+            <ShortcutLink
+              to={`/spaces/${space.id}?details=1`}
+              label="Operations"
+              primary
+            />
+
             <ShortcutLink
               to={`/spaces/${space.id}/pos`}
               label={smePosLabel(smePosRole)}
-              primary
             />
 
             <ShortcutButton
@@ -264,60 +279,22 @@ export function SpaceActionHub({
               onClick={() => setTool('shopping')}
             />
 
-            {canViewSmeFinancials && (
-              <>
-                <ShortcutLink
-                  to={`/spaces/${space.id}?section=reports`}
-                  label="Reports"
-                />
-
-                <ShortcutLink to="/accounts" label="Accounts" />
-
-                <ShortcutButton
-                  label="Expenses"
-                  onClick={() => setTool('expenses')}
-                />
-
-                <ShortcutButton
-                  label="Shared Bills"
-                  onClick={() => setTool('bills')}
-                />
-              </>
-            )}
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=members`}
-              label="Members"
+            <ShortcutButton
+              label="More"
+              onClick={() => setSpaceMoreOpen(true)}
             />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=chat`}
-              label="Chat"
-            />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=activity`}
-              label="Activity"
-            />
-
-            {(smePosRole === 'owner' || currentMember?.role === 'owner') && (
-              <ShortcutLink
-                to={`/spaces/${space.id}?tab=settings`}
-                label="Settings"
-              />
-            )}
           </div>
         ) : space.type === 'trip' ? (
-          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
+          <div
+            className="space-action-buttons trip-space-actions-v111"
+            data-space-launcher="trip"
+            data-secondary-label="Trip Space tools"
+            style={shortcutGridStyle}
+          >
             <ShortcutButton
               label="Trip Plan"
               primary
               onClick={() => setTool('trip_planning')}
-            />
-
-            <ShortcutLink
-              to="/budgets"
-              label="Trip Budget"
             />
 
             <ShortcutButton
@@ -336,38 +313,26 @@ export function SpaceActionHub({
             />
 
             <ShortcutButton
-              label="Shared Bills"
-              onClick={() => setTool('bills')}
+              label="More"
+              onClick={() => setSpaceMoreOpen(true)}
             />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=members`}
-              label="Members"
-            />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=chat`}
-              label="Chat"
-            />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=activity`}
-              label="Activity"
-            />
-
-            {currentMember?.role === 'owner' && (
-              <ShortcutLink
-                to={`/spaces/${space.id}?tab=settings`}
-                label="Settings"
-              />
-            )}
           </div>
         ) : space.type === 'household' ? (
-          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
+          <div
+            className="space-action-buttons household-space-actions-v111"
+            data-space-launcher="household"
+            data-secondary-label="Household Space tools"
+            style={shortcutGridStyle}
+          >
             <ShortcutButton
               label="Household Fund"
               primary
               onClick={() => setTool('fund')}
+            />
+
+            <ShortcutButton
+              label="Add Expense"
+              onClick={() => void openMoney('expense')}
             />
 
             <ShortcutButton
@@ -381,51 +346,15 @@ export function SpaceActionHub({
             />
 
             <ShortcutButton
-              label="Add Expense"
-              onClick={() => void openMoney('expense')}
+              label="More"
+              onClick={() => setSpaceMoreOpen(true)}
             />
-
-            <ShortcutButton
-              label="Shared expenses"
-              onClick={() => setTool('expenses')}
-            />
-
-            <ShortcutButton
-              label="Shared Bills"
-              onClick={() => setTool('bills')}
-            />
-
-            <ShortcutButton
-              label="Settlements"
-              onClick={() => setTool('balances')}
-            />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=members`}
-              label="Members"
-            />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=chat`}
-              label="Chat"
-            />
-
-            <ShortcutLink
-              to={`/spaces/${space.id}?tab=activity`}
-              label="Activity"
-            />
-
-            {currentMember?.role === 'owner' && (
-              <ShortcutLink
-                to={`/spaces/${space.id}?tab=settings`}
-                label="Settings"
-              />
-            )}
           </div>
         ) : space.type === 'personal' ? (
           <div
             className="space-action-buttons personal-space-actions-v111"
             data-personal-home-v111
+            data-space-launcher="personal"
             data-secondary-label="Personal money tools"
             style={shortcutGridStyle}
           >
@@ -470,13 +399,17 @@ export function SpaceActionHub({
               label="Reports"
             />
 
-            <ShortcutLink
-              to="/more"
+            <ShortcutButton
               label="More"
+              onClick={() => setSpaceMoreOpen(true)}
             />
           </div>
         ) : (
-          <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
+          <div
+            className="space-action-buttons"
+            data-secondary-label="More Space tools"
+            style={shortcutGridStyle}
+          >
             <ShortcutButton
               label="Add Expense"
               primary={isPrimary('expense')}
@@ -535,7 +468,249 @@ export function SpaceActionHub({
             )}
           </div>
         )}
+
       </section>
+
+
+      {spaceMoreOpen && (
+        <Modal
+          title={`${space.name} — More`}
+          onClose={() => setSpaceMoreOpen(false)}
+        >
+          <div
+            className="space-more-sheet-v111"
+            data-space-more-v111
+          >
+            <div className="space-more-context-v111">
+              <strong>{space.name}</strong>
+              <span>
+                These tools belong to this Space.
+                Global More remains in the bottom navigation.
+              </span>
+            </div>
+
+            <div
+              className="space-action-buttons space-more-actions-v111"
+              style={shortcutGridStyle}
+            >
+              {space.type === 'personal' && (
+                <>
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=money`}
+                    label="Money Activity"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=calendar`}
+                    label="Calendar"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=settings`}
+                    label="Space Settings"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+                </>
+              )}
+
+              {space.type === 'household' && (
+                <>
+                  <ShortcutButton
+                    label="Shared Expenses"
+                    onClick={() => {
+                      setSpaceMoreOpen(false);
+                      setTool('expenses');
+                    }}
+                  />
+
+                  <ShortcutButton
+                    label="Shared Bills"
+                    onClick={() => {
+                      setSpaceMoreOpen(false);
+                      setTool('bills');
+                    }}
+                  />
+
+                  <ShortcutButton
+                    label="Settlements"
+                    onClick={() => {
+                      setSpaceMoreOpen(false);
+                      setTool('balances');
+                    }}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=budgets`}
+                    label="Budget"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=reports`}
+                    label="Reports"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=calendar`}
+                    label="Calendar"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=members`}
+                    label="Members"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=chat`}
+                    label="Chat"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=activity`}
+                    label="Activity"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  {currentMember?.role === 'owner' && (
+                    <ShortcutLink
+                      to={`/spaces/${space.id}?tab=settings`}
+                      label="Space Settings"
+                      onClick={() => setSpaceMoreOpen(false)}
+                    />
+                  )}
+                </>
+              )}
+
+              {space.type === 'trip' && (
+                <>
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=budgets`}
+                    label="Trip Budget"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutButton
+                    label="Shared Bills"
+                    onClick={() => {
+                      setSpaceMoreOpen(false);
+                      setTool('bills');
+                    }}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=members`}
+                    label="Members"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=chat`}
+                    label="Chat"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=activity`}
+                    label="Activity"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  {currentMember?.role === 'owner' && (
+                    <ShortcutLink
+                      to={`/spaces/${space.id}?tab=settings`}
+                      label="Space Settings"
+                      onClick={() => setSpaceMoreOpen(false)}
+                    />
+                  )}
+                </>
+              )}
+
+              {space.type === 'sme' && (
+                <>
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?details=1`}
+                    label="Business Operations"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}/pos`}
+                    label={smePosLabel(smePosRole)}
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  {canViewSmeFinancials && (
+                    <>
+                      {space.ownerId === user?.uid && (
+                        <ShortcutLink
+                          to={`/spaces/${space.id}?section=accounts`}
+                          label="Business Accounts"
+                          onClick={() => setSpaceMoreOpen(false)}
+                        />
+                      )}
+
+                      <ShortcutLink
+                        to={`/spaces/${space.id}?section=reports`}
+                        label="Reports"
+                        onClick={() => setSpaceMoreOpen(false)}
+                      />
+
+                      <ShortcutButton
+                        label="Expenses"
+                        onClick={() => {
+                          setSpaceMoreOpen(false);
+                          setTool('expenses');
+                        }}
+                      />
+
+                      <ShortcutButton
+                        label="Shared Bills"
+                        onClick={() => {
+                          setSpaceMoreOpen(false);
+                          setTool('bills');
+                        }}
+                      />
+                    </>
+                  )}
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=members`}
+                    label="Members"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=chat`}
+                    label="Chat"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=activity`}
+                    label="Activity"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  {(smePosRole === 'owner'
+                    || currentMember?.role === 'owner') && (
+                    <ShortcutLink
+                      to={`/spaces/${space.id}?tab=settings`}
+                      label="Space Settings"
+                      onClick={() => setSpaceMoreOpen(false)}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {moneyType && (
         <MoneyActivityModal

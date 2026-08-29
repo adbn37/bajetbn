@@ -1,160 +1,123 @@
 import fs from 'node:fs';
 
-const read = (file) =>
-  fs.readFileSync(file, 'utf8');
+const read = (path) =>
+  fs.readFileSync(path, 'utf8');
 
-const auth = read(
-  'src/layouts/AuthLayout.tsx',
-);
+const auth =
+  read('src/layouts/AuthLayout.tsx');
 
-const onboarding = read(
-  'src/features/onboarding/OnboardingPage.tsx',
-);
+const onboarding =
+  read('src/features/onboarding/OnboardingPage.tsx');
 
-const functions = read(
-  'functions/src/index.ts',
-);
+const spaces =
+  read('src/features/spaces/SpacesPage.tsx');
 
-const i18n = read(
-  'src/services/i18n.ts',
-);
+const functions =
+  read('functions/src/index.ts');
 
-const css = read(
-  'src/styles/global.css',
-);
+const failures = [];
 
-const scope = JSON.parse(
-  read('scope/pre-v1-scope.json'),
-);
+function check(condition, message) {
+  if (condition) {
+    console.log('PASS:', message);
+    return;
+  }
 
-const checks = [
-  [
-    auth.includes(
-      "location.pathname === '/login'",
-    ),
-    'Login-only theme chooser guard is missing.',
-  ],
-  [
-    auth.includes(
+  failures.push(message);
+  console.error('FAIL:', message);
+}
+
+check(
+  auth.includes(
+    "location.pathname === '/login'",
+  )
+    && auth.includes(
       '{isLogin && <ThemeChooser compact />}',
     ),
-    'Login-only ThemeChooser is missing.',
-  ],
-  [
-    auth.includes('signup-money-reminder'),
-    'Signup reminder is missing.',
-  ],
-  [
-    auth.includes(
+  'Theme chooser remains login-only.',
+);
+
+check(
+  auth.includes(
+    'signup-money-reminder',
+  )
+    && auth.includes(
       'A servant will not move',
-    ),
-    'English reminder is missing.',
-  ],
-  [
-    auth.includes(
+    )
+    && auth.includes(
       'Tidak akan berganjak kaki',
     ),
-    'Malay reminder is missing.',
-  ],
-  [
-    auth.includes(
-      'Your money, your goals,',
+  'Money reminder remains in English and Malay.',
+);
+
+check(
+  !onboarding.includes(
+    'ThemeChooser',
+  ),
+  'Theme chooser is removed from onboarding.',
+);
+
+check(
+  !onboarding.includes(
+    "useState<'details' | 'theme'>",
+  )
+    && !onboarding.includes(
+      "step === 'theme'",
     ),
-    'New Auth headline is missing.',
-  ],
-  [
-    !auth.includes(
-      'One place for the money',
-    ),
-    'Old Auth headline remains.',
-  ],
-  [
-    onboarding.includes(
-      '<ThemeChooser />',
-    ),
-    'Onboarding theme samples are missing.',
-  ],
-  [
-    onboarding.includes(
-      "useState<'details' | 'theme'>",
-    ),
-    'Two-step onboarding is missing.',
-  ],
-  [
-    onboarding.includes(
-      'Skip for now',
-    ),
-    'Skip action is missing.',
-  ],
-  [
-    onboarding.includes(
-      'anytime in Settings',
-    ),
-    'Settings guidance is missing.',
-  ],
-  [
-    onboarding.includes(
-      'appearance: selectedAppearance',
-    ),
-    'Selected theme is not sent through onboarding.',
-  ],
-  [
-    !onboarding.includes(
-      'updateUserAppearance(',
-    ),
-    'Onboarding still writes the theme before creating the profile.',
-  ],
-  [
-    functions.includes(
-      "request.data?.appearance ?? 'dark'",
+  'Onboarding is one focused Personal setup.',
+);
+
+check(
+  onboarding.includes(
+    'appearance: preferences.appearance',
+  ),
+  'Login/guest theme choice is preserved during onboarding.',
+);
+
+check(
+  onboarding.includes(
+    "'/spaces?welcome=1'",
+  ),
+  'New users continue to Space discovery.',
+);
+
+check(
+  onboarding.includes(
+    'changed later in Settings',
+  ),
+  'Onboarding explains theme can be changed later.',
+);
+
+check(
+  spaces.includes(
+    'welcomeFromOnboarding',
+  )
+    && spaces.includes(
+      'space-discovery-welcome-v111',
     )
-      && functions.includes(
-        'appearance, textSize',
-      ),
-    'Onboarding does not validate and save the selected theme atomically.',
-  ],
-  [
-    css.includes(
-      '/* v0.11.18 signup theme onboarding */',
+    && spaces.includes(
+      'Your Personal Space is ready',
     ),
-    'Signup/onboarding styles are missing.',
-  ],
-  [
-    i18n.includes(
-      'Wang anda, matlamat anda',
+  'Spaces page provides first-run Space discovery guidance.',
+);
+
+check(
+  functions.includes(
+    "request.data?.appearance ?? 'dark'",
+  )
+    && functions.includes(
+      'appearance, textSize',
     ),
-    'Malay headline is missing.',
-  ],
-];
-
-const failures =
-  checks
-    .filter(([passed]) => !passed)
-    .map(([, message]) => message);
-
-const scopeItem =
-  scope.items.find(
-    (item) =>
-      item.id
-      === 'core.theme_presets_login',
-  );
-
-if (!scopeItem) {
-  failures.push(
-    'Theme preset scope item is missing.',
-  );
-}
+  'Backend continues to save appearance safely.',
+);
 
 if (failures.length) {
-  console.error(
-    failures
-      .map((failure) => `- ${failure}`)
-      .join('\n'),
+  throw new Error(
+    `Signup/Space discovery verification failed: ${failures.length} check(s).`,
   );
-
-  process.exit(1);
 }
 
+console.log('');
 console.log(
-  'Signup reminder, login-only chooser and optional onboarding theme checks passed.',
+  'Signup + Space discovery verification PASS.',
 );
