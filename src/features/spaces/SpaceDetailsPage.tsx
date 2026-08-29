@@ -60,7 +60,7 @@ import { SpaceAvatarSettings } from './SpaceAvatarSettings';
 
 import type { CustomSpaceModule } from '../../types/models';
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
-type SpaceOverviewSection = 'money' | 'budgets' | 'goals' | 'bills' | 'reports' | 'calendar';
+type SpaceOverviewSection = 'accounts' | 'income' | 'expenses' | 'money' | 'budgets' | 'goals' | 'bills' | 'instalments' | 'reports' | 'calendar';
 type SpaceReportRange = 'day' | 'week' | 'month' | 'year' | 'custom';
 
 function localIsoDate(value: Date) {
@@ -240,7 +240,8 @@ export function SpaceDetailsPage() {
         );
 
       const nextCompactActionHome =
-        nextSpace.type === 'sme'
+        nextSpace.type === 'personal'
+        || nextSpace.type === 'sme'
         || nextSpace.type === 'household'
         || nextSpace.type === 'trip';
 
@@ -480,7 +481,8 @@ export function SpaceDetailsPage() {
     ];
 
   const compactActionHome =
-    space.type === 'sme'
+    space.type === 'personal'
+    || space.type === 'sme'
     || space.type === 'household'
     || space.type === 'trip';
 
@@ -713,6 +715,7 @@ export function SpaceDetailsPage() {
       space={space}
       moneyIn={moneyIn}
       moneyOut={moneyOut}
+      accounts={accounts}
       accountsUsed={accountsUsed}
       transactions={transactions}
       budgets={budgets}
@@ -767,6 +770,7 @@ function SpaceOverview({
   space,
   moneyIn,
   moneyOut,
+  accounts,
   accountsUsed,
   transactions,
   budgets,
@@ -781,6 +785,7 @@ function SpaceOverview({
   space: Space;
   moneyIn: number;
   moneyOut: number;
+  accounts: Account[];
   accountsUsed: Account[];
   transactions: FinancialTransaction[];
   budgets: Budget[];
@@ -797,11 +802,25 @@ function SpaceOverview({
     space.type === 'custom'
       ? normalizeCustomSpaceModules(space.customModules)
       : DEFAULT_CUSTOM_SPACE_MODULES;
-  const [overviewSearchParams] = useSearchParams();
+  const [
+    overviewSearchParams,
+    setOverviewSearchParams,
+  ] = useSearchParams();
   const requestedSection = overviewSearchParams.get('section');
   const requestedOverviewSection =
     requestedSection
-    && ['money', 'budgets', 'goals', 'bills', 'reports', 'calendar'].includes(requestedSection)
+    && [
+      'accounts',
+      'income',
+      'expenses',
+      'money',
+      'budgets',
+      'goals',
+      'bills',
+      'instalments',
+      'reports',
+      'calendar',
+    ].includes(requestedSection)
       ? requestedSection as SpaceOverviewSection
       : null;
 
@@ -815,6 +834,21 @@ function SpaceOverview({
       setSection(requestedOverviewSection);
     }
   }, [requestedOverviewSection]);
+
+  function closeOverviewSection() {
+    const next =
+      new URLSearchParams(
+        overviewSearchParams,
+      );
+
+    next.delete('section');
+    setSection(null);
+
+    setOverviewSearchParams(
+      next,
+      { replace: true },
+    );
+  }
   const today = localIsoDate(new Date());
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 8)}01`);
   const [customTo, setCustomTo] = useState(today);
@@ -865,9 +899,41 @@ function SpaceOverview({
   }
 
   const moneyRows = [...transactions].sort((a, b) => b.transactionDate.localeCompare(a.transactionDate));
+  const accountRows = [...accounts]
+    .sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  const incomeRows = moneyRows
+    .filter((item) =>
+      item.status === 'posted'
+      && item.type === 'income',
+    );
+  const expenseRows = moneyRows
+    .filter((item) =>
+      item.status === 'posted'
+      && item.type === 'expense',
+    );
+  const personalFlowRows =
+    section === 'income'
+      ? incomeRows
+      : section === 'expenses'
+        ? expenseRows
+        : [];
   const billRows = [...commitments].sort((a, b) =>
     (a.nextDueDate || a.endDate || '9999-12-31').localeCompare(b.nextDueDate || b.endDate || '9999-12-31'),
   );
+  const billsOnlyRows =
+    space.type === 'personal'
+      ? billRows.filter(
+          (item) =>
+            item.type !== 'instalment',
+        )
+      : billRows;
+  const instalmentRows =
+    billRows.filter(
+      (item) =>
+        item.type === 'instalment',
+    );
   const budgetRows = [...budgets].sort((a, b) => b.endDate.localeCompare(a.endDate));
   const goalRows = [...goals].sort((a, b) => (a.targetDate || '9999-12-31').localeCompare(b.targetDate || '9999-12-31'));
 
@@ -920,10 +986,32 @@ function SpaceOverview({
   ].filter((item) => Boolean(item.date)).sort((a, b) => a.date.localeCompare(b.date));
 
   const sectionTitle: Record<SpaceOverviewSection, string> = {
+    accounts: 'Accounts',
+    income: 'Income',
+    expenses: 'Expenses',
     money: 'Money activity',
-    budgets: space.type === 'trip' ? 'Trip budget' : space.type === 'event' ? 'Event budget' : space.type === 'project' ? 'Project budget' : space.type === 'property' ? 'Property budget' : space.type === 'vehicle' ? 'Vehicle budget' : space.type === 'asset' ? 'Asset budget' : 'Budgets',
+    budgets:
+      space.type === 'personal'
+        ? 'Budget'
+        : space.type === 'trip'
+          ? 'Trip budget'
+          : space.type === 'event'
+            ? 'Event budget'
+            : space.type === 'project'
+              ? 'Project budget'
+              : space.type === 'property'
+                ? 'Property budget'
+                : space.type === 'vehicle'
+                  ? 'Vehicle budget'
+                  : space.type === 'asset'
+                    ? 'Asset budget'
+                    : 'Budgets',
     goals: 'Goals',
-    bills: 'Bills & instalments',
+    bills:
+      space.type === 'personal'
+        ? 'Bills'
+        : 'Bills & instalments',
+    instalments: 'Instalments',
     reports: 'Money reports',
     calendar: 'Calendar',
   };
@@ -943,7 +1031,7 @@ function SpaceOverview({
               : 'Staff';
 
   const usesCompactActionHome = (
-    ['sme', 'household', 'trip']
+    ['personal', 'sme', 'household', 'trip']
   ).includes(space.type);
 
   if (usesCompactActionHome && !section) {
@@ -996,9 +1084,126 @@ function SpaceOverview({
       </section>
     )}
 
-    {section && canViewFinancials && <Modal title={`${space.name} — ${sectionTitle[section]}`} onClose={() => setSection(null)}>
+    {section && canViewFinancials && <Modal title={`${space.name} — ${sectionTitle[section]}`} onClose={closeOverviewSection}>
       <div className="space-scoped-modal">
         <div className="space-scoped-context"><strong>{space.name}</strong><span>Only records from this Space are shown.</span></div>
+
+        {section === 'accounts' && (
+          <div className="space-scoped-list personal-space-account-list">
+            {accountRows.length
+              ? accountRows.map(
+                  (item) => (
+                    <article
+                      key={item.id}
+                      className="space-scoped-row"
+                    >
+                      <div>
+                        <strong>
+                          {item.name}
+                        </strong>
+                        <small>
+                          {item.institution
+                            || item.type.replace(
+                              '_',
+                              ' ',
+                            )}
+                          {' · '}
+                          {item.currency}
+                        </small>
+                      </div>
+
+                      <div className="space-scoped-amount">
+                        <strong>
+                          {formatMoney(
+                            item.ledgerBalanceMinor,
+                            item.currency,
+                          )}
+                        </strong>
+                        <small>
+                          Current balance
+                        </small>
+                      </div>
+                    </article>
+                  ),
+                )
+              : (
+                <EmptyState
+                  title="No accounts in this Personal Space"
+                  description="Create or assign an account to this Personal Space to start tracking money here."
+                />
+              )}
+          </div>
+        )}
+
+        {(section === 'income'
+          || section === 'expenses') && (
+          <div className="space-scoped-list personal-space-flow-list">
+            {personalFlowRows.length
+              ? personalFlowRows.map(
+                  (item) => (
+                    <article
+                      key={item.id}
+                      className="space-scoped-row"
+                    >
+                      <div>
+                        <strong>
+                          {item.counterparty
+                            || item.category
+                            || (
+                              section === 'income'
+                                ? 'Income'
+                                : 'Expense'
+                            )}
+                        </strong>
+                        <small>
+                          {displaySpaceDate(
+                            item.transactionDate,
+                          )}
+                          {' · '}
+                          {accountName(
+                            item.accountId,
+                          )}
+                        </small>
+                      </div>
+
+                      <div className="space-scoped-amount">
+                        <strong>
+                          {section === 'income'
+                            ? '+'
+                            : '-'}
+                          {formatMoney(
+                            item.amountMinor,
+                            item.currency,
+                          )}
+                        </strong>
+                        <small>
+                          {item.category
+                            || (
+                              section === 'income'
+                                ? 'Money in'
+                                : 'Money out'
+                            )}
+                        </small>
+                      </div>
+                    </article>
+                  ),
+                )
+              : (
+                <EmptyState
+                  title={
+                    section === 'income'
+                      ? 'No income in this Personal Space'
+                      : 'No expenses in this Personal Space'
+                  }
+                  description={
+                    section === 'income'
+                      ? 'Use the centred + button to record money in.'
+                      : 'Use the centred + button to record money out.'
+                  }
+                />
+              )}
+          </div>
+        )}
 
         {section === 'money' && <>
           <div className="space-scoped-summary">
@@ -1038,7 +1243,7 @@ function SpaceOverview({
         </div>}
 
         {section === 'bills' && <div className="space-scoped-list">
-          {billRows.length ? billRows.map((item) => <article key={item.id} className="space-scoped-row">
+          {billsOnlyRows.length ? billsOnlyRows.map((item) => <article key={item.id} className="space-scoped-row">
             <div>
               <strong>{item.name}</strong>
               <small>{item.payee || item.categoryName} · {item.nextDueDate ? `Due ${displaySpaceDate(item.nextDueDate)}` : item.status === 'completed' ? 'Completed' : 'No next due date'}</small>
@@ -1047,8 +1252,75 @@ function SpaceOverview({
               <strong>{formatMoney(item.amountMinor, item.currency)}</strong>
               <small>{item.type === 'instalment' ? `${formatMoney(item.amountPaidMinor, item.currency)} paid` : item.status}</small>
             </div>
-          </article>) : <EmptyState title="No bills or instalments in this Space" description="Add a bill or instalment for this Space to start tracking what is due." />}
+          </article>) : (
+            <EmptyState
+              title={
+                space.type === 'personal'
+                  ? 'No bills in this Personal Space'
+                  : 'No bills or instalments in this Space'
+              }
+              description={
+                space.type === 'personal'
+                  ? 'Add a bill for this Personal Space to start tracking what is due.'
+                  : 'Add a bill or instalment for this Space to start tracking what is due.'
+              }
+            />
+          )}
         </div>}
+
+        {section === 'instalments' && (
+          <div className="space-scoped-list">
+            {instalmentRows.length
+              ? instalmentRows.map(
+                  (item) => (
+                    <article
+                      key={item.id}
+                      className="space-scoped-row"
+                    >
+                      <div>
+                        <strong>
+                          {item.name}
+                        </strong>
+                        <small>
+                          {item.payee
+                            || item.categoryName}
+                          {' · '}
+                          {item.nextDueDate
+                            ? `Due ${displaySpaceDate(
+                                item.nextDueDate,
+                              )}`
+                            : item.status === 'completed'
+                              ? 'Completed'
+                              : 'No next due date'}
+                        </small>
+                      </div>
+
+                      <div className="space-scoped-amount">
+                        <strong>
+                          {formatMoney(
+                            item.amountMinor,
+                            item.currency,
+                          )}
+                        </strong>
+                        <small>
+                          {formatMoney(
+                            item.amountPaidMinor,
+                            item.currency,
+                          )}
+                          {' paid'}
+                        </small>
+                      </div>
+                    </article>
+                  ),
+                )
+              : (
+                <EmptyState
+                  title="No instalments in this Personal Space"
+                  description="Add an instalment for this Personal Space to track its payments and due dates."
+                />
+              )}
+          </div>
+        )}
 
         {section === 'reports' && <>
           <div className="space-report-controls">

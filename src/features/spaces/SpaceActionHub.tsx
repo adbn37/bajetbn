@@ -422,6 +422,59 @@ export function SpaceActionHub({
               />
             )}
           </div>
+        ) : space.type === 'personal' ? (
+          <div
+            className="space-action-buttons personal-space-actions-v111"
+            data-personal-home-v111
+            data-secondary-label="Personal money tools"
+            style={shortcutGridStyle}
+          >
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=accounts`}
+              label="Accounts"
+              primary
+            />
+
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=income`}
+              label="Income"
+            />
+
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=expenses`}
+              label="Expenses"
+            />
+
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=budgets`}
+              label="Budget"
+            />
+
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=goals`}
+              label="Goals"
+            />
+
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=bills`}
+              label="Bills"
+            />
+
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=instalments`}
+              label="Instalments"
+            />
+
+            <ShortcutLink
+              to={`/spaces/${space.id}?section=reports`}
+              label="Reports"
+            />
+
+            <ShortcutLink
+              to="/more"
+              label="More"
+            />
+          </div>
         ) : (
           <div className="space-action-buttons" data-secondary-label="More Space tools" style={shortcutGridStyle}>
             <ShortcutButton
