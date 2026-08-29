@@ -117,7 +117,6 @@ export function GoalsPage({
     },
     [spaceIdOverride, user],
   );
-  useEffect(() => { void load(); }, [user]);
   const active = useMemo(() => goals.filter((item) => !item.archivedAt && !item.closedAt), [goals]);
   const inactive = useMemo(() => goals.filter((item) => item.archivedAt || item.closedAt), [goals]);
   const target = active.reduce((sum, item) => sum + item.targetMinor, 0); const saved = active.reduce((sum, item) => sum + item.currentMinor, 0);

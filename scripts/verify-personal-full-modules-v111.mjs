@@ -288,8 +288,29 @@ check(
 
 check(
   details.includes(
-    'personalEmbeddedSection',
-  ),
+    'const fullEmbeddedSection',
+  )
+    && details.includes(
+      "nextSpace.type === 'personal'",
+    )
+    && details.includes(
+      "'accounts'",
+    )
+    && details.includes(
+      "'budgets'",
+    )
+    && details.includes(
+      "'goals'",
+    )
+    && details.includes(
+      "'bills'",
+    )
+    && details.includes(
+      "'instalments'",
+    )
+    && details.includes(
+      '&& !fullEmbeddedSection',
+    ),
   'Heavy Personal modules load only when opened.',
 );
 

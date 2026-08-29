@@ -318,21 +318,40 @@ export function SpaceDetailsPage() {
        * Other Space types preserve their current overview behavior,
        * but now use Space-scoped Firestore queries.
        */
-      const personalEmbeddedSection =
-        nextSpace.type === 'personal'
-        && [
-          'accounts',
-          'budgets',
-          'goals',
-          'bills',
-          'instalments',
-        ].includes(
-          requestedSection || '',
+      const fullEmbeddedSection =
+        (
+          nextSpace.type === 'personal'
+          && [
+            'accounts',
+            'budgets',
+            'goals',
+            'bills',
+            'instalments',
+          ].includes(
+            requestedSection || '',
+          )
+        )
+        || (
+          (
+            nextSpace.type === 'household'
+            || nextSpace.type === 'trip'
+          )
+          && requestedSection === 'budgets'
+        )
+        || (
+          nextSpace.type === 'sme'
+          && nextSpace.ownerId === user.uid
+          && [
+            'budgets',
+            'bills',
+          ].includes(
+            requestedSection || '',
+          )
         );
 
       const shouldLoadOverviewData =
         nextActiveTab === 'overview'
-        && !personalEmbeddedSection
+        && !fullEmbeddedSection
         && (
           !nextCompactActionHome
           || Boolean(requestedSection)
@@ -891,6 +910,22 @@ function SpaceOverview({
     online,
   } = useOfflineSync();
 
+  const usesFullBudgetModule =
+    space.type === 'personal'
+    || space.type === 'household'
+    || space.type === 'trip'
+    || (
+      space.type === 'sme'
+      && space.ownerId === user?.uid
+    );
+
+  const usesFullCommitmentModule =
+    space.type === 'personal'
+    || (
+      space.type === 'sme'
+      && space.ownerId === user?.uid
+    );
+
   const [
     personalMoneyType,
     setPersonalMoneyType,
@@ -1305,7 +1340,7 @@ function SpaceOverview({
             </Suspense>
           )}
 
-        {space.type === 'personal'
+        {usesFullBudgetModule
           && section === 'budgets'
           && (
             <Suspense
@@ -1512,7 +1547,7 @@ function SpaceOverview({
           </div>
         </>}
 
-        {space.type !== 'personal' && section === 'budgets' && <div className="space-scoped-list">
+        {!usesFullBudgetModule && section === 'budgets' && <div className="space-scoped-list">
           {budgetRows.length ? budgetRows.map((item) => {
             const remaining = item.limitMinor - item.spentMinor;
             return <article key={item.id} className="space-scoped-row">
@@ -1529,7 +1564,7 @@ function SpaceOverview({
           </article>) : <EmptyState title="No goals in this Space" description="Create a goal for this Space to start tracking progress." />}
         </div>}
 
-        {space.type !== 'personal' && section === 'bills' && <div className="space-scoped-list">
+        {!usesFullCommitmentModule && section === 'bills' && <div className="space-scoped-list">
           {billsOnlyRows.length ? billsOnlyRows.map((item) => <article key={item.id} className="space-scoped-row">
             <div>
               <strong>{item.name}</strong>
@@ -1600,6 +1635,24 @@ function SpaceOverview({
               )}
           </div>
         )}
+
+        {space.type === 'sme'
+          && space.ownerId === user?.uid
+          && section === 'bills'
+          && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Business Bills & Instalments…
+                </div>
+              }
+            >
+              <EmbeddedCommitmentsPage
+                embedded
+                spaceIdOverride={space.id}
+              />
+            </Suspense>
+          )}
 
         {section === 'reports' && <>
           <div className="space-report-controls">

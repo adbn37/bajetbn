@@ -130,7 +130,6 @@ export function BudgetsPage({
     },
     [spaceIdOverride, user],
   );
-  useEffect(() => { void load(); }, [user]);
 
   const active = useMemo(() => budgets.filter((item) => !item.archivedAt), [budgets]);
   const archived = useMemo(() => budgets.filter((item) => item.archivedAt), [budgets]);
@@ -163,7 +162,17 @@ export function BudgetsPage({
 
   return <main className={embedded ? 'page embedded-module-page' : 'page'}>
     <PageHeader
-      eyebrow={embedded ? 'Personal Space' : 'Planning'}
+      eyebrow={
+        embedded
+          ? spaces[0]?.type === 'household'
+            ? 'Household Space'
+            : spaces[0]?.type === 'trip'
+              ? 'Trip Space'
+              : spaces[0]?.type === 'sme'
+                ? 'Business Space'
+                : 'Personal Space'
+          : 'Planning'
+      }
       title="Budget"
       description="Set how much you plan to spend. Saved expenses update the matching budget automatically."
       action={

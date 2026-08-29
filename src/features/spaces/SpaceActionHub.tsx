@@ -649,7 +649,7 @@ export function SpaceActionHub({
                     <>
                       {space.ownerId === user?.uid && (
                         <ShortcutLink
-                          to={`/spaces/${space.id}?section=accounts`}
+                          to="/accounts"
                           label="Business Accounts"
                           onClick={() => setSpaceMoreOpen(false)}
                         />

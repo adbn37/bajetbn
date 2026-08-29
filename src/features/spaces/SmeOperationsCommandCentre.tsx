@@ -292,7 +292,7 @@ const activeCommitments = commitments.filter(
 
                   <Link
                     className="button secondary compact"
-                    to={`/spaces/${space.id}?tab=bills`}
+                    to={`/spaces/${space.id}?section=bills`}
                   >
                     Review bills
                   </Link>

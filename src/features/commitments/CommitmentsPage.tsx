@@ -180,7 +180,6 @@ export function CommitmentsPage({
     },
     [typeOverride],
   );
-  useEffect(() => { void load(); }, [user]);
   const active = items.filter((item) => !item.archivedAt && !item.stoppedAt);
   const inactive = items.filter((item) => item.archivedAt || item.stoppedAt);
   const effectiveTypeFilter =
@@ -213,7 +212,13 @@ export function CommitmentsPage({
     finally { setBusyId(''); }
   }
   return <main className={embedded ? 'page embedded-module-page' : 'page'}><PageHeader
-      eyebrow={embedded ? 'Personal Space' : 'Planning'}
+      eyebrow={
+        embedded
+          ? spaces[0]?.type === 'sme'
+            ? 'Business Space'
+            : 'Personal Space'
+          : 'Planning'
+      }
       title={
         typeOverride === 'bill'
           ? 'Bills'

@@ -106,7 +106,6 @@ export function AccountsPage({
     },
     [spaceIdOverride, user],
   );
-  useEffect(() => { void load(); }, [user]);
 
   const active = useMemo(() => accounts.filter((item) => !item.archivedAt && !item.closedAt), [accounts]);
   const closed = useMemo(() => accounts.filter((item) => item.archivedAt || item.closedAt), [accounts]);

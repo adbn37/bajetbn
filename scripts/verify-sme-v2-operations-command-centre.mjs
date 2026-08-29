@@ -40,8 +40,13 @@ expect(
 );
 
 expect(
-  command.includes("to={`/spaces/${space.id}?tab=bills`}"),
-  'SME Needs Attention must reuse existing Space bills.',
+  command.includes("to={`/spaces/${space.id}?section=bills`}"),
+  'SME Needs Attention must open the existing Business Bills & Instalments module.',
+);
+
+expect(
+  !command.includes("to={`/spaces/${space.id}?tab=bills`}"),
+  'SME Needs Attention must not send commitment alerts to Shared Bills.',
 );
 
 expect(
