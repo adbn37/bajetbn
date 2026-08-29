@@ -5,7 +5,7 @@ import { ConnectivityBanner } from '../components/ConnectivityBanner';
 import { ContextualHelp } from '../components/ContextualHelp';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
-import { subscribeSpaceActivities, subscribeUserNotifications } from '../repositories/collaborationRepository';
+import { subscribeUserNotifications } from '../repositories/collaborationRepository';
 import { listenForForegroundPush } from '../repositories/notificationRepository';
 import { listSpaces } from '../repositories/spaceRepository';
 import type { Space } from '../types/models';
@@ -26,9 +26,7 @@ import {
 
 interface ActivityToast {
   id: string;
-  spaceId: string;
-  spaceName: string;
-  actorName: string;
+  title: string;
   summary: string;
   targetPath: string;
 }
@@ -111,64 +109,44 @@ export function AppShell() {
   useEffect(() => {
     if (!user) {
       setUnreadNotifications(0);
-      return;
-    }
-    return subscribeUserNotifications(
-      user.uid,
-      (items) => setUnreadNotifications(items.filter((item) => !item.readAt).length),
-      () => setUnreadNotifications(0),
-    );
-  }, [user]);
-  useEffect(() => {
-    if (!user) {
       setActivityToast(null);
       return;
     }
 
-    let active = true;
-    const stops: Array<() => void> = [];
+    let initialized = false;
+    const known = new Set<string>();
 
-    void listSpaces(user.uid).then((spaces) => {
-      if (!active) return;
-      spaces.filter((space) => !space.archivedAt).forEach((space) => {
-        let initialized = false;
-        const known = new Set<string>();
-        const stop = subscribeSpaceActivities(
-          space.id,
-          (items) => {
-            if (!initialized) {
-              items.forEach((item) => known.add(item.id));
-              initialized = true;
-              return;
-            }
-
-            const fresh = items.filter((item) => !known.has(item.id));
-            items.forEach((item) => known.add(item.id));
-            const newest = fresh.find((item) => item.actorUid !== user.uid);
-            if (!newest) return;
-
-            const opensPos = newest.action.includes('pos')
-              || newest.action.includes('marketplace')
-              || String(newest.targetType || '').toLowerCase().includes('pos');
-            setActivityToast({
-              id: newest.id,
-              spaceId: space.id,
-              spaceName: space.name,
-              actorName: newest.actorName || 'A Space member',
-              summary: newest.summary || newest.action.replaceAll('_', ' '),
-              targetPath: opensPos ? `/spaces/${space.id}/pos` : `/spaces/${space.id}?tab=activity`,
-            });
-          },
-          () => undefined,
+    return subscribeUserNotifications(
+      user.uid,
+      (items) => {
+        setUnreadNotifications(
+          items.filter((item) => !item.readAt).length,
         );
-        stops.push(stop);
-      });
-    }).catch(() => undefined);
 
-    return () => {
-      active = false;
-      stops.forEach((stop) => stop());
-    };
+        if (!initialized) {
+          items.forEach((item) => known.add(item.id));
+          initialized = true;
+          return;
+        }
+
+        const fresh = items.filter((item) => !known.has(item.id));
+        items.forEach((item) => known.add(item.id));
+
+        const newestActivity = fresh.find(
+          (item) => item.source === 'activity',
+        );
+
+        if (!newestActivity) return;
+
+        setActivityToast({
+          id: newestActivity.id,
+          title: newestActivity.title || 'Space update',
+          summary: newestActivity.message || 'A Space was updated.',
+          targetPath: newestActivity.targetPath || '/notifications',
+        });
+      },
+      () => setUnreadNotifications(0),
+    );
   }, [user]);
 
   useEffect(() => {
@@ -394,7 +372,7 @@ export function AppShell() {
           >
             <span className="space-activity-live-toast-icon">●</span>
             <span className="space-activity-live-toast-copy">
-              <strong>{activityToast.actorName} · {activityToast.spaceName}</strong>
+              <strong>{activityToast.title}</strong>
               <span>{activityToast.summary}</span>
               <small>Just updated · Tap to view details</small>
             </span>

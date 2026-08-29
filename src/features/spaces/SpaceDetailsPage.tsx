@@ -16,7 +16,7 @@ import { listGoals } from '../../repositories/goalRepository';
 import { listSharedExpenses } from '../../repositories/sharedExpenseRepository';
 import { getMySmePosAccess } from '../../repositories/smePosRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
-import { listSpaces } from '../../repositories/spaceRepository';
+import { getSpace, updateSpace } from '../../repositories/spaceRepository';
 import { listTransactions, listTransactionsForSpace } from '../../repositories/transactionRepository';
 import type {
   Account,
@@ -32,7 +32,6 @@ import type {
   SmePosRole,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
-import { updateSpace } from '../../repositories/spaceRepository';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
 import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
@@ -160,8 +159,7 @@ export function SpaceDetailsPage() {
     setLoading(true);
     setError('');
     try {
-      const spaces = await listSpaces(user.uid);
-      const nextSpace = spaces.find((item) => item.id === spaceId) || null;
+      const nextSpace = await getSpace(spaceId);
       setSpace(nextSpace);
       if (!nextSpace) return;
 

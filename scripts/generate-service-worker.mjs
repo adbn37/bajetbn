@@ -125,11 +125,10 @@ self.addEventListener('install', (event) => {
       await fetchAndCache(cache, url, true);
     }
 
-    // Icons and screenshots are useful but must never prevent an otherwise
-    // healthy application shell from activating.
-    await Promise.allSettled(
-      OPTIONAL_URLS.map((url) => fetchAndCache(cache, url, false)),
-    );
+    // Do not download every lazy route/tool during installation.
+    // OPTIONAL_URLS remain eligible for cache-first runtime caching below,
+    // so POS, barcode, reports and other heavy chunks are stored only after
+    // the user actually requests them.
 
     await self.skipWaiting();
   })());

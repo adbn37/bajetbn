@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   documentId,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -29,6 +30,22 @@ export async function listSpaces(uid: string): Promise<Space[]> {
   }
 
   return spaces.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Load one Space directly.
+ *
+ * Firestore security rules already require the signed-in user to be an
+ * active member of the requested Space, so this avoids loading every Space
+ * only to locate the current one.
+ */
+export async function getSpace(spaceId: string): Promise<Space | null> {
+  const { db } = requireFirebase();
+  const snapshot = await getDoc(doc(db, 'spaces', spaceId));
+
+  return snapshot.exists()
+    ? ({ id: snapshot.id, ...snapshot.data() } as Space)
+    : null;
 }
 
 export async function createSpace(input: {
