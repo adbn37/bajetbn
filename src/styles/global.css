@@ -9745,3 +9745,36 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
   }
 }
 /* END v1.11.0 SPACE-SPECIFIC MORE */
+
+
+/* v1.11.0 PERSONAL FULL MODULES */
+.embedded-module-page {
+  min-height: 0;
+  padding: 0;
+}
+
+.space-scoped-modal .embedded-module-page {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.space-scoped-modal .embedded-module-page > .page-header {
+  margin-top: 0;
+}
+
+.personal-module-primary-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .personal-module-primary-action {
+    justify-content: stretch;
+  }
+
+  .personal-module-primary-action .button {
+    width: 100%;
+  }
+}
+/* END v1.11.0 PERSONAL FULL MODULES */

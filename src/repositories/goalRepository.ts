@@ -28,6 +28,32 @@ export async function listGoalsForOwnerSpace(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export async function listGoalContributionsForGoal(
+  goalId: string,
+): Promise<GoalContribution[]> {
+  const { db } = requireFirebase();
+
+  const snapshot = await getDocs(query(
+    collection(db, 'goalContributions'),
+    where('goalId', '==', goalId),
+  ));
+
+  return snapshot.docs
+    .map(
+      (item) =>
+        ({
+          id: item.id,
+          ...item.data(),
+        }) as GoalContribution,
+    )
+    .sort(
+      (a, b) =>
+        b.contributionDate.localeCompare(
+          a.contributionDate,
+        ),
+    );
+}
+
 export async function listGoalContributions(uid: string): Promise<GoalContribution[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'goalContributions'), where('ownerId', '==', uid)));

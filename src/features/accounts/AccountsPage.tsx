@@ -6,7 +6,13 @@ import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { institutionCodeForLabel, institutionDisplay, institutionOptionsForType } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
-import { createAccount, listAllAccounts, updateAccount } from '../../repositories/accountRepository';
+import {
+  createAccount,
+  listAllAccounts,
+  listAllPersonalAccounts,
+  listAccountsForOwnerSpace,
+  updateAccount,
+} from '../../repositories/accountRepository';
 import {
   ACCOUNT_COLOR_OPTIONS,
   accountColorClass,
@@ -15,7 +21,10 @@ import {
   type AccountColor,
 } from '../../services/accountVisualPreferences';
 import { manageAccount } from '../../repositories/lifecycleRepository';
-import { listSpaces } from '../../repositories/spaceRepository';
+import {
+  getSpace,
+  listSpaces,
+} from '../../repositories/spaceRepository';
 import type { Account, AccountClassification, AccountType, InstitutionCode, Space } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
@@ -23,7 +32,13 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 const accountLabels: Record<AccountType, string> = { bank: 'Bank', cash: 'Cash', e_wallet: 'E-wallet', credit_card: 'Credit card' };
 type AccountLifecycleAction = 'close' | 'delete';
 
-export function AccountsPage() {
+export function AccountsPage({
+  spaceIdOverride,
+  embedded = false,
+}: {
+  spaceIdOverride?: string;
+  embedded?: boolean;
+} = {}) {
   const { user, profile } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -36,18 +51,61 @@ export function AccountsPage() {
 
   const load = async () => {
     if (!user) return;
-    setLoading(true); setError('');
+
+    setLoading(true);
+    setError('');
+
     try {
-      const [nextAccounts, nextSpaces] = await Promise.all([
+      if (spaceIdOverride) {
+        const targetSpace =
+          await getSpace(spaceIdOverride);
+
+        if (!targetSpace) {
+          throw new Error(
+            'This Space is no longer available.',
+          );
+        }
+
+        const nextAccounts =
+          targetSpace.type === 'personal'
+            ? await listAllPersonalAccounts(
+                user.uid,
+              )
+            : await listAccountsForOwnerSpace(
+                user.uid,
+                spaceIdOverride,
+              );
+
+        setAccounts(nextAccounts);
+        setSpaces([targetSpace]);
+        return;
+      }
+
+      const [
+        nextAccounts,
+        nextSpaces,
+      ] = await Promise.all([
         listAllAccounts(user.uid),
         listSpaces(user.uid),
       ]);
+
       setAccounts(nextAccounts);
       setSpaces(nextSpaces);
+    } catch (nextError) {
+      setError(
+        getErrorMessage(nextError),
+      );
+    } finally {
+      setLoading(false);
     }
-    catch (nextError) { setError(getErrorMessage(nextError)); }
-    finally { setLoading(false); }
   };
+
+  useEffect(
+    () => {
+      void load();
+    },
+    [spaceIdOverride, user],
+  );
   useEffect(() => { void load(); }, [user]);
 
   const active = useMemo(() => accounts.filter((item) => !item.archivedAt && !item.closedAt), [accounts]);
@@ -61,6 +119,40 @@ export function AccountsPage() {
     () => active.filter((item) => item.classification === 'business' && !item.spaceId).length,
     [active],
   );
+
+  const accountHeaderAction =
+    embedded
+      ? (
+          <button
+            className="button primary"
+            onClick={() =>
+              setModal('create')
+            }
+          >
+            + Add account
+          </button>
+        )
+      : (
+          <div className="page-header-action-row">
+            <Link
+              className="button secondary archive-button"
+              to="/accounts/closed"
+            >
+              Closed Accounts
+              {' '}
+              <span>{closed.length}</span>
+            </Link>
+
+            <button
+              className="button primary"
+              onClick={() =>
+                setModal('create')
+              }
+            >
+              + Add account
+            </button>
+          </div>
+        );
 
   function askLifecycle(account: Account, action: AccountLifecycleAction) {
     setError('');
@@ -107,21 +199,81 @@ export function AccountsPage() {
     } finally { setBusyId(''); }
   }
 
-  return <main className="page accounts-page">
-    <PageHeader eyebrow="Money sources" title="Accounts" description="Add personal or business bank, cash, e-wallet, and credit card accounts. Business ownership and POS availability are controlled here." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/accounts/closed">Closed Accounts <span>{closed.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add account</button></div>} />
+  return <main className={embedded ? 'page accounts-page embedded-module-page' : 'page accounts-page'}>
+    <PageHeader
+      eyebrow={embedded ? 'Personal Space' : 'Money sources'}
+      title="Accounts"
+      description={
+        embedded
+          ? 'Manage the personal accounts available to this Personal Space.'
+          : 'Add personal or business bank, cash, e-wallet, and credit card accounts. Business ownership and POS availability are controlled here.'
+      }
+      action={accountHeaderAction}
+    />
     {error && !lifecycleDialog && <div className="notice error">{error}</div>}
-    <section className="account-summary"><div><span>Total money available</span><strong>{formatMoney(total, profile?.currency || 'BND')}</strong></div><div><span>Accounts in use</span><strong>{active.length}</strong></div><Link to="/accounts/closed" className="account-summary-link"><span>Closed accounts</span><strong>{closed.length}</strong><small>Open archive →</small></Link></section>
-    <div className="info-banner"><strong>Business account ownership</strong><span>Assign each business account to one SME here. Only accounts belonging to that SME and enabled for POS can be used at its checkout. Managers and cashiers cannot change this.</span></div>
-    {unassignedBusinessCount > 0 && <div className="notice">{unassignedBusinessCount} existing business account{unassignedBusinessCount === 1 ? ' is' : 's are'} not assigned to an SME yet. Edit {unassignedBusinessCount === 1 ? 'it' : 'them'} here to finish the one-time ownership setup.</div>}
-    {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountGroups accounts={active} spaces={ownedSmeSpaces} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onClose={(account) => askLifecycle(account, 'close')} onDelete={(account) => askLifecycle(account, 'delete')} />}
+    <section className="account-summary">
+      <div>
+        <span>Total money available</span>
+        <strong>
+          {formatMoney(
+            total,
+            profile?.currency || 'BND',
+          )}
+        </strong>
+      </div>
+
+      <div>
+        <span>Accounts in use</span>
+        <strong>{active.length}</strong>
+      </div>
+
+      {!embedded && (
+        <Link
+          to="/accounts/closed"
+          className="account-summary-link"
+        >
+          <span>Closed accounts</span>
+          <strong>{closed.length}</strong>
+          <small>Open archive →</small>
+        </Link>
+      )}
+    </section>
+    {!embedded && (
+      <div className="info-banner">
+        <strong>
+          Business account ownership
+        </strong>
+        <span>
+          Assign each business account to one SME here.
+          Only accounts belonging to that SME and enabled
+          for POS can be used at its checkout.
+          Managers and cashiers cannot change this.
+        </span>
+      </div>
+    )}
+    {!embedded
+      && unassignedBusinessCount > 0
+      && (
+        <div className="notice">
+          {unassignedBusinessCount}
+          {' '}
+          existing business account
+          {unassignedBusinessCount === 1
+            ? ' is'
+            : 's are'}
+          {' '}
+          not assigned to an SME yet.
+        </div>
+      )}
+    {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountGroups accounts={active} spaces={ownedSmeSpaces} spaceIdOverride={spaceIdOverride} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onClose={(account) => askLifecycle(account, 'close')} onDelete={(account) => askLifecycle(account, 'delete')} />}
 
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
-    {modal === 'create' && profile && <AccountForm currency={profile.currency} spaces={ownedSmeSpaces} onClose={() => setModal(null)} onSubmit={async (values) => { await createAccount(values); setModal(null); await load(); }} />}
-    {modal === 'edit' && selected && <AccountForm currency={selected.currency} spaces={ownedSmeSpaces} initial={selected} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification, spaceId: values.spaceId, posEnabled: values.posEnabled }); if (user) setAccountColor(user.uid, selected.id, values.color); setModal(null); await load(); }} />}
+    {modal === 'create' && profile && <AccountForm currency={profile.currency} spaces={ownedSmeSpaces} lockedPersonal={Boolean(spaceIdOverride)} onClose={() => setModal(null)} onSubmit={async (values) => { await createAccount(values); setModal(null); await load(); }} />}
+    {modal === 'edit' && selected && <AccountForm currency={selected.currency} spaces={ownedSmeSpaces} initial={selected} lockedPersonal={Boolean(spaceIdOverride)} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification, spaceId: values.spaceId, posEnabled: values.posEnabled }); if (user) setAccountColor(user.uid, selected.id, values.color); setModal(null); await load(); }} />}
   </main>;
 }
 
-function AccountGroups({ accounts, spaces, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; spaces: Space[]; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
+function AccountGroups({ accounts, spaces, spaceIdOverride, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; spaces: Space[]; spaceIdOverride?: string; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
   const personal = accounts.filter((account) => account.classification === 'personal');
   const unassigned = accounts.filter((account) => account.classification === 'business' && !account.spaceId);
   const groups = spaces
@@ -133,20 +285,20 @@ function AccountGroups({ accounts, spaces, busyId, onEdit, onClose, onDelete }: 
   return <div className="form-stack">
     {personal.length > 0 && <section>
       <div className="panel-heading"><div><span className="eyebrow">Personal</span><h2>Personal accounts</h2></div><span>{personal.length}</span></div>
-      <AccountList accounts={personal} spaces={spaces} {...actions} />
+      <AccountList accounts={personal} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
     </section>}
     {groups.map(({ space, accounts: businessAccounts }) => <section key={space.id}>
       <div className="panel-heading"><div><span className="eyebrow">Business</span><h2>{space.name}</h2></div><span>{businessAccounts.length}</span></div>
-      <AccountList accounts={businessAccounts} spaces={spaces} {...actions} />
+      <AccountList accounts={businessAccounts} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
     </section>)}
     {unassigned.length > 0 && <section>
       <div className="panel-heading"><div><span className="eyebrow">Needs setup</span><h2>Unassigned business accounts</h2></div><span>{unassigned.length}</span></div>
-      <AccountList accounts={unassigned} spaces={spaces} {...actions} />
+      <AccountList accounts={unassigned} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
     </section>}
   </div>;
 }
 
-function AccountList({ accounts, spaces, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; spaces: Space[]; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
+function AccountList({ accounts, spaces, spaceIdOverride, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; spaces: Space[]; spaceIdOverride?: string; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
   const { user } = useAuth();
   const spaceName = (account: Account) => account.spaceId ? spaces.find((space) => space.id === account.spaceId)?.name || 'Business' : 'Unassigned business';
 
@@ -154,7 +306,16 @@ function AccountList({ accounts, spaces, busyId, onEdit, onClose, onDelete }: { 
     <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
     <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {account.classification === 'personal' ? 'Personal' : spaceName(account)}{account.classification === 'business' && account.posEnabled ? ' · POS enabled' : ''}</p></div><small>{account.displayId}</small></div>
     <div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div>
-    <div className="account-actions"><Link className="text-button account-view-activity" to={`/transactions?accountId=${encodeURIComponent(account.id)}`}>View activity</Link><button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div>
+    <div className="account-actions"><Link
+      className="text-button account-view-activity"
+      to={
+        spaceIdOverride
+          ? `/spaces/${spaceIdOverride}?section=money`
+          : `/transactions?accountId=${encodeURIComponent(account.id)}`
+      }
+    >
+      View activity
+    </Link><button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div>
   </article>)}</section>;
 }
 
@@ -171,7 +332,7 @@ type AccountFormValues = {
   color: AccountColor;
 };
 
-function AccountForm({ currency, spaces, initial, onClose, onSubmit }: { currency: string; spaces: Space[]; initial?: Account; onClose: () => void; onSubmit: (values: AccountFormValues) => Promise<void> }) {
+function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClose, onSubmit }: { currency: string; spaces: Space[]; initial?: Account; lockedPersonal?: boolean; onClose: () => void; onSubmit: (values: AccountFormValues) => Promise<void> }) {
   const { user } = useAuth();
   const [name, setName] = useState(initial?.name || '');
   const [color, setColor] = useState<AccountColor>(() =>
@@ -181,7 +342,11 @@ function AccountForm({ currency, spaces, initial, onClose, onSubmit }: { currenc
   );
   const [institution, setInstitution] = useState(initial?.institution || institutionDisplay(initial || { type: 'bank' }));
   const [type, setType] = useState<AccountType>(initial?.type || 'bank');
-  const [classification, setClassification] = useState<AccountClassification>(initial?.classification || 'personal');
+  const [classification, setClassification] = useState<AccountClassification>(
+    lockedPersonal
+      ? 'personal'
+      : initial?.classification || 'personal',
+  );
   const [spaceId, setSpaceId] = useState(initial?.spaceId || '');
   const [posEnabled, setPosEnabled] = useState(initial?.posEnabled === true);
   const [opening, setOpening] = useState(initial ? String(initial.openingBalanceMinor / 100) : '0.00');
@@ -197,6 +362,8 @@ function AccountForm({ currency, spaces, initial, onClose, onSubmit }: { currenc
   };
 
   const changeClassification = (nextClassification: AccountClassification) => {
+    if (lockedPersonal) return;
+
     setClassification(nextClassification);
     if (nextClassification === 'personal') {
       setSpaceId('');
@@ -231,7 +398,7 @@ function AccountForm({ currency, spaces, initial, onClose, onSubmit }: { currenc
     {error && <div className="notice error span-2">{error}</div>}
     <label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label>
     <label>Type<select value={type} onChange={(event) => changeType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label>
-    <label>Used for<select value={classification} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
+    <label>Used for<select value={classification} disabled={lockedPersonal} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
     {classification === 'business' && <label className="span-2">Business / SME Space
       <select value={spaceId} onChange={(event) => setSpaceId(event.target.value)} required>
         <option value="">Choose business</option>

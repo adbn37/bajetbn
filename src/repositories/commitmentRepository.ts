@@ -42,6 +42,32 @@ export async function listCommitmentsForSpace(spaceId: string): Promise<Commitme
     .sort((a, b) => (a.nextDueDate || '9999-12-31').localeCompare(b.nextDueDate || '9999-12-31'));
 }
 
+export async function listCommitmentPaymentsForCommitment(
+  commitmentId: string,
+): Promise<CommitmentPayment[]> {
+  const { db } = requireFirebase();
+
+  const snapshot = await getDocs(query(
+    collection(db, 'commitmentPayments'),
+    where('commitmentId', '==', commitmentId),
+  ));
+
+  return snapshot.docs
+    .map(
+      (item) =>
+        ({
+          id: item.id,
+          ...item.data(),
+        }) as CommitmentPayment,
+    )
+    .sort(
+      (a, b) =>
+        b.paymentDate.localeCompare(
+          a.paymentDate,
+        ),
+    );
+}
+
 export async function listCommitmentPayments(uid: string): Promise<CommitmentPayment[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'commitmentPayments'), where('ownerId', '==', uid)));

@@ -1,11 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
-import { listAccountsForOwnerSpace } from '../../repositories/accountRepository';
+import { useOfflineSync } from '../../contexts/OfflineSyncContext';
+import {
+  listAccountsForOwnerSpace,
+  listPersonalAccounts,
+} from '../../repositories/accountRepository';
+import {
+  listAllCustomCategories,
+} from '../../repositories/categoryRepository';
 import {
   listBudgetsForOwnerSpace,
   listBudgetsForSpace,
@@ -26,6 +40,7 @@ import { getSpace, updateSpace } from '../../repositories/spaceRepository';
 import {
   listTransactionsForOwnerSpace,
   listTransactionsForSpace,
+  postTransaction,
 } from '../../repositories/transactionRepository';
 import type {
   Account,
@@ -38,11 +53,14 @@ import type {
   Space,
   SpaceMember,
   SpaceType,
+  TransactionCategory,
   SmePosRole,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
+import { DEFAULT_TRANSACTION_CATEGORIES } from '../categories/defaultCategories';
+import { MoneyActivityModal } from '../transactions/TransactionsPage';
 import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
 import { useSpacePresenceHeartbeat } from '../collaboration/useSpacePresence';
 import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAutomationPanel';
@@ -59,6 +77,51 @@ import { SpaceAvatar } from './SpaceAvatar';
 import { SpaceAvatarSettings } from './SpaceAvatarSettings';
 
 import type { CustomSpaceModule } from '../../types/models';
+
+const EmbeddedAccountsPage = lazy(
+  async () => {
+    const module =
+      await import('../accounts/AccountsPage');
+
+    return {
+      default: module.AccountsPage,
+    };
+  },
+);
+
+const EmbeddedBudgetsPage = lazy(
+  async () => {
+    const module =
+      await import('../budgets/BudgetsPage');
+
+    return {
+      default: module.BudgetsPage,
+    };
+  },
+);
+
+const EmbeddedGoalsPage = lazy(
+  async () => {
+    const module =
+      await import('../goals/GoalsPage');
+
+    return {
+      default: module.GoalsPage,
+    };
+  },
+);
+
+const EmbeddedCommitmentsPage = lazy(
+  async () => {
+    const module =
+      await import('../commitments/CommitmentsPage');
+
+    return {
+      default: module.CommitmentsPage,
+    };
+  },
+);
+
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
 type SpaceOverviewSection = 'accounts' | 'income' | 'expenses' | 'money' | 'budgets' | 'goals' | 'bills' | 'instalments' | 'reports' | 'calendar';
 type SpaceReportRange = 'day' | 'week' | 'month' | 'year' | 'custom';
@@ -255,8 +318,21 @@ export function SpaceDetailsPage() {
        * Other Space types preserve their current overview behavior,
        * but now use Space-scoped Firestore queries.
        */
+      const personalEmbeddedSection =
+        nextSpace.type === 'personal'
+        && [
+          'accounts',
+          'budgets',
+          'goals',
+          'bills',
+          'instalments',
+        ].includes(
+          requestedSection || '',
+        );
+
       const shouldLoadOverviewData =
         nextActiveTab === 'overview'
+        && !personalEmbeddedSection
         && (
           !nextCompactActionHome
           || Boolean(requestedSection)
@@ -268,10 +344,14 @@ export function SpaceDetailsPage() {
         && canReadSmeFinancials
       ) {
         const nextAccountsPromise =
-          listAccountsForOwnerSpace(
-            user.uid,
-            spaceId,
-          );
+          nextSpace.type === 'personal'
+            ? listPersonalAccounts(
+                user.uid,
+              )
+            : listAccountsForOwnerSpace(
+                user.uid,
+                spaceId,
+              );
 
         const nextGoalsPromise =
           listGoalsForOwnerSpace(
@@ -726,6 +806,7 @@ export function SpaceDetailsPage() {
       openSharedBillCount={openSharedBills.length + openSharedExpenses.length}
       canViewFinancials={canViewSmeFinancials}
       smePosRole={smePosRole}
+      onRefresh={load}
     /> : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
       {activeTab === 'chat' ? (
           <SpaceChatPanel
@@ -781,6 +862,7 @@ function SpaceOverview({
   openSharedBillCount,
   canViewFinancials,
   smePosRole,
+  onRefresh,
 }: {
   space: Space;
   moneyIn: number;
@@ -796,8 +878,93 @@ function SpaceOverview({
   openSharedBillCount: number;
   canViewFinancials: boolean;
   smePosRole: SmePosRole | null;
+  onRefresh: () => Promise<void>;
 }) {
   const shared = space.type !== 'personal';
+
+  const {
+    user,
+    profile,
+  } = useAuth();
+
+  const {
+    online,
+  } = useOfflineSync();
+
+  const [
+    personalMoneyType,
+    setPersonalMoneyType,
+  ] = useState<
+    'income'
+    | 'expense'
+    | null
+  >(null);
+
+  const [
+    personalCustomCategories,
+    setPersonalCustomCategories,
+  ] = useState<TransactionCategory[]>([]);
+
+  const [
+    personalMoneyLoading,
+    setPersonalMoneyLoading,
+  ] = useState(false);
+
+  const personalCategories = useMemo(
+    () => [
+      ...DEFAULT_TRANSACTION_CATEGORIES,
+      ...personalCustomCategories.filter(
+        (item) =>
+          !item.archivedAt,
+      ),
+    ],
+    [personalCustomCategories],
+  );
+
+  const reloadPersonalCategories =
+    useCallback(
+      async () => {
+        if (!user) {
+          return personalCategories;
+        }
+
+        const next =
+          await listAllCustomCategories(
+            user.uid,
+          );
+
+        setPersonalCustomCategories(
+          next,
+        );
+
+        return [
+          ...DEFAULT_TRANSACTION_CATEGORIES,
+          ...next.filter(
+            (item) =>
+              !item.archivedAt,
+          ),
+        ];
+      },
+      [
+        personalCategories,
+        user,
+      ],
+    );
+
+  async function openPersonalMoney(
+    type: 'income' | 'expense',
+  ) {
+    if (!user) return;
+
+    setPersonalMoneyLoading(true);
+
+    try {
+      await reloadPersonalCategories();
+      setPersonalMoneyType(type);
+    } finally {
+      setPersonalMoneyLoading(false);
+    }
+  }
   const customModules =
     space.type === 'custom'
       ? normalizeCustomSpaceModules(space.customModules)
@@ -1086,9 +1253,129 @@ function SpaceOverview({
 
     {section && canViewFinancials && <Modal title={`${space.name} — ${sectionTitle[section]}`} onClose={closeOverviewSection}>
       <div className="space-scoped-modal">
-        <div className="space-scoped-context"><strong>{space.name}</strong><span>Only records from this Space are shown.</span></div>
+        <div className="space-scoped-context">
+          <strong>{space.name}</strong>
+          <span>
+            Only records from this Space are shown.
+          </span>
+        </div>
 
-        {section === 'accounts' && (
+        {space.type === 'personal'
+          && (
+            section === 'income'
+            || section === 'expenses'
+          )
+          && (
+            <div className="personal-module-primary-action">
+              <button
+                type="button"
+                className="button primary"
+                disabled={personalMoneyLoading}
+                onClick={() =>
+                  void openPersonalMoney(
+                    section === 'income'
+                      ? 'income'
+                      : 'expense',
+                  )
+                }
+              >
+                {personalMoneyLoading
+                  ? 'Loading…'
+                  : section === 'income'
+                    ? 'Add Income'
+                    : 'Add Expense'}
+              </button>
+            </div>
+          )}
+
+        {space.type === 'personal'
+          && section === 'accounts'
+          && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Accounts…
+                </div>
+              }
+            >
+              <EmbeddedAccountsPage
+                embedded
+                spaceIdOverride={space.id}
+              />
+            </Suspense>
+          )}
+
+        {space.type === 'personal'
+          && section === 'budgets'
+          && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Budget…
+                </div>
+              }
+            >
+              <EmbeddedBudgetsPage
+                embedded
+                spaceIdOverride={space.id}
+              />
+            </Suspense>
+          )}
+
+        {space.type === 'personal'
+          && section === 'goals'
+          && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Goals…
+                </div>
+              }
+            >
+              <EmbeddedGoalsPage
+                embedded
+                spaceIdOverride={space.id}
+              />
+            </Suspense>
+          )}
+
+        {space.type === 'personal'
+          && section === 'bills'
+          && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Bills…
+                </div>
+              }
+            >
+              <EmbeddedCommitmentsPage
+                embedded
+                spaceIdOverride={space.id}
+                typeOverride="bill"
+              />
+            </Suspense>
+          )}
+
+        {space.type === 'personal'
+          && section === 'instalments'
+          && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Instalments…
+                </div>
+              }
+            >
+              <EmbeddedCommitmentsPage
+                embedded
+                spaceIdOverride={space.id}
+                typeOverride="instalment"
+              />
+            </Suspense>
+          )}
+
+        {space.type !== 'personal' && section === 'accounts' && (
           <div className="space-scoped-list personal-space-account-list">
             {accountRows.length
               ? accountRows.map(
@@ -1197,8 +1484,8 @@ function SpaceOverview({
                   }
                   description={
                     section === 'income'
-                      ? 'Use the centred + button to record money in.'
-                      : 'Use the centred + button to record money out.'
+                      ? 'Use Add Income above or the centred + button to record money in.'
+                      : 'Use Add Expense above or the centred + button to record money out.'
                   }
                 />
               )}
@@ -1225,7 +1512,7 @@ function SpaceOverview({
           </div>
         </>}
 
-        {section === 'budgets' && <div className="space-scoped-list">
+        {space.type !== 'personal' && section === 'budgets' && <div className="space-scoped-list">
           {budgetRows.length ? budgetRows.map((item) => {
             const remaining = item.limitMinor - item.spentMinor;
             return <article key={item.id} className="space-scoped-row">
@@ -1235,14 +1522,14 @@ function SpaceOverview({
           }) : <EmptyState title="No budgets in this Space" description="Create a Budget for this Space to start planning its spending." />}
         </div>}
 
-        {section === 'goals' && <div className="space-scoped-list">
+        {space.type !== 'personal' && section === 'goals' && <div className="space-scoped-list">
           {goalRows.length ? goalRows.map((item) => <article key={item.id} className="space-scoped-row">
             <div><strong>{item.name}</strong><small>{item.targetDate ? `Target ${displaySpaceDate(item.targetDate)}` : 'No target date'} · {item.status}</small></div>
             <div className="space-scoped-amount"><strong>{formatMoney(item.currentMinor, item.currency)} / {formatMoney(item.targetMinor, item.currency)}</strong><small>{Math.max(0, Math.min(100, item.targetMinor > 0 ? Math.round((item.currentMinor / item.targetMinor) * 100) : 0))}%</small></div>
           </article>) : <EmptyState title="No goals in this Space" description="Create a goal for this Space to start tracking progress." />}
         </div>}
 
-        {section === 'bills' && <div className="space-scoped-list">
+        {space.type !== 'personal' && section === 'bills' && <div className="space-scoped-list">
           {billsOnlyRows.length ? billsOnlyRows.map((item) => <article key={item.id} className="space-scoped-row">
             <div>
               <strong>{item.name}</strong>
@@ -1254,21 +1541,13 @@ function SpaceOverview({
             </div>
           </article>) : (
             <EmptyState
-              title={
-                space.type === 'personal'
-                  ? 'No bills in this Personal Space'
-                  : 'No bills or instalments in this Space'
-              }
-              description={
-                space.type === 'personal'
-                  ? 'Add a bill for this Personal Space to start tracking what is due.'
-                  : 'Add a bill or instalment for this Space to start tracking what is due.'
-              }
+              title="No bills or instalments in this Space"
+              description="Add a bill or instalment for this Space to start tracking what is due."
             />
           )}
         </div>}
 
-        {section === 'instalments' && (
+        {space.type !== 'personal' && section === 'instalments' && (
           <div className="space-scoped-list">
             {instalmentRows.length
               ? instalmentRows.map(
@@ -1358,6 +1637,39 @@ function SpaceOverview({
         </div>}
       </div>
     </Modal>}
+
+    {personalMoneyType && (
+      <MoneyActivityModal
+        accounts={accounts}
+        spaces={[space]}
+        categories={personalCategories}
+        timezone={
+          profile?.timezone
+          || space.timezone
+          || 'Asia/Brunei'
+        }
+        online={online}
+        initialType={personalMoneyType}
+        lockedSpaceId={space.id}
+        onCategoriesChanged={
+          reloadPersonalCategories
+        }
+        onClose={() =>
+          setPersonalMoneyType(null)
+        }
+        onSubmit={postTransaction}
+        onComplete={async (
+          _message,
+          refresh,
+        ) => {
+          setPersonalMoneyType(null);
+
+          if (refresh) {
+            await onRefresh();
+          }
+        }}
+      />
+    )}
   </>;
 }
 
