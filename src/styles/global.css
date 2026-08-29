@@ -9683,3 +9683,17 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 /* END v1.11.0 Global Home + mobile navigation */
+
+
+/* v1.11.0 FIVE-SLOT MOBILE NAV LOCK */
+@media (max-width: 780px) {
+  .mobile-bottom-nav {
+    grid-template-columns:
+      repeat(5, minmax(0, 1fr));
+  }
+
+  .mobile-bottom-nav > .mobile-bottom-add {
+    grid-column: 3;
+  }
+}
+/* END v1.11.0 FIVE-SLOT MOBILE NAV LOCK */

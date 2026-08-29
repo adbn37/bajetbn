@@ -1,45 +1,17 @@
 import fs from 'node:fs';
 
-const read =
-  (file) =>
-    fs.readFileSync(
-      file,
-      'utf8',
-    );
-
-const navigation =
-  read(
-    'src/services/personalisation.ts',
-  );
-
-const customizer =
-  read(
-    'src/components/SidebarCustomizer.tsx',
-  );
-
-const shell =
-  read(
-    'src/layouts/AppShell.tsx',
-  );
-
-const morePage =
-  read(
-    'src/pages/MorePage.tsx',
-  );
-
-const styles =
-  read(
-    'src/styles/global.css',
-  );
+const read = (file) => fs.readFileSync(file, 'utf8');
+const navigation = read('src/services/personalisation.ts');
+const customizer = read('src/components/SidebarCustomizer.tsx');
+const shell = read('src/layouts/AppShell.tsx');
+const morePage = read('src/pages/MorePage.tsx');
+const styles = read('src/styles/global.css');
 
 let checks = 0;
 
 function check(condition, message) {
   checks += 1;
-
-  if (!condition) {
-    throw new Error(message);
-  }
+  if (!condition) throw new Error(message);
 }
 
 for (const id of [
@@ -52,9 +24,7 @@ for (const id of [
   'search',
 ]) {
   check(
-    navigation.includes(
-      `'${id}'`,
-    ),
+    navigation.includes(`'${id}'`),
     `Recommended navigation is missing ${id}.`,
   );
 }
@@ -67,31 +37,23 @@ for (const id of [
   'offline-sync',
 ]) {
   check(
-    navigation.includes(
-      `'${id}'`,
-    ),
+    navigation.includes(`'${id}'`),
     `Optional navigation is missing ${id}.`,
   );
 }
 
 check(
-  navigation.includes(
-    'RECOMMENDED_NAVIGATION_ORDER',
-  ),
+  navigation.includes('RECOMMENDED_NAVIGATION_ORDER'),
   'Recommended navigation order is missing.',
 );
 
 check(
-  navigation.includes(
-    'RECOMMENDED_HIDDEN_NAVIGATION',
-  ),
+  navigation.includes('RECOMMENDED_HIDDEN_NAVIGATION'),
   'Recommended hidden navigation is missing.',
 );
 
 check(
-  navigation.includes(
-    "id: 'overview'",
-  )
+  navigation.includes("id: 'overview'")
     && navigation.match(
       /id:\s*'overview'[\s\S]*?protected:\s*true/,
     ),
@@ -99,9 +61,7 @@ check(
 );
 
 check(
-  navigation.includes(
-    "id: 'spaces'",
-  )
+  navigation.includes("id: 'spaces'")
     && navigation.match(
       /id:\s*'spaces'[\s\S]*?protected:\s*true/,
     ),
@@ -123,61 +83,38 @@ check(
 );
 
 check(
-  customizer.includes(
-    'toggleHidden',
-  ),
+  customizer.includes('toggleHidden'),
   'Hide/show support was removed.',
 );
 
 check(
-  customizer.includes(
-    'togglePinned',
-  ),
+  customizer.includes('togglePinned'),
   'Pin support was removed.',
 );
 
 check(
-  customizer.includes(
-    'dropOn',
-  ),
+  customizer.includes('dropOn'),
   'Drag/reorder support was removed.',
 );
 
 check(
-  customizer.includes(
-    'Reset menu',
-  ),
+  customizer.includes('Reset menu'),
   'Reset menu was removed.',
 );
 
 check(
-  shell.includes(
-    'orderedNavigation',
-  ),
+  shell.includes('orderedNavigation'),
   'Desktop AppShell must continue using personalized navigation.',
 );
 
-const mobileClassMarker =
-  shell.indexOf(
-    'className="mobile-bottom-nav',
-  );
-
-check(
-  mobileClassMarker >= 0,
-  'Mobile navigation class is missing.',
+const mobileNavStart = shell.indexOf(
+  '<nav className="mobile-bottom-nav"',
 );
 
-const mobileNavStart =
-  shell.lastIndexOf(
-    '<nav',
-    mobileClassMarker,
-  );
-
-const mobileNavEnd =
-  shell.indexOf(
-    '</nav>',
-    mobileClassMarker,
-  );
+const mobileNavEnd = shell.indexOf(
+  '</nav>',
+  mobileNavStart,
+);
 
 check(
   mobileNavStart >= 0
@@ -185,199 +122,137 @@ check(
   'Mobile navigation section is missing.',
 );
 
-const mobileNavigation =
-  shell.slice(
-    mobileNavStart,
-    mobileNavEnd
-      + '</nav>'.length,
-  );
+const mobileNavigation = shell.slice(
+  mobileNavStart,
+  mobileNavEnd,
+);
+
+const businessIndex =
+  mobileNavigation.indexOf('<small>{businessPickerLoading');
 
 const homeIndex =
-  mobileNavigation.indexOf(
-    '<small>Home</small>',
-  );
-
-const spacesIndex =
-  mobileNavigation.indexOf(
-    '<small>Spaces</small>',
-  );
+  mobileNavigation.indexOf('<small>Home</small>');
 
 const addIndex =
-  mobileNavigation.indexOf(
-    'mobile-bottom-add',
-  );
+  mobileNavigation.indexOf('mobile-bottom-add');
+
+const alertsIndex =
+  mobileNavigation.indexOf('<small>Alerts</small>');
 
 const moreIndex =
-  mobileNavigation.indexOf(
-    '<small>More</small>',
-  );
+  mobileNavigation.indexOf('<small>More</small>');
 
 check(
-  homeIndex >= 0
-    && spacesIndex > homeIndex
-    && addIndex > spacesIndex
-    && moreIndex > addIndex,
-  'Mobile navigation order must be Home, Spaces, Add, More.',
+  businessIndex >= 0
+    && businessIndex < homeIndex
+    && homeIndex < addIndex
+    && addIndex < alertsIndex
+    && alertsIndex < moreIndex,
+  'Mobile navigation order must remain Business, Home, Add, Alerts, More.',
 );
 
 check(
-  mobileNavigation.includes(
-    'to="/spaces"',
-  ),
-  'Spaces must be a first-class mobile destination.',
+  mobileNavigation.includes('openBusinessShortcut'),
+  'Mobile Business shortcut is missing.',
 );
 
 check(
-  mobileNavigation.includes(
-    "navigate('/?quick=1')",
-  ),
-  'Mobile Add must keep opening the quick money action.',
-);
-
-check(
-  mobileNavigation.includes(
-    'to="/more"',
-  ),
-  'Mobile More destination is missing.',
-);
-
-check(
-  !mobileNavigation.includes(
-    '<small>Alerts</small>',
-  ),
-  'Obsolete Alerts bottom-nav destination remains.',
-);
-
-check(
-  !mobileNavigation.includes(
-    'to="/notifications"',
-  ),
-  'Notifications must live in the responsive header, not bottom nav.',
-);
-
-check(
-  !mobileNavigation.includes(
-    '<small>Business</small>',
-  )
-    && !mobileNavigation.includes(
-      'businessPickerLoading',
-    ),
-  'Obsolete Business bottom-nav destination remains.',
-);
-
-check(
-  !shell.includes(
-    'openBusinessShortcut',
-  ),
-  'Old global Business shortcut implementation must be removed.',
-);
-
-check(
-  !shell.includes(
-    'businessPickerOpen',
-  )
-    && !shell.includes(
-      'businessSpaces.map',
-    ),
-  'Old mobile Business picker runtime must be removed.',
-);
-
-check(
-  !mobileNavigation.includes(
-    '<small>POS</small>',
-  ),
+  !mobileNavigation.includes('<small>POS</small>'),
   'POS must not remain as a global mobile navigation item.',
 );
 
 check(
-  !shell.includes(
-    'openPosShortcut',
-  ),
-  'Old global POS shortcut implementation must remain removed.',
+  !shell.includes('openPosShortcut'),
+  'Old global POS shortcut implementation must be removed.',
 );
 
 check(
-  !shell.includes(
-    'aria-label="Open menu"',
-  ),
+  shell.includes("space.type === 'sme'"),
+  'Business shortcut must target SME Business Spaces.',
+);
+
+check(
+  shell.includes('smeSpaces.length === 1')
+    && shell.includes(
+      'navigate(`/spaces/${smeSpaces[0].id}`)',
+    ),
+  'A single Business must open directly.',
+);
+
+check(
+  shell.includes('mobile-business-picker')
+    && shell.includes('businessSpaces.map'),
+  'Multiple Businesses must use the mobile drop-up picker.',
+);
+
+check(
+  !shell.includes('aria-label="Open menu"'),
   'The mobile top hamburger menu must remain removed.',
 );
 
 check(
-  shell.includes(
-    "navigate('/notifications')",
-  )
-    && shell.includes(
-      '<NotificationBellIcon />',
-    ),
-  'Responsive header notification access is missing.',
+  mobileNavigation.includes("navigate('/?quick=1')"),
+  'Mobile Add must keep opening the quick money action.',
 );
 
 check(
-  morePage.includes(
-    'orderedNavigation(personalisation)',
-  )
-    && morePage.includes(
-      'visibleNavigation.map',
-    ),
+  mobileNavigation.includes('to="/notifications"'),
+  'Mobile Alerts destination is missing.',
+);
+
+check(
+  mobileNavigation.includes('<NotificationBellIcon />'),
+  'Mobile Alerts must retain the notification bell.',
+);
+
+check(
+  mobileNavigation.includes('unreadNotifications > 0'),
+  'Mobile Alerts must retain the unread badge.',
+);
+
+check(
+  mobileNavigation.includes('to="/more"'),
+  'Mobile More destination is missing.',
+);
+
+check(
+  morePage.includes('orderedNavigation(personalisation)')
+    && morePage.includes('visibleNavigation.map'),
   'More must show the personalized main navigation.',
 );
 
 check(
-  morePage.includes(
-    'secondaryNavigation(personalisation)',
-  )
-    && morePage.includes(
-      'secondaryTools.map',
-    ),
+  morePage.includes('secondaryNavigation(personalisation)')
+    && morePage.includes('secondaryTools.map'),
   'More must show hidden More tools.',
 );
 
 check(
-  morePage.includes(
-    '<SidebarCustomizer',
-  )
-    && morePage.includes(
-      'Customize menu',
-    ),
+  morePage.includes('<SidebarCustomizer')
+    && morePage.includes('Customize menu'),
   'More must provide menu customization.',
 );
 
 check(
-  morePage.includes(
-    'void logOut()',
-  )
-    && morePage.includes(
-      'Sign out',
-    ),
+  morePage.includes('void logOut()')
+    && morePage.includes('Sign out'),
   'More must provide account sign out.',
 );
 
 check(
-  morePage.includes(
-    'to="/settings"',
-  )
-    && morePage.includes(
-      'to="/subscription"',
-    ),
+  morePage.includes('to="/settings"')
+    && morePage.includes('to="/subscription"'),
   'More must provide Settings and Subscription.',
 );
 
 check(
-  styles.includes(
-    'v1.11.0 Global Home + mobile navigation',
-  ),
-  'v1.11 Global Home/navigation styles are missing.',
-);
-
-check(
-  styles.includes(
-    'repeat(4, minmax(0, 1fr))',
-  ),
-  'Mobile bottom navigation must use four equal slots.',
+  styles.includes('mobile-business-picker')
+    && styles.includes(
+      'BAJETBN V1.9.8 MOBILE BUSINESS NAV',
+    ),
+  'Mobile Business drop-up styles are missing.',
 );
 
 console.log(
-  `Global navigation cleanup checks passed (${checks} checks): `
-  + 'Home, Spaces, Add, More with responsive-header notifications.',
+  `Global navigation cleanup checks passed (${checks} checks).`,
 );

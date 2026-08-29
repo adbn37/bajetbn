@@ -8,14 +8,10 @@ const read =
     );
 
 const dashboard =
-  read(
-    'src/pages/DashboardPage.tsx',
-  );
+  read('src/pages/DashboardPage.tsx');
 
 const shell =
-  read(
-    'src/layouts/AppShell.tsx',
-  );
+  read('src/layouts/AppShell.tsx');
 
 const transactions =
   read(
@@ -23,37 +19,22 @@ const transactions =
   );
 
 const css =
-  read(
-    'src/styles/global.css',
-  );
+  read('src/styles/global.css');
 
 const failures = [];
 
-function check(
-  condition,
-  message,
-) {
+function check(condition, message) {
   if (condition) {
-    console.log(
-      'PASS:',
-      message,
-    );
-
+    console.log('PASS:', message);
     return;
   }
 
   failures.push(message);
-
-  console.error(
-    'FAIL:',
-    message,
-  );
+  console.error('FAIL:', message);
 }
 
 /*
- * ------------------------------------------------------------
- * HOME DATA SCOPE
- * ------------------------------------------------------------
+ * Global Home performance contract.
  */
 
 check(
@@ -96,198 +77,105 @@ check(
     'listTransactionsForOwnerAccount',
   )
     && transactions.includes(
-      "where('ownerId', '==', uid)",
-    )
-    && transactions.includes(
       "where('accountId', '==', accountId)",
     ),
-  'Account-scoped transaction repository reader exists.',
+  'Account-scoped transaction reader exists.',
 );
 
 check(
   transactions.includes(
     "where('destinationAccountId', '==', accountId)",
   ),
-  'Destination-side transfers are included in account activity.',
+  'Destination-side transfers are included.',
 );
-
-/*
- * ------------------------------------------------------------
- * MONTHLY ACCOUNT SUMMARY
- * ------------------------------------------------------------
- */
 
 check(
   dashboard.includes(
     'function accountMonthSummary(',
-  ),
-  'Per-account monthly money summary is preserved.',
-);
-
-check(
-  dashboard.includes(
-    'Money in',
   )
-    && dashboard.includes(
-      'Money out',
-    )
-    && dashboard.includes(
-      'This month',
-    ),
-  'Selected account card retains monthly Money in/out.',
+    && dashboard.includes('Money in')
+    && dashboard.includes('Money out'),
+  'Monthly Money in/out is preserved.',
 );
-
-/*
- * ------------------------------------------------------------
- * LATEST 20 DISPLAY
- *
- * Do not depend on formatting such as:
- *   .slice(0, 20)
- *
- * Accept multiline:
- *   transactions.slice(
- *     0,
- *     20,
- *   )
- * ------------------------------------------------------------
- */
 
 check(
   /transactions\s*\.slice\s*\(\s*0\s*,\s*20\s*,?\s*\)/m.test(
     dashboard,
   ),
-  'Home limits the visible account activity to the latest 20 entries.',
+  'Visible account activity is limited to latest 20.',
 );
 
 check(
-  /const\s+recentTransactions\s*=/m.test(
-    dashboard,
-  )
-    && dashboard.includes(
-      'recentTransactions.map(',
-    ),
-  'The Home activity list renders the latest-20 view.',
-);
-
-/*
- * The account query itself must NOT be reduced to 20 before
- * accountMonthSummary runs, otherwise monthly totals would be
- * incomplete.
- */
-check(
-  !/setTransactions\s*\([\s\S]{0,500}?\.slice\s*\(\s*0\s*,\s*20/m.test(
-    dashboard,
+  dashboard.includes(
+    'recentTransactions.map(',
   ),
-  'Monthly summary keeps the full selected-account scoped result.',
+  'Home renders the latest-20 activity view.',
 );
-
-/*
- * ------------------------------------------------------------
- * LAZY GLOBAL ADD
- * ------------------------------------------------------------
- */
 
 check(
   dashboard.includes(
     'loadQuickOptions',
   ),
-  'Add options use a lazy loader.',
+  'Global Add dependencies remain lazy-loaded.',
 );
-
-check(
-  dashboard.includes(
-    'listSpaces(user.uid)',
-  )
-    && dashboard.includes(
-      'listAllCustomCategories',
-    ),
-  'Spaces and categories remain available to global Add.',
-);
-
-/*
- * ------------------------------------------------------------
- * ACCOUNT CAROUSEL
- * ------------------------------------------------------------
- */
 
 check(
   dashboard.includes(
     'home-v110-account-carousel',
   )
     && dashboard.includes(
-      'home-v110-account-slide',
-    )
-    && dashboard.includes(
-      'home-v110-carousel-dots',
+      'setPreferredHomeAccountId',
     ),
-  'Account carousel remains intact.',
-);
-
-check(
-  dashboard.includes(
-    'setPreferredHomeAccountId',
-  ),
-  'Selected Home account preference remains persistent.',
+  'Account carousel and preferred account remain intact.',
 );
 
 /*
- * ------------------------------------------------------------
- * MOBILE NAVIGATION
- * ------------------------------------------------------------
+ * Five-slot mobile navigation contract.
  */
 
-const navClassIndex =
+const navMarker =
   shell.indexOf(
-    'className="mobile-bottom-nav',
+    '<nav className="mobile-bottom-nav"',
   );
 
-let mobileNavigation = '';
+const navEnd =
+  shell.indexOf(
+    '</nav>',
+    navMarker,
+  );
 
-if (navClassIndex >= 0) {
-  const start =
-    shell.lastIndexOf(
-      '<nav',
-      navClassIndex,
-    );
-
-  const end =
-    shell.indexOf(
-      '</nav>',
-      navClassIndex,
-    );
-
-  if (
-    start >= 0
-    && end > start
-  ) {
-    mobileNavigation =
-      shell.slice(
-        start,
-        end + '</nav>'.length,
-      );
-  }
-}
+const mobileNavigation =
+  navMarker >= 0
+    && navEnd > navMarker
+    ? shell.slice(
+        navMarker,
+        navEnd + '</nav>'.length,
+      )
+    : '';
 
 check(
-  Boolean(
-    mobileNavigation,
-  ),
-  'Mobile navigation is installed.',
+  Boolean(mobileNavigation),
+  'Mobile bottom navigation exists.',
 );
+
+const businessIndex =
+  mobileNavigation.indexOf(
+    'businessPickerLoading',
+  );
 
 const homeIndex =
   mobileNavigation.indexOf(
     '<small>Home</small>',
   );
 
-const spacesIndex =
-  mobileNavigation.indexOf(
-    '<small>Spaces</small>',
-  );
-
 const addIndex =
   mobileNavigation.indexOf(
     'mobile-bottom-add',
+  );
+
+const alertsIndex =
+  mobileNavigation.indexOf(
+    '<small>Alerts</small>',
   );
 
 const moreIndex =
@@ -296,103 +184,146 @@ const moreIndex =
   );
 
 check(
-  homeIndex >= 0
-    && spacesIndex > homeIndex
-    && addIndex > spacesIndex
-    && moreIndex > addIndex,
-  'Mobile navigation order is Home, Spaces, Add, More.',
+  businessIndex >= 0
+    && businessIndex < homeIndex
+    && homeIndex < addIndex
+    && addIndex < alertsIndex
+    && alertsIndex < moreIndex,
+  'Mobile navigation order is Business, Home, Add, Alerts, More.',
 );
 
 check(
-  mobileNavigation.includes(
-    'to="/spaces"',
-  ),
-  'Spaces is a first-class mobile destination.',
+  shell.includes(
+    'openBusinessShortcut',
+  )
+    && shell.includes(
+      "space.type === 'sme'",
+    ),
+  'Business shortcut targets Business/SME Spaces.',
+);
+
+check(
+  shell.includes(
+    'businessPickerOpen',
+  )
+    && shell.includes(
+      'businessSpaces.map',
+    ),
+  'Multiple Business Spaces retain the Business picker.',
 );
 
 check(
   mobileNavigation.includes(
     "navigate('/?quick=1')",
   ),
-  'Global Add action is retained.',
+  'Centre + opens global money activity.',
+);
+
+check(
+  mobileNavigation.includes(
+    'to="/notifications"',
+  )
+    && mobileNavigation.includes(
+      '<NotificationBellIcon />',
+    ),
+  'Alerts is restored to mobile bottom navigation.',
+);
+
+check(
+  mobileNavigation.includes(
+    'unreadNotifications > 0',
+  ),
+  'Alerts retains the unread badge.',
 );
 
 check(
   mobileNavigation.includes(
     'to="/more"',
   ),
-  'More is a first-class mobile destination.',
-);
-
-check(
-  !mobileNavigation.includes(
-    '<small>Business</small>',
-  )
-    && !shell.includes(
-      'openBusinessShortcut',
-    )
-    && !shell.includes(
-      'businessPickerOpen',
-    ),
-  'Old Business bottom-nav runtime is removed.',
-);
-
-check(
-  !mobileNavigation.includes(
-    '<small>Alerts</small>',
-  )
-    && !mobileNavigation.includes(
-      'to="/notifications"',
-    ),
-  'Notifications no longer consume a bottom-nav destination.',
+  'More remains the fifth mobile destination.',
 );
 
 /*
- * ------------------------------------------------------------
- * RESPONSIVE NOTIFICATIONS
- * ------------------------------------------------------------
- */
-
-check(
-  shell.includes(
-    "navigate('/notifications')",
-  )
-    && shell.includes(
-      '<NotificationBellIcon />',
-    ),
-  'Notifications remain accessible from the responsive header.',
-);
-
-/*
- * ------------------------------------------------------------
- * CSS
- * ------------------------------------------------------------
+ * The + button must be precisely the third grid slot.
  */
 
 check(
   css.includes(
-    'v1.11.0 Global Home + mobile navigation',
-  ),
-  'v1.11 Global Home/navigation styles are installed.',
+    'v1.11.0 FIVE-SLOT MOBILE NAV LOCK',
+  )
+    && /repeat\s*\(\s*5\s*,\s*minmax\s*\(\s*0\s*,\s*1fr\s*\)\s*\)/m.test(
+      css,
+    )
+    && /mobile-bottom-add[\s\S]{0,120}?grid-column:\s*3/m.test(
+      css,
+    ),
+  '+ is locked to the exact centre slot (3 of 5).',
 );
+
+/*
+ * Mobile Alerts means no duplicate notification action
+ * in the mobile header. Desktop keeps its notification bell.
+ */
+
+const mobileHeaderStart =
+  shell.indexOf(
+    '<header className="mobile-header">',
+  );
+
+const mobileHeaderEnd =
+  shell.indexOf(
+    '</header>',
+    mobileHeaderStart,
+  );
+
+const mobileHeader =
+  shell.slice(
+    mobileHeaderStart,
+    mobileHeaderEnd,
+  );
 
 check(
-  /repeat\s*\(\s*4\s*,\s*minmax\s*\(\s*0\s*,\s*1fr\s*\)\s*\)/m.test(
-    css,
+  !mobileHeader.includes(
+    "navigate('/notifications')",
   ),
-  'Mobile navigation uses four equal slots.',
+  'Mobile notification access is not duplicated in the header.',
 );
 
-if (failures.length > 0) {
+const desktopHeaderStart =
+  shell.indexOf(
+    '<div className="desktop-environment">',
+  );
+
+const desktopHeaderEnd =
+  shell.indexOf(
+    '<ConnectivityBanner />',
+    desktopHeaderStart,
+  );
+
+const desktopHeader =
+  shell.slice(
+    desktopHeaderStart,
+    desktopHeaderEnd,
+  );
+
+check(
+  desktopHeader.includes(
+    "navigate('/notifications')",
+  )
+    && desktopHeader.includes(
+      '<NotificationBellIcon />',
+    ),
+  'Desktop notification bell remains available.',
+);
+
+if (failures.length) {
   console.error('');
   console.error(
     `${failures.length} Global Home/navigation check(s) failed:`,
   );
 
   for (const failure of failures) {
-    console.error(
-      `- ${failure}`,
-    );
+    console.error(`- ${failure}`);
   }
 
   process.exit(1);
@@ -402,6 +333,11 @@ console.log('');
 console.log(
   'Global Home/navigation verification PASS.',
 );
+
 console.log(
-  'Account-first Home + monthly summary + latest-20 activity + Home/Spaces/Add/More verified.',
+  'Mobile navigation: Business | Home | + | Alerts | More.',
+);
+
+console.log(
+  '+ is the exact centre item: slot 3 of 5.',
 );

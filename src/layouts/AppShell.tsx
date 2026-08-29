@@ -7,6 +7,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { subscribeUserNotifications } from '../repositories/collaborationRepository';
 import { listenForForegroundPush } from '../repositories/notificationRepository';
+import { listSpaces } from '../repositories/spaceRepository';
+import type { Space } from '../types/models';
 import { planLabel } from '../services/entitlements';
 import { SidebarCustomizer } from '../components/SidebarCustomizer';
 import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
@@ -55,6 +57,10 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [businessSpaces, setBusinessSpaces] = useState<Space[]>([]);
+  const [businessPickerOpen, setBusinessPickerOpen] = useState(false);
+  const [businessPickerLoading, setBusinessPickerLoading] = useState(false);
+  const [businessPickerError, setBusinessPickerError] = useState('');
   const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
   const [menuCustomizerOpen, setMenuCustomizerOpen] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
@@ -168,6 +174,48 @@ export function AppShell() {
     return () => { active = false; stop(); };
   }, [navigate, profile?.browserPushEnabled]);
 
+  async function openBusinessShortcut() {
+    if (!user || businessPickerLoading) return;
+
+    setBusinessPickerLoading(true);
+    setBusinessPickerError('');
+    setBusinessPickerOpen(false);
+
+    try {
+      const accessibleSpaces = await listSpaces(user.uid);
+      const smeSpaces = accessibleSpaces.filter(
+        (space) => space.type === 'sme' && !space.archivedAt,
+      );
+
+      setBusinessSpaces(smeSpaces);
+
+      if (smeSpaces.length === 0) {
+        navigate('/spaces');
+        return;
+      }
+
+      if (smeSpaces.length === 1) {
+        navigate(`/spaces/${smeSpaces[0].id}`);
+        return;
+      }
+
+      setBusinessPickerOpen(true);
+    } catch {
+      setBusinessSpaces([]);
+      setBusinessPickerError(
+        'Your Business Spaces could not be loaded. Open Spaces and try again.',
+      );
+      setBusinessPickerOpen(true);
+    } finally {
+      setBusinessPickerLoading(false);
+    }
+  }
+
+  function chooseBusinessSpace(space: Space) {
+    setBusinessPickerOpen(false);
+    setBusinessPickerError('');
+    navigate(`/spaces/${space.id}`);
+  }
   function submitSearch(event: FormEvent) {
     event.preventDefault();
     const query = searchText.trim();
@@ -304,35 +352,7 @@ export function AppShell() {
         <header className="mobile-header">
 
           <Brand compact />
-          <div className="mobile-header-actions">
-            <button
-              className="icon-button"
-              onClick={() => navigate('/search')}
-              aria-label="Search"
-            >
-              ⌕
-            </button>
-
-            <button
-              className="icon-button notification-button"
-              onClick={() => navigate('/notifications')}
-              aria-label={`${unreadNotifications} unread notifications`}
-            >
-              <NotificationBellIcon />
-
-              {unreadNotifications > 0 && (
-                <span className="notification-count">
-                  {unreadNotifications > 99
-                    ? '99+'
-                    : unreadNotifications}
-                </span>
-              )}
-            </button>
-
-            <span className="environment-badge">
-              {import.meta.env.VITE_APP_ENV || 'local'}
-            </span>
-          </div>
+          <div className="mobile-header-actions"><button className="icon-button" onClick={() => navigate('/search')} aria-label="Search">⌕</button><span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span></div>
         </header>
         <div className="desktop-environment">
           <form className="top-search-form" onSubmit={submitSearch}><span>⌕</span><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search BajetBN" aria-label="Search BajetBN" /></form>
@@ -362,48 +382,55 @@ export function AppShell() {
         <Outlet />
         <ContextualHelp />
 
-        <nav
-          className="mobile-bottom-nav mobile-bottom-nav-v111"
-          aria-label="Quick navigation"
-        >
+        <nav className="mobile-bottom-nav" aria-label="Quick navigation">
+          <button
+            type="button"
+            className={businessPickerOpen ? 'active' : ''}
+            onClick={() => void openBusinessShortcut()}
+            aria-label="Open Business"
+            aria-expanded={businessPickerOpen}
+          >
+            <span aria-hidden="true">▦</span>
+            <small>{businessPickerLoading ? 'Loading…' : 'Business'}</small>
+          </button>
+
           <NavLink
             to="/"
             end
-            className={({ isActive }) =>
-              isActive ? 'active' : ''
-            }
+            className={({ isActive }) => isActive ? 'active' : ''}
           >
             <span aria-hidden="true">⌂</span>
             <small>Home</small>
           </NavLink>
 
-          <NavLink
-            to="/spaces"
-            className={({ isActive }) =>
-              isActive ? 'active' : ''
-            }
-          >
-            <span aria-hidden="true">▦</span>
-            <small>Spaces</small>
-          </NavLink>
+
 
           <button
             type="button"
             className="mobile-bottom-add"
-            onClick={() =>
-              navigate('/?quick=1')
-            }
-            aria-label="Add money activity"
+            onClick={() => navigate('/?quick=1')}
+            aria-label="Add income or expense"
           >
             <span aria-hidden="true">+</span>
             <small>Add</small>
           </button>
 
           <NavLink
+            to="/notifications"
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span className="mobile-bottom-alert-icon" aria-hidden="true">
+              <NotificationBellIcon />
+              {unreadNotifications > 0 && (
+                <b>{unreadNotifications > 9 ? '9+' : unreadNotifications}</b>
+              )}
+            </span>
+            <small>Alerts</small>
+          </NavLink>
+
+          <NavLink
             to="/more"
-            className={({ isActive }) =>
-              isActive ? 'active' : ''
-            }
+            className={({ isActive }) => isActive ? 'active' : ''}
           >
             <span aria-hidden="true">☷</span>
             <small>More</small>
@@ -417,6 +444,89 @@ export function AppShell() {
           />
         )}
 
+        {businessPickerOpen && (
+          <>
+            <button
+              type="button"
+              className="mobile-business-picker-backdrop"
+              aria-label="Close business menu"
+              onClick={() => {
+                setBusinessPickerOpen(false);
+                setBusinessPickerError('');
+              }}
+            />
+
+            <section
+              className="mobile-business-picker"
+              aria-label="Choose a Business"
+            >
+              <header className="mobile-business-picker-header">
+                <div>
+                  <small>Business</small>
+                  <strong>
+                    {businessPickerError
+                      ? 'Business unavailable'
+                      : 'Choose a Business'}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Close business menu"
+                  onClick={() => {
+                    setBusinessPickerOpen(false);
+                    setBusinessPickerError('');
+                  }}
+                >
+                  ×
+                </button>
+              </header>
+
+              {businessPickerError ? (
+                <div className="notice error">
+                  {businessPickerError}
+                </div>
+              ) : (
+                <div className="mobile-business-picker-list">
+                  {businessSpaces.map((space) => (
+                    <button
+                      type="button"
+                      key={space.id}
+                      className="mobile-business-picker-option"
+                      onClick={() => chooseBusinessSpace(space)}
+                    >
+                      <span className="space-icon sme" aria-hidden="true">
+                        B
+                      </span>
+
+                      <span>
+                        <strong>{space.name}</strong>
+                        <small>
+                          Business Space · {space.currency}
+                        </small>
+                      </span>
+
+                      <b aria-hidden="true">›</b>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="mobile-business-picker-all"
+                onClick={() => {
+                  setBusinessPickerOpen(false);
+                  setBusinessPickerError('');
+                  navigate('/spaces');
+                }}
+              >
+                View all Spaces
+                <span aria-hidden="true">›</span>
+              </button>
+            </section>
+          </>
+        )}
       </div>
     </div>
   );
