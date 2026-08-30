@@ -13,7 +13,7 @@ function expect(condition, message) {
 }
 
 for (const token of [
-  'SME Operations',
+  'Business Overview',
   'Needs Attention',
   'Your daily focus',
   "role === 'owner'",
@@ -30,7 +30,7 @@ for (const token of [
 ]) {
   expect(
     command.includes(token),
-    `SME Operations Command Centre is missing: ${token}`,
+    `SME Business Overview is missing: ${token}`,
   );
 }
 
@@ -108,7 +108,7 @@ expect(
 expect(
   !command.includes('window.confirm(')
     && !command.includes('window.alert('),
-  'SME Operations must not use browser-native confirmation.',
+  'SME Business Overview must not use browser-native confirmation.',
 );
 
-console.log('SME v2 Slice 1 Operations Command Centre checks passed.');
+console.log('SME v2 Slice 1 Business Overview checks passed.');

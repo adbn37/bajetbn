@@ -260,7 +260,7 @@ export function SpaceActionHub({
           >
             <ShortcutLink
               to={`/spaces/${space.id}?details=1`}
-              label="Operations"
+              label="Business Overview"
               primary
             />
 
@@ -268,6 +268,20 @@ export function SpaceActionHub({
               to={`/spaces/${space.id}/pos`}
               label={smePosLabel(smePosRole)}
             />
+
+            {space.ownerId === user?.uid && (
+              <>
+                <ShortcutLink
+                  to={`/spaces/${space.id}?section=accounts`}
+                  label="Business Accounts"
+                />
+
+                <ShortcutLink
+                  to={`/spaces/${space.id}/business`}
+                  label="Business Admin"
+                />
+              </>
+            )}
 
             <ShortcutButton
               label="Tasks"
@@ -633,35 +647,10 @@ export function SpaceActionHub({
 
               {space.type === 'sme' && (
                 <>
-                  <ShortcutLink
-                    to={`/spaces/${space.id}?details=1`}
-                    label="Business Operations"
-                    onClick={() => setSpaceMoreOpen(false)}
-                  />
 
-                  <ShortcutLink
-                    to={`/spaces/${space.id}/pos`}
-                    label={smePosLabel(smePosRole)}
-                    onClick={() => setSpaceMoreOpen(false)}
-                  />
 
                   {canViewSmeFinancials && (
                     <>
-                      {space.ownerId === user?.uid && (
-                        <>
-                          <ShortcutLink
-                            to="/accounts"
-                            label="Business Accounts"
-                            onClick={() => setSpaceMoreOpen(false)}
-                          />
-
-                          <ShortcutLink
-                            to={'/spaces/' + space.id + '/business'}
-                            label="Business Admin"
-                            onClick={() => setSpaceMoreOpen(false)}
-                          />
-                        </>
-                      )}
 
                       <ShortcutLink
                         to={`/spaces/${space.id}?section=reports`}

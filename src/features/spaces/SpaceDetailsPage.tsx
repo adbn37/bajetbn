@@ -1188,7 +1188,10 @@ function SpaceOverview({
   ].filter((item) => Boolean(item.date)).sort((a, b) => a.date.localeCompare(b.date));
 
   const sectionTitle: Record<SpaceOverviewSection, string> = {
-    accounts: 'Accounts',
+    accounts:
+      space.type === 'sme'
+        ? 'Business Accounts'
+        : 'Accounts',
     income: 'Income',
     expenses: 'Expenses',
     money: 'Money activity',
@@ -1450,8 +1453,16 @@ function SpaceOverview({
                 )
               : (
                 <EmptyState
-                  title="No accounts in this Personal Space"
-                  description="Create or assign an account to this Personal Space to start tracking money here."
+                  title={
+                    space.type === 'sme'
+                      ? 'No business accounts in this Space'
+                      : 'No accounts in this Space'
+                  }
+                  description={
+                    space.type === 'sme'
+                      ? `Create or assign a Business Account to ${space.name} to keep business money inside this SME Space.`
+                      : 'Create or assign an account to this Space to start tracking money here.'
+                  }
                 />
               )}
           </div>

@@ -34,9 +34,9 @@ function roleLabel(role: SmePosRole | null) {
 function roleFocus(role: SmePosRole | null) {
   if (role === 'owner') {
     return {
-      title: 'Business operations',
+      title: 'Owner overview',
       detail: 'See business money and stay on top of daily shop operations.',
-      action: 'Open operations',
+      action: 'Open POS & Operations',
     };
   }
 
@@ -150,7 +150,7 @@ const activeCommitments = commitments.filter(
       <div className="sme-operations-heading">
         <div>
           <span className="eyebrow">SME v2</span>
-          <h2>SME Operations</h2>
+          <h2>Business Overview</h2>
           <p className="muted">
             Your Space home follows your business role. The existing POS remains
             the source of truth for what you can open and change.
@@ -216,8 +216,11 @@ const activeCommitments = commitments.filter(
               </div>
 
               {role === 'owner' && (
-                <Link className="text-button" to="/accounts">
-                  Manage accounts
+                <Link
+                  className="text-button"
+                  to={`/spaces/${space.id}?section=accounts`}
+                >
+                  Open accounts
                 </Link>
               )}
             </div>

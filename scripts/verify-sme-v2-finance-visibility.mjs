@@ -38,7 +38,7 @@ for (const token of [
   'Cash, bank and other business accounts assigned directly to',
   'POS payments enabled',
   'POS payments off',
-  'Manage accounts',
+  'Open accounts',
   'No business account is assigned to this SME yet.',
   'Assigned to this SME',
 ]) {
@@ -47,6 +47,18 @@ for (const token of [
     `Missing SME account visibility token: ${token}`,
   );
 }
+
+expect(
+  command.includes(
+    'to={`/spaces/${space.id}?section=accounts`}',
+  ),
+  'SME Business Accounts must stay inside the current SME Space.',
+);
+
+expect(
+  !command.includes('to="/accounts"'),
+  'SME Business Accounts must not escape to the global Accounts page.',
+);
 
 expect(
   command.includes(

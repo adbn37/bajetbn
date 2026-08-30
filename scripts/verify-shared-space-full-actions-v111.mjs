@@ -259,9 +259,12 @@ check(
     'label="Business Accounts"',
   )
     && hub.includes(
+      'to={`/spaces/${space.id}?section=accounts`}',
+    )
+    && !hub.includes(
       'to="/accounts"',
     ),
-  'SME Business Accounts opens full account management.',
+  'SME Business Accounts stays inside the current SME Space.',
 );
 
 check(

@@ -100,8 +100,10 @@ check(
 
 check(
   hub.includes('label="Business Admin"')
-    && hub.includes("'/business'"),
-  'SME Space More exposes Business Admin.',
+    && hub.includes(
+      'to={`/spaces/${space.id}/business`}',
+    ),
+  'SME Space home exposes Business Admin for the current business.',
 );
 
 check(

@@ -102,15 +102,33 @@ check(
     'data-space-launcher="sme"',
   )
     && hub.includes(
-      'label="Operations"',
+      'label="Business Overview"',
+    )
+    && hub.includes(
+      "'POS & Operations'",
+    )
+    && hub.includes(
+      'label="Business Accounts"',
+    )
+    && hub.includes(
+      'label="Business Admin"',
     )
     && hub.includes(
       'label="Tasks"',
     )
     && hub.includes(
       'label="Purchase List"',
+    )
+    && hub.includes(
+      'to={`/spaces/${space.id}?section=accounts`}',
+    )
+    && hub.includes(
+      'to={`/spaces/${space.id}/business`}',
+    )
+    && !hub.includes(
+      'to="/accounts"',
     ),
-  'Phase 6: SME operations-first home complete.',
+  'Phase 6: SME business-space-first home complete.',
 );
 
 check(
@@ -256,7 +274,7 @@ console.log(
 );
 
 console.log(
-  ' BAJETBN v1.11.0 SPACE-FIRST PROGRAM: PASS',
+  ' BAJETBN v1.12.0 SPACE-FIRST PROGRAM: PASS',
 );
 
 console.log(
