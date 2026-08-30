@@ -283,15 +283,27 @@ check(
   'Space replaces Alerts in mobile bottom slot four.',
 );
 
+const stagingAcceptance =
+  scope.items.find(
+    (item) =>
+      item.id ===
+        'release.v114_staging_acceptance',
+  );
+
 check(
   scope.items.every(
     (item) =>
-      item.id ===
-        'release.v114_staging_acceptance'
-        ? item.status === 'planned'
-        : item.status === 'complete',
-  ),
-  'v1.14 implementation is complete with staging acceptance still pending.',
+      item.status === 'complete',
+  )
+    && stagingAcceptance?.acceptedCandidate ===
+      '34ea41b55c0d849a7793452914b86df3f6d79b02'
+    && stagingAcceptance?.acceptedAt ===
+      '2026-08-31'
+    && stagingAcceptance?.ciRunId ===
+      33322670991
+    && stagingAcceptance?.ownerAcceptance ===
+      'pass',
+  'v1.14 staging acceptance is recorded against the verified runtime candidate.',
 );
 
 check(

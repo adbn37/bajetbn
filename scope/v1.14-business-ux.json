@@ -26,7 +26,11 @@
     {
       "id": "release.v114_staging_acceptance",
       "title": "Integrated v1.14 staging deployment and owner acceptance",
-      "status": "planned"
+      "status": "complete",
+      "acceptedCandidate": "34ea41b55c0d849a7793452914b86df3f6d79b02",
+      "acceptedAt": "2026-08-31",
+      "ciRunId": 33322670991,
+      "ownerAcceptance": "pass"
     }
   ],
   "excluded": [
