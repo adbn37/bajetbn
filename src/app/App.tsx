@@ -26,6 +26,7 @@ const BusinessAdvancedPage = lazy(() => import('../features/business/BusinessAdv
 const BusinessInvoicesPage = lazy(() => import('../features/business/BusinessInvoicesPage').then((module) => ({ default: module.BusinessInvoicesPage })));
 const BusinessAccountingPage = lazy(() => import('../features/business/BusinessAccountingPage').then((module) => ({ default: module.BusinessAccountingPage })));
 const BusinessTaxPage = lazy(() => import('../features/business/BusinessTaxPage').then((module) => ({ default: module.BusinessTaxPage })));
+const BusinessPayrollPage = lazy(() => import('../features/business/BusinessPayrollPage').then((module) => ({ default: module.BusinessPayrollPage })));
 const SmePosPage = lazy(() => import('../features/sme-pos/SmePosPage').then((module) => ({ default: module.SmePosPage })));
 const SmePosSettingsPage = lazy(() => import('../features/sme-pos/SmePosSettingsPage').then((module) => ({ default: module.SmePosSettingsPage })));
 const SmePosArchivedRecordsPage = lazy(() => import('../features/sme-pos/SmePosArchivedRecordsPage').then((module) => ({ default: module.SmePosArchivedRecordsPage })));
@@ -87,6 +88,7 @@ export default function App() {
                   <Route path="spaces/:spaceId/business/invoices" element={<BusinessInvoicesPage />} />
                   <Route path="spaces/:spaceId/business/accounting" element={<BusinessAccountingPage />} />
                   <Route path="spaces/:spaceId/business/tax" element={<BusinessTaxPage />} />
+                  <Route path="spaces/:spaceId/business/payroll" element={<BusinessPayrollPage />} />
                   <Route path="spaces/:spaceId/pos" element={<SmePosPage />} />
                   <Route path="spaces/:spaceId/pos/settings" element={<SmePosSettingsPage />} />
                   <Route path="spaces/:spaceId/pos/archived" element={<SmePosArchivedRecordsPage />} />

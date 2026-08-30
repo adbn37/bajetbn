@@ -640,6 +640,180 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /businessEmployees/{employeeId} {
+      allow read: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && isSpaceOwner(resource.data.spaceId);
+
+      allow create: if signedIn()
+        && isSmeSpace(request.resource.data.spaceId)
+        && isSpaceOwner(request.resource.data.spaceId)
+        && request.resource.data.keys().hasOnly([
+          'displayId', 'spaceId', 'ownerId',
+          'name', 'roleTitle', 'employeeNumber', 'phone',
+          'monthlyWageMinor', 'currency',
+          'archivedAt', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.displayId is string
+        && request.resource.data.displayId.size() > 0
+        && request.resource.data.displayId.size() <= 80
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.roleTitle is string
+        && request.resource.data.roleTitle.size() <= 120
+        && request.resource.data.employeeNumber is string
+        && request.resource.data.employeeNumber.size() <= 80
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 80
+        && request.resource.data.monthlyWageMinor is int
+        && request.resource.data.monthlyWageMinor >= 0
+        && request.resource.data.currency is string
+        && request.resource.data.currency.size() > 0
+        && request.resource.data.currency.size() <= 10
+        && request.resource.data.archivedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && isSpaceOwner(resource.data.spaceId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.spaceId == resource.data.spaceId
+        && request.resource.data.displayId == resource.data.displayId
+        && request.resource.data.currency == resource.data.currency
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'roleTitle', 'employeeNumber',
+          'phone', 'monthlyWageMinor',
+          'archivedAt', 'updatedAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.roleTitle is string
+        && request.resource.data.roleTitle.size() <= 120
+        && request.resource.data.employeeNumber is string
+        && request.resource.data.employeeNumber.size() <= 80
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 80
+        && request.resource.data.monthlyWageMinor is int
+        && request.resource.data.monthlyWageMinor >= 0
+        && (
+          request.resource.data.archivedAt == null
+          || request.resource.data.archivedAt is timestamp
+        )
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    match /businessPayrollRuns/{runId} {
+      allow read: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && isSpaceOwner(resource.data.spaceId);
+
+      allow create: if signedIn()
+        && isSmeSpace(request.resource.data.spaceId)
+        && isSpaceOwner(request.resource.data.spaceId)
+        && request.resource.data.keys().hasOnly([
+          'displayId', 'spaceId', 'ownerId',
+          'employeeId', 'employeeName',
+          'period', 'payDate',
+          'grossMinor', 'deductionsMinor', 'netMinor',
+          'accountId', 'accountName',
+          'currency', 'note',
+          'status', 'transactionId',
+          'idempotencyKey', 'failureReason',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.displayId is string
+        && request.resource.data.displayId.size() > 0
+        && request.resource.data.displayId.size() <= 80
+        && request.resource.data.employeeId is string
+        && request.resource.data.employeeId.size() > 0
+        && request.resource.data.employeeName is string
+        && request.resource.data.employeeName.size() > 0
+        && request.resource.data.employeeName.size() <= 120
+        && request.resource.data.period is string
+        && request.resource.data.period.size() == 7
+        && request.resource.data.payDate is string
+        && request.resource.data.payDate.size() == 10
+        && request.resource.data.grossMinor is int
+        && request.resource.data.grossMinor > 0
+        && request.resource.data.deductionsMinor is int
+        && request.resource.data.deductionsMinor >= 0
+        && request.resource.data.deductionsMinor < request.resource.data.grossMinor
+        && request.resource.data.netMinor == request.resource.data.grossMinor - request.resource.data.deductionsMinor
+        && request.resource.data.accountId is string
+        && request.resource.data.accountId.size() > 0
+        && request.resource.data.accountName is string
+        && request.resource.data.accountName.size() > 0
+        && request.resource.data.accountName.size() <= 160
+        && request.resource.data.currency is string
+        && request.resource.data.currency.size() > 0
+        && request.resource.data.currency.size() <= 10
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 500
+        && request.resource.data.status == 'pending'
+        && request.resource.data.transactionId == null
+        && request.resource.data.idempotencyKey is string
+        && request.resource.data.idempotencyKey.size() > 0
+        && request.resource.data.failureReason == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && isSpaceOwner(resource.data.spaceId)
+        && resource.data.status == 'pending'
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.spaceId == resource.data.spaceId
+        && request.resource.data.displayId == resource.data.displayId
+        && request.resource.data.employeeId == resource.data.employeeId
+        && request.resource.data.employeeName == resource.data.employeeName
+        && request.resource.data.period == resource.data.period
+        && request.resource.data.payDate == resource.data.payDate
+        && request.resource.data.grossMinor == resource.data.grossMinor
+        && request.resource.data.deductionsMinor == resource.data.deductionsMinor
+        && request.resource.data.netMinor == resource.data.netMinor
+        && request.resource.data.accountId == resource.data.accountId
+        && request.resource.data.accountName == resource.data.accountName
+        && request.resource.data.currency == resource.data.currency
+        && request.resource.data.note == resource.data.note
+        && request.resource.data.idempotencyKey == resource.data.idempotencyKey
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'transactionId',
+          'failureReason', 'updatedAt'
+        ])
+        && request.resource.data.status in [
+          'pending', 'posted'
+        ]
+        && (
+          (
+            request.resource.data.status == 'posted'
+            && request.resource.data.transactionId is string
+          )
+          || (
+            request.resource.data.status == 'pending'
+            && request.resource.data.transactionId == null
+          )
+        )
+        && (
+          request.resource.data.failureReason == null
+          || (
+            request.resource.data.failureReason is string
+            && request.resource.data.failureReason.size() <= 1000
+          )
+        )
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
     match /businessContacts/{contactId} {
       allow read: if signedIn()
         && isSpaceMember(resource.data.spaceId);
