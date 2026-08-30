@@ -179,7 +179,10 @@
     {
       "id": "release.final_staging_acceptance",
       "title": "One complete end-to-end staging acceptance after every development item is integrated",
-      "status": "planned"
+      "status": "complete",
+      "acceptedCandidate": "b7b2f6429145fb287cf826ca33fa1ebe67f18cd5",
+      "acceptedAt": "2026-08-30",
+      "acceptance": "Manual integrated staging acceptance passed by the owner on the deployed v1.13 staging build."
     }
   ]
 }

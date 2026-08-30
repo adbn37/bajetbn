@@ -143,13 +143,18 @@ check(
   'Final repository audit has a valid release state.',
 );
 
-check(
-  scope.items.some(
+const finalStagingAcceptance =
+  scope.items.find(
     (item) =>
-      item.id === 'release.final_staging_acceptance'
-      && item.status === 'planned',
-  ),
-  'Final staging acceptance remains open.',
+      item.id === 'release.final_staging_acceptance',
+  );
+
+check(
+  finalStagingAcceptance
+    && ['planned', 'complete'].includes(
+      finalStagingAcceptance.status,
+    ),
+  'Final staging acceptance has a valid release state.',
 );
 
 if (failures.length) {

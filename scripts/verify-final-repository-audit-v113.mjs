@@ -134,6 +134,7 @@ const requiredComplete = [
   'onboarding.guided_setup',
 
   'release.final_repository_audit',
+  'release.final_staging_acceptance',
 ];
 
 for (const id of requiredComplete) {
@@ -150,11 +151,8 @@ const remaining =
   );
 
 check(
-  remaining.length === 1
-    && remaining[0]?.id ===
-      'release.final_staging_acceptance'
-    && remaining[0]?.status === 'planned',
-  'Only final integrated staging acceptance remains.',
+  remaining.length === 0,
+  'All master development and final staging acceptance items are complete.',
 );
 
 // Subscription / Plus / Admin.
@@ -447,5 +445,5 @@ console.log(
 );
 
 console.log(
-  'Only final integrated staging acceptance remains.',
+  'Final integrated staging acceptance is complete.',
 );
