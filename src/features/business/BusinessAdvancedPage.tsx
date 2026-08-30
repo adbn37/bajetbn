@@ -561,6 +561,28 @@ export function BusinessAdvancedPage() {
               >
                 Invoices
               </Link>
+
+              <Link
+                className="button secondary"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/accounting'
+                }
+              >
+                Accounting
+              </Link>
+
+              <Link
+                className="button secondary"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/tax'
+                }
+              >
+                Tax
+              </Link>
             </div>
           </section>
         </>

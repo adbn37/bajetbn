@@ -24,6 +24,8 @@ const CollectionAddItemPage = lazy(() => import('../features/collection/Collecti
 const CollectionItemDetailsPage = lazy(() => import('../features/collection/CollectionItemDetailsPage').then((module) => ({ default: module.CollectionItemDetailsPage })));
 const BusinessAdvancedPage = lazy(() => import('../features/business/BusinessAdvancedPage').then((module) => ({ default: module.BusinessAdvancedPage })));
 const BusinessInvoicesPage = lazy(() => import('../features/business/BusinessInvoicesPage').then((module) => ({ default: module.BusinessInvoicesPage })));
+const BusinessAccountingPage = lazy(() => import('../features/business/BusinessAccountingPage').then((module) => ({ default: module.BusinessAccountingPage })));
+const BusinessTaxPage = lazy(() => import('../features/business/BusinessTaxPage').then((module) => ({ default: module.BusinessTaxPage })));
 const SmePosPage = lazy(() => import('../features/sme-pos/SmePosPage').then((module) => ({ default: module.SmePosPage })));
 const SmePosSettingsPage = lazy(() => import('../features/sme-pos/SmePosSettingsPage').then((module) => ({ default: module.SmePosSettingsPage })));
 const SmePosArchivedRecordsPage = lazy(() => import('../features/sme-pos/SmePosArchivedRecordsPage').then((module) => ({ default: module.SmePosArchivedRecordsPage })));
@@ -83,6 +85,8 @@ export default function App() {
                   <Route path="spaces/:spaceId/collection/items/:itemId" element={<CollectionItemDetailsPage />} />
                   <Route path="spaces/:spaceId/business" element={<BusinessAdvancedPage />} />
                   <Route path="spaces/:spaceId/business/invoices" element={<BusinessInvoicesPage />} />
+                  <Route path="spaces/:spaceId/business/accounting" element={<BusinessAccountingPage />} />
+                  <Route path="spaces/:spaceId/business/tax" element={<BusinessTaxPage />} />
                   <Route path="spaces/:spaceId/pos" element={<SmePosPage />} />
                   <Route path="spaces/:spaceId/pos/settings" element={<SmePosSettingsPage />} />
                   <Route path="spaces/:spaceId/pos/archived" element={<SmePosArchivedRecordsPage />} />
