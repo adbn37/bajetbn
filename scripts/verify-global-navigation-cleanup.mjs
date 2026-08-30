@@ -136,8 +136,8 @@ const homeIndex =
 const addIndex =
   mobileNavigation.indexOf('mobile-bottom-add');
 
-const alertsIndex =
-  mobileNavigation.indexOf('<small>Alerts</small>');
+const spaceIndex =
+  mobileNavigation.indexOf('<small>Space</small>');
 
 const moreIndex =
   mobileNavigation.indexOf('<small>More</small>');
@@ -146,9 +146,9 @@ check(
   businessIndex >= 0
     && businessIndex < homeIndex
     && homeIndex < addIndex
-    && addIndex < alertsIndex
-    && alertsIndex < moreIndex,
-  'Mobile navigation order must remain Business, Home, Add, Alerts, More.',
+    && addIndex < spaceIndex
+    && spaceIndex < moreIndex,
+  'Mobile navigation order must remain Business, Home, Add, Space, More.',
 );
 
 check(
@@ -196,18 +196,19 @@ check(
 );
 
 check(
-  mobileNavigation.includes('to="/notifications"'),
-  'Mobile Alerts destination is missing.',
+  mobileNavigation.includes('to="/spaces"'),
+  'Mobile Space destination is missing.',
 );
 
 check(
-  mobileNavigation.includes('<NotificationBellIcon />'),
-  'Mobile Alerts must retain the notification bell.',
+  mobileNavigation.includes('<small>Space</small>'),
+  'Mobile Space label is missing.',
 );
 
 check(
-  mobileNavigation.includes('unreadNotifications > 0'),
-  'Mobile Alerts must retain the unread badge.',
+  !mobileNavigation.includes('to="/notifications"')
+    && !mobileNavigation.includes('<small>Alerts</small>'),
+  'Alerts must not remain in the mobile bottom navigation.',
 );
 
 check(

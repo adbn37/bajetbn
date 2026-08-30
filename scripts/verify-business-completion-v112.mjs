@@ -193,7 +193,7 @@ check(
       'Business financial report',
     )
     && accounting.includes(
-      'SME ledger',
+      'Business ledger',
     )
     && accounting.includes(
       'businessInvoicePaymentId',

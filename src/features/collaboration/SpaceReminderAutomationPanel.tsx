@@ -349,7 +349,7 @@ export function SpaceReminderAutomationPanel({
       </article>}
 
       {canManage && isSme && <article className="space-automation-card">
-        <span className="eyebrow">SME operations</span>
+        <span className="eyebrow">Business operations</span>
 
         <label className="space-automation-toggle">
           <input

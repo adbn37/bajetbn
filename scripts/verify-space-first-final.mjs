@@ -227,7 +227,7 @@ const navTokens = [
   'Business',
   '<small>Home</small>',
   'mobile-bottom-add',
-  '<small>Alerts</small>',
+  '<small>Space</small>',
   '<small>More</small>',
 ];
 
@@ -251,7 +251,7 @@ for (const token of navTokens) {
 
 check(
   navValid,
-  'Business | Home | + | Alerts | More remains locked.',
+  'Business | Home | + | Space | More remains locked.',
 );
 
 if (failures.length) {

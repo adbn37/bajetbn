@@ -216,7 +216,7 @@ export function SubscriptionPage() {
       <PageHeader
         eyebrow="BajetBN"
         title="Subscription"
-        description="Basic stays free forever. Upgrade to Plus when you need more Spaces, collaboration, SME capacity and storage."
+        description="Basic stays free forever. Upgrade to Plus when you need more Spaces, collaboration, Business capacity and storage."
       />
 
       <section className="subscription-current">
@@ -345,11 +345,11 @@ export function SubscriptionPage() {
           {[
             ['Household Spaces', '1', 'More Spaces'],
             ['Trip Spaces', '1', 'More Spaces'],
-            ['SME Spaces', '1', 'More Spaces'],
-            ['SME inventory', '20 items', 'Expanded limits'],
-            ['SME customers', '10 customers', 'Expanded limits'],
-            ['SME sellers', '3 sellers', 'Expanded limits'],
-            ['SME team', 'Owner + 1 member', 'More team members'],
+            ['Business Spaces', '1', 'More Spaces'],
+            ['Business inventory', '20 items', 'Expanded limits'],
+            ['Business customers', '10 customers', 'Expanded limits'],
+            ['Business sellers', '3 sellers', 'Expanded limits'],
+            ['Business team', 'Owner + 1 member', 'More team members'],
             ['Personal accounts', '2 accounts', 'More accounts'],
             ['Collaboration', 'Basic sharing', 'Expanded collaboration'],
             ['Storage', 'Basic storage', 'More storage'],
@@ -400,7 +400,7 @@ export function SubscriptionPage() {
 
             <span>
               Ideal for getting started with personal,
-              household and small SME budgeting.
+              household and small Business budgeting.
             </span>
           </div>
 

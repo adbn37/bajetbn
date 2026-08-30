@@ -109,13 +109,13 @@ export function SmePosArchivedRecordsPage() {
   }
 
   if (loading) return <main className="page"><div className="loading-panel">Loading archived POS records…</div></main>;
-  if (!space || space.type !== 'sme') return <main className="page"><PageHeader eyebrow="SME POS" title="SME Space required" description="Archived POS records are available inside an SME Space." /><Link className="button primary" to="/spaces">Back to Spaces</Link></main>;
+  if (!space || space.type !== 'sme') return <main className="page"><PageHeader eyebrow="Business POS" title="Business Space required" description="Archived POS records are available inside an Business Space." /><Link className="button primary" to="/spaces">Back to Spaces</Link></main>;
 
   const canRestore = role === 'owner' || role === 'manager';
   const marketplace = mode === 'marketplace_consignment';
 
   return <main className="page">
-    <PageHeader eyebrow="SME POS archive" title="Archived POS records" description={`${marketplace ? 'Seller listings, sellers and customers' : 'Products and customers'} archived from ${space.name}.`} action={<Link className="button secondary" to={`/spaces/${space.id}/pos`}>Back to POS</Link>} />
+    <PageHeader eyebrow="Business POS archive" title="Archived POS records" description={`${marketplace ? 'Seller listings, sellers and customers' : 'Products and customers'} archived from ${space.name}.`} action={<Link className="button secondary" to={`/spaces/${space.id}/pos`}>Back to POS</Link>} />
     {error && <div className="notice error">{error}</div>}{success && <div className="notice success">{success}</div>}
     {!canRestore && <div className="notice">Your POS role does not include archived records.</div>}
 

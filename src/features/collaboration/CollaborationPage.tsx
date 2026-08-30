@@ -659,11 +659,11 @@ export function InviteForm({
   return <form className="form-stack invite-member-form" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
     {checkingBusinessRoles
-      ? <div className="info-banner"><strong>Preparing SME roles</strong><span>Loading this shop's team roles before the invitation is created.</span></div>
+      ? <div className="info-banner"><strong>Preparing Business roles</strong><span>Loading this shop's team roles before the invitation is created.</span></div>
       : businessInvite
-        ? <div className="info-banner"><strong>WhatsApp-first SME invite</strong><span>Choose their shop role, then send the secure invite through WhatsApp. Email is optional and only acts as an extra identity lock when provided.</span></div>
+        ? <div className="info-banner"><strong>WhatsApp-first Business invite</strong><span>Choose their shop role, then send the secure invite through WhatsApp. Email is optional and only acts as an extra identity lock when provided.</span></div>
         : <div className="info-banner"><strong>WhatsApp-first invitations</strong><span>Send the secure link through WhatsApp. Email is optional; if you add one, only that email can accept the invite.</span></div>}
-    {space.type === 'sme' && canAssignPosRole && posChecked && !posMode && <div className="notice">POS is not set up yet. You can invite normal SME Space members here. Set up POS first to invite Cashiers, Stock Staff, or Sellers.</div>}
+    {space.type === 'sme' && canAssignPosRole && posChecked && !posMode && <div className="notice">POS is not set up yet. You can invite normal Business Space members here. Set up POS first to invite Cashiers, Stock Staff, or Sellers.</div>}
     <div className="form-grid">
       <label>WhatsApp number <span className="optional-label">Recommended</span><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} inputMode="tel" placeholder="6738XXXXXX" /><small>Enter their number to open the chat directly, or leave blank to choose a WhatsApp contact.</small></label>
       <label>Email address <span className="optional-label">Optional</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="person@example.com" /><small>Optional security lock. If entered, only this email can accept the invite.</small></label>

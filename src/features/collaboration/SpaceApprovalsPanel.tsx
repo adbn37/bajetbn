@@ -18,8 +18,8 @@ const targetLabels: Record<SpaceApprovalTargetType, string> = {
   contribution_adjustment: 'Contribution adjustment',
   booking: 'Booking',
   household_purchase: 'Household purchase',
-  sme_purchase: 'SME purchase',
-  sme_payout: 'SME payout',
+  sme_purchase: 'Business purchase',
+  sme_payout: 'Business payout',
   custom_action: 'Custom Space action',
   other: 'Other',
 };

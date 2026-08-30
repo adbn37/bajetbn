@@ -25,7 +25,7 @@ const TIPS: ContextualHelpTip[] = [
     eyebrow: 'Spaces',
     title: 'Keep shared money organised',
     body:
-      'Spaces separate different parts of your life. Use them for your household, trips, SME, collections and other shared plans.',
+      'Spaces separate different parts of your life. Use them for your household, trips, Business, collections and other shared plans.',
     actionLabel: 'View Spaces',
     actionPath: '/spaces',
   },
@@ -38,10 +38,10 @@ const TIPS: ContextualHelpTip[] = [
   },
   {
     id: 'pos',
-    eyebrow: 'SME POS',
+    eyebrow: 'Business POS',
     title: 'Record sales from this register',
     body:
-      'Use POS for sales, stock and checkout activity linked to this SME. Seller and inventory records stay connected to the same Space.',
+      'Use POS for sales, stock and checkout activity linked to this Business. Seller and inventory records stay connected to the same Space.',
   },
   {
     id: 'accounts',

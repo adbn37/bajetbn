@@ -53,7 +53,7 @@ const workflows:
       priorities: [
         'Keep Business Accounts separate from personal money.',
         'Use reusable customer and vendor records.',
-        'Record income and expenses inside this SME Space.',
+        'Record income and expenses inside this Business Space.',
         'Review Accounting regularly.',
       ],
       daily: [
@@ -138,7 +138,7 @@ const workflows:
         'Keep renter details reusable.',
         'Use tasks for handover, collection and follow-up.',
         'Use invoices for rental charges when appropriate.',
-        'Record payments and operating costs in this SME Space.',
+        'Record payments and operating costs in this Business Space.',
       ],
       daily: [
         'Review upcoming rental tasks.',
@@ -177,7 +177,7 @@ const workflows:
       description:
         'Start with the core business tools, then use the workflows that match how the business actually runs.',
       priorities: [
-        'Keep business money inside this SME Space.',
+        'Keep business money inside this Business Space.',
         'Use customer and vendor records when repeat contact matters.',
         'Use tasks and purchase lists for operational work.',
         'Review Accounting before adding unnecessary process.',
@@ -310,8 +310,8 @@ export function BusinessIndustryPage() {
       <main className="page">
         <PageHeader
           eyebrow="Business workflow"
-          title="SME Space not found"
-          description="Open an SME Space to view its business workflow."
+          title="Business Space not found"
+          description="Open an Business Space to view its business workflow."
         />
       </main>
     );

@@ -173,9 +173,9 @@ const addIndex =
     'mobile-bottom-add',
   );
 
-const alertsIndex =
+const spaceIndex =
   mobileNavigation.indexOf(
-    '<small>Alerts</small>',
+    '<small>Space</small>',
   );
 
 const moreIndex =
@@ -187,9 +187,9 @@ check(
   businessIndex >= 0
     && businessIndex < homeIndex
     && homeIndex < addIndex
-    && addIndex < alertsIndex
-    && alertsIndex < moreIndex,
-  'Mobile navigation order is Business, Home, Add, Alerts, More.',
+    && addIndex < spaceIndex
+    && spaceIndex < moreIndex,
+  'Mobile navigation order is Business, Home, Add, Space, More.',
 );
 
 check(
@@ -221,19 +221,12 @@ check(
 
 check(
   mobileNavigation.includes(
-    'to="/notifications"',
+    'to="/spaces"',
   )
     && mobileNavigation.includes(
-      '<NotificationBellIcon />',
+      '<small>Space</small>',
     ),
-  'Alerts is restored to mobile bottom navigation.',
-);
-
-check(
-  mobileNavigation.includes(
-    'unreadNotifications > 0',
-  ),
-  'Alerts retains the unread badge.',
+  'Space is the fourth mobile destination.',
 );
 
 check(
@@ -261,8 +254,9 @@ check(
 );
 
 /*
- * Mobile Alerts means no duplicate notification action
- * in the mobile header. Desktop keeps its notification bell.
+ * Mobile Alerts lives in the header.
+ * Environment labels are hidden from the mobile customer UI.
+ * Desktop keeps its notification bell and environment label.
  */
 
 const mobileHeaderStart =
@@ -283,10 +277,23 @@ const mobileHeader =
   );
 
 check(
-  !mobileHeader.includes(
+  mobileHeader.includes(
     "navigate('/notifications')",
+  )
+    && mobileHeader.includes(
+      '<NotificationBellIcon />',
+    )
+    && mobileHeader.includes(
+      'unreadNotifications > 0',
+    ),
+  'Mobile Alerts bell with unread badge is in the header.',
+);
+
+check(
+  !mobileHeader.includes(
+    'environment-badge',
   ),
-  'Mobile notification access is not duplicated in the header.',
+  'Staging/Production environment text is hidden from the mobile header.',
 );
 
 const desktopHeaderStart =
@@ -335,7 +342,7 @@ console.log(
 );
 
 console.log(
-  'Mobile navigation: Business | Home | + | Alerts | More.',
+  'Mobile navigation: Business | Home | + | Space | More.',
 );
 
 console.log(

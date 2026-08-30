@@ -12,7 +12,7 @@ import { getErrorMessage } from '../../utils/errors';
 const labels: Record<SpaceType, string> = {
   personal: 'Personal',
   household: 'Household',
-  sme: 'SME',
+  sme: 'Business',
   trip: 'Trip',
   goal: 'Goal',
   collection: 'Collection',

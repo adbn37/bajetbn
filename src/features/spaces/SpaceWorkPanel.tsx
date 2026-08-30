@@ -305,7 +305,7 @@ function PurchaseExpenseForm({
 
       let message =
         space.type === 'sme'
-          ? 'SME Purchase recorded and linked.'
+          ? 'Business Purchase recorded and linked.'
           : 'Household Expense recorded and linked.';
 
       if (receiptFile) {
@@ -342,7 +342,7 @@ function PurchaseExpenseForm({
     <details>
       <summary>
         {space.type === 'sme'
-          ? 'Record as SME Purchase'
+          ? 'Record as Business Purchase'
           : 'Record as Household Expense'}
       </summary>
 
@@ -507,7 +507,7 @@ function PurchaseExpenseForm({
               {busyPurchase
                 ? 'Recording...'
                 : space.type === 'sme'
-                  ? 'Record SME Purchase'
+                  ? 'Record Business Purchase'
                   : 'Record Household Expense'}
             </button>
           </>
@@ -892,7 +892,7 @@ export function SpaceWorkPanel({
               <span className="eyebrow">
                 {space.type === 'household'
                   ? 'Household'
-                  : 'SME'}
+                  : 'Business'}
               </span>
               <h2>
                 {space.type === 'household'

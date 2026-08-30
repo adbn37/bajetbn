@@ -233,8 +233,8 @@ export function BusinessAdvancedPage() {
       <main className="page">
         <PageHeader
           eyebrow="Business"
-          title="SME Space not found"
-          description="Open an SME Space to use Business Admin."
+          title="Business Space not found"
+          description="Open an Business Space to use Business Admin."
         />
 
         <Link
@@ -265,7 +265,7 @@ export function BusinessAdvancedPage() {
         />
 
         <div className="notice">
-          Existing SME member and POS permissions remain unchanged.
+          Existing Business member and POS permissions remain unchanged.
         </div>
       </main>
     );
@@ -527,13 +527,24 @@ export function BusinessAdvancedPage() {
             </h2>
 
             <p>
-              Business identity and contacts stay attached to this SME Space so invoices, accounting, tax and payroll use the same source of truth.
+              Business identity and contacts stay attached to this Business Space so invoices, accounting, tax and payroll use the same source of truth.
             </p>
 
             <div className="button-row">
+              <Link
+                className="button primary"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/setup'
+                }
+              >
+                Business Setup
+              </Link>
+
               <button
                 type="button"
-                className="button primary"
+                className="button secondary"
                 onClick={
                   () => setView('profile')
                 }
@@ -1015,7 +1026,7 @@ function BusinessProfileEditor({
       </h2>
 
       <p>
-        The same profile will be used by the business modules attached to this SME Space.
+        The same profile will be used by the business modules attached to this Business Space.
       </p>
 
       <form

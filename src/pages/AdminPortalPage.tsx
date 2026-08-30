@@ -865,7 +865,7 @@ export function AdminPortalPage() {
             </div>
 
             <div>
-              <span>SME Spaces</span>
+              <span>Business Spaces</span>
               <strong>1</strong>
             </div>
 
@@ -877,21 +877,21 @@ export function AdminPortalPage() {
             </div>
 
             <div>
-              <span>SME customers</span>
+              <span>Business customers</span>
               <strong>
                 {BASIC_PLAN_LIMITS.smeCustomers}
               </strong>
             </div>
 
             <div>
-              <span>SME sellers</span>
+              <span>Business sellers</span>
               <strong>
                 {BASIC_PLAN_LIMITS.smeSellers}
               </strong>
             </div>
 
             <div>
-              <span>Extra SME member</span>
+              <span>Extra Business member</span>
               <strong>
                 {BASIC_PLAN_LIMITS.smeAdditionalMembers}
               </strong>

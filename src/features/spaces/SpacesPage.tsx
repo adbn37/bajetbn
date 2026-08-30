@@ -16,7 +16,7 @@ import { SpaceAvatar } from './SpaceAvatar';
 const labels: Record<SpaceType, string> = {
   personal: 'Personal',
   household: 'Household',
-  sme: 'SME',
+  sme: 'Business',
   trip: 'Trip',
   goal: 'Goal',
   collection: 'Collection',
@@ -54,7 +54,7 @@ export function SpacesPage() {
     suggestedSpaceType === 'household'
       ? 'Household'
       : suggestedSpaceType === 'sme'
-        ? 'SME'
+        ? 'Business'
         : suggestedSpaceType === 'trip'
           ? 'Trip'
           : '';
@@ -253,7 +253,23 @@ export function SpacesPage() {
 
 
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
-    {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" initialType={suggestedSpaceType || undefined} onClose={() => setModal(null)} onSubmit={async (values) => { await createSpace({ uid: user.uid, currency: profile.currency, timezone: profile.timezone, ...values }); setModal(null); await load(); }} />}
+    {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" initialType={suggestedSpaceType || undefined} onClose={() => setModal(null)} onSubmit={async (values) => {
+      const createdSpaceId = await createSpace({
+        uid: user.uid,
+        currency: profile.currency,
+        timezone: profile.timezone,
+        ...values,
+      });
+
+      setModal(null);
+
+      if (values.type === 'sme') {
+        navigate(`/spaces/${createdSpaceId}/business/setup`);
+        return;
+      }
+
+      await load();
+    }} />}
     {modal === 'edit' && selected && <SpaceForm title="Edit Space" submitLabel="Save changes" initial={selected} lockType onClose={() => setModal(null)} onSubmit={async (values) => { await updateSpace(selected.id, values); setModal(null); await load(); }} />}
   </main>;
 }
@@ -449,7 +465,7 @@ function SpaceForm({
           onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}
         >
           <option value="household">Household</option>
-          <option value="sme">SME</option>
+          <option value="sme">Business</option>
           <option value="trip">Trip</option>
           <option value="goal">Goal</option>
           <option value="collection">Collection</option>

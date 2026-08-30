@@ -73,7 +73,7 @@ export function AuthLayout() {
           </h1>
 
           <p>
-            Track spending, manage household and trip funds, grow your savings, and keep SME finances organised—all with BajetBN.
+            Track spending, manage household and trip funds, grow your savings, and keep Business finances organised—all with BajetBN.
           </p>
         </div>
 

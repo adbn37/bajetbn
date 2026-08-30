@@ -60,7 +60,7 @@ for (const token of [
   'Replace item photo',
   'Remove photo',
   'Record as Household Expense',
-  'Record as SME Purchase',
+  'Record as Business Purchase',
   'Receipt or photo (optional)',
   'PaymentMethodField',
   'Financial record linked',

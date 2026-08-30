@@ -34,7 +34,7 @@ export type BajetBnPlusPlan =
 export const BAJETBN_BASIC_SPACE_SUMMARY = [
   '1 Household Space',
   '1 Trip Space',
-  '1 SME Space',
+  '1 Business Space',
 ] as const;
 
 export const BAJETBN_PAYMENT_ACCOUNTS = [

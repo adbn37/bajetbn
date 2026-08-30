@@ -23,7 +23,7 @@ requireText(collaboration, "cashier: 'viewer'", 'Cashier safe Space-role mapping
 requireText(collaboration, "stock_staff: 'viewer'", 'Stock Staff safe Space-role mapping');
 requireText(collaboration, "seller: 'viewer'", 'Seller safe Space-role mapping');
 requireText(collaboration, 'posRole: businessInvite ? posRole : null', 'POS role invitation payload');
-requireText(collaboration, 'WhatsApp-first SME invite', 'WhatsApp-first SME guidance');
+requireText(collaboration, 'WhatsApp-first Business invite', 'WhatsApp-first SME guidance');
 requireText(collaboration, 'WhatsApp-first invitations', 'WhatsApp-first normal Space guidance');
 requireText(collaboration, "email: email.trim() || null", 'optional invitation email payload');
 requireText(collaboration, 'Email address <span className="optional-label">Optional</span>', 'optional email UI');

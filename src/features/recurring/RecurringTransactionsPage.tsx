@@ -188,7 +188,7 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
       </div>
       <div className="form-grid">
         <label className="span-2">Name<input required value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder={type === 'income' ? 'Example: Monthly salary' : 'Example: Monthly subscription'} /></label>
-        <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option key={space.id} value={space.id}>{space.name} · {space.type === 'sme' ? 'SME' : 'Personal'}</option>)}</select></label>
+        <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option key={space.id} value={space.id}>{space.name} · {space.type === 'sme' ? 'Business' : 'Personal'}</option>)}</select></label>
         <label>Account<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
         <label className="span-2 amount-field">Amount ({selectedSpace?.currency || 'BND'})<input required inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
       </div>

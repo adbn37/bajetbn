@@ -105,16 +105,16 @@ const businessIndex = mobileNavigation.indexOf(
 );
 const homeIndex = mobileNavigation.indexOf('<small>Home</small>');
 const addIndex = mobileNavigation.indexOf('mobile-bottom-add');
-const alertsIndex = mobileNavigation.indexOf('<small>Alerts</small>');
+const spaceIndex = mobileNavigation.indexOf('<small>Space</small>');
 const moreIndex = mobileNavigation.indexOf('<small>More</small>');
 
 need(
   businessIndex >= 0
     && businessIndex < homeIndex
     && homeIndex < addIndex
-    && addIndex < alertsIndex
-    && alertsIndex < moreIndex,
-  'Mobile bottom navigation must remain Business, Home, Add, Alerts, More.',
+    && addIndex < spaceIndex
+    && spaceIndex < moreIndex,
+  'Mobile bottom navigation must remain Business, Home, Add, Space, More.',
 );
 
 need(
@@ -134,18 +134,19 @@ need(
 );
 
 need(
-  mobileNavigation.includes('to="/notifications"'),
-  'Mobile Alerts destination is missing.',
+  mobileNavigation.includes('to="/spaces"'),
+  'Mobile Space destination is missing.',
 );
 
 need(
-  mobileNavigation.includes('<NotificationBellIcon />'),
-  'Mobile Alerts bell is missing.',
+  mobileNavigation.includes('<small>Space</small>'),
+  'Mobile Space label is missing.',
 );
 
 need(
-  mobileNavigation.includes('unreadNotifications > 0'),
-  'Mobile unread notification badge is missing.',
+  !mobileNavigation.includes('to="/notifications"')
+    && !mobileNavigation.includes('<small>Alerts</small>'),
+  'Alerts must not remain in the fixed mobile bottom navigation.',
 );
 
 need(!shell.includes('<small>My Inbox</small>'), 'My Inbox must not replace the fixed mobile bottom navigation.');

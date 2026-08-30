@@ -413,8 +413,8 @@ export function BusinessTaxPage() {
       <main className="page">
         <PageHeader
           eyebrow="Business tax"
-          title="SME Space not found"
-          description="Open an SME Space to configure business tax."
+          title="Business Space not found"
+          description="Open an Business Space to configure business tax."
         />
       </main>
     );

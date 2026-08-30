@@ -82,7 +82,7 @@ function roleFocus(role: SmePosRole | null) {
 
   return {
     title: 'POS access not assigned',
-    detail: 'Ask the SME owner to assign your business role before opening shop tools.',
+    detail: 'Ask the Business owner to assign your business role before opening shop tools.',
     action: '',
   };
 }
@@ -149,7 +149,7 @@ const activeCommitments = commitments.filter(
     <section className="sme-operations-command-centre">
       <div className="sme-operations-heading">
         <div>
-          <span className="eyebrow">SME v2</span>
+          <span className="eyebrow">Business v2</span>
           <h2>Business Overview</h2>
           <p className="muted">
             Your Space home follows your business role. The existing POS remains
@@ -183,25 +183,25 @@ const activeCommitments = commitments.filter(
             <article className="sme-operation-card">
               <span>Money in</span>
               <strong>{formatMoney(moneyIn, space.currency)}</strong>
-              <small>Posted money activity in this SME Space</small>
+              <small>Posted money activity in this Business Space</small>
             </article>
 
             <article className="sme-operation-card">
               <span>Money out</span>
               <strong>{formatMoney(moneyOut, space.currency)}</strong>
-              <small>Posted spending in this SME Space</small>
+              <small>Posted spending in this Business Space</small>
             </article>
 
             <article className="sme-operation-card">
               <span>Business accounts</span>
               <strong>{businessAccounts.length}</strong>
-              <small>Accounts assigned directly to this SME Space</small>
+              <small>Accounts assigned directly to this Business Space</small>
             </article>
 
             <article className="sme-operation-card">
               <span>Active bills</span>
               <strong>{activeCommitments.length}</strong>
-              <small>Bills and instalments belonging to this SME Space</small>
+              <small>Bills and instalments belonging to this Business Space</small>
             </article>
           </div>
 
@@ -247,20 +247,20 @@ const activeCommitments = commitments.filter(
                         {formatMoney(account.ledgerBalanceMinor, account.currency)}
                       </strong>
                     ) : (
-                      <span className="type-badge">Assigned to this SME</span>
+                      <span className="type-badge">Assigned to this Business</span>
                     )}
                   </article>
                 ))}
               </div>
             ) : role === 'owner' ? (
               <div className="notice">
-                <strong>No business account is assigned to this SME yet.</strong>{' '}
+                <strong>No business account is assigned to this Business yet.</strong>{' '}
                 Open Accounts, create or edit a business account, and assign it to {space.name}.
               </div>
             ) : (
               <div className="notice">
                 <strong>No assigned business account is available to you.</strong>{' '}
-                The SME owner manages account ownership and account access.
+                The Business owner manages account ownership and account access.
               </div>
             )}
           </section>
@@ -289,7 +289,7 @@ const activeCommitments = commitments.filter(
                     </strong>
 
                     <small>
-                      Review the existing Bills &amp; instalments records for this SME Space.
+                      Review the existing Bills &amp; instalments records for this Business Space.
                     </small>
                   </div>
 
@@ -303,7 +303,7 @@ const activeCommitments = commitments.filter(
               ) : (
                 <div className="notice">
                   <strong>No urgent business bills right now.</strong>{' '}
-                  New due or overdue SME bills will appear here.
+                  New due or overdue Business bills will appear here.
                 </div>
               )}
             </section>
@@ -320,7 +320,7 @@ const activeCommitments = commitments.filter(
           <article>
             <span>Team</span>
             <strong>{memberCount}</strong>
-            <small>Active people in this SME Space</small>
+            <small>Active people in this Business Space</small>
           </article>
 
           <article>

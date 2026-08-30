@@ -34,17 +34,17 @@ expect(
 
 for (const token of [
   'Business accounts',
-  'Accounts assigned directly to this SME Space',
+  'Accounts assigned directly to this Business Space',
   'Cash, bank and other business accounts assigned directly to',
   'POS payments enabled',
   'POS payments off',
   'Open accounts',
-  'No business account is assigned to this SME yet.',
-  'Assigned to this SME',
+  'No business account is assigned to this Business yet.',
+  'Assigned to this Business',
 ]) {
   expect(
     command.includes(token),
-    `Missing SME account visibility token: ${token}`,
+    `Missing Business account visibility token: ${token}`,
   );
 }
 
@@ -52,19 +52,19 @@ expect(
   command.includes(
     'to={`/spaces/${space.id}?section=accounts`}',
   ),
-  'SME Business Accounts must stay inside the current SME Space.',
+  'Business Accounts must stay inside the current Business Space.',
 );
 
 expect(
   !command.includes('to="/accounts"'),
-  'SME Business Accounts must not escape to the global Accounts page.',
+  'Business Accounts must not escape to the global Accounts page.',
 );
 
 expect(
   command.includes(
     'formatMoney(account.ledgerBalanceMinor, account.currency)',
   ),
-  'SME owner account cards must use the existing ledger balance.',
+  'Business owner account cards must use the existing ledger balance.',
 );
 
 expect(
@@ -89,4 +89,4 @@ expect(
   'SME Slice 2 styles are missing.',
 );
 
-console.log('SME v2 Slice 2 business account visibility checks passed.');
+console.log('Business v2 Slice 2 business account visibility checks passed.');

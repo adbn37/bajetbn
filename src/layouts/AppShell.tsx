@@ -352,7 +352,31 @@ export function AppShell() {
         <header className="mobile-header">
 
           <Brand compact />
-          <div className="mobile-header-actions"><button className="icon-button" onClick={() => navigate('/search')} aria-label="Search">⌕</button><span className="environment-badge">{import.meta.env.VITE_APP_ENV || 'local'}</span></div>
+          <div className="mobile-header-actions">
+            <button
+              className="icon-button"
+              onClick={() => navigate('/search')}
+              aria-label="Search"
+            >
+              ⌕
+            </button>
+
+            <button
+              className="icon-button notification-button"
+              onClick={() => navigate('/notifications')}
+              aria-label={`${unreadNotifications} unread notifications`}
+            >
+              <NotificationBellIcon />
+
+              {unreadNotifications > 0 && (
+                <span className="notification-count">
+                  {unreadNotifications > 99
+                    ? '99+'
+                    : unreadNotifications}
+                </span>
+              )}
+            </button>
+          </div>
         </header>
         <div className="desktop-environment">
           <form className="top-search-form" onSubmit={submitSearch}><span>⌕</span><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search BajetBN" aria-label="Search BajetBN" /></form>
@@ -416,16 +440,11 @@ export function AppShell() {
           </button>
 
           <NavLink
-            to="/notifications"
+            to="/spaces"
             className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span className="mobile-bottom-alert-icon" aria-hidden="true">
-              <NotificationBellIcon />
-              {unreadNotifications > 0 && (
-                <b>{unreadNotifications > 9 ? '9+' : unreadNotifications}</b>
-              )}
-            </span>
-            <small>Alerts</small>
+            <span aria-hidden="true">▣</span>
+            <small>Space</small>
           </NavLink>
 
           <NavLink

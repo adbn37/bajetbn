@@ -96,11 +96,11 @@ export function SmePosPage() {
     );
   }, [role, settings, spaceId, user]);
 
-  if (loading) return <main className="page"><div className="loading-panel">Loading SME POS…</div></main>;
+  if (loading) return <main className="page"><div className="loading-panel">Loading Business POS…</div></main>;
 
   if (!space || space.type !== 'sme') {
     return <main className="page">
-      <PageHeader eyebrow="SME POS" title="SME Space required" description="Point of sale is available inside an SME Space." />
+      <PageHeader eyebrow="Business POS" title="Business Space required" description="Point of sale is available inside an Business Space." />
       {error && <div className="notice error">{error}</div>}
       <Link className="button primary" to="/spaces">Back to Spaces</Link>
     </main>;
@@ -109,7 +109,7 @@ export function SmePosPage() {
   if (!settings && isOwner) {
     return <main className="page sme-pos-page">
       <PageHeader
-        eyebrow="SME SPACE"
+        eyebrow="Business SPACE"
         title={space.name}
         description="Finish setup to open the register."
         action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>}
@@ -125,7 +125,7 @@ export function SmePosPage() {
 
   if (accessDenied || !settings || !role) {
     return <main className="page">
-      <PageHeader eyebrow="SME POS" title={space.name} description="You do not have POS access." action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>} />
+      <PageHeader eyebrow="Business POS" title={space.name} description="You do not have POS access." action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>} />
       {error && <div className="notice error">{error}</div>}
       <EmptyState title="No POS access yet" description="Ask the Space owner to assign you a POS role." />
     </main>;
@@ -138,7 +138,7 @@ export function SmePosPage() {
 
   return <main className={`page sme-pos-page sme-pos-role-${role}`}>
     <PageHeader
-      eyebrow="SME SPACE"
+      eyebrow="Business SPACE"
       title={settings.shopName || space.name}
       description={
         role === 'cashier'
@@ -154,7 +154,7 @@ export function SmePosPage() {
       action={headerActions}
     />
 
-    {space.archivedAt && <div className="notice">This SME Space is archived. Restore it before using the POS.</div>}
+    {space.archivedAt && <div className="notice">This Business Space is archived. Restore it before using the POS.</div>}
     {error && <div className="notice error">{error}</div>}
     <div id="sme-pos-workspace">
       {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace

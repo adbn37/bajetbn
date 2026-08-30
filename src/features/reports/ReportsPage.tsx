@@ -684,15 +684,15 @@ export function ReportsPage() {
     </section>
 
     {selectedSpaceRecord?.type === 'sme' && <section className="panel sme-health-panel">
-      <div className="panel-heading"><div><span className="eyebrow">SME overview</span><h2>{selectedSpaceRecord.name}</h2><p>A simple business view for the selected report period.</p></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Business overview</span><h2>{selectedSpaceRecord.name}</h2><p>A simple business view for the selected report period.</p></div></div>
       <div className="summary-grid sme-health-grid">
-        <article className="summary-card featured"><span>Business money in</span><strong>{formatMoney(moneyIn, currency)}</strong><small>Income recorded in this SME Space</small></article>
-        <article className="summary-card"><span>Business money out</span><strong>{formatMoney(moneyOut, currency)}</strong><small>Expenses recorded in this SME Space</small></article>
+        <article className="summary-card featured"><span>Business money in</span><strong>{formatMoney(moneyIn, currency)}</strong><small>Income recorded in this Business Space</small></article>
+        <article className="summary-card"><span>Business money out</span><strong>{formatMoney(moneyOut, currency)}</strong><small>Expenses recorded in this Business Space</small></article>
         <article className={`summary-card ${moneyLeft < 0 ? 'report-warning-card' : ''}`}><span>Simple profit check</span><strong>{formatMoney(moneyLeft, currency)}</strong><small>Money in minus money out</small></article>
-        <article className="summary-card"><span>Current cash position</span><strong>{formatMoney(selectedSmeCashPosition, currency)}</strong><small>{selectedSmeAccounts.length} account{selectedSmeAccounts.length === 1 ? '' : 's'} used by this SME</small></article>
+        <article className="summary-card"><span>Current cash position</span><strong>{formatMoney(selectedSmeCashPosition, currency)}</strong><small>{selectedSmeAccounts.length} account{selectedSmeAccounts.length === 1 ? '' : 's'} used by this Business</small></article>
       </div>
       <div className="sme-upcoming-strip"><div><span>Upcoming payments — next 30 days</span><strong>{formatMoney(selectedSmeUpcomingMinor, currency)}</strong></div><small>{selectedSmeUpcoming.length} bill{selectedSmeUpcoming.length === 1 ? '' : 's'} or instalment{selectedSmeUpcoming.length === 1 ? '' : 's'} coming up.</small></div>
-      <div className="report-data-note">The cash position uses the current balances of accounts that have been used by this SME Space. Those accounts may also be used elsewhere.</div>
+      <div className="report-data-note">The cash position uses the current balances of accounts that have been used by this Business Space. Those accounts may also be used elsewhere.</div>
     </section>}
 
     <section className="reports-grid">

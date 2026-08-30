@@ -705,7 +705,7 @@ export function BusinessPayrollPage() {
       });
 
       setFeedback(
-        'Payroll posted to the Business Account and SME transaction ledger.',
+        'Payroll posted to the Business Account and Business transaction ledger.',
       );
 
       setPayrollForm(
@@ -812,8 +812,8 @@ export function BusinessPayrollPage() {
       <main className="page">
         <PageHeader
           eyebrow="Business payroll"
-          title="SME Space not found"
-          description="Open an SME Space to use payroll."
+          title="Business Space not found"
+          description="Open an Business Space to use payroll."
         />
       </main>
     );
@@ -873,7 +873,7 @@ export function BusinessPayrollPage() {
       <PageHeader
         eyebrow="Business payroll"
         title={space.name}
-        description="Manage employees, payroll runs, wage posting and payroll history for this SME Space."
+        description="Manage employees, payroll runs, wage posting and payroll history for this Business Space."
         action={
           <Link
             className="button secondary"
@@ -907,7 +907,7 @@ export function BusinessPayrollPage() {
           </h2>
 
           <p>
-            Employee and payroll records belong only to this SME Space.
+            Employee and payroll records belong only to this Business Space.
             Wage payments use the normal BajetBN transaction ledger.
           </p>
 
@@ -1238,12 +1238,12 @@ export function BusinessPayrollPage() {
 
             <p>
               Gross pay and deductions remain in payroll history.
-              The net wage posts as an SME expense to the selected Business Account.
+              The net wage posts as an Business expense to the selected Business Account.
             </p>
 
             {accounts.length === 0 && (
               <div className="notice warning">
-                Add a Business Account to this SME Space before posting payroll.
+                Add a Business Account to this Business Space before posting payroll.
               </div>
             )}
 

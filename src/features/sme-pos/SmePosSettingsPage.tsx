@@ -154,7 +154,7 @@ export function SmePosSettingsPage() {
 
   function checkOnline() {
     if (space?.archivedAt) {
-      setError('Restore this SME Space before changing POS settings or staff access.');
+      setError('Restore this Business Space before changing POS settings or staff access.');
       return false;
     }
     if (navigator.onLine) return true;
@@ -171,11 +171,11 @@ export function SmePosSettingsPage() {
       return;
     }
     if (!eligiblePaymentAccounts.length) {
-      setError(`Add or edit a business account in Accounts, assign it to ${space?.name || 'this SME'}, and enable POS payments first.`);
+      setError(`Add or edit a business account in Accounts, assign it to ${space?.name || 'this Business'}, and enable POS payments first.`);
       return;
     }
     if (defaultPaymentAccountId && !eligiblePaymentAccounts.some((item) => item.id === defaultPaymentAccountId)) {
-      setError('The default payment account must belong to this SME and be enabled for POS payments.');
+      setError('The default payment account must belong to this Business and be enabled for POS payments.');
       return;
     }
     if (!settings || settings.mode === mode || settings.status === 'draft') {
@@ -281,19 +281,19 @@ export function SmePosSettingsPage() {
   if (loading) return <main className="page"><div className="loading-panel">Loading POS settings…</div></main>;
 
   if (!space || space.type !== 'sme') {
-    return <main className="page"><PageHeader eyebrow="SME POS" title="SME Space required" description="POS settings are available inside an SME Space." /><Link className="button primary" to="/spaces">Back to Spaces</Link></main>;
+    return <main className="page"><PageHeader eyebrow="Business POS" title="Business Space required" description="POS settings are available inside an Business Space." /><Link className="button primary" to="/spaces">Back to Spaces</Link></main>;
   }
 
   if (!isOwner) {
     return <main className="page">
-      <PageHeader eyebrow="SME POS settings" title={space.name} description="Only the SME Space owner can change shop settings and staff POS roles." action={<Link className="button secondary" to={`/spaces/${space.id}/pos`}>Back to POS</Link>} />
+      <PageHeader eyebrow="Business POS settings" title={space.name} description="Only the Business Space owner can change shop settings and staff POS roles." action={<Link className="button secondary" to={`/spaces/${space.id}/pos`}>Back to POS</Link>} />
       <EmptyState title="Owner access required" description="Ask the Space owner to update the shop setup or your POS role." />
     </main>;
   }
 
   return <main className="page sme-pos-page">
     <PageHeader eyebrow="Owner settings" title="POS Settings" description={`Shop setup and staff access for ${settings?.shopName || space.name}.`} action={<Link className="button secondary" to={`/spaces/${space.id}/pos`}>Back to POS</Link>} />
-    {space.archivedAt && <div className="notice">This SME Space is archived. Restore it before changing POS settings.</div>}
+    {space.archivedAt && <div className="notice">This Business Space is archived. Restore it before changing POS settings.</div>}
     {error && <div className="notice error">{error}</div>}
     {success && <div className="notice success">{success}</div>}
 
@@ -319,20 +319,20 @@ export function SmePosSettingsPage() {
           <label className="span-2">Receipt message<textarea value={receiptFooter} onChange={(event) => setReceiptFooter(event.target.value)} rows={3} maxLength={240} placeholder="Thank you for shopping with us." /></label>
           <fieldset className="span-2">
             <legend>Payment accounts</legend>
-            <small>Account ownership and POS availability are managed from Accounts by the SME owner. Managers and cashiers cannot attach another account here.</small>
+            <small>Account ownership and POS availability are managed from Accounts by the Business owner. Managers and cashiers cannot attach another account here.</small>
             <div className="form-stack compact">
               {eligiblePaymentAccounts.map((account) => <div key={account.id}>
                 <strong>{account.name}</strong> · {account.type.replace('_', ' ')} · {account.currency}
                 {!account.spaceId && <small>Legacy setup · assign this account to {space.name} from Accounts.</small>}
               </div>)}
-              {!eligiblePaymentAccounts.length && <small>No payment account is assigned to this SME yet.</small>}
+              {!eligiblePaymentAccounts.length && <small>No payment account is assigned to this Business yet.</small>}
             </div>
             <Link className="text-button" to="/accounts">Manage business accounts →</Link>
           </fieldset>
           <label className="span-2">Default payment account<select value={defaultPaymentAccountId} onChange={(event) => setDefaultPaymentAccountId(event.target.value)}><option value="">Choose during checkout</option>{eligiblePaymentAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select><small>Optional. The account must belong to {space.name} and be enabled for POS payments from Accounts.</small></label>
         </div>
 
-        {!eligiblePaymentAccounts.length && <div className="notice">No POS payment account is assigned to {space.name}. Open Accounts, edit a business account, assign it to this SME, and enable POS payments.</div>}
+        {!eligiblePaymentAccounts.length && <div className="notice">No POS payment account is assigned to {space.name}. Open Accounts, edit a business account, assign it to this Business, and enable POS payments.</div>}
         <div className="button-row">
           <button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : settings ? 'Save POS settings' : 'Save POS setup'}</button>
           {settings?.status === 'draft' && <button className="button secondary" type="button" disabled={busy} onClick={() => askStatus('active')}>Activate POS</button>}
@@ -354,7 +354,7 @@ export function SmePosSettingsPage() {
 
     {settings && <section className="panel sme-pos-access-panel">
       <div className="panel-heading"><div><span className="eyebrow">People & access</span><h2>Shop team</h2></div><div className="button-row"><span>{access.length} active</span><button className="button primary" type="button" disabled={busy || Boolean(space.archivedAt)} onClick={() => setInviteOpen(true)}>+ Invite person</button></div></div>
-      <p>This uses the same SME invitation as the Members page. Choose the person's business role once; BajetBN applies their Space membership and POS access together.</p>
+      <p>This uses the same Business invitation as the Members page. Choose the person's business role once; BajetBN applies their Space membership and POS access together.</p>
       <div className="sme-pos-access-list">
         {members.filter((member) => (member.status || 'active') === 'active').map((member) => {
           const current = member.uid === space.ownerId ? 'owner' : accessByUid.get(member.uid)?.role || '';

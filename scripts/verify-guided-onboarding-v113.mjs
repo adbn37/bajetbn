@@ -55,7 +55,7 @@ check(
     && onboarding.includes(
       "value: 'trip'",
     ),
-  'Purpose choices cover Personal, Household, SME and Trip.',
+  'Purpose choices cover Personal, Household, Business and Trip.',
 );
 
 check(
@@ -103,7 +103,7 @@ check(
     "'Step 1 of 3'",
   )
     && i18n.includes(
-      "'Business / SME'",
+      "'Business'",
     ),
   'Guided copy has Malay localization markers.',
 );

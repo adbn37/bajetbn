@@ -472,8 +472,8 @@ export function BusinessAccountingPage() {
       <main className="page">
         <PageHeader
           eyebrow="Business accounting"
-          title="SME Space not found"
-          description="Open an SME Space to view business accounting."
+          title="Business Space not found"
+          description="Open an Business Space to view business accounting."
         />
       </main>
     );
@@ -514,7 +514,7 @@ export function BusinessAccountingPage() {
       <PageHeader
         eyebrow="Business accounting"
         title={space.name}
-        description="Income, expenses, account balances, receivables and monthly results derived from this SME Space."
+        description="Income, expenses, account balances, receivables and monthly results derived from this Business Space."
         action={
           <Link
             className="button secondary"
@@ -552,7 +552,7 @@ export function BusinessAccountingPage() {
           </strong>
 
           <small>
-            Posted SME income
+            Posted Business income
           </small>
         </article>
 
@@ -569,7 +569,7 @@ export function BusinessAccountingPage() {
           </strong>
 
           <small>
-            Posted SME expenses
+            Posted Business expenses
           </small>
         </article>
 
@@ -650,7 +650,7 @@ export function BusinessAccountingPage() {
             </h2>
 
             <p>
-              Latest active months from the SME transaction ledger.
+              Latest active months from the Business transaction ledger.
             </p>
           </div>
         </div>
@@ -718,7 +718,7 @@ export function BusinessAccountingPage() {
             </span>
 
             <h2>
-              SME ledger
+              Business ledger
             </h2>
 
             <p>
@@ -734,7 +734,7 @@ export function BusinessAccountingPage() {
             </h3>
 
             <p>
-              POS sales, invoice payments, payroll and normal SME money activity will appear here.
+              POS sales, invoice payments, payroll and normal Business money activity will appear here.
             </p>
           </div>
         ) : (

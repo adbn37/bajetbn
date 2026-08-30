@@ -221,7 +221,7 @@ export function TripPlanningPanel({
           <span className="eyebrow">Trip planning</span>
           <h2>Itinerary, Tasks & Bookings</h2>
           <p className="muted">
-            Keep the group plan together without mixing travel Bookings with SME
+            Keep the group plan together without mixing travel Bookings with Business
             POS reservations.
           </p>
         </div>

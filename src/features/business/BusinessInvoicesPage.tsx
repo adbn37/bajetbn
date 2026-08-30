@@ -536,8 +536,8 @@ export function BusinessInvoicesPage() {
       <main className="page">
         <PageHeader
           eyebrow="Business invoices"
-          title="SME Space not found"
-          description="Open an SME Space to manage invoices."
+          title="Business Space not found"
+          description="Open an Business Space to manage invoices."
         />
 
         <Link
@@ -1362,7 +1362,7 @@ export function BusinessInvoicesPage() {
 
           {accounts.length === 0 && (
             <div className="notice error">
-              Create a Business Account for this SME Space before recording an invoice payment.
+              Create a Business Account for this Business Space before recording an invoice payment.
             </div>
           )}
 

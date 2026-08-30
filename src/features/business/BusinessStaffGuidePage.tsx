@@ -29,7 +29,7 @@ const sections = [
     title:
       '1. Start the shift',
     items: [
-      'Open the correct SME Space before doing any business work.',
+      'Open the correct Business Space before doing any business work.',
       'Open POS & Operations and confirm you are working in the correct business.',
       'Review Tasks, Purchase List and anything that needs attention.',
       'Confirm the correct Business Account is being used for collections.',
@@ -199,8 +199,8 @@ export function BusinessStaffGuidePage() {
       <main className="page">
         <PageHeader
           eyebrow="Staff operations"
-          title="SME Space not found"
-          description="Open an SME Space to view its staff operations guide."
+          title="Business Space not found"
+          description="Open an Business Space to view its staff operations guide."
         />
       </main>
     );
@@ -233,7 +233,7 @@ export function BusinessStaffGuidePage() {
 
       <div className="notice">
         Always confirm that you are inside the correct Business Space.
-        Sales, stock, tasks and business money should stay attached to this SME.
+        Sales, stock, tasks and business money should stay attached to this Business.
       </div>
 
       {sections.map(

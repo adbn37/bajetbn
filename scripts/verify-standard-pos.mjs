@@ -76,7 +76,7 @@ if (!workspace.includes("const canViewReports = ['owner', 'manager'].includes(ro
 if (!workspace.includes("if (role === 'cashier') return ['register', 'customers', 'bookings', 'sales']")) fail('Cashier navigation must be limited to Register, Customers, Bookings and My recent sales.');
 
 const settingsPage = read('src/features/sme-pos/SmePosSettingsPage.tsx');
-if (!settingsPage.includes('Only the SME Space owner can change shop settings and staff POS roles.')) fail('POS settings must be owner-only.');
+if (!settingsPage.includes('Only the Business Space owner can change shop settings and staff POS roles.')) fail('POS settings must be owner-only.');
 
 const rules = read('firestore.rules');
 if (rules.includes("allow read: if isSpaceOwner(resource.data.spaceId) || hasActivePosAccess(resource.data.spaceId);\n      allow create, update, delete: if false;\n    }\n\n    match /smePosCustomers")) fail('Lower POS roles must not retain direct full product reads.');

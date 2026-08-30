@@ -22,7 +22,7 @@ must(accountRepo, 'spaceId?: string | null;', 'create/update account SME ownersh
 must(accountRepo, 'posEnabled?: boolean;', 'create/update account POS payload');
 
 must(accountsPage, 'Business account ownership', 'Accounts ownership guidance');
-must(accountsPage, 'Business / SME Space', 'business owner selector');
+must(accountsPage, 'Business Space', 'business owner selector');
 must(accountsPage, "Use for this business's POS payments", 'POS eligibility toggle');
 must(accountsPage, 'item.type === \'sme\' && item.ownerId === user?.uid', 'owner-only SME choices');
 must(accountsPage, 'Unassigned business accounts', 'legacy migration view');

@@ -171,7 +171,7 @@ function displaySpaceDate(value?: string | null) {
 const spaceTypeLabel: Record<SpaceType, string> = {
   personal: 'Personal',
   household: 'Household',
-  sme: 'SME',
+  sme: 'Business',
   trip: 'Trip',
   goal: 'Goal',
   collection: 'Collection',
@@ -309,7 +309,7 @@ export function SpaceDetailsPage() {
         || nextSpace.type === 'trip';
 
       /*
-       * Household, Trip and SME launcher pages stay lightweight.
+       * Household, Trip and Business launcher pages stay lightweight.
        *
        * Detailed financial data is requested only when:
        * - an overview section/report is opened; or
@@ -388,7 +388,7 @@ export function SpaceDetailsPage() {
           Promise<Commitment[]>;
 
         /*
-         * Preserve the existing SME manager financial permission.
+         * Preserve the existing Business manager financial permission.
          * Managers use Space-authorized queries; owner data remains
          * owner + Space scoped.
          */
@@ -592,7 +592,7 @@ export function SpaceDetailsPage() {
       leading={<SpaceAvatar space={space} size="large" />}
       description={
         space.type === 'sme'
-          ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · SME`
+          ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Business`
           : spaceDescription(space)
       }
       action={<Link className="button secondary" to="/spaces">Back</Link>}
@@ -774,7 +774,7 @@ export function SpaceDetailsPage() {
             padding: '0.5rem 0',
           }}
         >
-          Detailed SME overview
+          Detailed Business overview
         </summary>
 
         <div style={{ marginTop: '0.75rem' }}>
@@ -1247,7 +1247,7 @@ function SpaceOverview({
     {space.type === 'sme' && !canViewFinancials ? (
       <>
         <section className="sme-finance-private">
-          <article className="summary-card featured"><span>Your role</span><strong>{smeRoleLabel}</strong><small>SME operational access</small></article>
+          <article className="summary-card featured"><span>Your role</span><strong>{smeRoleLabel}</strong><small>Business operational access</small></article>
           <article className="summary-card"><span>Members</span><strong>{memberCount}</strong><small>Active people in this Space</small></article>
           <article className="summary-card"><span>Daily workspace</span><strong>POS</strong><small>Sales and shop tools stay available</small></article>
         </section>
@@ -1460,7 +1460,7 @@ function SpaceOverview({
                   }
                   description={
                     space.type === 'sme'
-                      ? `Create or assign a Business Account to ${space.name} to keep business money inside this SME Space.`
+                      ? `Create or assign a Business Account to ${space.name} to keep business money inside this Business Space.`
                       : 'Create or assign an account to this Space to start tracking money here.'
                   }
                 />

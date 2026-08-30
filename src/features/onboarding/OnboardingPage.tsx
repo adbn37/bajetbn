@@ -52,11 +52,11 @@ const PURPOSE_OPTIONS: PurposeOption[] = [
   {
     value: 'sme',
     icon: 'B',
-    title: 'Business / SME',
+    title: 'Business',
     description:
       'Separate business accounts, sales, POS, invoices and operations from personal money.',
     nextStep:
-      'Create an SME Space after your Personal Space is ready.',
+      'Create an Business Space after your Personal Space is ready.',
   },
   {
     value: 'trip',

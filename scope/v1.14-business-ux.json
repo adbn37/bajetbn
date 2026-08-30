@@ -1,0 +1,39 @@
+{
+  "program": "BajetBN Business UX completion",
+  "targetRelease": "BajetBN v1.14.0",
+  "baseCheckpoint": "22361afdb2b9190feb206b26973e611de2dc3332",
+  "policy": {
+    "production": "LOCKED / UNTOUCHED until v1.14 integrated staging acceptance passes and the owner explicitly approves production.",
+    "internalTerminology": "Internal type, route implementation, collection and code identifiers may continue using sme/Sme for compatibility. User-facing product wording must use Business.",
+    "releaseRule": "v1.13 remains the accepted historical baseline. v1.14 contains the additional agreed pre-production Business and mobile UX work."
+  },
+  "items": [
+    {
+      "id": "business.wizard",
+      "title": "Guided Business Space setup wizard",
+      "status": "complete"
+    },
+    {
+      "id": "business.terminology",
+      "title": "Replace user-facing SME wording with Business while retaining safe internal identifiers",
+      "status": "complete"
+    },
+    {
+      "id": "mobile.navigation",
+      "title": "Mobile header Alerts and Business | Home | + | Space | More bottom navigation",
+      "status": "complete"
+    },
+    {
+      "id": "release.v114_staging_acceptance",
+      "title": "Integrated v1.14 staging deployment and owner acceptance",
+      "status": "planned"
+    }
+  ],
+  "excluded": [
+    {
+      "id": "android.play_store",
+      "status": "excluded",
+      "reason": "Separate packaging/publishing program."
+    }
+  ]
+}

@@ -243,8 +243,8 @@ export function AccountsPage({
           Business account ownership
         </strong>
         <span>
-          Assign each business account to one SME here.
-          Only accounts belonging to that SME and enabled
+          Assign each business account to one Business Space here.
+          Only accounts belonging to that Business Space and enabled
           for POS can be used at its checkout.
           Managers and cashiers cannot change this.
         </span>
@@ -261,7 +261,7 @@ export function AccountsPage({
             ? ' is'
             : 's are'}
           {' '}
-          not assigned to an SME yet.
+          not assigned to a Business Space yet.
         </div>
       )}
     {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountGroups accounts={active} spaces={ownedSmeSpaces} spaceIdOverride={spaceIdOverride} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onClose={(account) => askLifecycle(account, 'close')} onDelete={(account) => askLifecycle(account, 'delete')} />}
@@ -374,7 +374,7 @@ function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClos
     event.preventDefault(); setBusy(true); setError('');
     try {
       if (classification === 'business' && !spaceId) {
-        throw new Error('Choose which SME business owns this account.');
+        throw new Error('Choose which Business business owns this account.');
       }
       const cleanInstitution = institution.trim();
       await onSubmit({
@@ -398,18 +398,18 @@ function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClos
     <label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label>
     <label>Type<select value={type} onChange={(event) => changeType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label>
     <label>Used for<select value={classification} disabled={lockedPersonal} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
-    {classification === 'business' && <label className="span-2">Business / SME Space
+    {classification === 'business' && <label className="span-2">Business Space
       <select value={spaceId} onChange={(event) => setSpaceId(event.target.value)} required>
         <option value="">Choose business</option>
         {spaces.map((space) => <option key={space.id} value={space.id} disabled={Boolean(space.archivedAt)}>{space.name}{space.archivedAt ? ' (Archived)' : ''}</option>)}
       </select>
-      <small>This is the account's owner business. Other SME Spaces cannot use it.</small>
+      <small>This is the account's owner business. Other Business Spaces cannot use it.</small>
     </label>}
     {classification === 'business' && <label className="checkbox-field span-2">
       <input type="checkbox" checked={posEnabled} onChange={(event) => setPosEnabled(event.target.checked)} disabled={!spaceId} />
-      <span><strong>Use for this business's POS payments</strong><small>Only the SME owner can change this here. Managers and cashiers can use approved accounts during checkout but cannot attach another account.</small></span>
+      <span><strong>Use for this business's POS payments</strong><small>Only the Business owner can change this here. Managers and cashiers can use approved accounts during checkout but cannot attach another account.</small></span>
     </label>}
-    {classification === 'business' && !spaces.some((space) => !space.archivedAt) && <div className="notice span-2">Create or restore an SME Space before adding a business account.</div>}
+    {classification === 'business' && !spaces.some((space) => !space.archivedAt) && <div className="notice span-2">Create or restore an Business Space before adding a business account.</div>}
     <label className="span-2">Institution or provider
       <input list="brunei-institution-options" value={institution} onChange={(event) => setInstitution(event.target.value)} placeholder={type === 'cash' ? 'Cash' : type === 'e_wallet' ? 'Choose or type an e-wallet' : 'Choose or type a bank'} />
       <datalist id="brunei-institution-options">{options.map((item) => <option key={item.code} value={item.shortLabel}>{item.label}</option>)}</datalist>
