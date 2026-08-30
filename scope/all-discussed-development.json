@@ -3,7 +3,7 @@
   "targetRelease": "BajetBN v1.12.0",
   "baseCandidate": "55c345b125ee050a28011b02fc45e2c0e087e51c",
   "policy": {
-    "manualTesting": "Deferred until all development is complete.",
+    "manualTesting": "Required on the final v1.12 staging candidate before production promotion.",
     "staging": "Keep the accepted v1.11 candidate unchanged until the final v1.12 candidate.",
     "production": "Production remains untouched until explicit owner approval."
   },
@@ -33,32 +33,32 @@
     {
       "id": "business.accounting",
       "title": "SME accounting records, income/expense linkage and business financial reports",
-      "status": "planned"
+      "status": "complete"
     },
     {
       "id": "business.tax",
       "title": "Business tax configuration and tax tracking",
-      "status": "planned"
+      "status": "complete"
     },
     {
       "id": "business.payroll",
       "title": "Employees, payroll runs, wage posting and payroll history",
-      "status": "planned"
+      "status": "complete"
     },
     {
       "id": "sme.industry_profiles",
       "title": "Flexible SME profiles for retail, service, marketplace, rental, transport and delivery work",
-      "status": "planned"
+      "status": "complete"
     },
     {
       "id": "sme.staff_operations_guide",
       "title": "In-app staff guide for POS, inventory, barcode, sales, returns and operational workflows",
-      "status": "planned"
+      "status": "complete"
     },
     {
       "id": "release.final_audit",
       "title": "Final all-discussed-development audit and staging candidate",
-      "status": "planned"
+      "status": "complete"
     }
   ]
 }

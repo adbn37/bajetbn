@@ -527,7 +527,7 @@ export function BusinessAdvancedPage() {
             </h2>
 
             <p>
-              Business identity and contacts stay attached to this SME Space so later invoices, accounting, tax and payroll use the same source of truth.
+              Business identity and contacts stay attached to this SME Space so invoices, accounting, tax and payroll use the same source of truth.
             </p>
 
             <div className="button-row">
