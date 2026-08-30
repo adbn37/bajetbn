@@ -293,6 +293,11 @@ export function SpaceActionHub({
               onClick={() => setTool('shopping')}
             />
 
+            <ShortcutLink
+              to={`/spaces/${space.id}/business/guide`}
+              label="Staff Guide"
+            />
+
             <ShortcutButton
               label="More"
               onClick={() => setSpaceMoreOpen(true)}

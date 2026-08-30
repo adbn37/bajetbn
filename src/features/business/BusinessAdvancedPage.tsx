@@ -594,6 +594,28 @@ export function BusinessAdvancedPage() {
               >
                 Payroll
               </Link>
+
+              <Link
+                className="button secondary"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/industry'
+                }
+              >
+                Business Workflow
+              </Link>
+
+              <Link
+                className="button secondary"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/guide'
+                }
+              >
+                Staff Guide
+              </Link>
             </div>
           </section>
         </>
