@@ -1,0 +1,116 @@
+{
+  "scopeVersion": "2026-08-30.1",
+  "targetRelease": "BajetBN v1.13.0",
+  "baseCheckpoint": "0740bb7660f37906332b13932e69e11b51183eba",
+  "purpose": "Single master register for every remaining BajetBN development item before production is considered.",
+  "policy": {
+    "production": "LOCKED. Do not promote live until every active item in this master scope is complete, one final end-to-end staging acceptance passes, and the owner explicitly approves production.",
+    "staging": "The accepted v1.12 checkpoint stays unchanged while remaining development is completed on this feature branch.",
+    "manualTesting": "Do one final integrated staging acceptance after all development items are complete.",
+    "scopeRule": "A module-specific scope may never by itself be treated as full-product completion."
+  },
+  "excluded": [
+    {
+      "id": "android.play_store",
+      "title": "Android / Play Store packaging and publishing",
+      "reason": "Explicitly excluded by the owner from this development program."
+    }
+  ],
+  "items": [
+    {
+      "id": "baseline.v112_accepted",
+      "title": "Accepted BajetBN v1.12 staging checkpoint",
+      "status": "complete"
+    },
+    {
+      "id": "space_first.global_home_navigation",
+      "title": "Global Home, account carousel, recent activity and Business | Home | + | Alerts | More navigation",
+      "status": "complete"
+    },
+    {
+      "id": "space_first.personal",
+      "title": "Personal Space compact launcher and full Personal money modules",
+      "status": "complete"
+    },
+    {
+      "id": "space_first.household",
+      "title": "Household Fund, expense, To-Do, To-Buy, budget, bills, shared expenses and settlements",
+      "status": "complete"
+    },
+    {
+      "id": "space_first.trip",
+      "title": "Trip Plan, Trip Fund, Trip Expenses, Settle Up and Trip Budget",
+      "status": "complete"
+    },
+    {
+      "id": "space_first.sme",
+      "title": "SME Business-space-first home, operations, financial visibility, tasks and Purchase List",
+      "status": "complete"
+    },
+    {
+      "id": "money.labels_multi_account",
+      "title": "Transaction labels and multi-account Money Activity filtering",
+      "status": "complete"
+    },
+    {
+      "id": "collaboration.invitations_whatsapp_share_bill",
+      "title": "Space invitations, WhatsApp/copy/cancel actions and actionable Share a Bill workflow",
+      "status": "complete"
+    },
+    {
+      "id": "collaboration.advanced",
+      "title": "Chat, announcements, polls, approvals, reminders, Needs Attention and concurrency safeguards",
+      "status": "complete"
+    },
+    {
+      "id": "sme.pos_full_operations",
+      "title": "Standard and Marketplace POS, returns, payouts, staff roles, barcode workflows and daily operations",
+      "status": "complete"
+    },
+    {
+      "id": "collection.full_workflow",
+      "title": "Collection photos, item details, barcode scanning, organization and lifecycle",
+      "status": "complete"
+    },
+    {
+      "id": "spaces.extended_types_modules_avatars",
+      "title": "Extended/custom Space types, configurable modules and uploaded Space avatars",
+      "status": "complete"
+    },
+    {
+      "id": "theme.personalisation",
+      "title": "Login theme chooser, Theme Studio, personal touches, menu customization and theme synchronization",
+      "status": "complete"
+    },
+    {
+      "id": "safety.reliability_offline",
+      "title": "Offline sync, lifecycle protections, reliability automation, deletion and re-registration safeguards",
+      "status": "complete"
+    },
+    {
+      "id": "business.v112_full",
+      "title": "Business profile, invoicing, accounting, tax, payroll, industry workflows and Staff Operations Guide",
+      "status": "complete"
+    },
+    {
+      "id": "onboarding.contextual_help",
+      "title": "One-time contextual help for major sections with replay",
+      "status": "complete"
+    },
+    {
+      "id": "onboarding.guided_setup",
+      "title": "Guided first-use onboarding with clear purpose selection, Personal Space explanation and first-setup checklist while keeping theme selection login-only",
+      "status": "planned"
+    },
+    {
+      "id": "release.final_repository_audit",
+      "title": "Repository-and-history reconciliation proving no discussed development remains outside this master register",
+      "status": "planned"
+    },
+    {
+      "id": "release.final_staging_acceptance",
+      "title": "One complete end-to-end staging acceptance after every development item is integrated",
+      "status": "planned"
+    }
+  ]
+}
