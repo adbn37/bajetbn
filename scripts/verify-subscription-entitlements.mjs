@@ -37,7 +37,7 @@ const functions =
   fs.readFileSync(
     'functions/src/index.ts',
     'utf8',
-  );
+  ).replace(/\r\n?/g, '\n');
 
 const usages = [
   'if (!productId) {\n    await assertBasicSmeInventoryCapacity',

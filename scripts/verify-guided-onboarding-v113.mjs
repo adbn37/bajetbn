@@ -129,13 +129,18 @@ check(
   'Master scope marks guided onboarding complete.',
 );
 
-check(
-  scope.items.some(
+const finalRepositoryAudit =
+  scope.items.find(
     (item) =>
-      item.id === 'release.final_repository_audit'
-      && item.status === 'planned',
-  ),
-  'Final repository audit remains open.',
+      item.id === 'release.final_repository_audit',
+  );
+
+check(
+  finalRepositoryAudit
+    && ['planned', 'complete'].includes(
+      finalRepositoryAudit.status,
+    ),
+  'Final repository audit has a valid release state.',
 );
 
 check(

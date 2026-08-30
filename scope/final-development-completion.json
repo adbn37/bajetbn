@@ -1,5 +1,5 @@
 {
-  "scopeVersion": "2026-08-30.2",
+  "scopeVersion": "2026-08-30.3",
   "targetRelease": "BajetBN v1.13.0",
   "baseCheckpoint": "0740bb7660f37906332b13932e69e11b51183eba",
   "purpose": "Single master register for every remaining BajetBN development item before production is considered.",
@@ -110,9 +110,71 @@
       ]
     },
     {
+      "id": "sme.pos_sale_corrections",
+      "title": "Owner-only POS sale void/reversal and audited permanent-sale deletion controls",
+      "status": "complete",
+      "evidence": [
+        "src/features/sme-pos/StandardPosWorkspace.tsx",
+        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+        "src/repositories/smePosRepository.ts",
+        "scripts/verify-sme-pos-sale-void.mjs",
+        "scripts/verify-sme-pos-sale-void-ui.mjs",
+        "scripts/verify-v190-preprod-final.mjs"
+      ]
+    },
+    {
+      "id": "sme.seller_self_service",
+      "title": "Marketplace seller profile, own inventory, seller wallet, split payouts and financial privacy",
+      "status": "complete",
+      "evidence": [
+        "src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx",
+        "src/repositories/smePosRepository.ts",
+        "scripts/verify-seller-self-service-payouts.mjs"
+      ]
+    },
+    {
+      "id": "debt.full_workflow",
+      "title": "Debt tracking, I Owe/Owed to Me, atomic payments and reversals, payment proof and reminders",
+      "status": "complete",
+      "evidence": [
+        "src/features/debt/DebtPage.tsx",
+        "src/repositories/debtRepository.ts",
+        "scripts/verify-debt-v190.mjs",
+        "scripts/verify-debt-payments-v190.mjs",
+        "scripts/verify-debt-proof-reminders-v190.mjs"
+      ]
+    },
+    {
+      "id": "subscription.plus_admin",
+      "title": "Plus subscriptions, payment-proof requests, secure admin review, activation/expiry and Basic/Plus entitlements",
+      "status": "complete",
+      "evidence": [
+        "src/pages/SubscriptionPage.tsx",
+        "src/pages/AdminPortalPage.tsx",
+        "src/components/AdminSubscriptionRequests.tsx",
+        "src/services/entitlements.ts",
+        "src/config/subscription.ts",
+        "scripts/verify-subscription-backend.mjs",
+        "scripts/verify-subscription-entitlements.mjs",
+        "scripts/verify-v190-preprod-final.mjs"
+      ]
+    },
+    {
       "id": "release.final_repository_audit",
       "title": "Repository-and-history reconciliation proving no discussed development remains outside this master register",
-      "status": "planned"
+      "status": "complete",
+      "evidence": [
+        "scope/pre-v1-scope.json",
+        "scope/all-discussed-development.json",
+        "scope/final-development-completion.json",
+        "scripts/verify-final-repository-audit-v113.mjs",
+        "package.json"
+      ],
+      "reconciliation": {
+        "reviewedAt": "2026-08-30",
+        "result": "Repository history, prior scoped releases and current source were reconciled into the v1.13 master register.",
+        "staleHistoricalVerifiers": "Old release-specific verifiers that hard-code obsolete package versions are retained as history but are not reintroduced into the active structural chain."
+      }
     },
     {
       "id": "release.final_staging_acceptance",

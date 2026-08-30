@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 
 const read = (path) =>
-  fs.readFileSync(path, 'utf8');
+  fs.readFileSync(path, 'utf8')
+    .replace(/\r\n?/g, '\n');
 
 const functions =
   read('functions/src/index.ts');

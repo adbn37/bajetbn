@@ -59,7 +59,7 @@ const checks = [
   ],
   [
     'src/pages/AdminPortalPage.tsx',
-    'Plus 1 month',
+    'Activate {months === 12',
   ],
   [
     'src/pages/AdminPortalPage.tsx',

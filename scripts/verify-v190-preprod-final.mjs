@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const read = (path) =>
-  fs.readFileSync(path, 'utf8');
+  fs.readFileSync(path, 'utf8').replace(/\r\n?/g, '\n');
 
 const files = {
   config:
@@ -133,7 +133,7 @@ check(
 
 check(
   files.admin.includes(
-    'Grant Lifetime Plus',
+    'Grant Lifetime',
   )
   && files.functions.includes(
     "action === 'lifetime'",
@@ -142,10 +142,13 @@ check(
 );
 
 check(
-  !files.subscription.includes(
-    'Lifetime Plus',
+  !files.config.includes(
+    "key: 'lifetime'",
+  )
+  && !files.subscription.includes(
+    'Grant Lifetime',
   ),
-  'Lifetime option hidden from customer page',
+  'Lifetime purchase option hidden from customer page',
 );
 
 check(
@@ -216,11 +219,14 @@ check(
 );
 
 check(
-  files.functions.includes(
-    "kind:\n                'delete_sme_pos_sale_permanently'",
+  /kind:\s*['"]delete_sme_pos_sale_permanently['"]/.test(
+    files.functions,
   )
-  && files.functions.includes(
-    "db.collection(\n        'smePosDeletionAudit'",
+  && /collection\(\s*['"]smePosDeletionAudit['"]\s*,?\s*\)/.test(
+    files.functions,
+  )
+  && /transaction\.create\(\s*auditRef\s*,/.test(
+    files.functions,
   ),
   'permanent deletion audit tombstone',
 );

@@ -35,14 +35,15 @@ must(workspace, '<option value="all">All stock</option>', 'All stock filter');
 must(workspace, '<option value="mine">My stock · {mySeller.name}</option>', 'My stock filter');
 
 // Seller self-service operations are server-enforced to the linked seller/listing.
-for (const token of [
-  'You can edit only stock linked to your own seller profile.',
-  'You can add stock only to your own linked seller profile.',
-  'You can update stock only for your own linked seller stock.',
-  'You can receive stock only for your own linked seller stock.',
-  'You can archive or restore only your own linked seller stock.',
-]) must(functions, token, `seller ownership guard: ${token}`);
+// Verify the authorization structure instead of historical error-message wording.
+must(functions, 'if (!canManageAnySellerListing) {', 'seller edit authorization branch');
+must(functions, 'existing.sellerId !== sellerId', 'seller edit listing ownership');
 must(functions, 'seller.data()?.linkedUid !== uid', 'linked UID ownership check');
+must(functions, 'seller.data()?.inventoryManagementEnabled !== true', 'seller inventory permission flag');
+must(functions, 'Seller inventory management is not enabled for this seller profile.', 'seller create/edit denial');
+must(functions, 'You can update stock only for your own linked seller stock.', 'seller stock update guard');
+must(functions, 'You can receive stock only for your own linked seller stock.', 'seller stock receipt guard');
+must(functions, 'You can archive or restore only your own linked seller stock.', 'seller archive/restore guard');
 must(functions, 'commissionType: canManageAnySellerListing ? commission.commissionType : existing.commissionType', 'non-manager commission preservation');
 must(functions, 'commissionRateBps: canManageAnySellerListing ? commission.commissionRateBps : Number(existing.commissionRateBps || 0)', 'non-manager rate preservation');
 must(functions, 'commissionMinor: canManageAnySellerListing ? commission.commissionMinor : Number(existing.commissionMinor || 0)', 'non-manager fixed commission preservation');
