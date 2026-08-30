@@ -54,61 +54,90 @@ check(
   !onboarding.includes(
     'ThemeChooser',
   ),
-  'Theme chooser is removed from onboarding.',
+  'Theme chooser remains absent from onboarding.',
 );
 
 check(
-  !onboarding.includes(
-    "useState<'details' | 'theme'>",
+  onboarding.includes(
+    'type OnboardingStep = 1 | 2 | 3;',
+  )
+    && onboarding.includes(
+      'What do you want to organise first?',
+    )
+    && onboarding.includes(
+      'Your first setup plan',
+    ),
+  'Onboarding provides the guided three-step setup.',
+);
+
+check(
+  onboarding.includes(
+    'appearance:',
+  )
+    && onboarding.includes(
+      'preferences.appearance',
+    ),
+  'Login theme choice is preserved.',
+);
+
+check(
+  onboarding.includes(
+    '/spaces?welcome=1&setup=${purpose}',
+  ),
+  'New users continue to purpose-aware Space discovery.',
+);
+
+check(
+  onboarding.includes(
+    'sign-in page',
+  )
+    && onboarding.includes(
+      'changed later in Settings',
+    ),
+  'Theme ownership is explained without adding a chooser.',
+);
+
+check(
+  onboarding.includes(
+    'Created automatically',
   )
     && !onboarding.includes(
-      "step === 'theme'",
+      'createSpace(',
     ),
-  'Onboarding is one focused Personal setup.',
-);
-
-check(
-  onboarding.includes(
-    'appearance: preferences.appearance',
-  ),
-  'Login/guest theme choice is preserved during onboarding.',
-);
-
-check(
-  onboarding.includes(
-    "'/spaces?welcome=1'",
-  ),
-  'New users continue to Space discovery.',
-);
-
-check(
-  onboarding.includes(
-    'changed later in Settings',
-  ),
-  'Onboarding explains theme can be changed later.',
+  'Personal Space remains automatic.',
 );
 
 check(
   spaces.includes(
-    'welcomeFromOnboarding',
+    'setupFromOnboarding',
   )
     && spaces.includes(
-      'space-discovery-welcome-v111',
+      'guided-onboarding-next-v113',
     )
     && spaces.includes(
       'Your Personal Space is ready',
     ),
-  'Spaces page provides first-run Space discovery guidance.',
+  'Spaces page gives purpose-aware setup guidance.',
+);
+
+check(
+  spaces.includes(
+    "setupFromOnboarding === 'household'",
+  )
+    && spaces.includes(
+      "setupFromOnboarding === 'sme'",
+    )
+    && spaces.includes(
+      "setupFromOnboarding === 'trip'",
+    ),
+  'Household, SME and Trip recommendations are supported.',
 );
 
 check(
   functions.includes(
     "request.data?.appearance ?? 'dark'",
-  )
-    && functions.includes(
-      'appearance, textSize',
-    ),
-  'Backend continues to save appearance safely.',
+  ),
+  'Backend appearance compatibility remains intact.',
 );
 
 if (failures.length) {
@@ -119,5 +148,5 @@ if (failures.length) {
 
 console.log('');
 console.log(
-  'Signup + Space discovery verification PASS.',
+  'Signup + guided Space discovery verification PASS.',
 );

@@ -1,5 +1,5 @@
 {
-  "scopeVersion": "2026-08-30.1",
+  "scopeVersion": "2026-08-30.2",
   "targetRelease": "BajetBN v1.13.0",
   "baseCheckpoint": "0740bb7660f37906332b13932e69e11b51183eba",
   "purpose": "Single master register for every remaining BajetBN development item before production is considered.",
@@ -100,7 +100,14 @@
     {
       "id": "onboarding.guided_setup",
       "title": "Guided first-use onboarding with clear purpose selection, Personal Space explanation and first-setup checklist while keeping theme selection login-only",
-      "status": "planned"
+      "status": "complete",
+      "evidence": [
+        "src/features/onboarding/OnboardingPage.tsx",
+        "src/features/spaces/SpacesPage.tsx",
+        "src/services/i18n.ts",
+        "src/styles/global.css",
+        "scripts/verify-guided-onboarding-v113.mjs"
+      ]
     },
     {
       "id": "release.final_repository_audit",

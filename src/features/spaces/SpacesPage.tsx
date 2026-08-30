@@ -36,6 +36,29 @@ export function SpacesPage() {
 
   const welcomeFromOnboarding =
     searchParams.get('welcome') === '1';
+
+  const setupFromOnboarding =
+    searchParams.get('setup');
+
+  const suggestedSpaceType:
+    Exclude<SpaceType, 'personal'> | null =
+      setupFromOnboarding === 'household'
+        ? 'household'
+        : setupFromOnboarding === 'sme'
+          ? 'sme'
+          : setupFromOnboarding === 'trip'
+            ? 'trip'
+            : null;
+
+  const suggestedSpaceLabel =
+    suggestedSpaceType === 'household'
+      ? 'Household'
+      : suggestedSpaceType === 'sme'
+        ? 'SME'
+        : suggestedSpaceType === 'trip'
+          ? 'Trip'
+          : '';
+
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [invitations, setInvitations] = useState<SpaceInvitation[]>([]);
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
@@ -61,6 +84,10 @@ export function SpacesPage() {
 
   const active = useMemo(() => spaces.filter((item) => !item.archivedAt), [spaces]);
   const archived = useMemo(() => spaces.filter((item) => item.archivedAt), [spaces]);
+
+  const personalSpace =
+    active.find((item) => item.type === 'personal') || null;
+
   const openEdit = (space: Space) => { setSelected(space); setModal('edit'); };
   const pendingInvitations = useMemo(() => invitations.filter((item) => item.status === 'pending'), [invitations]);
 
@@ -129,14 +156,95 @@ export function SpacesPage() {
     <PageHeader eyebrow="Money groups" title="Spaces" description="Use Spaces to separate personal, household, trip, business, or collection records." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived Spaces <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
     {error && <div className="notice error">{error}</div>}
     {welcomeFromOnboarding && (
-      <div className="info-banner space-discovery-welcome-v111">
-        <strong>Your Personal Space is ready</strong>
-        <span>
-          Start there for your own money. Create a Household,
-          Trip or SME Space only when you need a separate
-          shared or business workspace.
-        </span>
-      </div>
+      <section className="panel space-discovery-welcome-v111 guided-onboarding-next-v113">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Setup complete
+            </span>
+
+            <h2>
+              Your Personal Space is ready
+            </h2>
+          </div>
+
+          <span className="status-pill">
+            First step complete
+          </span>
+        </div>
+
+        {suggestedSpaceType ? (
+          <>
+            <p>
+              Your Personal Space stays private for your own money.
+              Based on your setup choice, BajetBN recommends creating
+              a {suggestedSpaceLabel} Space next.
+            </p>
+
+            <div className="guided-next-actions">
+              <button
+                type="button"
+                className="button primary"
+                onClick={() =>
+                  setModal('create')
+                }
+              >
+                Create {suggestedSpaceLabel} Space
+              </button>
+
+              {personalSpace && (
+                <Link
+                  className="button secondary"
+                  to={`/spaces/${personalSpace.id}?section=accounts`}
+                >
+                  Add personal account first
+                </Link>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <p>
+              Start by adding the bank, cash, card or e-wallet
+              accounts you actually use. Then record your first
+              income or expense inside your Personal Space.
+            </p>
+
+            <div className="guided-next-actions">
+              {personalSpace ? (
+                <>
+                  <Link
+                    className="button primary"
+                    to={`/spaces/${personalSpace.id}?section=accounts`}
+                  >
+                    Add your first account
+                  </Link>
+
+                  <Link
+                    className="button secondary"
+                    to={`/spaces/${personalSpace.id}`}
+                  >
+                    Open Personal Space
+                  </Link>
+                </>
+              ) : (
+                <Link
+                  className="button primary"
+                  to="/accounts"
+                >
+                  Add your first account
+                </Link>
+              )}
+            </div>
+          </>
+        )}
+
+        <small className="muted">
+          You can create other Spaces anytime.
+          Your onboarding choice does not lock you
+          into one workflow.
+        </small>
+      </section>
     )}
 
     <div className="info-banner"><strong>Safe Space removal</strong><span>Empty Spaces can be deleted. Spaces with members or money history can be archived and restored later.</span></div>
@@ -145,7 +253,7 @@ export function SpacesPage() {
 
 
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
-    {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" onClose={() => setModal(null)} onSubmit={async (values) => { await createSpace({ uid: user.uid, currency: profile.currency, timezone: profile.timezone, ...values }); setModal(null); await load(); }} />}
+    {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" initialType={suggestedSpaceType || undefined} onClose={() => setModal(null)} onSubmit={async (values) => { await createSpace({ uid: user.uid, currency: profile.currency, timezone: profile.timezone, ...values }); setModal(null); await load(); }} />}
     {modal === 'edit' && selected && <SpaceForm title="Edit Space" submitLabel="Save changes" initial={selected} lockType onClose={() => setModal(null)} onSubmit={async (values) => { await updateSpace(selected.id, values); setModal(null); await load(); }} />}
   </main>;
 }
@@ -259,6 +367,7 @@ function SpaceForm({
   title,
   submitLabel,
   initial,
+  initialType,
   lockType = false,
   onClose,
   onSubmit,
@@ -266,6 +375,7 @@ function SpaceForm({
   title: string;
   submitLabel: string;
   initial?: Space;
+  initialType?: Exclude<SpaceType, 'personal'>;
   lockType?: boolean;
   onClose: () => void;
   onSubmit: (value: {
@@ -277,7 +387,9 @@ function SpaceForm({
 }) {
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState<Exclude<SpaceType, 'personal'>>(
-    (initial?.type === 'personal' ? 'custom' : initial?.type) || 'household',
+    (initial?.type === 'personal' ? 'custom' : initial?.type)
+      || initialType
+      || 'household',
   );
   const [description, setDescription] = useState(initial?.description || '');
   const [customModules, setCustomModules] = useState<CustomSpaceModule[]>(
