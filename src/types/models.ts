@@ -508,6 +508,51 @@ export interface BusinessProfile {
   updatedAt?: Timestamp;
 }
 
+export type BusinessPayrollRunStatus =
+  | 'pending'
+  | 'posted'
+  | 'cancelled';
+
+export interface BusinessEmployee {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  name: string;
+  roleTitle: string;
+  employeeNumber: string;
+  phone: string;
+  monthlyWageMinor: number;
+  currency: string;
+  archivedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface BusinessPayrollRun {
+  id: string;
+  displayId: string;
+  spaceId: string;
+  ownerId: string;
+  employeeId: string;
+  employeeName: string;
+  period: string;
+  payDate: string;
+  grossMinor: number;
+  deductionsMinor: number;
+  netMinor: number;
+  accountId: string;
+  accountName: string;
+  currency: string;
+  note: string;
+  status: BusinessPayrollRunStatus;
+  transactionId?: string | null;
+  idempotencyKey: string;
+  failureReason?: string | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface BusinessContact {
   id: string;
   displayId: string;

@@ -149,6 +149,114 @@ export async function saveBusinessProfile(
   );
 }
 
+export interface BusinessTaxSettingsInput {
+  taxEnabled: boolean;
+  taxName: string;
+  taxRateBps: number;
+  taxRegistrationNumber: string;
+}
+
+export async function saveBusinessTaxSettings(
+  spaceId: string,
+  input: BusinessTaxSettingsInput,
+): Promise<void> {
+  const { db } = requireFirebase();
+  const uid = requireUid();
+
+  const ref = doc(
+    db,
+    'businessProfiles',
+    spaceId,
+  );
+
+  const existing = await getDoc(ref);
+
+  if (!existing.exists()) {
+    throw new Error(
+      'Set up the Business Profile before configuring tax.',
+    );
+  }
+
+  const profile =
+    existing.data() as BusinessProfile;
+
+  if (profile.ownerId !== uid) {
+    throw new Error(
+      'Only the business owner can change tax settings.',
+    );
+  }
+
+  const taxName =
+    input.taxName.trim()
+    || 'Tax';
+
+  const taxRateBps =
+    Math.max(
+      0,
+      Math.min(
+        10000,
+        Math.round(
+          input.taxRateBps,
+        ),
+      ),
+    );
+
+  await updateDoc(
+    ref,
+    {
+      taxEnabled:
+        input.taxEnabled,
+      taxName,
+      taxRateBps,
+      taxRegistrationNumber:
+        input.taxRegistrationNumber.trim(),
+      updatedAt:
+        serverTimestamp(),
+    },
+  );
+}
+
+export async function setBusinessPayrollEnabled(
+  spaceId: string,
+  enabled: boolean,
+): Promise<void> {
+  const { db } = requireFirebase();
+  const uid = requireUid();
+
+  const ref = doc(
+    db,
+    'businessProfiles',
+    spaceId,
+  );
+
+  const existing = await getDoc(ref);
+
+  if (!existing.exists()) {
+    throw new Error(
+      'Set up the Business Profile before enabling payroll.',
+    );
+  }
+
+  const profile =
+    existing.data() as BusinessProfile;
+
+  if (profile.ownerId !== uid) {
+    throw new Error(
+      'Only the business owner can change payroll settings.',
+    );
+  }
+
+  await updateDoc(
+    ref,
+    {
+      payrollEnabled:
+        enabled,
+      updatedAt:
+        serverTimestamp(),
+    },
+  );
+}
+
 export async function listBusinessContacts(
   spaceId: string,
 ): Promise<BusinessContact[]> {
