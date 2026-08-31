@@ -43,19 +43,19 @@ check(
 );
 
 check(
-  onboarding.includes(
-    "value: 'personal'",
+  !onboarding.includes(
+    'onboarding-purpose-grid',
   )
-    && onboarding.includes(
+    && !onboarding.includes(
       "value: 'household'",
     )
     && onboarding.includes(
-      "value: 'sme'",
+      'Space = purpose',
     )
     && onboarding.includes(
-      "value: 'trip'",
+      'Account = where money is kept',
     ),
-  'Purpose choices cover Personal, Household, Business and Trip.',
+  'First-use onboarding starts simple and teaches Space versus Account.',
 );
 
 check(
@@ -87,15 +87,18 @@ check(
 
 check(
   spaces.includes(
-    'suggestedSpaceType',
+    'A Space is one part of your life. Accounts inside it are where that money is kept.',
   )
     && spaces.includes(
-      'Create {suggestedSpaceLabel} Space',
+      '?section=accounts',
     )
     && spaces.includes(
-      '?section=accounts',
+      'You do not need another Space yet.',
+    )
+    && !spaces.includes(
+      'space-pos-shortcut',
     ),
-  'Space discovery provides useful next actions.',
+  'Space discovery starts with Personal and avoids a generic Business POS shortcut.',
 );
 
 check(

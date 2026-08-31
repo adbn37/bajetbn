@@ -62,12 +62,18 @@ check(
     'type OnboardingStep = 1 | 2 | 3;',
   )
     && onboarding.includes(
-      'What do you want to organise first?',
+      'How BajetBN organises your money',
     )
     && onboarding.includes(
-      'Your first setup plan',
+      'Your first steps',
+    )
+    && onboarding.includes(
+      'Space = purpose',
+    )
+    && onboarding.includes(
+      'Account = where money is kept',
     ),
-  'Onboarding provides the guided three-step setup.',
+  'Onboarding provides the simplified guided three-step setup.',
 );
 
 check(
@@ -82,9 +88,12 @@ check(
 
 check(
   onboarding.includes(
-    '/spaces?welcome=1&setup=${purpose}',
-  ),
-  'New users continue to purpose-aware Space discovery.',
+    "'/spaces?welcome=1'",
+  )
+    && !onboarding.includes(
+      '/spaces?welcome=1&setup=${purpose}',
+    ),
+  'New users enter simple Personal-first Space discovery.',
 );
 
 check(
@@ -108,7 +117,7 @@ check(
 );
 
 check(
-  spaces.includes(
+  !spaces.includes(
     'setupFromOnboarding',
   )
     && spaces.includes(
@@ -116,21 +125,33 @@ check(
     )
     && spaces.includes(
       'Your Personal Space is ready',
+    )
+    && spaces.includes(
+      'You do not need another Space yet.',
+    )
+    && spaces.includes(
+      'A Space is one part of your life. Accounts inside it are where that money is kept.',
     ),
-  'Spaces page gives purpose-aware setup guidance.',
+  'Spaces page gives simple Personal-first guidance.',
 );
 
 check(
-  spaces.includes(
+  !spaces.includes(
     "setupFromOnboarding === 'household'",
   )
-    && spaces.includes(
+    && !spaces.includes(
       "setupFromOnboarding === 'sme'",
     )
-    && spaces.includes(
+    && !spaces.includes(
       "setupFromOnboarding === 'trip'",
+    )
+    && spaces.includes(
+      "values.type === 'sme'",
+    )
+    && spaces.includes(
+      '/business/setup',
     ),
-  'Household, SME and Trip recommendations are supported.',
+  'Optional Spaces stay user-initiated while Business setup remains type-aware.',
 );
 
 check(

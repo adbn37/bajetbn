@@ -180,10 +180,13 @@ check(
   !onboarding.includes(
     'Business / SME',
   )
-    && onboarding.includes(
-      "title: 'Business'",
+    && !/\bSME\b/.test(
+      onboarding,
+    )
+    && onboarding.toLowerCase().includes(
+      'business',
     ),
-  'Onboarding uses Business terminology.',
+  'Onboarding uses Business terminology without legacy SME wording.',
 );
 
 check(

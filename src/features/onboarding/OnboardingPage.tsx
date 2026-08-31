@@ -1,5 +1,4 @@
 import {
-  useMemo,
   useState,
   type FormEvent,
 } from 'react';
@@ -15,59 +14,6 @@ import { requireFirebase } from '../../services/firebase';
 import { getErrorMessage } from '../../utils/errors';
 
 type OnboardingStep = 1 | 2 | 3;
-
-type OnboardingPurpose =
-  | 'personal'
-  | 'household'
-  | 'sme'
-  | 'trip';
-
-interface PurposeOption {
-  value: OnboardingPurpose;
-  icon: string;
-  title: string;
-  description: string;
-  nextStep: string;
-}
-
-const PURPOSE_OPTIONS: PurposeOption[] = [
-  {
-    value: 'personal',
-    icon: 'P',
-    title: 'Personal money',
-    description:
-      'Track your own bank, cash, spending, bills, budgets and savings.',
-    nextStep:
-      'Add your first account and record your first money activity.',
-  },
-  {
-    value: 'household',
-    icon: 'H',
-    title: 'Household & family',
-    description:
-      'Keep household money, shared bills, tasks and shopping together.',
-    nextStep:
-      'Create a Household Space after your Personal Space is ready.',
-  },
-  {
-    value: 'sme',
-    icon: 'B',
-    title: 'Business',
-    description:
-      'Separate business accounts, sales, POS, invoices and operations from personal money.',
-    nextStep:
-      'Create an Business Space after your Personal Space is ready.',
-  },
-  {
-    value: 'trip',
-    icon: 'T',
-    title: 'Trip / travel',
-    description:
-      'Plan trip money, contributions, expenses, tasks and settlements.',
-    nextStep:
-      'Create a Trip Space after your Personal Space is ready.',
-  },
-];
 
 export function OnboardingPage() {
   const {
@@ -95,8 +41,6 @@ export function OnboardingPage() {
   const [timezone, setTimezone] =
     useState('Asia/Brunei');
 
-  const [purpose, setPurpose] =
-    useState<OnboardingPurpose>('personal');
 
   const [busy, setBusy] =
     useState(false);
@@ -104,14 +48,6 @@ export function OnboardingPage() {
   const [error, setError] =
     useState('');
 
-  const selectedPurpose = useMemo(
-    () =>
-      PURPOSE_OPTIONS.find(
-        (item) =>
-          item.value === purpose,
-      ) || PURPOSE_OPTIONS[0],
-    [purpose],
-  );
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -147,7 +83,7 @@ export function OnboardingPage() {
       await refreshProfile();
 
       navigate(
-        `/spaces?welcome=1&setup=${purpose}`,
+        '/spaces?welcome=1',
         { replace: true },
       );
     } catch (nextError) {
@@ -216,8 +152,8 @@ export function OnboardingPage() {
               {step === 1
                 ? 'Tell us about you'
                 : step === 2
-                  ? 'What do you want to organise first?'
-                  : 'Your first setup plan'}
+                  ? 'How BajetBN organises your money'
+                  : 'Your first steps'}
             </h1>
           </div>
 
@@ -250,16 +186,17 @@ export function OnboardingPage() {
 
         {step === 2 && (
           <p>
-            Choose what you want help setting up first.
-            This does not remove your Personal Space —
-            it only changes the next recommended step.
+            Start with your Personal Space. A Space separates one part
+            of your financial life; Accounts inside it show where that
+            money is actually kept.
           </p>
         )}
 
         {step === 3 && (
           <p>
-            Review what BajetBN will prepare for you.
-            You can change or add more Spaces later.
+            Keep the first setup simple. Add another Space later only
+            when a household, trip, business or other purpose needs to
+            stay separate from your personal money.
           </p>
         )}
 
@@ -368,96 +305,75 @@ export function OnboardingPage() {
           )}
 
           {step === 2 && (
-            <div
-              className="onboarding-purpose-grid"
-              role="radiogroup"
-              aria-label="Choose what to organise first"
-            >
-              {PURPOSE_OPTIONS.map(
-                (option) => {
-                  const selected =
-                    purpose === option.value;
+            <div className="guided-setup-review">
+              <article className="guided-setup-summary">
+                <span
+                  className="space-icon personal"
+                  aria-hidden="true"
+                >
+                  P
+                </span>
 
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`onboarding-purpose-card ${
-                        selected
-                          ? 'selected'
-                          : ''
-                      }`}
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() =>
-                        setPurpose(
-                          option.value,
-                        )
-                      }
-                    >
-                      <span
-                        className={`space-icon ${
-                          option.value === 'sme'
-                            ? 'sme'
-                            : option.value
-                        }`}
-                        aria-hidden="true"
-                      >
-                        {option.icon}
-                      </span>
+                <div>
+                  <span className="eyebrow">
+                    The simple rule
+                  </span>
 
-                      <span className="onboarding-purpose-copy">
-                        <strong>
-                          {option.title}
-                        </strong>
+                  <h2>
+                    Space = purpose
+                  </h2>
 
-                        <small>
-                          {option.description}
-                        </small>
-                      </span>
+                  <p>
+                    Your Personal Space is your private money home.
+                    Household, Trip and Business Spaces are separate
+                    environments you can add only when you need them.
+                  </p>
+                </div>
+              </article>
 
-                      <span
-                        className="onboarding-purpose-check"
-                        aria-hidden="true"
-                      >
-                        {selected ? '✓' : ''}
-                      </span>
-                    </button>
-                  );
-                },
-              )}
+              <div className="guided-setup-checklist">
+                <article className="guided-setup-item complete">
+                  <span>S</span>
+
+                  <div>
+                    <strong>
+                      Space = purpose
+                    </strong>
+
+                    <small>
+                      Personal, Household, Trip or Business.
+                    </small>
+                  </div>
+
+                  <em>
+                    Context
+                  </em>
+                </article>
+
+                <article className="guided-setup-item">
+                  <span>A</span>
+
+                  <div>
+                    <strong>
+                      Account = where money is kept
+                    </strong>
+
+                    <small>
+                      BIBD, Baiduri, cash, card or e-wallet can
+                      live inside the right Space.
+                    </small>
+                  </div>
+
+                  <em>
+                    Money location
+                  </em>
+                </article>
+              </div>
             </div>
           )}
 
           {step === 3 && (
             <div className="guided-setup-review">
-              <article className="guided-setup-summary">
-                <span
-                  className={`space-icon ${
-                    purpose === 'sme'
-                      ? 'sme'
-                      : purpose
-                  }`}
-                  aria-hidden="true"
-                >
-                  {selectedPurpose.icon}
-                </span>
-
-                <div>
-                  <span className="eyebrow">
-                    Your focus
-                  </span>
-
-                  <h2>
-                    {selectedPurpose.title}
-                  </h2>
-
-                  <p>
-                    {selectedPurpose.description}
-                  </p>
-                </div>
-              </article>
-
               <div className="guided-setup-checklist">
                 <article className="guided-setup-item complete">
                   <span>1</span>
@@ -468,12 +384,13 @@ export function OnboardingPage() {
                     </strong>
 
                     <small>
-                      Created automatically as your
-                      private money home.
+                      Created automatically as your private money home.
                     </small>
                   </div>
 
-                  <em>Ready</em>
+                  <em>
+                    Ready
+                  </em>
                 </article>
 
                 <article className="guided-setup-item">
@@ -485,13 +402,13 @@ export function OnboardingPage() {
                     </strong>
 
                     <small>
-                      Add your bank, cash, card or
-                      e-wallet so balances have a
-                      real money location.
+                      Add the bank, cash, card or e-wallet you actually use.
                     </small>
                   </div>
 
-                  <em>Next</em>
+                  <em>
+                    Next
+                  </em>
                 </article>
 
                 <article className="guided-setup-item">
@@ -499,15 +416,36 @@ export function OnboardingPage() {
 
                   <div>
                     <strong>
-                      Continue with {selectedPurpose.title}
+                      Record your first money activity
                     </strong>
 
                     <small>
-                      {selectedPurpose.nextStep}
+                      Add income or an expense inside your Personal Space.
                     </small>
                   </div>
 
-                  <em>Suggested</em>
+                  <em>
+                    Then
+                  </em>
+                </article>
+
+                <article className="guided-setup-item">
+                  <span>4</span>
+
+                  <div>
+                    <strong>
+                      Add another Space only when needed
+                    </strong>
+
+                    <small>
+                      Use one for a household, trip, business or
+                      another purpose that should stay separate.
+                    </small>
+                  </div>
+
+                  <em>
+                    Later
+                  </em>
                 </article>
               </div>
 
@@ -539,7 +477,7 @@ export function OnboardingPage() {
                 : step === 1
                   ? 'Continue'
                   : step === 2
-                    ? 'Review my setup'
+                    ? 'Show my first steps'
                     : 'Finish setup'}
             </button>
           </div>

@@ -29,6 +29,25 @@ const labels: Record<SpaceType, string> = {
 };
 type SpaceLifecycleAction = 'archive' | 'delete';
 
+function spaceDefaultDescription(type: SpaceType) {
+  const descriptions: Record<SpaceType, string> = {
+    personal: 'Your private home for your own accounts, spending, bills, budgets and savings.',
+    household: 'Shared household money, bills, shopping, tasks and members.',
+    sme: 'One business environment. Its operational tools adapt to the type of business you set up.',
+    trip: 'Trip budget, contributions, expenses, bookings, tasks and settlements.',
+    goal: 'Keep money and activity for one goal separate and easy to follow.',
+    collection: 'Organise a collection, its items, values and related activity.',
+    vehicle: 'Keep one vehicle\'s costs, records and related money together.',
+    property: 'Keep one property\'s money, records and responsibilities together.',
+    project: 'Track money, tasks and people for one project.',
+    event: 'Keep one event\'s budget, tasks, contributions and spending together.',
+    asset: 'Track money and records connected to one asset.',
+    custom: 'Create a flexible Space and choose the modules that purpose needs.',
+  };
+
+  return descriptions[type];
+}
+
 export function SpacesPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -36,28 +55,6 @@ export function SpacesPage() {
 
   const welcomeFromOnboarding =
     searchParams.get('welcome') === '1';
-
-  const setupFromOnboarding =
-    searchParams.get('setup');
-
-  const suggestedSpaceType:
-    Exclude<SpaceType, 'personal'> | null =
-      setupFromOnboarding === 'household'
-        ? 'household'
-        : setupFromOnboarding === 'sme'
-          ? 'sme'
-          : setupFromOnboarding === 'trip'
-            ? 'trip'
-            : null;
-
-  const suggestedSpaceLabel =
-    suggestedSpaceType === 'household'
-      ? 'Household'
-      : suggestedSpaceType === 'sme'
-        ? 'Business'
-        : suggestedSpaceType === 'trip'
-          ? 'Trip'
-          : '';
 
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [invitations, setInvitations] = useState<SpaceInvitation[]>([]);
@@ -153,7 +150,7 @@ export function SpacesPage() {
 
 
   return <main className="page">
-    <PageHeader eyebrow="Money groups" title="Spaces" description="Use Spaces to separate personal, household, trip, business, or collection records." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived Spaces <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
+    <PageHeader eyebrow="One app. Separate Spaces." title="Spaces" description="A Space is one part of your life. Accounts inside it are where that money is kept." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived Spaces <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
     {error && <div className="notice error">{error}</div>}
     {welcomeFromOnboarding && (
       <section className="panel space-discovery-welcome-v111 guided-onboarding-next-v113">
@@ -169,80 +166,46 @@ export function SpacesPage() {
           </div>
 
           <span className="status-pill">
-            First step complete
+            Start here
           </span>
         </div>
 
-        {suggestedSpaceType ? (
-          <>
-            <p>
-              Your Personal Space stays private for your own money.
-              Based on your setup choice, BajetBN recommends creating
-              a {suggestedSpaceLabel} Space next.
-            </p>
+        <p>
+          You do not need another Space yet. Start by adding the bank,
+          cash, card or e-wallet you actually use, then record your first
+          income or expense inside your Personal Space.
+        </p>
 
-            <div className="guided-next-actions">
-              <button
-                type="button"
+        <div className="guided-next-actions">
+          {personalSpace ? (
+            <>
+              <Link
                 className="button primary"
-                onClick={() =>
-                  setModal('create')
-                }
+                to={`/spaces/${personalSpace.id}?section=accounts`}
               >
-                Create {suggestedSpaceLabel} Space
-              </button>
+                Add your first account
+              </Link>
 
-              {personalSpace && (
-                <Link
-                  className="button secondary"
-                  to={`/spaces/${personalSpace.id}?section=accounts`}
-                >
-                  Add personal account first
-                </Link>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <p>
-              Start by adding the bank, cash, card or e-wallet
-              accounts you actually use. Then record your first
-              income or expense inside your Personal Space.
-            </p>
-
-            <div className="guided-next-actions">
-              {personalSpace ? (
-                <>
-                  <Link
-                    className="button primary"
-                    to={`/spaces/${personalSpace.id}?section=accounts`}
-                  >
-                    Add your first account
-                  </Link>
-
-                  <Link
-                    className="button secondary"
-                    to={`/spaces/${personalSpace.id}`}
-                  >
-                    Open Personal Space
-                  </Link>
-                </>
-              ) : (
-                <Link
-                  className="button primary"
-                  to="/accounts"
-                >
-                  Add your first account
-                </Link>
-              )}
-            </div>
-          </>
-        )}
+              <Link
+                className="button secondary"
+                to={`/spaces/${personalSpace.id}`}
+              >
+                Open Personal Space
+              </Link>
+            </>
+          ) : (
+            <Link
+              className="button primary"
+              to="/accounts"
+            >
+              Add your first account
+            </Link>
+          )}
+        </div>
 
         <small className="muted">
-          You can create other Spaces anytime.
-          Your onboarding choice does not lock you
-          into one workflow.
+          Create a Household, Trip, Business or other Space later only
+          when that part of your life needs its own separate environment.
         </small>
       </section>
     )}
@@ -253,7 +216,7 @@ export function SpacesPage() {
 
 
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
-    {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" initialType={suggestedSpaceType || undefined} onClose={() => setModal(null)} onSubmit={async (values) => {
+    {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" onClose={() => setModal(null)} onSubmit={async (values) => {
       const createdSpaceId = await createSpace({
         uid: user.uid,
         currency: profile.currency,
@@ -277,7 +240,6 @@ export function SpacesPage() {
 function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { spaces: Space[]; busyId: string; navigate: ReturnType<typeof useNavigate>; onEdit: (space: Space) => void; onArchive: (space: Space) => void; onDelete: (space: Space) => void }) {
   return <section className="card-grid spaces-card-grid">{spaces.map((space) => {
     const open = () => navigate(`/spaces/${space.id}`);
-    const openPos = () => navigate(`/spaces/${space.id}/pos`);
     const stop = (event: MouseEvent<HTMLButtonElement>) => event.stopPropagation();
     const handleKey = (event: KeyboardEvent<HTMLElement>) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -302,9 +264,7 @@ function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { 
 
       <div className="space-card-copy">
         <h2>{space.name}</h2>
-        <p>{space.description || (space.type === 'personal'
-          ? 'Your private money area.'
-          : `A ${labels[space.type].toLowerCase()} area for its money activity.`)}</p>
+        <p>{space.description || spaceDefaultDescription(space.type)}</p>
       </div>
 
       <div className="meta-row">
@@ -317,17 +277,6 @@ function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { 
         <small>{space.displayId}</small>
 
         <div className="space-card-primary-actions">
-          {space.type === 'sme' && <button
-            type="button"
-            className="space-pos-shortcut"
-            onClick={(event) => {
-              stop(event);
-              openPos();
-            }}
-          >
-            POS
-          </button>}
-
           <span className="space-open-label">Open →</span>
 
           <details
@@ -458,7 +407,7 @@ function SpaceForm({
       </label>
 
       <label>
-        Type
+        What is this Space for?
         <select
           disabled={lockType}
           value={type}
@@ -476,6 +425,10 @@ function SpaceForm({
           <option value="asset">Asset</option>
           <option value="custom">Custom</option>
         </select>
+
+        <small className="muted">
+          {spaceDefaultDescription(type)}
+        </small>
       </label>
 
       {type === 'custom' && <fieldset className="custom-space-module-picker">

@@ -23,18 +23,16 @@ const TIPS: ContextualHelpTip[] = [
   {
     id: 'spaces',
     eyebrow: 'Spaces',
-    title: 'Keep shared money organised',
+    title: 'Space = purpose',
     body:
-      'Spaces separate different parts of your life. Use them for your household, trips, Business, collections and other shared plans.',
-    actionLabel: 'View Spaces',
-    actionPath: '/spaces',
+      'A Space is one part of your financial life. Your Personal Space is for your own money; create another Space only when something needs to stay separate. Accounts inside a Space show where that money is kept.',
   },
   {
     id: 'space-details',
     eyebrow: 'Inside a Space',
-    title: 'Everything for this Space lives here',
+    title: 'This Space has its own tools',
     body:
-      'Use the Space shortcuts to manage its money, tasks, members and activity without mixing it with unrelated records.',
+      'Use the tools that fit this Space without mixing its money with unrelated records. Business tools adapt to the business type you set up, while Personal and other Spaces keep their own purpose.',
   },
   {
     id: 'pos',
@@ -46,9 +44,9 @@ const TIPS: ContextualHelpTip[] = [
   {
     id: 'accounts',
     eyebrow: 'Accounts',
-    title: 'Your real money locations',
+    title: 'Account = where money is kept',
     body:
-      'Add bank, cash, card and e-wallet accounts here. Account balances help BajetBN show where your money actually sits.',
+      'Add the bank, cash, card or e-wallet accounts that belong to this part of your life. For example, a Personal Space can contain BIBD and Cash, while a Business Space can have its own bank and cash accounts.',
   },
   {
     id: 'activity',
