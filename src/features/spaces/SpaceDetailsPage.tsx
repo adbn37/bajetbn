@@ -258,10 +258,11 @@ export function SpaceDetailsPage() {
 
       const nextPosAccess =
         nextSpace.type === 'sme'
+        && nextSpace.ownerId !== user.uid
           ? await getMySmePosAccess(
               spaceId,
               user.uid,
-            )
+            ).catch(() => null)
           : null;
 
       const nextSmePosRole: SmePosRole | null =
@@ -592,7 +593,7 @@ export function SpaceDetailsPage() {
       leading={<SpaceAvatar space={space} size="large" />}
       description={
         space.type === 'sme'
-          ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Business`
+          ? `${space.ownerId === user?.uid || currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Business`
           : spaceDescription(space)
       }
       action={<Link className="button secondary" to="/spaces">Back</Link>}
@@ -635,7 +636,7 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
-    {activeTab === 'overview' && (
+    {(activeTab === 'overview' || space.type === 'sme') && (
       <SpaceActionHub
         space={space}
         members={members}
@@ -802,7 +803,8 @@ export function SpaceDetailsPage() {
     {activeTab === 'overview' && space.type === 'collection' && (
       <CollectionCommandCentre space={space} />
     )}
-    {(!compactActionHome || activeTab !== 'overview') && (
+    {space.type !== 'sme'
+      && (!compactActionHome || activeTab !== 'overview') && (
       <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
       {space.type === 'sme' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/pos`}>Point of sale</Link>}
@@ -1072,10 +1074,6 @@ function SpaceOverview({
     { key: 'reports', section: 'reports', icon: '⌁', title: 'Money reports', detail: 'Weekly, monthly, yearly or custom dates for this Space.' },
     { key: 'calendar', section: 'calendar', icon: '▦', title: 'Calendar', detail: 'See dates and deadlines belonging to this Space.' },
   ] : [];
-
-  if (space.type === 'sme') {
-    quickLinks.unshift({ key: 'pos', to: `/spaces/${space.id}/pos`, icon: '▣', title: 'Point of sale', detail: 'Open the register and daily shop tools.', featured: true });
-  }
 
   if (space.type === 'collection') {
     quickLinks.unshift({ key: 'collection', to: `/spaces/${space.id}/collection`, icon: 'C', title: 'Collection inventory', detail: 'Scan, find, label, and organise collectibles.', featured: true });

@@ -459,7 +459,7 @@ export function BusinessWizardPage() {
       );
 
       navigate(
-        `/spaces/${space.id}/business?setup=complete`,
+        `/spaces/${space.id}?setup=complete`,
         {
           replace: true,
         },

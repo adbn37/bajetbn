@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   useCallback,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -9,10 +10,12 @@ import { Modal } from '../../components/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import { listAccounts } from '../../repositories/accountRepository';
+import { getBusinessProfile } from '../../repositories/businessAdvancedRepository';
 import { listAllCustomCategories } from '../../repositories/categoryRepository';
 import { postTransaction } from '../../repositories/transactionRepository';
 import type {
   Account,
+  BusinessIndustry,
   SmePosRole,
   Space,
   SpaceMember,
@@ -144,6 +147,37 @@ export function SpaceActionHub({
   const [spaceMoreOpen, setSpaceMoreOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
+  const [businessIndustry, setBusinessIndustry] =
+    useState<BusinessIndustry>('general');
+
+  useEffect(() => {
+    if (space.type !== 'sme') {
+      return;
+    }
+
+    let active = true;
+
+    void getBusinessProfile(space.id)
+      .then((nextProfile) => {
+        if (active) {
+          setBusinessIndustry(
+            nextProfile?.industry
+            || 'general',
+          );
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setBusinessIndustry(
+            'general',
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [space.id, space.type]);
 
   const loadMoneyOptions = useCallback(async () => {
     if (!user || space.type === 'sme') return;
@@ -197,7 +231,16 @@ export function SpaceActionHub({
   const canManage =
     currentMember?.role === 'owner' || currentMember?.role === 'admin';
 
-  const experience = getSpaceHomeExperience(space, currentMember);
+  const experience = getSpaceHomeExperience(
+    space,
+    space.ownerId === user?.uid
+      && currentMember
+      ? {
+          ...currentMember,
+          role: 'owner' as const,
+        }
+      : currentMember,
+  );
 
   const isPrimary = (
     action: 'expense' | 'income' | 'fund' | 'expenses' | 'balances' | 'bills',
@@ -212,6 +255,36 @@ export function SpaceActionHub({
     tasks: space.type === 'household' ? 'To-Do' : 'Tasks',
     shopping: space.type === 'sme' ? 'Purchase List' : 'To-Buy',
   };
+
+  const isBusinessOwner =
+    space.type === 'sme'
+    && space.ownerId === user?.uid;
+
+  const salesFocusedBusiness =
+    businessIndustry === 'retail'
+    || businessIndustry === 'marketplace';
+
+  const businessWorkflowLabel =
+    businessIndustry === 'service'
+      ? 'Service Workflow'
+      : businessIndustry === 'rental'
+        ? 'Rental Workflow'
+        : businessIndustry === 'transport_delivery'
+          ? 'Delivery Workflow'
+          : 'Operations';
+
+  const businessAdminLabel =
+    businessIndustry === 'rental'
+      ? 'Renters & Admin'
+      : 'Customers & Admin';
+
+  const showBusinessInvoices =
+    isBusinessOwner
+    && (
+      businessIndustry === 'service'
+      || businessIndustry === 'rental'
+      || businessIndustry === 'transport_delivery'
+    );
 
   return (
     <>
@@ -256,6 +329,7 @@ export function SpaceActionHub({
             className="space-action-buttons sme-space-actions-v111"
             data-space-launcher="sme"
             data-secondary-label="Business Space tools"
+            data-business-industry={businessIndustry}
             style={shortcutGridStyle}
           >
             <ShortcutLink
@@ -264,23 +338,45 @@ export function SpaceActionHub({
               primary
             />
 
-            <ShortcutLink
-              to={`/spaces/${space.id}/pos`}
-              label={smePosLabel(smePosRole)}
-            />
+            {salesFocusedBusiness ? (
+              <ShortcutLink
+                to={`/spaces/${space.id}/pos`}
+                label={
+                  businessIndustry === 'marketplace'
+                    ? 'POS & Marketplace'
+                    : smePosLabel(smePosRole)
+                }
+              />
+            ) : (
+              <ShortcutLink
+                to={`/spaces/${space.id}/business/industry`}
+                label={businessWorkflowLabel}
+              />
+            )}
 
-            {space.ownerId === user?.uid && (
-              <>
-                <ShortcutLink
-                  to={`/spaces/${space.id}?section=accounts`}
-                  label="Business Accounts"
-                />
+            {isBusinessOwner && (
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=accounts`}
+                label="Business Accounts"
+              />
+            )}
 
-                <ShortcutLink
-                  to={`/spaces/${space.id}/business`}
-                  label="Business Admin"
-                />
-              </>
+            {isBusinessOwner && (
+              <ShortcutLink
+                to={`/spaces/${space.id}/business`}
+                label={businessAdminLabel}
+              />
+            )}
+
+            {showBusinessInvoices && (
+              <ShortcutLink
+                to={`/spaces/${space.id}/business/invoices`}
+                label={
+                  businessIndustry === 'rental'
+                    ? 'Rent & Collections'
+                    : 'Invoices & Collections'
+                }
+              />
             )}
 
             <ShortcutButton
@@ -288,14 +384,16 @@ export function SpaceActionHub({
               onClick={() => setTool('tasks')}
             />
 
-            <ShortcutButton
-              label="Purchase List"
-              onClick={() => setTool('shopping')}
-            />
+            {salesFocusedBusiness && (
+              <ShortcutButton
+                label="Purchase List"
+                onClick={() => setTool('shopping')}
+              />
+            )}
 
             <ShortcutLink
-              to={`/spaces/${space.id}/business/guide`}
-              label="Staff Guide"
+              to={`/spaces/${space.id}?tab=activity`}
+              label="Activity"
             />
 
             <ShortcutButton
@@ -652,7 +750,29 @@ export function SpaceActionHub({
 
               {space.type === 'sme' && (
                 <>
+                  <ShortcutLink
+                    to={`/spaces/${space.id}/business/industry`}
+                    label="Industry Workflow"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
 
+                  <ShortcutLink
+                    to={`/spaces/${space.id}/business/guide`}
+                    label="Staff Guide"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=updates`}
+                    label="Updates"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=approvals`}
+                    label="Approvals"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
 
                   {canViewSmeFinancials && (
                     <>

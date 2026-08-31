@@ -35,7 +35,11 @@ export function SmePosPage() {
     () => members.find((item) => item.uid === user?.uid) || null,
     [members, user?.uid],
   );
-  const isOwner = Boolean(space && user && space.ownerId === user.uid && currentMember?.role === 'owner');
+  const isOwner = Boolean(
+    space
+    && user
+    && space.ownerId === user.uid
+  );
   const role: SmePosRole | null = isOwner ? 'owner' : myAccess?.status === 'active' ? myAccess.role : null;
 
   const load = useCallback(async () => {
@@ -53,7 +57,8 @@ export function SmePosPage() {
       setMembers(nextMembers);
       if (!nextSpace || nextSpace.type !== 'sme') return;
 
-      const owner = nextSpace.ownerId === user.uid && nextMembers.find((item) => item.uid === user.uid)?.role === 'owner';
+      const owner =
+        nextSpace.ownerId === user.uid;
       let nextSettings: SmePosSettings | null = null;
       try {
         nextSettings = await getSmePosSettings(spaceId);
