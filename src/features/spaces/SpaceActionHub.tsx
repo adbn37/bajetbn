@@ -229,18 +229,12 @@ export function SpaceActionHub({
 
   const shared = space.type !== 'personal';
   const canManage =
-    currentMember?.role === 'owner' || currentMember?.role === 'admin';
-
-  const experience = getSpaceHomeExperience(
-    space,
     space.ownerId === user?.uid
-      && currentMember
-      ? {
-          ...currentMember,
-          role: 'owner' as const,
-        }
-      : currentMember,
-  );
+    || currentMember?.role === 'owner'
+    || currentMember?.role === 'admin';
+
+  const experience =
+    getSpaceHomeExperience(space, currentMember);
 
   const isPrimary = (
     action: 'expense' | 'income' | 'fund' | 'expenses' | 'balances' | 'bills',

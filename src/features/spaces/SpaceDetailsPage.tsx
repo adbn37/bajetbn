@@ -807,7 +807,6 @@ export function SpaceDetailsPage() {
       && (!compactActionHome || activeTab !== 'overview') && (
       <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
-      {space.type === 'sme' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/pos`}>Point of sale</Link>}
       {space.type === 'collection' && <Link className="space-details-tab-link" to={`/spaces/${space.id}/collection`}>Collection</Link>}
       </nav>
     )}

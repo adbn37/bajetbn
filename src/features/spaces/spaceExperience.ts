@@ -79,7 +79,10 @@ export function getSpaceHomeExperience(
     };
   }
 
-  const role: SpaceRole = currentMember?.role || 'member';
+  const role: SpaceRole =
+    currentMember?.uid === space.ownerId
+      ? 'owner'
+      : currentMember?.role || 'member';
 
   if (role === 'viewer') {
     return {

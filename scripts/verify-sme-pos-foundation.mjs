@@ -26,8 +26,45 @@ requireFile('src/repositories/smePosRepository.ts');
 requireText('src/types/models.ts', "export type SmePosMode = 'standard' | 'marketplace_consignment'");
 requireText('src/types/models.ts', "export type SmePosRole = 'owner' | 'manager' | 'cashier' | 'stock_staff' | 'seller' | 'viewer'");
 requireText('src/app/App.tsx', 'spaces/:spaceId/pos');
-requireText('src/features/spaces/SpaceDetailsPage.tsx', 'Point of sale');
-requireText('src/features/spaces/SpaceDetailsPage.tsx', 'sme-pos-open-button');
+/*
+ * Business navigation is now industry-aware.
+ *
+ * POS remains available for Retail / Marketplace through
+ * SpaceActionHub instead of being permanently exposed by
+ * SpaceDetailsPage for every Business type.
+ */
+requireText(
+  'src/features/spaces/SpaceActionHub.tsx',
+  "businessIndustry === 'retail'",
+);
+requireText(
+  'src/features/spaces/SpaceActionHub.tsx',
+  "businessIndustry === 'marketplace'",
+);
+requireText(
+  'src/features/spaces/SpaceActionHub.tsx',
+  'salesFocusedBusiness',
+);
+requireText(
+  'src/features/spaces/SpaceActionHub.tsx',
+  'smePosLabel',
+);
+requireText(
+  'src/features/spaces/SpaceActionHub.tsx',
+  '/pos',
+);
+
+if (
+  read(
+    'src/features/spaces/SpaceDetailsPage.tsx',
+  ).includes(
+    '>Point of sale</Link>',
+  )
+) {
+  fail(
+    'Legacy always-visible Business POS navigation must not return to SpaceDetailsPage.',
+  );
+}
 
 const page = read('src/features/sme-pos/SmePosPage.tsx') + '\n' + read('src/features/sme-pos/SmePosSettingsPage.tsx');
 for (const token of [
