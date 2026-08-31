@@ -9,7 +9,10 @@ import { Link } from 'react-router-dom';
 import { Modal } from '../../components/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
-import { listAccounts } from '../../repositories/accountRepository';
+import {
+  listAccounts,
+  listAccountsForSpace,
+} from '../../repositories/accountRepository';
 import { getBusinessProfile } from '../../repositories/businessAdvancedRepository';
 import { listAllCustomCategories } from '../../repositories/categoryRepository';
 import { postTransaction } from '../../repositories/transactionRepository';
@@ -180,16 +183,28 @@ export function SpaceActionHub({
   }, [space.id, space.type]);
 
   const loadMoneyOptions = useCallback(async () => {
-    if (!user || space.type === 'sme') return;
+    if (!user) return;
 
     try {
       const [nextAccounts, nextCategories] = await Promise.all([
-        listAccounts(user.uid),
-        listAllCustomCategories(user.uid),
+        space.type === 'sme'
+          ? listAccountsForSpace(space.id)
+          : listAccounts(user.uid),
+        space.type === 'sme' && space.ownerId !== user.uid
+          ? Promise.resolve([])
+          : listAllCustomCategories(user.uid),
       ]);
 
       setAccounts(
-        nextAccounts.filter((item) => !item.archivedAt && !item.closedAt),
+        nextAccounts.filter(
+          (item) =>
+            !item.archivedAt
+            && !item.closedAt
+            && (
+              space.type !== 'sme'
+              || item.sharedCanUseAccount !== false
+            ),
+        ),
       );
       setCustomCategories(nextCategories);
       setError('');
@@ -198,7 +213,7 @@ export function SpaceActionHub({
         'Money shortcuts could not load your accounts or categories. Other Space tools are still available.',
       );
     }
-  }, [space.type, user]);
+  }, [space.id, space.ownerId, space.type, user]);
 
   async function openMoney(
     type: 'income' | 'expense',
@@ -217,6 +232,11 @@ export function SpaceActionHub({
 
   async function reloadCategories(): Promise<TransactionCategory[]> {
     if (!user) return allCategories;
+
+    if (space.type === 'sme' && space.ownerId !== user.uid) {
+      setCustomCategories([]);
+      return [...DEFAULT_TRANSACTION_CATEGORIES];
+    }
 
     const next = await listAllCustomCategories(user.uid);
     setCustomCategories(next);
@@ -770,6 +790,24 @@ export function SpaceActionHub({
 
                   {canViewSmeFinancials && (
                     <>
+                      {currentMember?.canUseAccounts && (
+                        <>
+                          <ShortcutButton
+                            label="Add Income"
+                            onClick={() => {
+                              setSpaceMoreOpen(false);
+                              void openMoney('income');
+                            }}
+                          />
+                          <ShortcutButton
+                            label="Add Expense"
+                            onClick={() => {
+                              setSpaceMoreOpen(false);
+                              void openMoney('expense');
+                            }}
+                          />
+                        </>
+                      )}
 
                       <ShortcutLink
                         to={`/spaces/${space.id}?section=reports`}

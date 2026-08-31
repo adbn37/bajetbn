@@ -6,7 +6,11 @@ import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { InviteForm } from '../collaboration/CollaborationPage';
-import { listAccounts } from '../../repositories/accountRepository';
+import {
+  businessSpaceIdsForAccount,
+  listAccounts,
+  posSpaceIdsForAccount,
+} from '../../repositories/accountRepository';
 import {
   listSpaceInvitations,
   listSpaceMembers,
@@ -86,8 +90,9 @@ export function SmePosSettingsPage() {
     return accounts.filter((item) => item.classification === 'business'
       && item.currency === (space?.currency || 'BND')
       && (
-        (item.spaceId === space?.id && item.posEnabled === true)
-        || (!item.spaceId && legacyIds.has(item.id))
+        (businessSpaceIdsForAccount(item).includes(space?.id || '')
+          && posSpaceIdsForAccount(item).includes(space?.id || ''))
+        || (businessSpaceIdsForAccount(item).length === 0 && legacyIds.has(item.id))
       ));
   }, [accounts, settings?.paymentAccountIds, space?.currency, space?.id]);
   const accessByUid = useMemo(() => new Map(access.map((item) => [item.uid, item])), [access]);
@@ -126,8 +131,9 @@ export function SmePosSettingsPage() {
         const nextEligibleAccounts = nextAccounts.filter((item) => item.classification === 'business'
           && item.currency === nextSpace.currency
           && (
-            (item.spaceId === nextSpace.id && item.posEnabled === true)
-            || (!item.spaceId && legacyIds.has(item.id))
+            (businessSpaceIdsForAccount(item).includes(nextSpace.id)
+              && posSpaceIdsForAccount(item).includes(nextSpace.id))
+            || (businessSpaceIdsForAccount(item).length === 0 && legacyIds.has(item.id))
           ));
         setDefaultPaymentAccountId(
           nextSettings.defaultPaymentAccountId && nextEligibleAccounts.some((item) => item.id === nextSettings.defaultPaymentAccountId)
@@ -175,7 +181,7 @@ export function SmePosSettingsPage() {
       return;
     }
     if (defaultPaymentAccountId && !eligiblePaymentAccounts.some((item) => item.id === defaultPaymentAccountId)) {
-      setError('The default payment account must belong to this Business and be enabled for POS payments.');
+      setError('The default payment account must be linked to this Business and be enabled for POS payments.');
       return;
     }
     if (!settings || settings.mode === mode || settings.status === 'draft') {
@@ -323,16 +329,16 @@ export function SmePosSettingsPage() {
             <div className="form-stack compact">
               {eligiblePaymentAccounts.map((account) => <div key={account.id}>
                 <strong>{account.name}</strong> · {account.type.replace('_', ' ')} · {account.currency}
-                {!account.spaceId && <small>Legacy setup · assign this account to {space.name} from Accounts.</small>}
+                {!account.spaceId && <small>Legacy setup · link this account to {space.name} from Accounts.</small>}
               </div>)}
-              {!eligiblePaymentAccounts.length && <small>No payment account is assigned to this Business yet.</small>}
+              {!eligiblePaymentAccounts.length && <small>No payment account is linked to this Business yet.</small>}
             </div>
             <Link className="text-button" to="/accounts">Manage business accounts →</Link>
           </fieldset>
           <label className="span-2">Default payment account<select value={defaultPaymentAccountId} onChange={(event) => setDefaultPaymentAccountId(event.target.value)}><option value="">Choose during checkout</option>{eligiblePaymentAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select><small>Optional. The account must belong to {space.name} and be enabled for POS payments from Accounts.</small></label>
         </div>
 
-        {!eligiblePaymentAccounts.length && <div className="notice">No POS payment account is assigned to {space.name}. Open Accounts, edit a business account, assign it to this Business, and enable POS payments.</div>}
+        {!eligiblePaymentAccounts.length && <div className="notice">No POS payment account is linked to {space.name}. Open Accounts, edit a business account, link it to this Business, and enable POS payments.</div>}
         <div className="button-row">
           <button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : settings ? 'Save POS settings' : 'Save POS setup'}</button>
           {settings?.status === 'draft' && <button className="button secondary" type="button" disabled={busy} onClick={() => askStatus('active')}>Activate POS</button>}

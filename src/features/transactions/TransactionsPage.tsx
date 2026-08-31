@@ -16,7 +16,10 @@ import {
   categoryApplies,
   categoryIconGlyph,
 } from '../categories/defaultCategories';
-import { listAllAccounts } from '../../repositories/accountRepository';
+import {
+  businessSpaceIdsForAccount,
+  listAllAccounts,
+} from '../../repositories/accountRepository';
 import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
 import { createCategory, listAllCustomCategories, updateCategory } from '../../repositories/categoryRepository';
 import { manageCategory } from '../../repositories/lifecycleRepository';
@@ -660,10 +663,25 @@ export function MoneyActivityModal({
     : spaces[0]?.id || '';
   const [spaceId, setSpaceId] = useState(initialSpaceId);
   const selectedSpace = spaces.find((space) => space.id === spaceId);
+  const ownsAccountsInThisForm = accounts.some((account) => account.ownerId === user?.uid);
+  const canManageCategories = selectedSpace?.type !== 'sme' || ownsAccountsInThisForm;
+  const canAttachFiles = selectedSpace?.type !== 'sme' || ownsAccountsInThisForm;
   const [localCategories, setLocalCategories] = useState<TransactionCategory[]>(categories);
   const [showCategoryEditor, setShowCategoryEditor] = useState(false);
-  const compatibleAccounts = accounts.filter((account) => !selectedSpace || account.currency === selectedSpace.currency);
-  const [accountId, setAccountId] = useState(compatibleAccounts[0]?.id || accounts[0]?.id || '');
+  const accountAvailableInSelectedSpace = (account: Account) => {
+    if (!selectedSpace) return true;
+    if (selectedSpace.type === 'sme') {
+      return account.classification === 'business'
+        && businessSpaceIdsForAccount(account).includes(selectedSpace.id);
+    }
+    return account.classification === 'personal';
+  };
+  const compatibleAccounts = accounts.filter(
+    (account) =>
+      (!selectedSpace || account.currency === selectedSpace.currency)
+      && accountAvailableInSelectedSpace(account),
+  );
+  const [accountId, setAccountId] = useState(compatibleAccounts[0]?.id || '');
   const [destinationAccountId, setDestinationAccountId] = useState('');
   const [amount, setAmount] = useState('');
   const [transactionDate, setTransactionDate] = useState(dateInTimezone(timezone));
@@ -692,7 +710,11 @@ export function MoneyActivityModal({
     setLocalCategories(categories);
   }, [categories]);
   useEffect(() => {
-    const nextAccounts = accounts.filter((account) => !selectedSpace || account.currency === selectedSpace.currency);
+    const nextAccounts = accounts.filter(
+      (account) =>
+        (!selectedSpace || account.currency === selectedSpace.currency)
+        && accountAvailableInSelectedSpace(account),
+    );
     if (!nextAccounts.some((account) => account.id === accountId)) setAccountId(nextAccounts[0]?.id || '');
     if (destinationAccountId === accountId || !nextAccounts.some((account) => account.id === destinationAccountId)) setDestinationAccountId('');
   }, [accountId, accounts, destinationAccountId, selectedSpace]);
@@ -916,12 +938,12 @@ export function MoneyActivityModal({
       {lockedSpaceId
         ? <div className="locked-space-field"><span>Space</span><strong>{selectedSpace?.name || 'This Space'}</strong><small>Locked to this Space</small></div>
         : <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} · {space.type === 'sme' ? 'Business' : 'Personal'} · {space.currency}</option>)}</select></label>}
-      <label className={type === 'transfer' ? '' : 'span-2'}>{type === 'income' ? 'Money goes into' : type === 'expense' ? 'Money comes from' : 'Move from account'}<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
-      {type === 'transfer' && <label>Move to account<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Choose account</option>{destinationOptions.map((account) => <option value={account.id} key={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>}
+      <label className={type === 'transfer' ? '' : 'span-2'}>{type === 'income' ? 'Money goes into' : type === 'expense' ? 'Money comes from' : 'Move from account'}<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.sharedCanViewBalance === false ? 'Balance hidden' : formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
+      {type === 'transfer' && <label>Move to account<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Choose account</option>{destinationOptions.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.sharedCanViewBalance === false ? 'Balance hidden' : formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>}
       <label className="span-2 amount-field">Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})<input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
     </div>
 
-    {type !== 'transfer' && <fieldset className="category-picker"><legend className="category-picker-legend"><span>Category</span><button type="button" className="text-button" onClick={() => setShowCategoryEditor(true)}>+ Add category</button></legend><div className="category-option-grid">
+    {type !== 'transfer' && <fieldset className="category-picker"><legend className="category-picker-legend"><span>Category</span>{canManageCategories && <button type="button" className="text-button" onClick={() => setShowCategoryEditor(true)}>+ Add category</button>}</legend><div className="category-option-grid">
       {categoryOptions.map((category) => <button type="button" key={category.id} className={`category-option ${categoryId === category.id ? 'selected' : ''}`} onClick={() => setCategoryId(category.id)}>
         <span className={`category-icon category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span>{!category.isSystem && <small>Custom</small>}
       </button>)}
@@ -1012,7 +1034,7 @@ export function MoneyActivityModal({
       <label className="span-2">Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional details" maxLength={500} /></label>
     </div>
 
-    <section className="transaction-inline-attachments" aria-labelledby="inline-attachment-title">
+    {canAttachFiles && <section className="transaction-inline-attachments" aria-labelledby="inline-attachment-title">
       <div className="transaction-attachments-heading">
         <div><h3 id="inline-attachment-title">Receipt or document (optional)</h3><p>Skip this section when you do not have a receipt. You can also attach files later from Money activity details.</p></div>
         <span>{pendingFiles.length}/{maxAttachmentFiles}</span>
@@ -1032,18 +1054,18 @@ export function MoneyActivityModal({
       {!online && <div className="notice warning compact-notice"><strong>Internet required for attachments</strong><span>You can still save this money activity without a file and attach one later.</span></div>}
       {attachmentError && <div className="notice error">{attachmentError}</div>}
       <small>Images and PDFs only. Up to five files, each smaller than 10 MB.</small>
-    </section>
+    </section>}
 
-    {sourceAccount && amountMinor > 0 && <div className="transaction-preview">
+    {sourceAccount && sourceAccount.sharedCanViewBalance !== false && amountMinor > 0 && <div className="transaction-preview">
       <div><span>{sourceAccount.name} after saving</span><strong>{formatMoney(projectedSource, sourceAccount.currency)}</strong></div>
-      {type === 'transfer' && destinationAccount && <div><span>{destinationAccount.name} after saving</span><strong>{formatMoney(projectedDestination, destinationAccount.currency)}</strong></div>}
+      {type === 'transfer' && destinationAccount && destinationAccount.sharedCanViewBalance !== false && <div><span>{destinationAccount.name} after saving</span><strong>{formatMoney(projectedDestination, destinationAccount.currency)}</strong></div>}
       <small>Preview only. BajetBN will safely update the final account balances.</small>
     </div>}
 
     {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
     <div className="modal-actions"><button type="button" className="button secondary" disabled={busy} onClick={closeForm}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{saveLabel}</button></div>
   </form>
-  {showCategoryEditor && type !== 'transfer' && <CategoryEditor
+  {showCategoryEditor && canManageCategories && type !== 'transfer' && <CategoryEditor
     category={null}
     defaultKind={type === 'income' ? 'income' : 'expense'}
     defaultScope={scope}

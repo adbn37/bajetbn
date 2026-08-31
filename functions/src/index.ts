@@ -123,6 +123,29 @@ function optionalString(value: unknown, max = 120): string {
   return value.trim();
 }
 
+function optionalUniqueStringList(
+  value: unknown,
+  field: string,
+  maximum = 40,
+): string[] {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > maximum) {
+    throw new HttpsError('invalid-argument', field + ' must be a list with at most ' + maximum + ' items.');
+  }
+  const values: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (typeof raw !== 'string' || !raw.trim() || raw.trim().length > 80) {
+      throw new HttpsError('invalid-argument', 'Invalid ' + field + ' value.');
+    }
+    const next = raw.trim();
+    if (seen.has(next)) continue;
+    seen.add(next);
+    values.push(next);
+  }
+  return values;
+}
+
 function transactionLabels(value: unknown): string[] {
   if (value == null) return [];
 
@@ -235,15 +258,24 @@ function accountEffect(accountType: AccountType, flow: 'in' | 'out', amountMinor
   return accountType === 'credit_card' ? -assetEffect : assetEffect;
 }
 
-function assertAccount(data: DocumentData | undefined, uid: string, label: string, allowArchived = false): AccountRecord {
+function accountRecord(
+  data: DocumentData | undefined,
+  label: string,
+  allowArchived = false,
+): AccountRecord {
   if (!data) throw new HttpsError('not-found', `${label} was not found.`);
-  if (data.ownerId !== uid) throw new HttpsError('permission-denied', `You do not own the ${label.toLowerCase()}.`);
   if (!accountTypes.includes(data.type as AccountType)) throw new HttpsError('failed-precondition', `${label} has an unsupported type.`);
   if (!allowArchived && (data.archivedAt || data.closedAt)) throw new HttpsError('failed-precondition', `${label} is closed or archived.`);
   if (!Number.isSafeInteger(data.ledgerBalanceMinor) || !Number.isSafeInteger(data.balanceVersion)) {
     throw new HttpsError('failed-precondition', `${label} has an invalid ledger balance.`);
   }
   return data as AccountRecord;
+}
+
+function assertAccount(data: DocumentData | undefined, uid: string, label: string, allowArchived = false): AccountRecord {
+  const account = accountRecord(data, label, allowArchived);
+  if (account.ownerId !== uid) throw new HttpsError('permission-denied', `You do not own the ${label.toLowerCase()}.`);
+  return account;
 }
 
 function updateAccountBalance(transaction: Transaction, accountRef: DocumentReference, account: AccountRecord, deltaMinor: number) {
@@ -523,14 +555,343 @@ export const completeOnboarding = onCall({ region }, async (request) => {
 async function requireOwnedSmeSpaceForAccount(spaceId: string, uid: string): Promise<DocumentData> {
   const snapshot = await db.collection('spaces').doc(spaceId).get();
   if (!snapshot.exists || snapshot.data()?.archivedAt) {
-    throw new HttpsError('failed-precondition', 'Choose an active SME Space for this business account.');
+    throw new HttpsError('failed-precondition', 'Choose an active Business Space for this business account.');
   }
   const space = snapshot.data() || {};
   if (space.type !== 'sme' || space.ownerId !== uid) {
-    throw new HttpsError('permission-denied', 'Only the SME Space owner can assign a business account to that Space.');
+    throw new HttpsError('permission-denied', 'Only the Business Space owner can link a business account to that Space.');
   }
   return space;
 }
+
+function businessSpaceIdsForAccountData(account: DocumentData): string[] {
+  const ids = Array.isArray(account.businessSpaceIds)
+    ? account.businessSpaceIds.filter((value: unknown): value is string => typeof value === 'string' && Boolean(value.trim()))
+    : [];
+  const legacy = typeof account.spaceId === 'string' ? account.spaceId.trim() : '';
+  if (!ids.length && legacy) ids.push(legacy);
+  return [...new Set(ids)];
+}
+
+function posSpaceIdsForAccountData(account: DocumentData): string[] {
+  const ids = Array.isArray(account.posSpaceIds)
+    ? account.posSpaceIds.filter((value: unknown): value is string => typeof value === 'string' && Boolean(value.trim()))
+    : [];
+  const legacy = typeof account.spaceId === 'string' ? account.spaceId.trim() : '';
+  if (!ids.length && legacy && account.posEnabled === true) ids.push(legacy);
+  return [...new Set(ids)];
+}
+
+function accountLinkedToBusinessSpace(account: DocumentData, spaceId: string): boolean {
+  return businessSpaceIdsForAccountData(account).includes(spaceId);
+}
+
+function accountPosEnabledForBusinessSpace(account: DocumentData, spaceId: string): boolean {
+  return accountLinkedToBusinessSpace(account, spaceId)
+    && posSpaceIdsForAccountData(account).includes(spaceId);
+}
+
+function accountAccessDocumentId(accountId: string, uid: string): string {
+  return accountId + '_' + uid;
+}
+
+function accessSpaceIds(data: DocumentData | undefined, key: string): string[] {
+  const raw = data?.[key];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((value: unknown): value is string => typeof value === 'string' && Boolean(value.trim())))];
+}
+
+function withSpacePermission(current: string[], spaceId: string, enabled: boolean): string[] {
+  const next = new Set(current);
+  if (enabled) next.add(spaceId);
+  else next.delete(spaceId);
+  return [...next];
+}
+
+async function validateBusinessAccountSpaces(
+  businessSpaceIds: string[],
+  posSpaceIds: string[],
+  uid: string,
+  currency: string,
+) {
+  const businessSet = new Set(businessSpaceIds);
+  for (const posSpaceId of posSpaceIds) {
+    if (!businessSet.has(posSpaceId)) {
+      throw new HttpsError('invalid-argument', 'POS can only be enabled in a Business Space linked to this account.');
+    }
+  }
+
+  for (const spaceId of businessSpaceIds) {
+    const space = await requireOwnedSmeSpaceForAccount(spaceId, uid);
+    if (posSpaceIds.includes(spaceId) && space.currency !== currency) {
+      throw new HttpsError('failed-precondition', 'A POS-enabled Business account must use the same currency as that Business Space.');
+    }
+  }
+}
+
+async function assertAccountForSpaceActor(
+  transaction: Transaction,
+  snapshot: { id: string; exists: boolean; data: () => DocumentData | undefined },
+  actorUid: string,
+  spaceId: string,
+  space: DocumentData,
+  member: DocumentData,
+  label: string,
+): Promise<AccountRecord> {
+  const account = accountRecord(snapshot.data(), label);
+
+  if (account.ownerId === actorUid) {
+    if (space.type === 'sme') {
+      if (snapshot.data()?.classification !== 'business' || !accountLinkedToBusinessSpace(snapshot.data() || {}, spaceId)) {
+        throw new HttpsError('failed-precondition', 'Choose a Business account linked to this Business Space.');
+      }
+    }
+    return account;
+  }
+
+  if (
+    space.type !== 'sme'
+    || snapshot.data()?.classification !== 'business'
+    || !accountLinkedToBusinessSpace(snapshot.data() || {}, spaceId)
+  ) {
+    throw new HttpsError('permission-denied', 'This account is not available in this Business Space.');
+  }
+
+  if (member.canUseAccounts !== true) {
+    throw new HttpsError('permission-denied', 'Your Business role does not allow account use.');
+  }
+
+  const access = await transaction.get(
+    db.collection('accountAccess').doc(accountAccessDocumentId(snapshot.id, actorUid)),
+  );
+  const usableSpaceIds = accessSpaceIds(access.data(), 'usableSpaceIds');
+
+  if (!access.exists || !usableSpaceIds.includes(spaceId)) {
+    throw new HttpsError('permission-denied', 'The Business owner has not shared this account with you for money activity in this Space.');
+  }
+
+  return account;
+}
+
+export const getBusinessSpaceAccounts = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const [spaceSnapshot, memberSnapshot] = await Promise.all([
+    db.collection('spaces').doc(spaceId).get(),
+    db.collection('spaceMembers').doc(spaceId + '_' + uid).get(),
+  ]);
+
+  if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt || spaceSnapshot.data()?.type !== 'sme') {
+    throw new HttpsError('not-found', 'Business Space not found.');
+  }
+
+  const member = memberSnapshot.data() || {};
+  if (!memberSnapshot.exists || ['suspended', 'removed'].includes(String(member.status || ''))) {
+    throw new HttpsError('permission-denied', 'You are not an active member of this Business Space.');
+  }
+
+  const space = spaceSnapshot.data() || {};
+  const ownerId = String(space.ownerId || '');
+  const accountSnapshot = await db.collection('accounts').where('ownerId', '==', ownerId).get();
+  const linked = accountSnapshot.docs.filter((item) => {
+    const data = item.data();
+    return !data.archivedAt
+      && !data.closedAt
+      && data.classification === 'business'
+      && accountLinkedToBusinessSpace(data, spaceId);
+  });
+
+  const accessByAccount = new Map<string, DocumentData>();
+  if (uid !== ownerId) {
+    const accessSnapshots = await Promise.all(
+      linked.map((item) => db.collection('accountAccess').doc(accountAccessDocumentId(item.id, uid)).get()),
+    );
+    accessSnapshots.forEach((snapshot) => {
+      if (snapshot.exists) accessByAccount.set(String(snapshot.data()?.accountId || ''), snapshot.data() || {});
+    });
+  }
+
+  const accounts = linked.flatMap((item) => {
+    const data = item.data();
+    const access = accessByAccount.get(item.id);
+    const owner = uid === ownerId;
+    const canUse = owner || (
+      member.canUseAccounts === true
+      && accessSpaceIds(access, 'usableSpaceIds').includes(spaceId)
+    );
+    const canViewBalance = owner || (
+      member.canViewBalances === true
+      && accessSpaceIds(access, 'balanceSpaceIds').includes(spaceId)
+    );
+    const canViewLedger = owner || (
+      member.canViewLedger === true
+      && accessSpaceIds(access, 'ledgerSpaceIds').includes(spaceId)
+    );
+
+    if (!owner && !canUse && !canViewBalance && !canViewLedger) return [];
+
+    return [{
+      id: item.id,
+      displayId: String(data.displayId || item.id),
+      ownerId,
+      name: String(data.name || 'Business account'),
+      institution: typeof data.institution === 'string' ? data.institution : '',
+      institutionCode: data.institutionCode || null,
+      type: data.type,
+      classification: 'business',
+      businessSpaceIds: businessSpaceIdsForAccountData(data),
+      posSpaceIds: posSpaceIdsForAccountData(data),
+      spaceId: typeof data.spaceId === 'string' ? data.spaceId : null,
+      posEnabled: data.posEnabled === true,
+      currency: String(data.currency || space.currency || 'BND'),
+      openingBalanceMinor: canViewBalance ? Number(data.openingBalanceMinor || 0) : 0,
+      ledgerBalanceMinor: canViewBalance ? Number(data.ledgerBalanceMinor || 0) : 0,
+      balanceVersion: Number(data.balanceVersion || 0),
+      sharedCanUseAccount: canUse,
+      sharedCanViewBalance: canViewBalance,
+      sharedCanViewLedger: canViewLedger,
+      archivedAt: null,
+      closedAt: null,
+    }];
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
+  return { accounts };
+});
+
+export const getBusinessSpaceTransactions = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+  const [spaceSnapshot, memberSnapshot] = await Promise.all([
+    db.collection('spaces').doc(spaceId).get(),
+    db.collection('spaceMembers').doc(spaceId + '_' + uid).get(),
+  ]);
+
+  if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt || spaceSnapshot.data()?.type !== 'sme') {
+    throw new HttpsError('not-found', 'Business Space not found.');
+  }
+
+  const member = memberSnapshot.data() || {};
+  if (!memberSnapshot.exists || ['suspended', 'removed'].includes(String(member.status || ''))) {
+    throw new HttpsError('permission-denied', 'You are not an active member of this Business Space.');
+  }
+
+  const space = spaceSnapshot.data() || {};
+  const ownerId = String(space.ownerId || '');
+  const transactionSnapshot = await db.collection('transactions').where('spaceId', '==', spaceId).get();
+
+  if (uid === ownerId) {
+    return {
+      transactions: transactionSnapshot.docs
+        .filter((item) => item.data()?.ownerId === ownerId)
+        .map((item) => ({ id: item.id, ...item.data() })),
+    };
+  }
+
+  if (member.canViewLedger !== true) {
+    return { transactions: [] };
+  }
+
+  const accessSnapshot = await db.collection('accountAccess').where('uid', '==', uid).get();
+  const ledgerAccountIds = new Set(
+    accessSnapshot.docs
+      .filter((item) => accessSpaceIds(item.data(), 'ledgerSpaceIds').includes(spaceId))
+      .map((item) => String(item.data()?.accountId || ''))
+      .filter(Boolean),
+  );
+
+  return {
+    transactions: transactionSnapshot.docs
+      .filter((item) => {
+        const data = item.data() || {};
+        return data.ownerId === ownerId
+          && typeof data.accountId === 'string'
+          && ledgerAccountIds.has(data.accountId);
+      })
+      .map((item) => ({ id: item.id, ...item.data() })),
+  };
+});
+
+export const setBusinessAccountMemberAccess = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const accountId = stringValue(request.data?.accountId, 'Account ID', 80);
+  const spaceId = stringValue(request.data?.spaceId, 'Business Space', 80);
+  const memberUid = stringValue(request.data?.memberUid, 'Member ID', 160);
+  const canUseAccount = request.data?.canUseAccount === true;
+  const canViewBalance = request.data?.canViewBalance === true;
+  const canViewLedger = request.data?.canViewLedger === true;
+
+  const [accountSnapshot, spaceSnapshot, memberSnapshot] = await Promise.all([
+    db.collection('accounts').doc(accountId).get(),
+    db.collection('spaces').doc(spaceId).get(),
+    db.collection('spaceMembers').doc(spaceId + '_' + memberUid).get(),
+  ]);
+
+  const account = accountRecord(accountSnapshot.data(), 'Account');
+  if (account.ownerId !== uid) {
+    throw new HttpsError('permission-denied', 'Only the Business account owner can share this account.');
+  }
+  if (accountSnapshot.data()?.classification !== 'business') {
+    throw new HttpsError('failed-precondition', 'Personal accounts cannot be shared with Business Spaces.');
+  }
+  if (
+    !spaceSnapshot.exists
+    || spaceSnapshot.data()?.archivedAt
+    || spaceSnapshot.data()?.type !== 'sme'
+    || spaceSnapshot.data()?.ownerId !== uid
+    || !accountLinkedToBusinessSpace(accountSnapshot.data() || {}, spaceId)
+  ) {
+    throw new HttpsError('failed-precondition', 'Link this account to the Business Space before sharing it.');
+  }
+  if (memberUid === uid) {
+    throw new HttpsError('failed-precondition', 'The account owner already has full access.');
+  }
+  if (
+    !memberSnapshot.exists
+    || ['suspended', 'removed'].includes(String(memberSnapshot.data()?.status || ''))
+  ) {
+    throw new HttpsError('failed-precondition', 'Choose an active member of this Business Space.');
+  }
+
+  const accessRef = db.collection('accountAccess').doc(accountAccessDocumentId(accountId, memberUid));
+
+  return db.runTransaction(async (transaction) => {
+    const current = await transaction.get(accessRef);
+    const data = current.data() || {};
+    const usableSpaceIds = withSpacePermission(accessSpaceIds(data, 'usableSpaceIds'), spaceId, canUseAccount);
+    const balanceSpaceIds = withSpacePermission(accessSpaceIds(data, 'balanceSpaceIds'), spaceId, canViewBalance);
+    const ledgerSpaceIds = withSpacePermission(accessSpaceIds(data, 'ledgerSpaceIds'), spaceId, canViewLedger);
+    const spaceIds = [...new Set([...usableSpaceIds, ...balanceSpaceIds, ...ledgerSpaceIds])];
+    const now = FieldValue.serverTimestamp();
+
+    if (!spaceIds.length) {
+      if (current.exists) transaction.delete(accessRef);
+      return { accountId, spaceId, memberUid, removed: true };
+    }
+
+    transaction.set(accessRef, {
+      accountId,
+      uid: memberUid,
+      spaceIds,
+      usableSpaceIds,
+      balanceSpaceIds,
+      ledgerSpaceIds,
+      canUseAccount: usableSpaceIds.length > 0,
+      canViewBalance: balanceSpaceIds.length > 0,
+      canViewLedger: ledgerSpaceIds.length > 0,
+      createdAt: current.data()?.createdAt || now,
+      updatedAt: now,
+    }, { merge: true });
+
+    return {
+      accountId,
+      spaceId,
+      memberUid,
+      canUseAccount,
+      canViewBalance,
+      canViewLedger,
+    };
+  });
+});
 
 export const createAccount = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
@@ -539,26 +900,29 @@ export const createAccount = onCall({ region }, async (request) => {
   const institutionCode = optionalInstitutionCode(request.data?.institutionCode);
   const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
-  const requestedSpaceId = optionalString(request.data?.spaceId, 80) || null;
-  const requestedPosEnabled = request.data?.posEnabled === true;
   const currency = oneOf(request.data?.currency, ['BND', 'MYR', 'SGD', 'USD'] as const, 'currency');
   const openingBalanceMinor = request.data?.openingBalanceMinor;
   if (!Number.isSafeInteger(openingBalanceMinor) || Math.abs(openingBalanceMinor) > 99_999_999_999) {
     throw new HttpsError('invalid-argument', 'Opening balance must be a safe integer in minor units.');
   }
 
-  let spaceId: string | null = null;
-  let posEnabled = false;
+  const requestedBusinessSpaceIds = optionalUniqueStringList(request.data?.businessSpaceIds, 'Business Spaces');
+  const requestedPosSpaceIds = optionalUniqueStringList(request.data?.posSpaceIds, 'POS Business Spaces');
+  const legacySpaceId = optionalString(request.data?.spaceId, 80) || null;
+  const legacyPosEnabled = request.data?.posEnabled === true;
+  const businessSpaceIds = classification === 'business'
+    ? (requestedBusinessSpaceIds.length ? requestedBusinessSpaceIds : (legacySpaceId ? [legacySpaceId] : []))
+    : [];
+  const posSpaceIds = classification === 'business'
+    ? (requestedPosSpaceIds.length ? requestedPosSpaceIds : (legacySpaceId && legacyPosEnabled ? [legacySpaceId] : []))
+    : [];
+
   if (classification === 'business') {
-    if (!requestedSpaceId) throw new HttpsError('invalid-argument', 'Choose which SME business owns this account.');
-    const space = await requireOwnedSmeSpaceForAccount(requestedSpaceId, uid);
-    if (requestedPosEnabled && space.currency !== currency) {
-      throw new HttpsError('failed-precondition', 'A POS-enabled business account must use the same currency as its SME Space.');
-    }
-    spaceId = requestedSpaceId;
-    posEnabled = requestedPosEnabled;
+    await validateBusinessAccountSpaces(businessSpaceIds, posSpaceIds, uid, currency);
   }
 
+  const spaceId = businessSpaceIds[0] || null;
+  const posEnabled = posSpaceIds.length > 0;
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
 
@@ -573,7 +937,7 @@ export const createAccount = onCall({ region }, async (request) => {
 
     transaction.create(accountRef, {
       displayId: displayId('ACC'), ownerId: uid, name, institution, institutionCode, type, classification,
-      spaceId, posEnabled,
+      spaceId, posEnabled, businessSpaceIds, posSpaceIds,
       currency, openingBalanceMinor, ledgerBalanceMinor: openingBalanceMinor,
       balanceVersion: 1, archivedAt: null, closedAt: null, createdAt: now, updatedAt: now,
     });
@@ -598,26 +962,38 @@ export const updateAccountProfile = onCall({ region }, async (request) => {
   const institutionCode = optionalInstitutionCode(request.data?.institutionCode);
   const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
-  const requestedSpaceId = optionalString(request.data?.spaceId, 80) || null;
-  const requestedPosEnabled = request.data?.posEnabled === true;
   const ref = db.collection('accounts').doc(accountId);
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Account not found.');
   if (snapshot.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this account.');
 
-  let spaceId: string | null = null;
-  let posEnabled = false;
+  const requestedBusinessSpaceIds = optionalUniqueStringList(request.data?.businessSpaceIds, 'Business Spaces');
+  const requestedPosSpaceIds = optionalUniqueStringList(request.data?.posSpaceIds, 'POS Business Spaces');
+  const legacySpaceId = optionalString(request.data?.spaceId, 80) || null;
+  const legacyPosEnabled = request.data?.posEnabled === true;
+  const businessSpaceIds = classification === 'business'
+    ? (requestedBusinessSpaceIds.length ? requestedBusinessSpaceIds : (legacySpaceId ? [legacySpaceId] : []))
+    : [];
+  const posSpaceIds = classification === 'business'
+    ? (requestedPosSpaceIds.length ? requestedPosSpaceIds : (legacySpaceId && legacyPosEnabled ? [legacySpaceId] : []))
+    : [];
+
   if (classification === 'business') {
-    if (!requestedSpaceId) throw new HttpsError('invalid-argument', 'Choose which SME business owns this account.');
-    const space = await requireOwnedSmeSpaceForAccount(requestedSpaceId, uid);
-    if (requestedPosEnabled && space.currency !== snapshot.data()?.currency) {
-      throw new HttpsError('failed-precondition', 'A POS-enabled business account must use the same currency as its SME Space.');
-    }
-    spaceId = requestedSpaceId;
-    posEnabled = requestedPosEnabled;
+    await validateBusinessAccountSpaces(
+      businessSpaceIds,
+      posSpaceIds,
+      uid,
+      String(snapshot.data()?.currency || 'BND'),
+    );
   }
 
-  const settingsSnapshot = await db.collection('smePosSettings').where('ownerId', '==', uid).get();
+  const spaceId = businessSpaceIds[0] || null;
+  const posEnabled = posSpaceIds.length > 0;
+  const [settingsSnapshot, accessSnapshot] = await Promise.all([
+    db.collection('smePosSettings').where('ownerId', '==', uid).get(),
+    db.collection('accountAccess').where('accountId', '==', accountId).get(),
+  ]);
+
   const batch = db.batch();
   batch.update(ref, {
     name,
@@ -627,15 +1003,43 @@ export const updateAccountProfile = onCall({ region }, async (request) => {
     classification,
     spaceId,
     posEnabled,
+    businessSpaceIds,
+    posSpaceIds,
     updatedAt: FieldValue.serverTimestamp(),
   });
+
   settingsSnapshot.docs.forEach((settings) => {
-    if (settings.data()?.defaultPaymentAccountId === accountId && (!posEnabled || settings.id !== spaceId)) {
+    if (settings.data()?.defaultPaymentAccountId === accountId && !posSpaceIds.includes(settings.id)) {
       batch.update(settings.ref, { defaultPaymentAccountId: null, updatedAt: FieldValue.serverTimestamp() });
     }
   });
+
+  accessSnapshot.docs.forEach((access) => {
+    const data = access.data() || {};
+    const usableSpaceIds = accessSpaceIds(data, 'usableSpaceIds').filter((id) => businessSpaceIds.includes(id));
+    const balanceSpaceIds = accessSpaceIds(data, 'balanceSpaceIds').filter((id) => businessSpaceIds.includes(id));
+    const ledgerSpaceIds = accessSpaceIds(data, 'ledgerSpaceIds').filter((id) => businessSpaceIds.includes(id));
+    const spaceIds = [...new Set([...usableSpaceIds, ...balanceSpaceIds, ...ledgerSpaceIds])];
+
+    if (!spaceIds.length) {
+      batch.delete(access.ref);
+      return;
+    }
+
+    batch.update(access.ref, {
+      spaceIds,
+      usableSpaceIds,
+      balanceSpaceIds,
+      ledgerSpaceIds,
+      canUseAccount: usableSpaceIds.length > 0,
+      canViewBalance: balanceSpaceIds.length > 0,
+      canViewLedger: ledgerSpaceIds.length > 0,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+
   await batch.commit();
-  return { accountId, spaceId, posEnabled };
+  return { accountId, businessSpaceIds, posSpaceIds, spaceId, posEnabled };
 });
 
 export const archiveAccount = onCall({ region }, async (request) => {
@@ -993,8 +1397,12 @@ export const postTransaction = onCall({ region }, async (request) => {
   const accountRef = db.collection('accounts').doc(accountId);
   const destinationRef = destinationAccountId ? db.collection('accounts').doc(destinationAccountId) : null;
   const customCategoryRef = categoryId.startsWith('custom-') ? db.collection('categories').doc(categoryId) : null;
+  const preAccountSnapshot = await accountRef.get();
+  if (!preAccountSnapshot.exists) throw new HttpsError('not-found', 'Account was not found.');
+  const financialOwnerId = String(preAccountSnapshot.data()?.ownerId || '');
+  if (!financialOwnerId) throw new HttpsError('failed-precondition', 'Account owner is unavailable.');
   const budgetCandidateRefs = type === 'expense'
-    ? (await db.collection('budgets').where('ownerId', '==', uid).where('spaceId', '==', spaceId).get()).docs.map((item) => item.ref)
+    ? (await db.collection('budgets').where('ownerId', '==', financialOwnerId).where('spaceId', '==', spaceId).get()).docs.map((item) => item.ref)
     : [];
 
   return db.runTransaction(async (transaction) => {
@@ -1015,8 +1423,29 @@ export const postTransaction = onCall({ region }, async (request) => {
       throw new HttpsError('permission-denied', 'You cannot post transactions in this Space.');
     }
 
-    const account = assertAccount(accountSnapshot.data(), uid, 'Account');
-    const destination = destinationSnapshot ? assertAccount(destinationSnapshot.data(), uid, 'Destination account') : null;
+    const account = await assertAccountForSpaceActor(
+      transaction,
+      accountSnapshot,
+      uid,
+      spaceId,
+      spaceSnapshot.data() || {},
+      memberSnapshot.data() || {},
+      'Account',
+    );
+    const destination = destinationSnapshot
+      ? await assertAccountForSpaceActor(
+          transaction,
+          destinationSnapshot,
+          uid,
+          spaceId,
+          spaceSnapshot.data() || {},
+          memberSnapshot.data() || {},
+          'Destination account',
+        )
+      : null;
+    if (destination && destination.ownerId !== account.ownerId) {
+      throw new HttpsError('failed-precondition', 'Business transfers must stay between accounts owned by the same Business account owner.');
+    }
     const spaceCurrency = spaceSnapshot.data()?.currency;
     if (account.currency !== spaceCurrency) throw new HttpsError('failed-precondition', 'Account and Space currencies must match.');
     if (destination && destination.currency !== account.currency) {
@@ -1030,7 +1459,7 @@ export const postTransaction = onCall({ region }, async (request) => {
           categoryId,
           requiredKind: type,
           selectedScope,
-          uid,
+          uid: financialOwnerId,
           customData: customCategorySnapshot?.data(),
         });
     const budgetIds = type === 'expense'
@@ -1047,7 +1476,7 @@ export const postTransaction = onCall({ region }, async (request) => {
       updateAccountBalance(transaction, accountRef, account, delta);
       ledgerEntryIds.push(createLedgerEntry(transaction, {
         accountId,
-        ownerId: uid,
+        ownerId: financialOwnerId,
         spaceId,
         transactionId: transactionRef.id,
         entryType: type,
@@ -1064,7 +1493,7 @@ export const postTransaction = onCall({ region }, async (request) => {
       updateAccountBalance(transaction, destinationRef, destination, destinationDelta);
       ledgerEntryIds.push(createLedgerEntry(transaction, {
         accountId,
-        ownerId: uid,
+        ownerId: financialOwnerId,
         spaceId,
         transactionId: transactionRef.id,
         entryType: 'transfer_out',
@@ -1076,7 +1505,7 @@ export const postTransaction = onCall({ region }, async (request) => {
       }));
       ledgerEntryIds.push(createLedgerEntry(transaction, {
         accountId: destinationAccountId,
-        ownerId: uid,
+        ownerId: financialOwnerId,
         spaceId,
         transactionId: transactionRef.id,
         entryType: 'transfer_in',
@@ -1092,7 +1521,7 @@ export const postTransaction = onCall({ region }, async (request) => {
 
     transaction.create(transactionRef, {
       displayId: displayId('TXN'),
-      ownerId: uid,
+      ownerId: financialOwnerId,
       createdBy: uid,
       type,
       status: 'posted',
@@ -2091,12 +2520,14 @@ export const recordBusinessInvoicePayment = onCall(
         if (
           accountData.classification
             !== 'business'
-          || accountData.spaceId
-            !== spaceId
+          || !accountLinkedToBusinessSpace(
+              accountData,
+              spaceId,
+            )
         ) {
           throw new HttpsError(
             'failed-precondition',
-            'Choose a Business Account belonging to this SME Space.',
+            'Choose a Business Account linked to this Business Space.',
           );
         }
 
@@ -4509,17 +4940,16 @@ function configuredSmePosPaymentAccountIds(settings: DocumentData): string[] | n
 }
 
 function isSmePosPaymentAccountForSpace(settings: DocumentData, account: DocumentData, accountId: string, spaceId: string): boolean {
-  const assignedSpaceId = typeof account.spaceId === 'string' ? account.spaceId.trim() : '';
-  if (assignedSpaceId) {
-    return assignedSpaceId === spaceId && account.posEnabled === true;
-  }
+  if (accountPosEnabledForBusinessSpace(account, spaceId)) return true;
+  const linkedSpaces = businessSpaceIdsForAccountData(account);
+  if (linkedSpaces.length > 0) return false;
   const legacyIds = configuredSmePosPaymentAccountIds(settings);
   return Boolean(legacyIds?.includes(accountId));
 }
 
 function requireSmePosPaymentAccountForSpace(settings: DocumentData, account: DocumentData, accountId: string, spaceId: string) {
   if (!isSmePosPaymentAccountForSpace(settings, account, accountId, spaceId)) {
-    throw new HttpsError('failed-precondition', 'This account does not belong to this SME POS. Assign it from Accounts and enable POS payments first.');
+    throw new HttpsError('failed-precondition', 'This account is not enabled for POS payments in this Business Space. Link it from Accounts and enable POS for this Business first.');
   }
 }
 

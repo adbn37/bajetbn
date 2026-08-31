@@ -181,6 +181,23 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data.canViewLedger == true;
     }
 
+    function canViewAccountLedgerInSpace(accountId, spaceId) {
+      return signedIn()
+        && spaceId is string
+        && exists(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid)))
+        && (
+          (
+            'ledgerSpaceIds' in get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data
+            && get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data.ledgerSpaceIds is list
+            && get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data.ledgerSpaceIds.hasAny([spaceId])
+          )
+          || (
+            !('ledgerSpaceIds' in get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data)
+            && get(/databases/$(database)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid))).data.canViewLedger == true
+          )
+        );
+    }
+
     match /users/{uid} {
       allow read: if isSelf(uid);
       allow create: if false; // Created by the onboarding Cloud Function.
@@ -473,7 +490,10 @@ service cloud.firestore {
     }
 
     match /ledgerEntries/{entryId} {
-      allow read: if signedIn() && (ownsAccount(resource.data.accountId) || canViewAccountLedger(resource.data.accountId));
+      allow read: if signedIn() && (
+        ownsAccount(resource.data.accountId)
+        || canViewAccountLedgerInSpace(resource.data.accountId, resource.data.spaceId)
+      );
       allow create, update, delete: if false;
     }
 
@@ -486,6 +506,10 @@ service cloud.firestore {
       allow read: if signedIn() && (
         resource.data.ownerId == request.auth.uid
         || isPosManager(resource.data.spaceId)
+        || (
+          resource.data.accountId is string
+          && canViewAccountLedgerInSpace(resource.data.accountId, resource.data.spaceId)
+        )
       );
       allow create, update, delete: if false; // Posted and reversed only by trusted Cloud Functions.
     }

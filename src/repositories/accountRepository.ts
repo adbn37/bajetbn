@@ -1,7 +1,29 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
-import type { Account, AccountClassification, AccountType, InstitutionCode } from '../types/models';
+import type {
+  Account,
+  AccountAccess,
+  AccountClassification,
+  AccountType,
+  InstitutionCode,
+} from '../types/models';
+
+export function businessSpaceIdsForAccount(account: Pick<Account, 'businessSpaceIds' | 'spaceId'>): string[] {
+  const ids = Array.isArray(account.businessSpaceIds)
+    ? account.businessSpaceIds.filter(Boolean)
+    : [];
+  if (ids.length) return Array.from(new Set(ids));
+  return account.spaceId ? [account.spaceId] : [];
+}
+
+export function posSpaceIdsForAccount(account: Pick<Account, 'posSpaceIds' | 'spaceId' | 'posEnabled'>): string[] {
+  const ids = Array.isArray(account.posSpaceIds)
+    ? account.posSpaceIds.filter(Boolean)
+    : [];
+  if (ids.length) return Array.from(new Set(ids));
+  return account.spaceId && account.posEnabled ? [account.spaceId] : [];
+}
 
 export async function listAllAccounts(uid: string): Promise<Account[]> {
   const { db } = requireFirebase();
@@ -52,18 +74,49 @@ export async function listAccountsForOwnerSpace(
   uid: string,
   spaceId: string,
 ): Promise<Account[]> {
-  const { db } = requireFirebase();
-
-  const snapshot = await getDocs(query(
-    collection(db, 'accounts'),
-    where('ownerId', '==', uid),
-    where('spaceId', '==', spaceId),
-  ));
-
-  return snapshot.docs
-    .map((item) => ({ id: item.id, ...item.data() }) as Account)
-    .filter((item) => !item.archivedAt && !item.closedAt)
+  return (await listAllAccounts(uid))
+    .filter((item) =>
+      !item.archivedAt
+      && !item.closedAt
+      && item.classification === 'business'
+      && businessSpaceIdsForAccount(item).includes(spaceId))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function listAccountsForSpace(
+  spaceId: string,
+): Promise<Account[]> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'getBusinessSpaceAccounts');
+  const result = await call({ spaceId });
+  return ((result.data as { accounts?: Account[] })?.accounts || [])
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function listAccountAccess(
+  accountId: string,
+): Promise<AccountAccess[]> {
+  const { db } = requireFirebase();
+  const snapshot = await getDocs(query(
+    collection(db, 'accountAccess'),
+    where('accountId', '==', accountId),
+  ));
+  return snapshot.docs.map(
+    (item) => ({ id: item.id, ...item.data() }) as AccountAccess,
+  );
+}
+
+export async function setBusinessAccountMemberAccess(input: {
+  accountId: string;
+  spaceId: string;
+  memberUid: string;
+  canUseAccount: boolean;
+  canViewBalance: boolean;
+  canViewLedger: boolean;
+}) {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'setBusinessAccountMemberAccess');
+  return call(input);
 }
 
 export async function createAccount(input: {
@@ -72,8 +125,11 @@ export async function createAccount(input: {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  /** Legacy callers remain accepted; new UI uses the arrays below. */
   spaceId?: string | null;
   posEnabled?: boolean;
+  businessSpaceIds?: string[];
+  posSpaceIds?: string[];
   currency: string;
   openingBalanceMinor: number;
 }) {
@@ -89,8 +145,11 @@ export async function updateAccount(input: {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  /** Legacy callers remain accepted; new UI uses the arrays below. */
   spaceId?: string | null;
   posEnabled?: boolean;
+  businessSpaceIds?: string[];
+  posSpaceIds?: string[];
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'updateAccountProfile');

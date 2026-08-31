@@ -6,6 +6,10 @@ import type {
   SmePosRole,
   Space,
 } from '../../types/models';
+import {
+  businessSpaceIdsForAccount,
+  posSpaceIdsForAccount,
+} from '../../repositories/accountRepository';
 import { formatMoney } from '../../utils/money';
 
 function localDate(value = new Date()) {
@@ -123,7 +127,7 @@ export function SmeOperationsCommandCentre({
     .filter(
       (item) =>
         item.classification === 'business'
-        && item.spaceId === space.id
+        && businessSpaceIdsForAccount(item).includes(space.id)
         && !item.archivedAt
         && !item.closedAt,
     )
@@ -195,7 +199,7 @@ const activeCommitments = commitments.filter(
             <article className="sme-operation-card">
               <span>Business accounts</span>
               <strong>{businessAccounts.length}</strong>
-              <small>Accounts assigned directly to this Business Space</small>
+              <small>Business accounts linked to this Business Space</small>
             </article>
 
             <article className="sme-operation-card">
@@ -211,7 +215,7 @@ const activeCommitments = commitments.filter(
                 <span className="eyebrow">Finance</span>
                 <h3>Business accounts</h3>
                 <p>
-                  Cash, bank and other business accounts assigned directly to {space.name}.
+                  Cash, bank and other Business accounts linked to {space.name}. One account can also be linked to other Business Spaces.
                 </p>
               </div>
 
@@ -236,9 +240,9 @@ const activeCommitments = commitments.filter(
                         {' · '}
                         {account.currency}
                         {' · '}
-                        {account.posEnabled
-                          ? 'POS payments enabled'
-                          : 'POS payments off'}
+                        {posSpaceIdsForAccount(account).includes(space.id)
+                          ? 'POS payments enabled here'
+                          : 'POS payments off here'}
                       </small>
                     </div>
 
@@ -247,20 +251,20 @@ const activeCommitments = commitments.filter(
                         {formatMoney(account.ledgerBalanceMinor, account.currency)}
                       </strong>
                     ) : (
-                      <span className="type-badge">Assigned to this Business</span>
+                      <span className="type-badge">Linked to this Business</span>
                     )}
                   </article>
                 ))}
               </div>
             ) : role === 'owner' ? (
               <div className="notice">
-                <strong>No business account is assigned to this Business yet.</strong>{' '}
-                Open Accounts, create or edit a business account, and assign it to {space.name}.
+                <strong>No Business account is linked to this Business yet.</strong>{' '}
+                Open Accounts, create or edit a Business account, and link it to {space.name}.
               </div>
             ) : (
               <div className="notice">
-                <strong>No assigned business account is available to you.</strong>{' '}
-                The Business owner manages account ownership and account access.
+                <strong>No shared Business account is available to you.</strong>{' '}
+                The Business owner manages account links and member access.
               </div>
             )}
           </section>

@@ -7,10 +7,14 @@ import { PageHeader } from '../../components/PageHeader';
 import { institutionCodeForLabel, institutionDisplay, institutionOptionsForType } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  businessSpaceIdsForAccount,
   createAccount,
+  listAccountAccess,
   listAllAccounts,
   listAllPersonalAccounts,
   listAccountsForOwnerSpace,
+  posSpaceIdsForAccount,
+  setBusinessAccountMemberAccess,
   updateAccount,
 } from '../../repositories/accountRepository';
 import {
@@ -21,11 +25,20 @@ import {
   type AccountColor,
 } from '../../services/accountVisualPreferences';
 import { manageAccount } from '../../repositories/lifecycleRepository';
+import { listSpaceMembers } from '../../repositories/collaborationRepository';
 import {
   getSpace,
   listSpaces,
 } from '../../repositories/spaceRepository';
-import type { Account, AccountClassification, AccountType, InstitutionCode, Space } from '../../types/models';
+import type {
+  Account,
+  AccountAccess,
+  AccountClassification,
+  AccountType,
+  InstitutionCode,
+  Space,
+  SpaceMember,
+} from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
@@ -44,6 +57,7 @@ export function AccountsPage({
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
+  const [sharing, setSharing] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
@@ -115,7 +129,11 @@ export function AccountsPage({
     [spaces, user?.uid],
   );
   const unassignedBusinessCount = useMemo(
-    () => active.filter((item) => item.classification === 'business' && !item.spaceId).length,
+    () => active.filter(
+      (item) =>
+        item.classification === 'business'
+        && businessSpaceIdsForAccount(item).length === 0,
+    ).length,
     [active],
   );
 
@@ -240,13 +258,13 @@ export function AccountsPage({
     {!embedded && (
       <div className="info-banner">
         <strong>
-          Business account ownership
+          Business accounts can serve multiple Businesses
         </strong>
         <span>
-          Assign each business account to one Business Space here.
-          Only accounts belonging to that Business Space and enabled
-          for POS can be used at its checkout.
-          Managers and cashiers cannot change this.
+          Personal accounts stay Personal-only. A Business account can be linked
+          to several Business Spaces without duplicating its real balance.
+          Choose POS availability per Business, then share that account with
+          selected members when they need financial access.
         </span>
       </div>
     )}
@@ -264,22 +282,52 @@ export function AccountsPage({
           not assigned to a Business Space yet.
         </div>
       )}
-    {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountGroups accounts={active} spaces={ownedSmeSpaces} spaceIdOverride={spaceIdOverride} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onClose={(account) => askLifecycle(account, 'close')} onDelete={(account) => askLifecycle(account, 'delete')} />}
+    {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountGroups accounts={active} spaces={ownedSmeSpaces} spaceIdOverride={spaceIdOverride} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onShare={(account) => setSharing(account)} onClose={(account) => askLifecycle(account, 'close')} onDelete={(account) => askLifecycle(account, 'delete')} />}
 
+    {sharing && <BusinessAccountShareModal account={sharing} spaces={ownedSmeSpaces} onClose={() => setSharing(null)} />}
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {modal === 'create' && profile && <AccountForm currency={profile.currency} spaces={ownedSmeSpaces} lockedPersonal={Boolean(spaceIdOverride)} onClose={() => setModal(null)} onSubmit={async (values) => { await createAccount(values); setModal(null); await load(); }} />}
-    {modal === 'edit' && selected && <AccountForm currency={selected.currency} spaces={ownedSmeSpaces} initial={selected} lockedPersonal={Boolean(spaceIdOverride)} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification, spaceId: values.spaceId, posEnabled: values.posEnabled }); if (user) setAccountColor(user.uid, selected.id, values.color); setModal(null); await load(); }} />}
+    {modal === 'edit' && selected && <AccountForm currency={selected.currency} spaces={ownedSmeSpaces} initial={selected} lockedPersonal={Boolean(spaceIdOverride)} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification, businessSpaceIds: values.businessSpaceIds, posSpaceIds: values.posSpaceIds }); if (user) setAccountColor(user.uid, selected.id, values.color); setModal(null); await load(); }} />}
   </main>;
 }
 
-function AccountGroups({ accounts, spaces, spaceIdOverride, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; spaces: Space[]; spaceIdOverride?: string; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
+function AccountGroups({
+  accounts,
+  spaces,
+  spaceIdOverride,
+  busyId,
+  onEdit,
+  onShare,
+  onClose,
+  onDelete,
+}: {
+  accounts: Account[];
+  spaces: Space[];
+  spaceIdOverride?: string;
+  busyId: string;
+  onEdit: (account: Account) => void;
+  onShare: (account: Account) => void;
+  onClose: (account: Account) => void;
+  onDelete: (account: Account) => void;
+}) {
   const personal = accounts.filter((account) => account.classification === 'personal');
-  const unassigned = accounts.filter((account) => account.classification === 'business' && !account.spaceId);
+  const unassigned = accounts.filter(
+    (account) =>
+      account.classification === 'business'
+      && businessSpaceIdsForAccount(account).length === 0,
+  );
   const groups = spaces
-    .map((space) => ({ space, accounts: accounts.filter((account) => account.classification === 'business' && account.spaceId === space.id) }))
+    .map((space) => ({
+      space,
+      accounts: accounts.filter(
+        (account) =>
+          account.classification === 'business'
+          && businessSpaceIdsForAccount(account).includes(space.id),
+      ),
+    }))
     .filter((group) => group.accounts.length > 0);
 
-  const actions = { busyId, onEdit, onClose, onDelete };
+  const actions = { busyId, onEdit, onShare, onClose, onDelete };
 
   return <div className="form-stack">
     {personal.length > 0 && <section>
@@ -291,41 +339,218 @@ function AccountGroups({ accounts, spaces, spaceIdOverride, busyId, onEdit, onCl
       <AccountList accounts={businessAccounts} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
     </section>)}
     {unassigned.length > 0 && <section>
-      <div className="panel-heading"><div><span className="eyebrow">Needs setup</span><h2>Unassigned business accounts</h2></div><span>{unassigned.length}</span></div>
+      <div className="panel-heading"><div><span className="eyebrow">Not linked yet</span><h2>Business accounts</h2></div><span>{unassigned.length}</span></div>
       <AccountList accounts={unassigned} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
     </section>}
   </div>;
 }
 
-function AccountList({ accounts, spaces, spaceIdOverride, busyId, onEdit, onClose, onDelete }: { accounts: Account[]; spaces: Space[]; spaceIdOverride?: string; busyId: string; onEdit: (account: Account) => void; onClose: (account: Account) => void; onDelete: (account: Account) => void }) {
+function AccountList({
+  accounts,
+  spaces,
+  spaceIdOverride,
+  busyId,
+  onEdit,
+  onShare,
+  onClose,
+  onDelete,
+}: {
+  accounts: Account[];
+  spaces: Space[];
+  spaceIdOverride?: string;
+  busyId: string;
+  onEdit: (account: Account) => void;
+  onShare: (account: Account) => void;
+  onClose: (account: Account) => void;
+  onDelete: (account: Account) => void;
+}) {
   const { user } = useAuth();
-  const spaceName = (account: Account) => account.spaceId ? spaces.find((space) => space.id === account.spaceId)?.name || 'Business' : 'Unassigned business';
+  const businessNames = (account: Account) => {
+    const ids = businessSpaceIdsForAccount(account);
+    if (!ids.length) return 'Not linked to a Business';
+    return ids
+      .map((id) => spaces.find((space) => space.id === id)?.name || 'Business')
+      .join(', ');
+  };
 
-  return <section className="account-list">{accounts.map((account, index) => <article className={`account-card ${accountColorClass(getAccountColor(user?.uid || '', account.id, index))}`} key={account.id}>
-    <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
-    <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {account.classification === 'personal' ? 'Personal' : spaceName(account)}{account.classification === 'business' && account.posEnabled ? ' · POS enabled' : ''}</p></div><small>{account.displayId}</small></div>
-    <div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div>
-    <div className="account-actions"><Link
-      className="text-button account-view-activity"
-      to={
-        spaceIdOverride
-          ? `/spaces/${spaceIdOverride}?section=money`
-          : `/transactions?accountId=${encodeURIComponent(account.id)}`
-      }
-    >
-      View activity
-    </Link><button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div>
-  </article>)}</section>;
+  return <section className="account-list">{accounts.map((account, index) => {
+    const posCount = account.classification === 'business'
+      ? posSpaceIdsForAccount(account).length
+      : 0;
+
+    return <article className={`account-card ${accountColorClass(getAccountColor(user?.uid || '', account.id, index))}`} key={account.id}>
+      <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
+      <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {account.classification === 'personal' ? 'Personal only' : businessNames(account)}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div><small>{account.displayId}</small></div>
+      <div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div>
+      <div className="account-actions"><Link
+        className="text-button account-view-activity"
+        to={
+          spaceIdOverride
+            ? `/spaces/${spaceIdOverride}?section=money`
+            : `/transactions?accountId=${encodeURIComponent(account.id)}`
+        }
+      >
+        View activity
+      </Link>{account.classification === 'business' && <button className="text-button" onClick={() => onShare(account)}>Share</button>}<button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div>
+    </article>;
+  })}</section>;
 }
 
+type BusinessAccountShareRow = {
+  space: Space;
+  member: SpaceMember;
+  canUseAccount: boolean;
+  canViewBalance: boolean;
+  canViewLedger: boolean;
+};
+
+function BusinessAccountShareModal({
+  account,
+  spaces,
+  onClose,
+}: {
+  account: Account;
+  spaces: Space[];
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<BusinessAccountShareRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState('');
+  const [error, setError] = useState('');
+  const linkedIds = businessSpaceIdsForAccount(account);
+  const linkedSpaces = spaces.filter((space) => linkedIds.includes(space.id));
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [accessRows, memberGroups] = await Promise.all([
+          listAccountAccess(account.id),
+          Promise.all(linkedSpaces.map((space) => listSpaceMembers(space.id))),
+        ]);
+
+        if (!active) return;
+
+        const accessByUid = new Map<string, AccountAccess>(
+          accessRows.map((item) => [item.uid, item]),
+        );
+
+        const next: BusinessAccountShareRow[] = [];
+
+        linkedSpaces.forEach((space, index) => {
+          memberGroups[index]
+            .filter(
+              (member) =>
+                member.uid !== account.ownerId
+                && (member.status || 'active') === 'active',
+            )
+            .forEach((member) => {
+              const access = accessByUid.get(member.uid);
+              next.push({
+                space,
+                member,
+                canUseAccount: Boolean(access?.usableSpaceIds?.includes(space.id)),
+                canViewBalance: Boolean(access?.balanceSpaceIds?.includes(space.id)),
+                canViewLedger: Boolean(access?.ledgerSpaceIds?.includes(space.id)),
+              });
+            });
+        });
+
+        setRows(next);
+      } catch (nextError) {
+        if (active) setError(getErrorMessage(nextError));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [account.id, account.ownerId, linkedIds.join('|')]);
+
+  const patchRow = (
+    spaceId: string,
+    memberUid: string,
+    patch: Partial<BusinessAccountShareRow>,
+  ) => {
+    setRows((current) => current.map((row) =>
+      row.space.id === spaceId && row.member.uid === memberUid
+        ? { ...row, ...patch }
+        : row));
+  };
+
+  const saveRow = async (row: BusinessAccountShareRow) => {
+    const key = row.space.id + '_' + row.member.uid;
+    setBusyKey(key);
+    setError('');
+    try {
+      await setBusinessAccountMemberAccess({
+        accountId: account.id,
+        spaceId: row.space.id,
+        memberUid: row.member.uid,
+        canUseAccount: row.canUseAccount,
+        canViewBalance: row.canViewBalance,
+        canViewLedger: row.canViewLedger,
+      });
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusyKey('');
+    }
+  };
+
+  return <Modal title={`Share ${account.name}`} onClose={onClose}>
+    <div className="form-stack">
+      <div className="info-banner">
+        <strong>Share only inside linked Business Spaces</strong>
+        <span>The account keeps one real balance. Permissions below are separate for each Business Space. POS checkout access still follows that Business's POS role and POS-enabled account setting.</span>
+      </div>
+      {error && <div className="notice error">{error}</div>}
+      {linkedSpaces.length === 0 && <div className="notice">Link this Business account to at least one Business Space from Edit account first.</div>}
+      {loading ? <div className="loading-panel">Loading account access…</div> : rows.length === 0 && linkedSpaces.length > 0 ? <div className="notice">No other active members are available in the linked Business Spaces yet.</div> : rows.map((row) => {
+        const key = row.space.id + '_' + row.member.uid;
+        return <section className="panel" key={key}>
+          <div className="panel-heading">
+            <div><span className="eyebrow">{row.space.name}</span><h2>{row.member.displayName || row.member.email || 'Member'}</h2></div>
+          </div>
+          <div className="form-stack compact">
+            <label className="checkbox-field">
+              <input type="checkbox" checked={row.canUseAccount} onChange={(event) => patchRow(row.space.id, row.member.uid, { canUseAccount: event.target.checked })} />
+              <span><strong>Can use account</strong><small>Can post Business money activity with this account in this Space.</small></span>
+            </label>
+            <label className="checkbox-field">
+              <input type="checkbox" checked={row.canViewBalance} onChange={(event) => patchRow(row.space.id, row.member.uid, { canViewBalance: event.target.checked })} />
+              <span><strong>Can view balance</strong><small>Can see the account's current balance.</small></span>
+            </label>
+            <label className="checkbox-field">
+              <input type="checkbox" checked={row.canViewLedger} onChange={(event) => patchRow(row.space.id, row.member.uid, { canViewLedger: event.target.checked })} />
+              <span><strong>Can view activity</strong><small>Can see activity for this account inside {row.space.name}.</small></span>
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button className="button secondary" type="button" disabled={busyKey === key} onClick={() => void saveRow(row)}>
+              {busyKey === key ? 'Saving…' : 'Save access'}
+            </button>
+          </div>
+        </section>;
+      })}
+      <div className="modal-actions">
+        <button className="button primary" type="button" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  </Modal>;
+}
 type AccountFormValues = {
   name: string;
   institution?: string;
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
-  spaceId?: string | null;
-  posEnabled?: boolean;
+  businessSpaceIds: string[];
+  posSpaceIds: string[];
   currency: string;
   openingBalanceMinor: number;
   color: AccountColor;
@@ -346,8 +571,12 @@ function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClos
       ? 'personal'
       : initial?.classification || 'personal',
   );
-  const [spaceId, setSpaceId] = useState(initial?.spaceId || '');
-  const [posEnabled, setPosEnabled] = useState(initial?.posEnabled === true);
+  const [businessSpaceIds, setBusinessSpaceIds] = useState<string[]>(
+    () => initial ? businessSpaceIdsForAccount(initial) : [],
+  );
+  const [posSpaceIds, setPosSpaceIds] = useState<string[]>(
+    () => initial ? posSpaceIdsForAccount(initial) : [],
+  );
   const [opening, setOpening] = useState(initial ? String(initial.openingBalanceMinor / 100) : '0.00');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -365,17 +594,31 @@ function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClos
 
     setClassification(nextClassification);
     if (nextClassification === 'personal') {
-      setSpaceId('');
-      setPosEnabled(false);
+      setBusinessSpaceIds([]);
+      setPosSpaceIds([]);
     }
+  };
+
+  const toggleBusinessSpace = (spaceId: string, enabled: boolean) => {
+    setBusinessSpaceIds((current) =>
+      enabled
+        ? Array.from(new Set([...current, spaceId]))
+        : current.filter((id) => id !== spaceId));
+    if (!enabled) {
+      setPosSpaceIds((current) => current.filter((id) => id !== spaceId));
+    }
+  };
+
+  const togglePosSpace = (spaceId: string, enabled: boolean) => {
+    setPosSpaceIds((current) =>
+      enabled
+        ? Array.from(new Set([...current, spaceId]))
+        : current.filter((id) => id !== spaceId));
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      if (classification === 'business' && !spaceId) {
-        throw new Error('Choose which Business business owns this account.');
-      }
       const cleanInstitution = institution.trim();
       await onSubmit({
         name: name.trim(),
@@ -383,8 +626,8 @@ function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClos
         institutionCode: institutionCodeForLabel(cleanInstitution),
         type,
         classification,
-        spaceId: classification === 'business' ? spaceId : null,
-        posEnabled: classification === 'business' ? posEnabled : false,
+        businessSpaceIds: classification === 'business' ? businessSpaceIds : [],
+        posSpaceIds: classification === 'business' ? posSpaceIds : [],
         currency,
         openingBalanceMinor: initial ? initial.openingBalanceMinor : toMinorUnits(opening),
         color,
@@ -398,17 +641,42 @@ function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClos
     <label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label>
     <label>Type<select value={type} onChange={(event) => changeType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label>
     <label>Used for<select value={classification} disabled={lockedPersonal} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
-    {classification === 'business' && <label className="span-2">Business Space
-      <select value={spaceId} onChange={(event) => setSpaceId(event.target.value)} required>
-        <option value="">Choose business</option>
-        {spaces.map((space) => <option key={space.id} value={space.id} disabled={Boolean(space.archivedAt)}>{space.name}{space.archivedAt ? ' (Archived)' : ''}</option>)}
-      </select>
-      <small>This is the account's owner business. Other Business Spaces cannot use it.</small>
-    </label>}
-    {classification === 'business' && <label className="checkbox-field span-2">
-      <input type="checkbox" checked={posEnabled} onChange={(event) => setPosEnabled(event.target.checked)} disabled={!spaceId} />
-      <span><strong>Use for this business's POS payments</strong><small>Only the Business owner can change this here. Managers and cashiers can use approved accounts during checkout but cannot attach another account.</small></span>
-    </label>}
+    {classification === 'business' && <fieldset className="span-2">
+      <legend>Available in Business Spaces</legend>
+      <div className="form-stack compact">
+        {spaces.map((space) => {
+          const linked = businessSpaceIds.includes(space.id);
+          const posEnabledHere = posSpaceIds.includes(space.id);
+          return <div className="panel" key={space.id}>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={linked}
+                disabled={Boolean(space.archivedAt)}
+                onChange={(event) => toggleBusinessSpace(space.id, event.target.checked)}
+              />
+              <span>
+                <strong>{space.name}{space.archivedAt ? ' (Archived)' : ''}</strong>
+                <small>Make this Business account available inside this Business Space.</small>
+              </span>
+            </label>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={posEnabledHere}
+                disabled={!linked || Boolean(space.archivedAt)}
+                onChange={(event) => togglePosSpace(space.id, event.target.checked)}
+              />
+              <span>
+                <strong>Allow POS payments in {space.name}</strong>
+                <small>Cashiers can use it only when their POS role allows checkout. This does not automatically reveal the account balance.</small>
+              </span>
+            </label>
+          </div>;
+        })}
+      </div>
+      <small>A Business account is independent from a Space. Link the same account to as many of your Business Spaces as needed. You can also leave it unlinked and connect it later.</small>
+    </fieldset>}
     {classification === 'business' && !spaces.some((space) => !space.archivedAt) && <div className="notice span-2">Create or restore an Business Space before adding a business account.</div>}
     <label className="span-2">Institution or provider
       <input list="brunei-institution-options" value={institution} onChange={(event) => setInstitution(event.target.value)} placeholder={type === 'cash' ? 'Cash' : type === 'e_wallet' ? 'Choose or type an e-wallet' : 'Choose or type a bank'} />

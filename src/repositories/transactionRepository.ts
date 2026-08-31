@@ -175,6 +175,20 @@ export async function listTransactionsForSpace(spaceId: string): Promise<Financi
     });
 }
 
+export async function listBusinessTransactionsForSpace(
+  spaceId: string,
+): Promise<FinancialTransaction[]> {
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'getBusinessSpaceTransactions');
+  const result = await call({ spaceId });
+  return ((result.data as { transactions?: FinancialTransaction[] })?.transactions || [])
+    .sort((a, b) => {
+      const dateCompare = b.transactionDate.localeCompare(a.transactionDate);
+      if (dateCompare !== 0) return dateCompare;
+      return Number(b.postedAt?.toMillis?.() || 0) - Number(a.postedAt?.toMillis?.() || 0);
+    });
+}
+
 export async function postTransaction(input: {
   type: 'income' | 'expense' | 'transfer';
   accountId: string;

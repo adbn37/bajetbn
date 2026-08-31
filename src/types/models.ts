@@ -1378,8 +1378,17 @@ export interface Account {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  /**
+   * Legacy single-Business fields kept for safe migration/backward compatibility.
+   * businessSpaceIds / posSpaceIds are authoritative for new Business accounts.
+   */
   spaceId?: string | null;
   posEnabled?: boolean;
+  businessSpaceIds?: string[];
+  posSpaceIds?: string[];
+  sharedCanUseAccount?: boolean;
+  sharedCanViewBalance?: boolean;
+  sharedCanViewLedger?: boolean;
   currency: string;
   openingBalanceMinor: number;
   ledgerBalanceMinor: number;
@@ -1394,6 +1403,14 @@ export interface AccountAccess {
   id: string;
   accountId: string;
   uid: string;
+  /**
+   * Per-Business-Space permissions for one shared Business account.
+   * The aggregate booleans remain for backwards-compatible account/rules checks.
+   */
+  spaceIds?: string[];
+  usableSpaceIds?: string[];
+  balanceSpaceIds?: string[];
+  ledgerSpaceIds?: string[];
   canUseAccount: boolean;
   canViewBalance: boolean;
   canViewLedger: boolean;

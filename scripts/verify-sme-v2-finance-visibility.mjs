@@ -2,10 +2,23 @@ import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 
-const command = read('src/features/spaces/SmeOperationsCommandCentre.tsx');
-const settings = read('src/features/sme-pos/SmePosSettingsPage.tsx');
-const models = read('src/types/models.ts');
-const styles = read('src/styles/global.css');
+const command =
+  read('src/features/spaces/SmeOperationsCommandCentre.tsx');
+
+const settings =
+  read('src/features/sme-pos/SmePosSettingsPage.tsx');
+
+const models =
+  read('src/types/models.ts');
+
+const accountRepo =
+  read('src/repositories/accountRepository.ts');
+
+const functions =
+  read('functions/src/index.ts');
+
+const styles =
+  read('src/styles/global.css');
 
 function expect(condition, message) {
   if (!condition) throw new Error(message);
@@ -15,32 +28,49 @@ expect(
   models.includes("classification: AccountClassification;")
     && models.includes("spaceId?: string | null;")
     && models.includes("posEnabled?: boolean;")
+    && models.includes("businessSpaceIds?: string[];")
+    && models.includes("posSpaceIds?: string[];")
     && models.includes("ledgerBalanceMinor: number;"),
-  'Slice 2 must reuse the canonical Account model.',
+  'Canonical Account model must support legacy and multi-Space Business links.',
+);
+
+expect(
+  accountRepo.includes('businessSpaceIdsForAccount')
+    && accountRepo.includes('posSpaceIdsForAccount'),
+  'Business-account repository must expose canonical multi-Space helpers.',
 );
 
 expect(
   command.includes("const businessAccounts = accounts")
     && command.includes("item.classification === 'business'")
-    && command.includes("item.spaceId === space.id"),
-  'SME account ownership must come from Account.spaceId.',
+    && command.includes(
+      'businessSpaceIdsForAccount(item).includes(space.id)',
+    ),
+  'Business Overview must use multi-Space Business-account links.',
+);
+
+expect(
+  !command.includes(
+    "item.spaceId === space.id",
+  ),
+  'Business Overview must not depend on a single Account.spaceId.',
 );
 
 expect(
   !command.includes("const accountIds = new Set(")
     && !command.includes("accountsUsed"),
-  'Account ownership must not be inferred from transaction activity.',
+  'Business-account linkage must not be inferred from transaction activity.',
 );
 
 for (const token of [
   'Business accounts',
-  'Accounts assigned directly to this Business Space',
-  'Cash, bank and other business accounts assigned directly to',
-  'POS payments enabled',
-  'POS payments off',
+  'Business accounts linked to this Business Space',
+  'One account can also be linked to other Business Spaces.',
+  'POS payments enabled here',
+  'POS payments off here',
   'Open accounts',
-  'No business account is assigned to this Business yet.',
-  'Assigned to this Business',
+  'No Business account is linked to this Business yet.',
+  'Linked to this Business',
 ]) {
   expect(
     command.includes(token),
@@ -64,7 +94,7 @@ expect(
   command.includes(
     'formatMoney(account.ledgerBalanceMinor, account.currency)',
   ),
-  'Business owner account cards must use the existing ledger balance.',
+  'Business owner account cards must use the canonical ledger balance.',
 );
 
 expect(
@@ -73,13 +103,22 @@ expect(
 );
 
 expect(
-  /item\.spaceId\s*===\s*space\?\.id\s*&&\s*item\.posEnabled\s*===\s*true/.test(settings),
-  'Existing POS payment eligibility must remain Space-assigned and POS-enabled.',
+  settings.includes('posSpaceIdsForAccount')
+    && settings.includes(
+      "posSpaceIdsForAccount(item).includes(space?.id || '')",
+    ),
+  'POS payment eligibility must be configured independently per Business Space.',
 );
 
 expect(
   settings.includes('paymentAccountIds'),
   'Legacy POS payment-account compatibility must remain intact.',
+);
+
+expect(
+  functions.includes('accountLinkedToBusinessSpace')
+    && functions.includes('posSpaceIdsForAccountData'),
+  'Backend must enforce multi-Space account linkage and per-Space POS eligibility.',
 );
 
 expect(
@@ -89,4 +128,6 @@ expect(
   'SME Slice 2 styles are missing.',
 );
 
-console.log('Business v2 Slice 2 business account visibility checks passed.');
+console.log(
+  'Business v2 Slice 2 multi-Space account visibility checks passed.',
+);

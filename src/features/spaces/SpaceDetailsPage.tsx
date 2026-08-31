@@ -15,6 +15,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import {
   listAccountsForOwnerSpace,
+  listAccountsForSpace,
   listPersonalAccounts,
 } from '../../repositories/accountRepository';
 import {
@@ -38,6 +39,7 @@ import { getMySmePosAccess } from '../../repositories/smePosRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { getSpace, updateSpace } from '../../repositories/spaceRepository';
 import {
+  listBusinessTransactionsForSpace,
   listTransactionsForOwnerSpace,
   listTransactionsForSpace,
   postTransaction,
@@ -288,11 +290,30 @@ export function SpaceDetailsPage() {
 
       setMembers(nextMembers);
 
-      const canReadSmeFinancials =
+      const currentSpaceMember =
+        nextMembers.find(
+          (member) =>
+            member.uid === user.uid
+            && (member.status || 'active') === 'active',
+        ) || null;
+
+      const canManageSmeFinancials =
         nextSpace.type !== 'sme'
         || nextSpace.ownerId === user.uid
         || nextSmePosRole === 'owner'
-        || nextSmePosRole === 'manager';
+        || nextSmePosRole === 'manager'
+        || currentSpaceMember?.role === 'admin';
+
+      const canReadSmeFinancials =
+        canManageSmeFinancials
+        || Boolean(
+          currentSpaceMember
+          && (
+            currentSpaceMember.canUseAccounts
+            || currentSpaceMember.canViewBalances
+            || currentSpaceMember.canViewLedger
+          )
+        );
 
       const nextShared =
         nextSpace.type !== 'personal';
@@ -368,10 +389,14 @@ export function SpaceDetailsPage() {
             ? listPersonalAccounts(
                 user.uid,
               )
-            : listAccountsForOwnerSpace(
-                user.uid,
-                spaceId,
-              );
+            : nextSpace.type === 'sme'
+              ? listAccountsForSpace(
+                  spaceId,
+                )
+              : listAccountsForOwnerSpace(
+                  user.uid,
+                  spaceId,
+                );
 
         const nextGoalsPromise =
           listGoalsForOwnerSpace(
@@ -398,19 +423,23 @@ export function SpaceDetailsPage() {
           && nextSpace.ownerId !== user.uid
         ) {
           nextTransactionsPromise =
-            listTransactionsForSpace(
+            listBusinessTransactionsForSpace(
               spaceId,
             );
 
           nextBudgetsPromise =
-            listBudgetsForSpace(
-              spaceId,
-            );
+            canManageSmeFinancials
+              ? listBudgetsForSpace(
+                  spaceId,
+                )
+              : Promise.resolve([]);
 
           nextCommitmentsPromise =
-            listCommitmentsForSpace(
-              spaceId,
-            );
+            canManageSmeFinancials
+              ? listCommitmentsForSpace(
+                  spaceId,
+                )
+              : Promise.resolve([]);
         } else {
           nextTransactionsPromise =
             listTransactionsForOwnerSpace(
@@ -527,7 +556,15 @@ export function SpaceDetailsPage() {
     || space.type !== 'sme'
     || space.ownerId === user?.uid
     || smePosRole === 'owner'
-    || smePosRole === 'manager';
+    || smePosRole === 'manager'
+    || Boolean(
+      currentMember
+      && (
+        currentMember.canUseAccounts
+        || currentMember.canViewBalances
+        || currentMember.canViewLedger
+      )
+    );
 
   function chooseTab(tab: SpaceDetailsTab) {
     setSearchParams(tab === 'overview' ? {} : { tab });
@@ -1436,13 +1473,17 @@ function SpaceOverview({
 
                       <div className="space-scoped-amount">
                         <strong>
-                          {formatMoney(
-                            item.ledgerBalanceMinor,
-                            item.currency,
-                          )}
+                          {item.sharedCanViewBalance === false
+                            ? 'Balance hidden'
+                            : formatMoney(
+                                item.ledgerBalanceMinor,
+                                item.currency,
+                              )}
                         </strong>
                         <small>
-                          Current balance
+                          {item.sharedCanViewBalance === false
+                            ? 'Owner did not share balance'
+                            : 'Current balance'}
                         </small>
                       </div>
                     </article>
