@@ -98,12 +98,30 @@ check(
   'Business Admin route is registered.',
 );
 
+/*
+ * Business navigation became industry-aware in v1.14.
+ *
+ * The canonical Business Admin route remains available,
+ * while its visible launcher label adapts to the selected
+ * Business type.
+ */
 check(
-  hub.includes('label="Business Admin"')
+  hub.includes(
+    'businessAdminLabel',
+  )
+    && hub.includes(
+      "'Renters & Admin'",
+    )
+    && hub.includes(
+      "'Customers & Admin'",
+    )
     && hub.includes(
       'to={`/spaces/${space.id}/business`}',
+    )
+    && hub.includes(
+      'isBusinessOwner',
     ),
-  'SME Space home exposes Business Admin for the current business.',
+  'Business Space exposes the current business admin area with an industry-aware label.',
 );
 
 check(

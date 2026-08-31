@@ -102,16 +102,46 @@ check(
     'data-space-launcher="sme"',
   )
     && hub.includes(
+      'data-business-industry={businessIndustry}',
+    )
+    && hub.includes(
       'label="Business Overview"',
     )
     && hub.includes(
-      "'POS & Operations'",
+      "businessIndustry === 'retail'",
+    )
+    && hub.includes(
+      "businessIndustry === 'marketplace'",
+    )
+    && hub.includes(
+      'salesFocusedBusiness',
+    )
+    && hub.includes(
+      'to={`/spaces/${space.id}/pos`}',
+    )
+    && hub.includes(
+      'businessWorkflowLabel',
+    )
+    && hub.includes(
+      "'Service Workflow'",
+    )
+    && hub.includes(
+      "'Rental Workflow'",
+    )
+    && hub.includes(
+      "'Delivery Workflow'",
     )
     && hub.includes(
       'label="Business Accounts"',
     )
     && hub.includes(
-      'label="Business Admin"',
+      'businessAdminLabel',
+    )
+    && hub.includes(
+      "'Renters & Admin'",
+    )
+    && hub.includes(
+      "'Customers & Admin'",
     )
     && hub.includes(
       'label="Tasks"',
@@ -120,15 +150,27 @@ check(
       'label="Purchase List"',
     )
     && hub.includes(
+      'to={`/spaces/${space.id}?tab=activity`}',
+    )
+    && hub.includes(
+      'label="More"',
+    )
+    && hub.includes(
+      'label="Staff Guide"',
+    )
+    && hub.includes(
       'to={`/spaces/${space.id}?section=accounts`}',
     )
     && hub.includes(
       'to={`/spaces/${space.id}/business`}',
     )
+    && hub.includes(
+      'to={`/spaces/${space.id}/business/industry`}',
+    )
     && !hub.includes(
       'to="/accounts"',
     ),
-  'Phase 6: SME business-space-first home complete.',
+  'Phase 6: industry-aware Business Space home complete.',
 );
 
 check(
