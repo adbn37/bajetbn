@@ -891,15 +891,6 @@ export function DashboardPage() {
           <small>Manage</small>
         </Link>
 
-        <Link to="/spaces">
-          <span aria-hidden="true">
-            ▦
-          </span>
-
-          <strong>Spaces</strong>
-          <small>Open</small>
-        </Link>
-
         <Link to="/debt">
           <span aria-hidden="true">
             ↔
@@ -916,6 +907,15 @@ export function DashboardPage() {
 
           <strong>Reports</strong>
           <small>Insights</small>
+        </Link>
+
+        <Link to="/settings">
+          <span aria-hidden="true">
+            ✦
+          </span>
+
+          <strong>Themes</strong>
+          <small>Appearance</small>
         </Link>
       </section>
 

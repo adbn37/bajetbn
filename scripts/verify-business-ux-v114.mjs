@@ -96,8 +96,10 @@ function walk(directory) {
 }
 
 check(
-  pkg.version === '1.14.0'
-    && release.version === '1.14.0',
+  /^1\.14\.\d+$/.test(
+    pkg.version,
+  )
+    && release.version === pkg.version,
   'v1.14 package and release versions match.',
 );
 
