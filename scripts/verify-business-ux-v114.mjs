@@ -23,6 +23,15 @@ const business =
 const wizard =
   read('src/features/business/BusinessWizardPage.tsx');
 
+const industryPage =
+  read('src/features/business/BusinessIndustryPage.tsx');
+
+const attentionPanel =
+  read('src/features/spaces/SmeOperationalAttentionPanel.tsx');
+
+const hub =
+  read('src/features/spaces/SpaceActionHub.tsx');
+
 const pkg =
   JSON.parse(
     read('package.json'),
@@ -283,6 +292,83 @@ check(
       '<small>Alerts</small>',
     ),
   'Space replaces Alerts in mobile bottom slot four.',
+);
+
+check(
+  hub.includes(
+    "'Rental Operations'",
+  )
+    && hub.includes(
+      "'Service Operations'",
+    )
+    && hub.includes(
+      "'Delivery Operations'",
+    )
+    && hub.includes(
+      'salesFocusedBusiness',
+    ),
+  'Non-retail Business launchers use Operations terminology while POS stays sales-focused.',
+);
+
+const rentalToolsStart =
+  industryPage.indexOf(
+    "case 'rental':",
+  );
+
+const rentalToolsEnd =
+  industryPage.indexOf(
+    "case 'transport_delivery':",
+    rentalToolsStart,
+  );
+
+const rentalTools =
+  rentalToolsStart >= 0
+    && rentalToolsEnd > rentalToolsStart
+    ? industryPage.slice(
+        rentalToolsStart,
+        rentalToolsEnd,
+      )
+    : '';
+
+check(
+  industryPage.includes(
+    'data-rental-operations',
+  )
+    && rentalTools.includes(
+      "label: 'Rent & Collections'",
+    )
+    && rentalTools.includes(
+      "label: 'Renters & Admin'",
+    )
+    && rentalTools.includes(
+      "label: 'Business Accounts'",
+    )
+    && rentalTools.includes(
+      "label: 'Rental Accounting'",
+    )
+    && rentalTools.includes(
+      "label: 'Rental Activity'",
+    )
+    && !rentalTools.includes(
+      '/pos',
+    ),
+  'Rental Operations exposes rental tools without a POS route.',
+);
+
+check(
+  attentionPanel.includes(
+    'getBusinessProfile',
+  )
+    && attentionPanel.includes(
+      "industry === 'retail'",
+    )
+    && attentionPanel.includes(
+      "industry === 'marketplace'",
+    )
+    && attentionPanel.includes(
+      'if (!salesFocused)',
+    ),
+  'POS Attention is restricted to Retail and Marketplace businesses.',
 );
 
 const stagingAcceptance =

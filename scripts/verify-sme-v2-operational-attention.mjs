@@ -16,9 +16,13 @@ function need(value, message) {
 }
 
 for (const token of [
+  'getBusinessProfile',
   'getSmePosStaffWorkspace',
   'getMarketplacePosWorkspace',
   'listSmePosReservations',
+  "industry === 'retail'",
+  "industry === 'marketplace'",
+  'if (!salesFocused)',
   "const operationalRole = role === 'owner' || role === 'manager';",
   'if (!operationalRole) return null;',
   "new Set<SmePosReservation['status']>",
@@ -43,6 +47,25 @@ for (const token of [
 need(
   panel.includes("marketplaceResult.status === 'fulfilled'"),
   'Marketplace-specific attention must only use the Marketplace workspace when available.',
+);
+
+need(
+  panel.indexOf('getBusinessProfile')
+    < panel.indexOf('Promise.allSettled'),
+  'Business type must be resolved before POS operational datasets are requested.',
+);
+
+need(
+  panel.includes(
+    "industry === 'retail'",
+  )
+    && panel.includes(
+      "industry === 'marketplace'",
+    )
+    && panel.includes(
+      'if (!salesFocused)',
+    ),
+  'Only Retail and Marketplace may enter the POS attention data path.',
 );
 
 need(

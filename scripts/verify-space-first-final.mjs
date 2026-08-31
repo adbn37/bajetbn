@@ -123,13 +123,13 @@ check(
       'businessWorkflowLabel',
     )
     && hub.includes(
-      "'Service Workflow'",
+      "'Service Operations'",
     )
     && hub.includes(
-      "'Rental Workflow'",
+      "'Rental Operations'",
     )
     && hub.includes(
-      "'Delivery Workflow'",
+      "'Delivery Operations'",
     )
     && hub.includes(
       'label="Business Accounts"',

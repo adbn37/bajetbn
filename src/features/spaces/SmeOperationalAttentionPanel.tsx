@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  getBusinessProfile,
+} from '../../repositories/businessAdvancedRepository';
+import {
   getMarketplacePosWorkspace,
   getSmePosStaffWorkspace,
   listSmePosReservations,
 } from '../../repositories/smePosRepository';
 import type {
+  BusinessIndustry,
   SmePosReservation,
   SmePosRole,
   Space,
@@ -93,8 +97,53 @@ export function SmeOperationalAttentionPanel({
     }
 
     async function load() {
-      setLoading(true);
       setWarning('');
+
+      let industry: BusinessIndustry =
+        'general';
+
+      try {
+        const profile =
+          await getBusinessProfile(
+            space.id,
+          );
+
+        industry =
+          profile?.industry
+          || 'general';
+      } catch {
+        if (!cancelled) {
+          setSnapshot(
+            emptySnapshot,
+          );
+          setWarning('');
+          setLoading(false);
+        }
+
+        return;
+      }
+
+      if (cancelled) return;
+
+      const salesFocused =
+        industry === 'retail'
+        || industry === 'marketplace';
+
+      /*
+       * Rental, Service, Transport, General and Other
+       * businesses must not load POS inventory merely
+       * because the current member is Owner/Manager.
+       */
+      if (!salesFocused) {
+        setSnapshot(
+          emptySnapshot,
+        );
+        setWarning('');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
 
       const [
         standardResult,
@@ -109,7 +158,8 @@ export function SmeOperationalAttentionPanel({
       if (cancelled) return;
 
       const marketplace =
-        marketplaceResult.status === 'fulfilled';
+        industry === 'marketplace'
+        && marketplaceResult.status === 'fulfilled';
 
       const lowStock = marketplace
         ? marketplaceResult.value.listings
@@ -156,10 +206,12 @@ export function SmeOperationalAttentionPanel({
         marketplace,
       });
 
-      if (
-        standardResult.status === 'rejected'
-        && marketplaceResult.status === 'rejected'
-      ) {
+      const inventoryRejected =
+        industry === 'marketplace'
+          ? marketplaceResult.status === 'rejected'
+          : standardResult.status === 'rejected';
+
+      if (inventoryRejected) {
         setWarning(
           'Inventory attention could not be refreshed. Open POS to review the latest stock.',
         );

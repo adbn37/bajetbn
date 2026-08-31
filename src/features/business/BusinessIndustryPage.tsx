@@ -38,6 +38,12 @@ interface IndustryWorkflow {
   daily: string[];
 }
 
+interface IndustryTool {
+  label: string;
+  to: string;
+  primary?: boolean;
+}
+
 const workflows:
   Record<
     BusinessIndustry,
@@ -131,20 +137,20 @@ const workflows:
       label:
         'Rental business',
       headline:
-        'Customers, rental collections and follow-up',
+        'Renters, collections and day-to-day rental operations',
       description:
-        'Use customer records, tasks, invoices and business accounting to manage rental activity.',
+        'Manage renter records, rent collections, Business Accounts, accounting and rental activity without forcing a POS workflow.',
       priorities: [
         'Keep renter details reusable.',
-        'Use tasks for handover, collection and follow-up.',
+        'Use tasks for handover, maintenance, collection and follow-up.',
         'Use invoices for rental charges when appropriate.',
         'Record payments and operating costs in this Business Space.',
       ],
       daily: [
         'Review upcoming rental tasks.',
-        'Check overdue customer payments.',
+        'Check overdue rent and outstanding collections.',
         'Record rental-related expenses.',
-        'Update completed collections and handovers.',
+        'Update completed collections, maintenance and handovers.',
       ],
     },
 
@@ -190,6 +196,191 @@ const workflows:
       ],
     },
   };
+
+function getIndustryTools(
+  industry: BusinessIndustry,
+  spaceId: string,
+): IndustryTool[] {
+  const home =
+    '/spaces/' + spaceId;
+
+  const admin =
+    home + '/business';
+
+  const invoices =
+    home + '/business/invoices';
+
+  const accounting =
+    home + '/business/accounting';
+
+  const accounts =
+    home + '?section=accounts';
+
+  const activity =
+    home + '?tab=activity';
+
+  switch (industry) {
+    case 'retail':
+      return [
+        {
+          label: 'POS & Operations',
+          to: home + '/pos',
+          primary: true,
+        },
+        {
+          label: 'Business Accounts',
+          to: accounts,
+        },
+        {
+          label: 'Customers & Admin',
+          to: admin,
+        },
+        {
+          label: 'Accounting',
+          to: accounting,
+        },
+        {
+          label: 'Activity',
+          to: activity,
+        },
+        {
+          label: 'Staff Guide',
+          to: home + '/business/guide',
+        },
+      ];
+
+    case 'marketplace':
+      return [
+        {
+          label: 'POS & Marketplace',
+          to: home + '/pos',
+          primary: true,
+        },
+        {
+          label: 'Business Accounts',
+          to: accounts,
+        },
+        {
+          label: 'Customers & Admin',
+          to: admin,
+        },
+        {
+          label: 'Accounting',
+          to: accounting,
+        },
+        {
+          label: 'Activity',
+          to: activity,
+        },
+        {
+          label: 'Staff Guide',
+          to: home + '/business/guide',
+        },
+      ];
+
+    case 'service':
+      return [
+        {
+          label: 'Invoices & Collections',
+          to: invoices,
+          primary: true,
+        },
+        {
+          label: 'Customers & Admin',
+          to: admin,
+        },
+        {
+          label: 'Business Accounts',
+          to: accounts,
+        },
+        {
+          label: 'Accounting',
+          to: accounting,
+        },
+        {
+          label: 'Activity',
+          to: activity,
+        },
+      ];
+
+    case 'rental':
+      return [
+        {
+          label: 'Rent & Collections',
+          to: invoices,
+          primary: true,
+        },
+        {
+          label: 'Renters & Admin',
+          to: admin,
+        },
+        {
+          label: 'Business Accounts',
+          to: accounts,
+        },
+        {
+          label: 'Rental Accounting',
+          to: accounting,
+        },
+        {
+          label: 'Rental Activity',
+          to: activity,
+        },
+      ];
+
+    case 'transport_delivery':
+      return [
+        {
+          label: 'Invoices & Collections',
+          to: invoices,
+          primary: true,
+        },
+        {
+          label: 'Customers & Admin',
+          to: admin,
+        },
+        {
+          label: 'Business Accounts',
+          to: accounts,
+        },
+        {
+          label: 'Accounting',
+          to: accounting,
+        },
+        {
+          label: 'Delivery Activity',
+          to: activity,
+        },
+      ];
+
+    case 'general':
+    case 'other':
+    default:
+      return [
+        {
+          label: 'Business Admin',
+          to: admin,
+          primary: true,
+        },
+        {
+          label: 'Invoices & Collections',
+          to: invoices,
+        },
+        {
+          label: 'Business Accounts',
+          to: accounts,
+        },
+        {
+          label: 'Accounting',
+          to: accounting,
+        },
+        {
+          label: 'Activity',
+          to: activity,
+        },
+      ];
+  }
+}
 
 export function BusinessIndustryPage() {
   const {
@@ -324,13 +515,26 @@ export function BusinessIndustryPage() {
   const workflow =
     workflows[industry];
 
+  const tools =
+    getIndustryTools(
+      industry,
+      space.id,
+    );
+
+  const isRental =
+    industry === 'rental';
+
   return (
     <main
       className="page"
       data-business-industry-profile
     >
       <PageHeader
-        eyebrow="Industry workflow"
+        eyebrow={
+          isRental
+            ? 'Rental operations'
+            : 'Industry operations'
+        }
         title={workflow.label}
         description={workflow.description}
         action={
@@ -356,9 +560,53 @@ export function BusinessIndustryPage() {
         </div>
       )}
 
+      {isRental && (
+        <section
+          className="panel"
+          data-rental-operations
+        >
+          <span className="eyebrow">
+            Rental operations
+          </span>
+
+          <h2>
+            Run the rental from here
+          </h2>
+
+          <p>
+            POS and inventory tools stay out of the Rental
+            workflow. Use the tools that are actually connected
+            to this Business Space.
+          </p>
+
+          <div className="button-row">
+            {tools.map(
+              (tool) => (
+                <Link
+                  key={tool.label}
+                  className={
+                    'button '
+                    + (
+                      tool.primary
+                        ? 'primary'
+                        : 'secondary'
+                    )
+                  }
+                  to={tool.to}
+                >
+                  {tool.label}
+                </Link>
+              ),
+            )}
+          </div>
+        </section>
+      )}
+
       <section className="panel">
         <span className="eyebrow">
-          Recommended setup
+          {isRental
+            ? 'Rental setup tips'
+            : 'Recommended setup'}
         </span>
 
         <h2>
@@ -392,7 +640,9 @@ export function BusinessIndustryPage() {
 
       <section className="panel">
         <span className="eyebrow">
-          Daily routine
+          {isRental
+            ? 'Rental routine'
+            : 'Daily routine'}
         </span>
 
         <h2>
@@ -424,45 +674,38 @@ export function BusinessIndustryPage() {
         </div>
       </section>
 
-      <section className="panel">
-        <span className="eyebrow">
-          Business tools
-        </span>
+      {!isRental && (
+        <section className="panel">
+          <span className="eyebrow">
+            Business tools
+          </span>
 
-        <h2>
-          Open the tool you need
-        </h2>
+          <h2>
+            Open the tool you need
+          </h2>
 
-        <div className="button-row">
-          <Link
-            className="button primary"
-            to={`/spaces/${space.id}/pos`}
-          >
-            POS & Operations
-          </Link>
-
-          <Link
-            className="button secondary"
-            to={`/spaces/${space.id}/business/invoices`}
-          >
-            Invoices
-          </Link>
-
-          <Link
-            className="button secondary"
-            to={`/spaces/${space.id}/business/guide`}
-          >
-            Staff Guide
-          </Link>
-
-          <Link
-            className="button secondary"
-            to={`/spaces/${space.id}`}
-          >
-            Tasks & Purchase List
-          </Link>
-        </div>
-      </section>
+          <div className="button-row">
+            {tools.map(
+              (tool) => (
+                <Link
+                  key={tool.label}
+                  className={
+                    'button '
+                    + (
+                      tool.primary
+                        ? 'primary'
+                        : 'secondary'
+                    )
+                  }
+                  to={tool.to}
+                >
+                  {tool.label}
+                </Link>
+              ),
+            )}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

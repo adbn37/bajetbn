@@ -260,11 +260,11 @@ export function SpaceActionHub({
 
   const businessWorkflowLabel =
     businessIndustry === 'service'
-      ? 'Service Workflow'
+      ? 'Service Operations'
       : businessIndustry === 'rental'
-        ? 'Rental Workflow'
+        ? 'Rental Operations'
         : businessIndustry === 'transport_delivery'
-          ? 'Delivery Workflow'
+          ? 'Delivery Operations'
           : 'Operations';
 
   const businessAdminLabel =
