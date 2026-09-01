@@ -15,7 +15,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import {
   listAccountsForOwnerSpace,
-  listAccountsForSpace,
   listPersonalAccounts,
 } from '../../repositories/accountRepository';
 import {
@@ -305,15 +304,7 @@ export function SpaceDetailsPage() {
         || currentSpaceMember?.role === 'admin';
 
       const canReadSmeFinancials =
-        canManageSmeFinancials
-        || Boolean(
-          currentSpaceMember
-          && (
-            currentSpaceMember.canUseAccounts
-            || currentSpaceMember.canViewBalances
-            || currentSpaceMember.canViewLedger
-          )
-        );
+        canManageSmeFinancials;
 
       const nextShared =
         nextSpace.type !== 'personal';
@@ -390,9 +381,12 @@ export function SpaceDetailsPage() {
                 user.uid,
               )
             : nextSpace.type === 'sme'
-              ? listAccountsForSpace(
-                  spaceId,
-                )
+              ? nextSpace.ownerId === user.uid
+                ? listAccountsForOwnerSpace(
+                    user.uid,
+                    spaceId,
+                  )
+                : Promise.resolve([] as Account[])
               : listAccountsForOwnerSpace(
                   user.uid,
                   spaceId,
@@ -557,14 +551,7 @@ export function SpaceDetailsPage() {
     || space.ownerId === user?.uid
     || smePosRole === 'owner'
     || smePosRole === 'manager'
-    || Boolean(
-      currentMember
-      && (
-        currentMember.canUseAccounts
-        || currentMember.canViewBalances
-        || currentMember.canViewLedger
-      )
-    );
+    || currentMember?.role === 'admin';
 
   function chooseTab(tab: SpaceDetailsTab) {
     setSearchParams(tab === 'overview' ? {} : { tab });
@@ -1447,7 +1434,13 @@ function SpaceOverview({
             </Suspense>
           )}
 
-        {space.type !== 'personal' && section === 'accounts' && (
+        {space.type !== 'personal'
+          && section === 'accounts'
+          && (
+            space.type !== 'sme'
+            || space.ownerId === user?.uid
+          )
+          && (
           <div className="space-scoped-list personal-space-account-list">
             {accountRows.length
               ? accountRows.map(
@@ -1505,6 +1498,16 @@ function SpaceOverview({
               )}
           </div>
         )}
+
+        {space.type === 'sme'
+          && section === 'accounts'
+          && space.ownerId !== user?.uid
+          && (
+            <div className="notice">
+              <strong>Business Accounts are managed outside this Space.</strong>{' '}
+              Accounts shared with you appear on your main Accounts page. Business Space tools and financial visibility continue to follow your role.
+            </div>
+          )}
 
         {(section === 'income'
           || section === 'expenses') && (

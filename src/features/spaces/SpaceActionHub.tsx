@@ -274,17 +274,6 @@ export function SpaceActionHub({
     space.type === 'sme'
     && space.ownerId === user?.uid;
 
-  const canOpenBusinessAccounts =
-    isBusinessOwner
-    || Boolean(
-      currentMember
-      && (
-        currentMember.canUseAccounts
-        || currentMember.canViewBalances
-        || currentMember.canViewLedger
-      )
-    );
-
   const salesFocusedBusiness =
     businessIndustry === 'retail'
     || businessIndustry === 'marketplace';
@@ -379,7 +368,7 @@ export function SpaceActionHub({
               />
             )}
 
-            {canOpenBusinessAccounts && (
+            {isBusinessOwner && (
               <ShortcutLink
                 to={`/spaces/${space.id}?section=accounts`}
                 label="Business Accounts"

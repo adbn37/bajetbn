@@ -196,11 +196,19 @@ const activeCommitments = commitments.filter(
               <small>Posted spending in this Business Space</small>
             </article>
 
-            <article className="sme-operation-card">
-              <span>Business accounts</span>
-              <strong>{businessAccounts.length}</strong>
-              <small>Business accounts linked to this Business Space</small>
-            </article>
+            {role === 'owner' ? (
+              <article className="sme-operation-card">
+                <span>Business accounts</span>
+                <strong>{businessAccounts.length}</strong>
+                <small>Business accounts linked to this Business Space</small>
+              </article>
+            ) : (
+              <article className="sme-operation-card">
+                <span>Finance role</span>
+                <strong>{roleLabel(role)}</strong>
+                <small>Business finance shown here follows your role.</small>
+              </article>
+            )}
 
             <article className="sme-operation-card">
               <span>Active bills</span>
@@ -209,6 +217,7 @@ const activeCommitments = commitments.filter(
             </article>
           </div>
 
+          {role === 'owner' && (
           <section className="sme-business-accounts">
             <div className="sme-business-accounts-heading">
               <div>
@@ -246,28 +255,20 @@ const activeCommitments = commitments.filter(
                       </small>
                     </div>
 
-                    {account.sharedCanViewBalance === false ? (
-                      <span className="type-badge">Balance hidden</span>
-                    ) : (
-                      <strong>
-                        {formatMoney(account.ledgerBalanceMinor, account.currency)}
-                      </strong>
-                    )}
+                    <strong>
+                      {formatMoney(account.ledgerBalanceMinor, account.currency)}
+                    </strong>
                   </article>
                 ))}
               </div>
-            ) : role === 'owner' ? (
+            ) : (
               <div className="notice">
                 <strong>No Business account is linked to this Business yet.</strong>{' '}
                 Open Accounts, create or edit a Business account, and link it to {space.name}.
               </div>
-            ) : (
-              <div className="notice">
-                <strong>No shared Business account is available to you.</strong>{' '}
-                The Business owner manages account links and member access.
-              </div>
             )}
           </section>
+          )}
           {operationalRole && (
             <section className="sme-operations-attention">
               <div className="sme-operations-attention-heading">

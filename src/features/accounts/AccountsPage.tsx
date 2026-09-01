@@ -46,6 +46,13 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 const accountLabels: Record<AccountType, string> = { bank: 'Bank', cash: 'Cash', e_wallet: 'E-wallet', credit_card: 'Credit card' };
 type AccountLifecycleAction = 'close' | 'delete';
 
+type SharedAccountContext = {
+  spaceIds: string[];
+  usableSpaceIds: string[];
+  balanceSpaceIds: string[];
+  ledgerSpaceIds: string[];
+};
+
 export function AccountsPage({
   spaceIdOverride,
   embedded = false,
@@ -56,6 +63,7 @@ export function AccountsPage({
   const { user, profile } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [sharedAccountContext, setSharedAccountContext] = useState<Record<string, SharedAccountContext>>({});
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
   const [sharing, setSharing] = useState<Account | null>(null);
@@ -87,28 +95,99 @@ export function AccountsPage({
                 user.uid,
               )
             : targetSpace.type === 'sme'
-              ? await listAccountsForSpace(
-                  spaceIdOverride,
-                )
+              ? targetSpace.ownerId === user.uid
+                ? await listAccountsForOwnerSpace(
+                    user.uid,
+                    spaceIdOverride,
+                  )
+                : []
               : await listAccountsForOwnerSpace(
                   user.uid,
                   spaceIdOverride,
                 );
 
         setAccounts(nextAccounts);
+        setSharedAccountContext({});
         setSpaces([targetSpace]);
         return;
       }
 
       const [
-        nextAccounts,
+        ownedAccounts,
         nextSpaces,
       ] = await Promise.all([
         listAllAccounts(user.uid),
         listSpaces(user.uid),
       ]);
 
-      setAccounts(nextAccounts);
+      const sharedSmeSpaces = nextSpaces.filter(
+        (space) =>
+          space.type === 'sme'
+          && space.ownerId !== user.uid
+          && !space.archivedAt,
+      );
+
+      const sharedGroups = await Promise.all(
+        sharedSmeSpaces.map(async (space) => ({
+          space,
+          accounts: await listAccountsForSpace(space.id).catch(() => [] as Account[]),
+        })),
+      );
+
+      const sharedById = new Map<string, Account>();
+      const nextSharedAccountContext: Record<string, SharedAccountContext> = {};
+
+      sharedGroups.forEach(({ space, accounts: sharedAccounts }) => {
+        sharedAccounts.forEach((account) => {
+          const current = nextSharedAccountContext[account.id] || {
+            spaceIds: [],
+            usableSpaceIds: [],
+            balanceSpaceIds: [],
+            ledgerSpaceIds: [],
+          };
+
+          const addSpace = (values: string[], enabled: boolean) =>
+            enabled ? Array.from(new Set([...values, space.id])) : values;
+
+          nextSharedAccountContext[account.id] = {
+            spaceIds: addSpace(current.spaceIds, true),
+            usableSpaceIds: addSpace(current.usableSpaceIds, account.sharedCanUseAccount === true),
+            balanceSpaceIds: addSpace(current.balanceSpaceIds, account.sharedCanViewBalance === true),
+            ledgerSpaceIds: addSpace(current.ledgerSpaceIds, account.sharedCanViewLedger === true),
+          };
+
+          const existing = sharedById.get(account.id);
+          if (!existing) {
+            sharedById.set(account.id, account);
+            return;
+          }
+
+          const incomingBalance = account.sharedCanViewBalance === true;
+          const existingBalance = existing.sharedCanViewBalance === true;
+
+          sharedById.set(account.id, {
+            ...existing,
+            ...(incomingBalance && !existingBalance ? {
+              openingBalanceMinor: account.openingBalanceMinor,
+              ledgerBalanceMinor: account.ledgerBalanceMinor,
+            } : {}),
+            sharedCanUseAccount:
+              existing.sharedCanUseAccount === true
+              || account.sharedCanUseAccount === true,
+            sharedCanViewBalance:
+              existingBalance || incomingBalance,
+            sharedCanViewLedger:
+              existing.sharedCanViewLedger === true
+              || account.sharedCanViewLedger === true,
+          });
+        });
+      });
+
+      setAccounts(
+        [...ownedAccounts, ...sharedById.values()]
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setSharedAccountContext(nextSharedAccountContext);
       setSpaces(nextSpaces);
     } catch (nextError) {
       setError(
@@ -127,8 +206,25 @@ export function AccountsPage({
   );
 
   const active = useMemo(() => accounts.filter((item) => !item.archivedAt && !item.closedAt), [accounts]);
+  const ownedActive = useMemo(
+    () => active.filter((item) => item.ownerId === user?.uid),
+    [active, user?.uid],
+  );
+  const sharedActive = useMemo(
+    () => active.filter((item) => item.ownerId !== user?.uid),
+    [active, user?.uid],
+  );
   const closed = useMemo(() => accounts.filter((item) => item.archivedAt || item.closedAt), [accounts]);
-  const total = active.filter((item) => item.type !== 'credit_card').reduce((sum, item) => sum + item.ledgerBalanceMinor, 0);
+  const total = active
+    .filter(
+      (item) =>
+        item.type !== 'credit_card'
+        && (
+          item.ownerId === user?.uid
+          || item.sharedCanViewBalance === true
+        ),
+    )
+    .reduce((sum, item) => sum + item.ledgerBalanceMinor, 0);
   const ownedSmeSpaces = useMemo(
     () => spaces.filter((item) => item.type === 'sme' && item.ownerId === user?.uid),
     [spaces, user?.uid],
@@ -152,7 +248,8 @@ export function AccountsPage({
   const unassignedBusinessCount = useMemo(
     () => active.filter(
       (item) =>
-        item.classification === 'business'
+        item.ownerId === user?.uid
+        && item.classification === 'business'
         && businessSpaceIdsForAccount(item).length === 0,
     ).length,
     [active],
@@ -254,9 +351,9 @@ export function AccountsPage({
           ? embeddedSpace?.type === 'sme'
             ? canManageEmbeddedAccounts
               ? 'Manage the Business accounts linked to this Business Space.'
-              : 'Business accounts the owner has shared with you in this Space.'
+              : 'Business Account management stays with the owner. Accounts shared with you appear on your main Accounts page.'
             : 'Manage the personal accounts available to this Personal Space.'
-          : 'Add personal or business bank, cash, e-wallet, and credit card accounts. Business ownership and POS availability are controlled here.'
+          : 'See accounts you own and Business accounts shared with you. Owners keep control of account setup, sharing, POS links, closing and deletion.'
       }
       action={accountHeaderAction}
     />
@@ -319,12 +416,13 @@ export function AccountsPage({
       ? <div className="loading-panel">Loading Accounts…</div>
       : active.length === 0
         ? <EmptyState
-            title={embeddedSpace?.type === 'sme' && !canManageEmbeddedAccounts ? 'No Business account shared with you' : 'Add your first account'}
-            description={embeddedSpace?.type === 'sme' && !canManageEmbeddedAccounts ? 'The Business owner can share a linked account with you from Accounts.' : 'Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card.'}
+            title={embeddedSpace?.type === 'sme' && !canManageEmbeddedAccounts ? 'Business Accounts are owner-managed' : 'Add your first account'}
+            description={embeddedSpace?.type === 'sme' && !canManageEmbeddedAccounts ? 'Accounts shared with you appear on your main Accounts page instead of inside this Business Space.' : 'Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card.'}
             action={canManageEmbeddedAccounts ? <button className="button primary" onClick={() => setModal('create')}>Add account</button> : undefined}
           />
-        : <AccountGroups
-            accounts={active}
+        : <>
+          <AccountGroups
+            accounts={ownedActive}
             spaces={visibleSmeSpaces}
             spaceIdOverride={spaceIdOverride}
             busyId={busyId}
@@ -332,7 +430,33 @@ export function AccountsPage({
             onShare={(account) => setSharing(account)}
             onClose={(account) => askLifecycle(account, 'close')}
             onDelete={(account) => askLifecycle(account, 'delete')}
-          />}
+          />
+
+          {!embedded && sharedActive.length > 0 && (
+            <section className="shared-account-section">
+              <div className="panel-heading">
+                <div>
+                  <span className="eyebrow">Shared with me</span>
+                  <h2>Shared accounts</h2>
+                </div>
+                <span>{sharedActive.length}</span>
+              </div>
+              <p className="muted">
+                These accounts were shared with you by a Business owner. Balance, activity and money-use access follows the permissions they granted.
+              </p>
+              <AccountList
+                accounts={sharedActive}
+                spaces={spaces}
+                busyId={busyId}
+                onEdit={(account) => { setSelected(account); setModal('edit'); }}
+                onShare={(account) => setSharing(account)}
+                onClose={(account) => askLifecycle(account, 'close')}
+                onDelete={(account) => askLifecycle(account, 'delete')}
+                sharedAccountContext={sharedAccountContext}
+              />
+            </section>
+          )}
+        </>}
 
     {sharing && sharing.ownerId === user?.uid && (
       <BusinessAccountShareModal
@@ -450,6 +574,7 @@ function AccountList({
   onShare,
   onClose,
   onDelete,
+  sharedAccountContext,
 }: {
   accounts: Account[];
   spaces: Space[];
@@ -459,6 +584,7 @@ function AccountList({
   onShare: (account: Account) => void;
   onClose: (account: Account) => void;
   onDelete: (account: Account) => void;
+  sharedAccountContext?: Record<string, SharedAccountContext>;
 }) {
   const { user } = useAuth();
   const businessNames = (account: Account) => {
@@ -480,10 +606,18 @@ function AccountList({
     const canViewLedger =
       canManage
       || account.sharedCanViewLedger === true;
+    const sharedContext = sharedAccountContext?.[account.id];
+    const sharedSpaceNames = (sharedContext?.spaceIds || [])
+      .map((id) => spaces.find((space) => space.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
+    const sharedLabel = sharedSpaceNames.length
+      ? `Shared with me · ${sharedSpaceNames.join(', ')}`
+      : 'Shared with me';
+    const sharedLedgerSpaceId = sharedContext?.ledgerSpaceIds[0];
 
     return <article className={`account-card ${accountColorClass(getAccountColor(user?.uid || '', account.id, index))}`} key={account.id}>
       <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
-      <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {account.classification === 'personal' ? 'Personal only' : businessNames(account)}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div><small>{account.displayId}</small></div>
+      <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {canManage ? (account.classification === 'personal' ? 'Personal only' : businessNames(account)) : sharedLabel}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div><small>{account.displayId}</small></div>
       <div className="account-balance">
         <span>Current balance</span>
         <strong>
@@ -500,9 +634,13 @@ function AccountList({
           <Link
             className="text-button account-view-activity"
             to={
-              spaceIdOverride
-                ? `/spaces/${spaceIdOverride}?section=money`
-                : `/transactions?accountId=${encodeURIComponent(account.id)}`
+              canManage
+                ? spaceIdOverride
+                  ? `/spaces/${spaceIdOverride}?section=money`
+                  : `/transactions?accountId=${encodeURIComponent(account.id)}`
+                : sharedLedgerSpaceId
+                  ? `/spaces/${sharedLedgerSpaceId}?section=money`
+                  : '/accounts'
             }
           >
             View activity
