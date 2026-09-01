@@ -1,5 +1,4 @@
 import { ThemeStudio } from '../components/ThemeStudio';
-import { PersonalStyleSettings } from '../components/PersonalStyleSettings';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Timestamp } from 'firebase/firestore';
 import { AccountDeletionModal } from '../components/AccountDeletionModal';
@@ -310,7 +309,6 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <PersonalStyleSettings userId={user?.uid || ''} />
         <section className="panel settings-section">
           <div className="settings-section-heading">
             <div><h2>Money and time</h2><p>BajetBN uses BND and Brunei time so dates and amounts stay clear.</p></div>

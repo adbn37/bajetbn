@@ -10430,3 +10430,79 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
     grid-column: 2;
   }
 }
+
+/* Theme Studio simplified wallpaper assistant */
+.theme-studio-simple { display:grid; gap:.85rem; }
+.theme-studio-simple-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+.theme-studio-simple-heading h2 { margin:.1rem 0 .25rem; }
+.theme-studio-simple-heading p { margin:0; max-width:680px; }
+.theme-studio-simple-heading>.status-badge { flex:0 0 auto; }
+
+.theme-wallpaper-assistant { display:grid; gap:.75rem; padding:.9rem; border:1px solid var(--border); border-radius:14px; background:color-mix(in srgb,var(--surface-2) 72%,transparent); }
+.theme-wallpaper-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
+.theme-wallpaper-heading strong,.theme-wallpaper-heading small { display:block; }
+.theme-wallpaper-heading small { margin-top:.18rem; color:var(--muted); line-height:1.45; }
+.theme-wallpaper-actions { display:flex; align-items:center; gap:.65rem; flex-wrap:wrap; }
+.theme-wallpaper-upload { position:relative; overflow:hidden; }
+.theme-wallpaper-upload input { position:absolute; inline-size:1px; block-size:1px; opacity:0; pointer-events:none; }
+.theme-wallpaper-auto-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; }
+.theme-wallpaper-toggle { display:flex; flex-direction:row; align-items:flex-start; gap:.6rem; padding:.7rem; border:1px solid var(--border); border-radius:11px; background:color-mix(in srgb,var(--surface) 72%,transparent); cursor:pointer; }
+.theme-wallpaper-toggle input { width:auto; margin-top:.2rem; flex:0 0 auto; }
+.theme-wallpaper-toggle span { min-width:0; }
+.theme-wallpaper-toggle strong,.theme-wallpaper-toggle small { display:block; }
+.theme-wallpaper-toggle small { margin-top:.16rem; color:var(--muted); font-weight:500; line-height:1.4; }
+.theme-wallpaper-palette { display:flex; align-items:center; justify-content:space-between; gap:.8rem; padding:.7rem; border:1px solid var(--border); border-radius:11px; }
+.theme-wallpaper-palette strong,.theme-wallpaper-palette small { display:block; }
+.theme-wallpaper-palette small { margin-top:.15rem; color:var(--muted); }
+.theme-wallpaper-swatches { display:flex; gap:.42rem; flex-wrap:wrap; justify-content:flex-end; }
+.theme-wallpaper-swatches button { width:30px; height:30px; padding:0; border:2px solid color-mix(in srgb,var(--wallpaper-swatch) 55%,var(--border)); border-radius:50%; background:var(--wallpaper-swatch); box-shadow:0 0 0 2px transparent; }
+.theme-wallpaper-swatches button.active { box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent); }
+.theme-wallpaper-transparency { padding:.7rem; border:1px solid var(--border); border-radius:11px; }
+.theme-wallpaper-transparency>span { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+.theme-wallpaper-transparency input[type=range] { margin:.45rem 0 .15rem; }
+.theme-wallpaper-auto-result { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding:.65rem .75rem; border:1px solid color-mix(in srgb,var(--accent) 28%,var(--border)); border-radius:11px; background:color-mix(in srgb,var(--accent) 7%,transparent); }
+.theme-wallpaper-auto-result span,.theme-wallpaper-auto-result small { color:var(--muted); }
+.theme-wallpaper-empty,.theme-wallpaper-privacy { margin:0; font-size:.72rem; line-height:1.5; }
+.theme-wallpaper-privacy { padding-top:.55rem; border-top:1px solid var(--border); }
+.theme-studio-advanced-disclosure { border:1px solid var(--border); border-radius:14px; background:color-mix(in srgb,var(--surface) 66%,transparent); overflow:hidden; }
+.theme-studio-advanced-disclosure>summary { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.8rem .9rem; cursor:pointer; list-style:none; }
+.theme-studio-advanced-disclosure>summary::-webkit-details-marker { display:none; }
+.theme-studio-advanced-disclosure>summary span strong,.theme-studio-advanced-disclosure>summary span small { display:block; }
+.theme-studio-advanced-disclosure>summary span small { margin-top:.12rem; color:var(--muted); font-weight:500; }
+.theme-studio-advanced-disclosure>summary>b { color:var(--accent-2); font-size:1.1rem; transition:transform .18s ease; }
+.theme-studio-advanced-disclosure[open]>summary>b { transform:rotate(45deg); }
+.theme-studio-advanced-content { display:grid; gap:1rem; padding:.25rem .9rem .9rem; border-top:1px solid var(--border); }
+.theme-studio-advanced-content>.personal-style-settings { margin-top:1rem; }
+.theme-studio-simple-safety { margin:0; padding:.65rem .75rem; border-left:3px solid var(--accent); background:color-mix(in srgb,var(--accent) 6%,transparent); font-size:.72rem; line-height:1.5; }
+.theme-studio-simple-safety strong { color:var(--text); }
+
+html[data-theme-studio-v2=on][data-theme-wallpaper=custom] .panel,
+html[data-theme-studio-v2=on][data-theme-wallpaper=custom] .summary-card,
+html[data-theme-studio-v2=on][data-theme-wallpaper=custom] .space-quick-card,
+html[data-theme-studio-v2=on][data-theme-wallpaper=custom] .account-card,
+html[data-theme-studio-v2=on][data-theme-wallpaper=custom] .settings-section,
+html[data-theme-studio-v2=on][data-theme-wallpaper=custom] .data-tool-card,
+html[data-theme-studio-v2=on][data-theme-wallpaper=custom] .planning-card {
+  background:color-mix(in srgb,var(--surface) var(--theme-card-opacity,88%),transparent);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+
+html[data-theme*=contrast][data-theme-wallpaper=custom] .panel,
+html[data-theme*=contrast][data-theme-wallpaper=custom] .summary-card,
+html[data-theme*=contrast][data-theme-wallpaper=custom] .space-quick-card,
+html[data-theme*=contrast][data-theme-wallpaper=custom] .account-card,
+html[data-theme*=contrast][data-theme-wallpaper=custom] .settings-section,
+html[data-theme*=contrast][data-theme-wallpaper=custom] .data-tool-card,
+html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
+  background:var(--surface);
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+
+@media (max-width:700px) {
+  .theme-studio-simple-heading { flex-direction:column; gap:.5rem; }
+  .theme-wallpaper-auto-grid { grid-template-columns:1fr; }
+  .theme-wallpaper-palette { align-items:flex-start; flex-direction:column; }
+  .theme-wallpaper-swatches { justify-content:flex-start; }
+}

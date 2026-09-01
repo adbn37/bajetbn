@@ -17,6 +17,10 @@ export interface ThemeStudioV2Settings {
   wallpaperPosition: ThemeWallpaperPosition;
   wallpaperBlur: number;
   wallpaperDim: number;
+  wallpaperAutoMatch: boolean;
+  wallpaperAutoCards: boolean;
+  wallpaperPalette: string[];
+  cardOpacity: number;
 }
 
 export const THEME_STUDIO_V2_EVENT = "bajetbn:theme-studio-v2";
@@ -51,6 +55,10 @@ export function defaultThemeStudioV2(): ThemeStudioV2Settings {
     wallpaperPosition: "center",
     wallpaperBlur: 0,
     wallpaperDim: 28,
+    wallpaperAutoMatch: true,
+    wallpaperAutoCards: true,
+    wallpaperPalette: [],
+    cardOpacity: 88,
   };
 }
 
@@ -120,6 +128,13 @@ export function sanitizeThemeStudioV2(value?: Partial<ThemeStudioV2Settings> | n
     ? value.wallpaperPath.trim()
     : "";
 
+  const wallpaperPalette = Array.isArray(value?.wallpaperPalette)
+    ? value!.wallpaperPalette
+        .map((entry) => String(entry || "").trim().toUpperCase())
+        .filter((entry) => /^#[0-9A-F]{6}$/.test(entry))
+        .slice(0, 5)
+    : defaults.wallpaperPalette;
+
   return {
     accentColor: normalizeThemeAccent(value?.accentColor, defaults.accentColor),
     patternIntensity: Math.round(clamp(Number(value?.patternIntensity ?? defaults.patternIntensity), 0, 100)),
@@ -133,6 +148,14 @@ export function sanitizeThemeStudioV2(value?: Partial<ThemeStudioV2Settings> | n
     wallpaperPosition,
     wallpaperBlur: Math.round(clamp(Number(value?.wallpaperBlur ?? defaults.wallpaperBlur), 0, 20)),
     wallpaperDim: Math.round(clamp(Number(value?.wallpaperDim ?? defaults.wallpaperDim), 0, 80)),
+    wallpaperAutoMatch: typeof value?.wallpaperAutoMatch === "boolean"
+      ? value.wallpaperAutoMatch
+      : defaults.wallpaperAutoMatch,
+    wallpaperAutoCards: typeof value?.wallpaperAutoCards === "boolean"
+      ? value.wallpaperAutoCards
+      : defaults.wallpaperAutoCards,
+    wallpaperPalette,
+    cardOpacity: Math.round(clamp(Number(value?.cardOpacity ?? defaults.cardOpacity), 60, 100)),
   };
 }
 
@@ -168,6 +191,7 @@ export function clearThemeStudioV2() {
     "--theme-wallpaper-position",
     "--theme-wallpaper-blur",
     "--theme-wallpaper-dim",
+    "--theme-card-opacity",
     "--accent",
     "--accent-2",
   ]) root.style.removeProperty(property);
@@ -210,6 +234,7 @@ export function applyThemeStudioV2(value: ThemeStudioV2Settings) {
   root.style.setProperty("--theme-wallpaper-position", settings.wallpaperPosition);
   root.style.setProperty("--theme-wallpaper-blur", String(settings.wallpaperBlur) + "px");
   root.style.setProperty("--theme-wallpaper-dim", String(settings.wallpaperDim / 100));
+  root.style.setProperty("--theme-card-opacity", String(settings.cardOpacity) + "%");
 
   if (highContrast) {
     root.style.removeProperty("--theme-user-accent");

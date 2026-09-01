@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n?/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
 const need = (condition, message) => { if (!condition) throw new Error(message); };
 
@@ -22,7 +22,7 @@ const authFiles = [
 const authSource = authFiles.map(read).join("\n");
 
 need(studio.includes("export function ThemeStudio"), "Theme Studio component is missing.");
-need(studio.includes("<ThemeChooser />"), "Theme Studio must reuse the existing ThemeChooser.");
+need(studio.includes("<ThemeChooser compact />"), "Theme Studio must reuse the existing ThemeChooser in the simplified compact view.");
 need(studio.includes("usePreferences()"), "Theme Studio must reuse PreferencesContext.");
 need(studio.includes("normalizeAppearance(appearance)"), "Theme Studio must use existing appearance normalization.");
 need(!studio.includes("localStorage"), "Theme Studio must not create another persistence engine.");
