@@ -18860,3 +18860,124 @@ export const deleteSmePosSalePermanently = onCall(
     );
   },
 );
+
+export const updateTransactionDetails = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const transactionId = stringValue(
+    request.data?.transactionId,
+    'Money activity',
+    120,
+  );
+  const counterparty = optionalString(
+    request.data?.counterparty,
+    120,
+  );
+  const note = optionalString(
+    request.data?.note,
+    500,
+  );
+  const labels = transactionLabels(
+    request.data?.labels,
+  );
+  const {
+    paymentMethod,
+    paymentMethodLabel,
+  } = paymentMethodValues({
+    paymentMethod: request.data?.paymentMethod,
+    paymentMethodLabel:
+      request.data?.paymentMethodLabel,
+  });
+
+  const transactionRef =
+    db.collection('transactions').doc(
+      transactionId,
+    );
+
+  return db.runTransaction(
+    async (transaction) => {
+      const snapshot =
+        await transaction.get(
+          transactionRef,
+        );
+
+      if (!snapshot.exists) {
+        throw new HttpsError(
+          'not-found',
+          'Money activity not found.',
+        );
+      }
+
+      const data =
+        snapshot.data() || {};
+
+      if (data.ownerId !== uid) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the owner of this money activity can edit its details.',
+        );
+      }
+
+      if (
+        data.status !== 'posted'
+        || data.type === 'reversal'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Only active saved money activity can be edited.',
+        );
+      }
+
+      const managedKeys = [
+        'commitmentId',
+        'commitmentPaymentId',
+        'businessInvoiceId',
+        'businessInvoicePaymentId',
+        'spaceWorkItemId',
+        'sharedBillAssignmentId',
+        'sharedBillPaymentId',
+        'recurringTemplateId',
+        'recurringRunId',
+        'smePosSaleId',
+        'posSaleId',
+        'smePosReturnId',
+        'smePosPayoutId',
+        'reservationId',
+      ];
+
+      if (
+        managedKeys.some(
+          (key) => Boolean(data[key]),
+        )
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This money activity is controlled by another BajetBN workflow. Edit it from its original source.',
+        );
+      }
+
+      const now =
+        FieldValue.serverTimestamp();
+
+      transaction.update(
+        transactionRef,
+        {
+          counterparty,
+          note,
+          labels,
+          paymentMethod,
+          paymentMethodLabel,
+          editedBy: uid,
+          editedAt: now,
+          editCount:
+            Number(data.editCount || 0) + 1,
+          updatedAt: now,
+        },
+      );
+
+      return {
+        transactionId,
+        updated: true,
+      };
+    },
+  );
+});

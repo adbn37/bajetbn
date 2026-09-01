@@ -699,6 +699,9 @@ export interface FinancialTransaction {
   recurringTemplateId?: string | null;
   recurringRunId?: string | null;
   recurringScheduledDate?: string | null;
+  editedAt?: Timestamp | null;
+  editedBy?: string | null;
+  editCount?: number;
   createdAt?: Timestamp;
   postedAt?: Timestamp;
   updatedAt?: Timestamp;

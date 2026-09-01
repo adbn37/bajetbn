@@ -70,7 +70,6 @@ for (const token of [
   'POS payments off here',
   'Open accounts',
   'No Business account is linked to this Business yet.',
-  'Linked to this Business',
 ]) {
   expect(
     command.includes(token),
@@ -91,10 +90,12 @@ expect(
 );
 
 expect(
-  command.includes(
-    'formatMoney(account.ledgerBalanceMinor, account.currency)',
-  ),
-  'Business owner account cards must use the canonical ledger balance.',
+  command.includes('account.sharedCanViewBalance === false')
+    && command.includes('Balance hidden')
+    && command.includes(
+      'formatMoney(account.ledgerBalanceMinor, account.currency)',
+    ),
+  'Business account cards must respect per-account balance visibility while using the canonical ledger balance when allowed.',
 );
 
 expect(

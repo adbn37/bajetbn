@@ -246,12 +246,12 @@ const activeCommitments = commitments.filter(
                       </small>
                     </div>
 
-                    {role === 'owner' ? (
+                    {account.sharedCanViewBalance === false ? (
+                      <span className="type-badge">Balance hidden</span>
+                    ) : (
                       <strong>
                         {formatMoney(account.ledgerBalanceMinor, account.currency)}
                       </strong>
-                    ) : (
-                      <span className="type-badge">Linked to this Business</span>
                     )}
                   </article>
                 ))}

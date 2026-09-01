@@ -382,3 +382,20 @@ export async function reverseTransaction(transactionId: string, transactionDate:
   const call = httpsCallable(functions, 'reverseTransaction');
   return call({ transactionId, transactionDate, reason, idempotencyKey: idempotencyKey() });
 }
+
+export async function updateTransactionDetails(input: {
+  transactionId: string;
+  counterparty?: string;
+  note?: string;
+  labels?: string[];
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+}): Promise<void> {
+  if (!navigator.onLine) {
+    throw new Error('Connect to the internet before editing saved money activity.');
+  }
+
+  const { functions } = requireFirebase();
+  const call = httpsCallable(functions, 'updateTransactionDetails');
+  await call(input);
+}

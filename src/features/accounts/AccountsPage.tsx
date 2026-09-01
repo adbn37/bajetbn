@@ -13,6 +13,7 @@ import {
   listAllAccounts,
   listAllPersonalAccounts,
   listAccountsForOwnerSpace,
+  listAccountsForSpace,
   posSpaceIdsForAccount,
   setBusinessAccountMemberAccess,
   updateAccount,
@@ -85,10 +86,14 @@ export function AccountsPage({
             ? await listAllPersonalAccounts(
                 user.uid,
               )
-            : await listAccountsForOwnerSpace(
-                user.uid,
-                spaceIdOverride,
-              );
+            : targetSpace.type === 'sme'
+              ? await listAccountsForSpace(
+                  spaceIdOverride,
+                )
+              : await listAccountsForOwnerSpace(
+                  user.uid,
+                  spaceIdOverride,
+                );
 
         setAccounts(nextAccounts);
         setSpaces([targetSpace]);
@@ -128,6 +133,22 @@ export function AccountsPage({
     () => spaces.filter((item) => item.type === 'sme' && item.ownerId === user?.uid),
     [spaces, user?.uid],
   );
+  const embeddedSpace =
+    spaceIdOverride
+      ? spaces[0] || null
+      : null;
+
+  const visibleSmeSpaces =
+    embedded
+    && embeddedSpace?.type === 'sme'
+      ? [embeddedSpace]
+      : ownedSmeSpaces;
+
+  const canManageEmbeddedAccounts =
+    !embedded
+    || !embeddedSpace
+    || embeddedSpace.ownerId === user?.uid;
+
   const unassignedBusinessCount = useMemo(
     () => active.filter(
       (item) =>
@@ -138,8 +159,10 @@ export function AccountsPage({
   );
 
   const accountHeaderAction =
-    embedded
-      ? (
+    embedded && !canManageEmbeddedAccounts
+      ? null
+      : embedded
+        ? (
           <button
             className="button primary"
             onClick={() =>
@@ -218,11 +241,21 @@ export function AccountsPage({
 
   return <main className={embedded ? 'page accounts-page embedded-module-page' : 'page accounts-page'}>
     <PageHeader
-      eyebrow={embedded ? 'Personal Space' : 'Money sources'}
+      eyebrow={
+        embedded
+          ? embeddedSpace?.type === 'sme'
+            ? 'Business Space'
+            : 'Personal Space'
+          : 'Money sources'
+      }
       title="Accounts"
       description={
         embedded
-          ? 'Manage the personal accounts available to this Personal Space.'
+          ? embeddedSpace?.type === 'sme'
+            ? canManageEmbeddedAccounts
+              ? 'Manage the Business accounts linked to this Business Space.'
+              : 'Business accounts the owner has shared with you in this Space.'
+            : 'Manage the personal accounts available to this Personal Space.'
           : 'Add personal or business bank, cash, e-wallet, and credit card accounts. Business ownership and POS availability are controlled here.'
       }
       action={accountHeaderAction}
@@ -282,12 +315,75 @@ export function AccountsPage({
           not assigned to a Business Space yet.
         </div>
       )}
-    {loading ? <div className="loading-panel">Loading Accounts…</div> : active.length === 0 ? <EmptyState title="Add your first account" description="Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card." action={<button className="button primary" onClick={() => setModal('create')}>Add account</button>} /> : <AccountGroups accounts={active} spaces={ownedSmeSpaces} spaceIdOverride={spaceIdOverride} busyId={busyId} onEdit={(account) => { setSelected(account); setModal('edit'); }} onShare={(account) => setSharing(account)} onClose={(account) => askLifecycle(account, 'close')} onDelete={(account) => askLifecycle(account, 'delete')} />}
+    {loading
+      ? <div className="loading-panel">Loading Accounts…</div>
+      : active.length === 0
+        ? <EmptyState
+            title={embeddedSpace?.type === 'sme' && !canManageEmbeddedAccounts ? 'No Business account shared with you' : 'Add your first account'}
+            description={embeddedSpace?.type === 'sme' && !canManageEmbeddedAccounts ? 'The Business owner can share a linked account with you from Accounts.' : 'Start with BIBD, Baiduri, Cash, an e-wallet, or a credit card.'}
+            action={canManageEmbeddedAccounts ? <button className="button primary" onClick={() => setModal('create')}>Add account</button> : undefined}
+          />
+        : <AccountGroups
+            accounts={active}
+            spaces={visibleSmeSpaces}
+            spaceIdOverride={spaceIdOverride}
+            busyId={busyId}
+            onEdit={(account) => { setSelected(account); setModal('edit'); }}
+            onShare={(account) => setSharing(account)}
+            onClose={(account) => askLifecycle(account, 'close')}
+            onDelete={(account) => askLifecycle(account, 'delete')}
+          />}
 
-    {sharing && <BusinessAccountShareModal account={sharing} spaces={ownedSmeSpaces} onClose={() => setSharing(null)} />}
+    {sharing && sharing.ownerId === user?.uid && (
+      <BusinessAccountShareModal
+        account={sharing}
+        spaces={ownedSmeSpaces}
+        onClose={() => setSharing(null)}
+      />
+    )}
+
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
-    {modal === 'create' && profile && <AccountForm currency={profile.currency} spaces={ownedSmeSpaces} lockedPersonal={Boolean(spaceIdOverride)} onClose={() => setModal(null)} onSubmit={async (values) => { await createAccount(values); setModal(null); await load(); }} />}
-    {modal === 'edit' && selected && <AccountForm currency={selected.currency} spaces={ownedSmeSpaces} initial={selected} lockedPersonal={Boolean(spaceIdOverride)} onClose={() => setModal(null)} onSubmit={async (values) => { await updateAccount({ accountId: selected.id, name: values.name, institution: values.institution, institutionCode: values.institutionCode, type: values.type, classification: values.classification, businessSpaceIds: values.businessSpaceIds, posSpaceIds: values.posSpaceIds }); if (user) setAccountColor(user.uid, selected.id, values.color); setModal(null); await load(); }} />}
+
+    {modal === 'create' && profile && canManageEmbeddedAccounts && (
+      <AccountForm
+        currency={profile.currency}
+        spaces={visibleSmeSpaces}
+        lockedPersonal={embeddedSpace?.type === 'personal'}
+        onClose={() => setModal(null)}
+        onSubmit={async (values) => {
+          await createAccount(values);
+          setModal(null);
+          await load();
+        }}
+      />
+    )}
+
+    {modal === 'edit' && selected && selected.ownerId === user?.uid && (
+      <AccountForm
+        currency={selected.currency}
+        spaces={visibleSmeSpaces}
+        initial={selected}
+        lockedPersonal={embeddedSpace?.type === 'personal'}
+        onClose={() => setModal(null)}
+        onSubmit={async (values) => {
+          await updateAccount({
+            accountId: selected.id,
+            name: values.name,
+            institution: values.institution,
+            institutionCode: values.institutionCode,
+            type: values.type,
+            classification: values.classification,
+            businessSpaceIds: values.businessSpaceIds,
+            posSpaceIds: values.posSpaceIds,
+          });
+          if (user) {
+            setAccountColor(user.uid, selected.id, values.color);
+          }
+          setModal(null);
+          await load();
+        }}
+      />
+    )}
   </main>;
 }
 
@@ -377,21 +473,54 @@ function AccountList({
     const posCount = account.classification === 'business'
       ? posSpaceIdsForAccount(account).length
       : 0;
+    const canManage = account.ownerId === user?.uid;
+    const canViewBalance =
+      canManage
+      || account.sharedCanViewBalance === true;
+    const canViewLedger =
+      canManage
+      || account.sharedCanViewLedger === true;
 
     return <article className={`account-card ${accountColorClass(getAccountColor(user?.uid || '', account.id, index))}`} key={account.id}>
       <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
       <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {account.classification === 'personal' ? 'Personal only' : businessNames(account)}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div><small>{account.displayId}</small></div>
-      <div className="account-balance"><span>Current balance</span><strong>{formatMoney(account.ledgerBalanceMinor, account.currency)}</strong><small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small></div>
-      <div className="account-actions"><Link
-        className="text-button account-view-activity"
-        to={
-          spaceIdOverride
-            ? `/spaces/${spaceIdOverride}?section=money`
-            : `/transactions?accountId=${encodeURIComponent(account.id)}`
-        }
-      >
-        View activity
-      </Link>{account.classification === 'business' && <button className="text-button" onClick={() => onShare(account)}>Share</button>}<button className="text-button" onClick={() => onEdit(account)}>Edit</button><button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button><button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button></div>
+      <div className="account-balance">
+        <span>Current balance</span>
+        <strong>
+          {canViewBalance
+            ? formatMoney(account.ledgerBalanceMinor, account.currency)
+            : 'Balance hidden'}
+        </strong>
+        {canViewBalance
+          ? <small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small>
+          : <small className="account-secondary-detail">The Business owner controls balance visibility.</small>}
+      </div>
+      <div className="account-actions">
+        {canViewLedger && (
+          <Link
+            className="text-button account-view-activity"
+            to={
+              spaceIdOverride
+                ? `/spaces/${spaceIdOverride}?section=money`
+                : `/transactions?accountId=${encodeURIComponent(account.id)}`
+            }
+          >
+            View activity
+          </Link>
+        )}
+        {canManage && account.classification === 'business' && (
+          <button className="text-button" onClick={() => onShare(account)}>Share</button>
+        )}
+        {canManage && (
+          <button className="text-button" onClick={() => onEdit(account)}>Edit</button>
+        )}
+        {canManage && (
+          <button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button>
+        )}
+        {canManage && (
+          <button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button>
+        )}
+      </div>
     </article>;
   })}</section>;
 }

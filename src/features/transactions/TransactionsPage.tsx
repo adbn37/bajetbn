@@ -32,6 +32,7 @@ import {
   postTransaction,
   removeTransactionAttachment,
   reverseTransaction,
+  updateTransactionDetails,
   uploadTransactionAttachment,
   type PostTransactionOutcome,
   type TransactionInput,
@@ -132,6 +133,29 @@ function transactionLabelText(label: string): string {
   return `#${label}`;
 }
 
+function transactionHasManagedSource(item: FinancialTransaction): boolean {
+  const linked =
+    item as FinancialTransaction
+    & Record<string, unknown>;
+
+  return Boolean(
+    item.commitmentId
+    || item.commitmentPaymentId
+    || item.businessInvoiceId
+    || item.businessInvoicePaymentId
+    || item.spaceWorkItemId
+    || item.sharedBillAssignmentId
+    || item.sharedBillPaymentId
+    || item.recurringTemplateId
+    || item.recurringRunId
+    || linked.smePosSaleId
+    || linked.posSaleId
+    || linked.smePosReturnId
+    || linked.smePosPayoutId
+    || linked.reservationId
+  );
+}
+
 export function TransactionsPage() {
   const { user, profile } = useAuth();
   const { online, lastCompletedAt } = useOfflineSync();
@@ -150,6 +174,9 @@ export function TransactionsPage() {
   const [receiptTransaction, setReceiptTransaction] = useState<FinancialTransaction | null>(null);
   const [reverseDialog, setReverseDialog] = useState<ActionConfirmState<FinancialTransaction> | null>(null);
   const [reverseBusy, setReverseBusy] = useState(false);
+  const [correctionDialog, setCorrectionDialog] = useState<ActionConfirmState<FinancialTransaction> | null>(null);
+  const [correctionBusy, setCorrectionBusy] = useState(false);
+  const [correctionDraft, setCorrectionDraft] = useState<FinancialTransaction | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current_month');
@@ -400,6 +427,54 @@ export function TransactionsPage() {
     }
   };
 
+  const askCorrection = (item: FinancialTransaction) => {
+    setError('');
+
+    if (transactionHasManagedSource(item)) {
+      setError('This money activity came from another BajetBN workflow. Correct it from the original bill, invoice, recurring item, POS record, or linked source instead.');
+      return;
+    }
+
+    setCorrectionDialog({
+      payload: item,
+      title: `Correct ${item.displayId}?`,
+      description: 'BajetBN will undo the original record first, then open a pre-filled replacement. This keeps the account ledger and audit history accurate.',
+      note: 'Use this when the amount, account, date, category, Space, or transaction type is wrong.',
+      confirmLabel: 'Undo and create correction',
+      tone: 'danger',
+    });
+  };
+
+  const handleCorrection = async () => {
+    if (!correctionDialog) return;
+
+    const item = correctionDialog.payload;
+    setCorrectionBusy(true);
+    setError('');
+
+    try {
+      if (transactionHasManagedSource(item)) {
+        throw new Error('Correct this record from its original BajetBN workflow.');
+      }
+
+      await reverseTransaction(
+        item.id,
+        dateInTimezone(profile?.timezone || 'Asia/Brunei'),
+        'Corrected from Money activity details',
+      );
+
+      setCorrectionDialog(null);
+      setSelectedTransaction(null);
+      setCorrectionDraft(item);
+      setFeedback('Original activity undone. Review and save the pre-filled correction.');
+      await load();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setCorrectionBusy(false);
+    }
+  };
+
   return (
     <main className="page">
       <PageHeader
@@ -585,6 +660,47 @@ export function TransactionsPage() {
         }}
       />}
 
+      {correctionDraft && profile && correctionDraft.type !== 'reversal' && (
+        <MoneyActivityModal
+          accounts={activeAccounts}
+          spaces={spaces}
+          categories={allCategories}
+          labelSuggestions={availableLabels}
+          onCategoriesChanged={refreshCategories}
+          timezone={profile.timezone}
+          online={online}
+          initialValues={{
+            type: correctionDraft.type,
+            accountId: correctionDraft.accountId,
+            destinationAccountId: correctionDraft.destinationAccountId || undefined,
+            spaceId: correctionDraft.spaceId,
+            amountMinor: correctionDraft.amountMinor,
+            currency: correctionDraft.currency,
+            transactionDate: correctionDraft.transactionDate,
+            categoryId: correctionDraft.categoryId,
+            category: correctionDraft.category,
+            categoryIcon: correctionDraft.categoryIcon,
+            categoryColor: correctionDraft.categoryColor,
+            categoryScope: correctionDraft.categoryScope,
+            counterparty: correctionDraft.counterparty,
+            note: correctionDraft.note,
+            labels: correctionDraft.labels,
+            paymentMethod: correctionDraft.paymentMethod || undefined,
+            paymentMethodLabel: correctionDraft.paymentMethodLabel || undefined,
+          }}
+          onClose={() => {
+            setCorrectionDraft(null);
+            setFeedback('Original activity remains undone. Add a replacement later if you still need one.');
+          }}
+          onSubmit={postTransaction}
+          onComplete={async (message, refresh) => {
+            setCorrectionDraft(null);
+            setFeedback(`Correction saved. ${message}`);
+            if (refresh) await load();
+          }}
+        />
+      )}
+
       {showCategoryManager && <CategoryManager
         customCategories={customCategories}
         onClose={() => setShowCategoryManager(false)}
@@ -600,6 +716,12 @@ export function TransactionsPage() {
         online={online}
         onClose={() => setSelectedTransaction(null)}
         onReverse={() => askReverse(selectedTransaction)}
+        onCorrect={() => askCorrection(selectedTransaction)}
+        onUpdated={async () => {
+          setSelectedTransaction(null);
+          setFeedback('Money activity details updated.');
+          await load();
+        }}
         onAttachmentsChanged={(count) => updateAttachmentCount(selectedTransaction.id, count)}
       />}
 
@@ -613,10 +735,17 @@ export function TransactionsPage() {
         receiptsOnly
         onClose={() => setReceiptTransaction(null)}
         onReverse={() => askReverse(receiptTransaction)}
+        onCorrect={() => askCorrection(receiptTransaction)}
+        onUpdated={async () => {
+          setReceiptTransaction(null);
+          setFeedback('Money activity details updated.');
+          await load();
+        }}
         onAttachmentsChanged={(count) => updateAttachmentCount(receiptTransaction.id, count)}
       />}
 
       {reverseDialog && <ActionConfirmModal state={reverseDialog} busy={reverseBusy} error={error} onClose={() => { setReverseDialog(null); setError(''); }} onConfirm={() => void handleReverse()} />}
+      {correctionDialog && <ActionConfirmModal state={correctionDialog} busy={correctionBusy} error={error} onClose={() => { setCorrectionDialog(null); setError(''); }} onConfirm={() => void handleCorrection()} />}
     </main>
   );
 }
@@ -633,6 +762,7 @@ export function MoneyActivityModal({
   timezone,
   online,
   initialType,
+  initialValues,
   lockedSpaceId,
   onCategoriesChanged,
   onClose,
@@ -646,6 +776,7 @@ export function MoneyActivityModal({
   timezone: string;
   online: boolean;
   initialType?: Exclude<PrimaryType, 'transfer'>;
+  initialValues?: TransactionInput;
   lockedSpaceId?: string;
   onCategoriesChanged?: () => Promise<TransactionCategory[]>;
   onClose: () => void;
@@ -657,9 +788,10 @@ export function MoneyActivityModal({
   const maxAttachmentSizeBytes = 10 * 1024 * 1024;
   const chooseFilesRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const [type, setType] = useState<PrimaryType>(initialType || 'expense');
-  const initialSpaceId = lockedSpaceId && spaces.some((space) => space.id === lockedSpaceId)
-    ? lockedSpaceId
+  const [type, setType] = useState<PrimaryType>(initialValues?.type || initialType || 'expense');
+  const requestedInitialSpaceId = initialValues?.spaceId || lockedSpaceId || '';
+  const initialSpaceId = requestedInitialSpaceId && spaces.some((space) => space.id === requestedInitialSpaceId)
+    ? requestedInitialSpaceId
     : spaces[0]?.id || '';
   const [spaceId, setSpaceId] = useState(initialSpaceId);
   const selectedSpace = spaces.find((space) => space.id === spaceId);
@@ -681,16 +813,28 @@ export function MoneyActivityModal({
       (!selectedSpace || account.currency === selectedSpace.currency)
       && accountAvailableInSelectedSpace(account),
   );
-  const [accountId, setAccountId] = useState(compatibleAccounts[0]?.id || '');
-  const [destinationAccountId, setDestinationAccountId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [transactionDate, setTransactionDate] = useState(dateInTimezone(timezone));
-  const [categoryId, setCategoryId] = useState('');
-  const [labelDraft, setLabelDraft] = useState('');
-  const [counterparty, setCounterparty] = useState('');
-  const [note, setNote] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(suggestedPaymentMethod(accounts[0]));
-  const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
+  const [accountId, setAccountId] = useState(
+    initialValues?.accountId
+    && compatibleAccounts.some((account) => account.id === initialValues.accountId)
+      ? initialValues.accountId
+      : compatibleAccounts[0]?.id || '',
+  );
+  const [destinationAccountId, setDestinationAccountId] = useState(initialValues?.destinationAccountId || '');
+  const [amount, setAmount] = useState(initialValues ? (initialValues.amountMinor / 100).toFixed(2) : '');
+  const [transactionDate, setTransactionDate] = useState(initialValues?.transactionDate || dateInTimezone(timezone));
+  const [categoryId, setCategoryId] = useState(initialValues?.categoryId || '');
+  const [labelDraft, setLabelDraft] = useState(
+    (initialValues?.labels || []).map(transactionLabelText).join(', '),
+  );
+  const [counterparty, setCounterparty] = useState(initialValues?.counterparty || '');
+  const [note, setNote] = useState(initialValues?.note || '');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(
+    initialValues?.paymentMethod || suggestedPaymentMethod(accounts[0]),
+  );
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState(
+    initialValues?.paymentMethod === 'other' ? initialValues.paymentMethodLabel || '' : '',
+  );
+  const preserveInitialPaymentMethodRef = useRef(Boolean(initialValues?.paymentMethod));
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [savedState, setSavedState] = useState<{
     mode: 'posted_with_failures' | 'queued_with_files';
@@ -729,7 +873,15 @@ export function MoneyActivityModal({
 
   const sourceAccount = accounts.find((account) => account.id === accountId);
   const destinationAccount = accounts.find((account) => account.id === destinationAccountId);
-  useEffect(() => { setPaymentMethod(suggestedPaymentMethod(sourceAccount)); setPaymentMethodCustom(''); }, [accountId]);
+  useEffect(() => {
+    if (preserveInitialPaymentMethodRef.current) {
+      preserveInitialPaymentMethodRef.current = false;
+      return;
+    }
+
+    setPaymentMethod(suggestedPaymentMethod(sourceAccount));
+    setPaymentMethodCustom('');
+  }, [accountId]);
   const destinationOptions = compatibleAccounts.filter((account) => account.id !== accountId);
   let amountMinor = 0;
   try { amountMinor = amount ? toMinorUnits(amount) : 0; } catch { amountMinor = 0; }
@@ -919,14 +1071,17 @@ export function MoneyActivityModal({
   const closeForm = () => { if (!busy) onClose(); };
   const saveLabel = busy
     ? pendingFiles.length > 0 ? 'Saving and uploading…' : 'Saving…'
-    : !online ? 'Save on this device'
-      : pendingFiles.length > 0 ? `Save and attach ${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'}`
-        : 'Save money activity';
+    : initialValues
+      ? 'Save corrected activity'
+      : !online ? 'Save on this device'
+        : pendingFiles.length > 0 ? `Save and attach ${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'}`
+          : 'Save money activity';
 
   const typeOptions: PrimaryType[] = lockedSpaceId
     ? ['expense', 'income']
     : ['expense', 'income', 'transfer'];
-  return <Modal title="Add money activity" onClose={closeForm}><form className="transaction-form" onSubmit={submit}>
+  return <Modal title={initialValues ? 'Correct money activity' : 'Add money activity'} onClose={closeForm}><form className="transaction-form" onSubmit={submit}>
+    {initialValues && <div className="notice warning compact-notice"><strong>Creating a correction</strong><span>The original activity has already been undone. Review every field and save this replacement to finish the correction.</span></div>}
     {error && <div className="notice error">{error}</div>}
     {!online && <div className="notice warning compact-notice"><strong>Saving offline</strong><span>This money activity will stay on this device and sync safely when internet returns.</span></div>}
     <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
@@ -1091,7 +1246,147 @@ export function MoneyActivityModal({
   </Modal>;
 }
 
-function TransactionDetails({ item, source, destination, space, category, online, receiptsOnly = false, onClose, onReverse, onAttachmentsChanged }: {
+function TransactionEditDetails({
+  item,
+  source,
+  online,
+  onClose,
+  onSaved,
+}: {
+  item: FinancialTransaction;
+  source?: Account;
+  online: boolean;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [counterparty, setCounterparty] = useState(item.counterparty || '');
+  const [note, setNote] = useState(item.note || '');
+  const [labelDraft, setLabelDraft] = useState(
+    (item.labels || []).map(transactionLabelText).join(', '),
+  );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(
+    item.paymentMethod || suggestedPaymentMethod(source),
+  );
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState(
+    item.paymentMethod === 'other' ? item.paymentMethodLabel || '' : '',
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (busy) return;
+
+    if (!online) {
+      setError('Connect to the internet before editing saved money activity.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      await updateTransactionDetails({
+        transactionId: item.id,
+        counterparty: counterparty.trim(),
+        note: note.trim(),
+        labels: parseTransactionLabels(labelDraft),
+        paymentMethod,
+        paymentMethodLabel:
+          paymentMethod === 'other'
+            ? paymentMethodCustom.trim()
+            : null,
+      });
+
+      await onSaved();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <Modal title="Edit money activity details" onClose={onClose}>
+    <form className="transaction-form" onSubmit={submit}>
+      <div className="info-banner">
+        <strong>Safe details only</strong>
+        <span>Amount, Account, Space, Date, Category and transaction type stay locked here because they affect balances or reports. Use Correct transaction for those changes.</span>
+      </div>
+
+      {error && <div className="notice error">{error}</div>}
+      {!online && <div className="notice warning">Connect to the internet before saving edits.</div>}
+
+      <div className="form-grid">
+        {item.type !== 'transfer' && <label>
+          {item.type === 'income' ? 'Source or customer' : 'Shop or person paid'}
+          <input
+            value={counterparty}
+            onChange={(event) => setCounterparty(event.target.value)}
+            maxLength={120}
+            placeholder="Optional"
+          />
+        </label>}
+        <PaymentMethodField
+          className={item.type === 'transfer' ? 'span-2' : ''}
+          label={item.type === 'transfer' ? 'How was the money moved?' : 'Payment method'}
+          value={paymentMethod}
+          customLabel={paymentMethodCustom}
+          onChange={(value, custom) => {
+            setPaymentMethod(value);
+            setPaymentMethodCustom(custom);
+          }}
+        />
+      </div>
+
+      <section className="transaction-label-editor">
+        <div className="transaction-label-editor-heading">
+          <div>
+            <strong>Labels</strong>
+            <small>Update labels used for search and filtering.</small>
+          </div>
+          <span>{parseTransactionLabels(labelDraft).length} of {MAX_TRANSACTION_LABELS} labels</span>
+        </div>
+        <input
+          value={labelDraft}
+          onChange={(event) => setLabelDraft(event.target.value)}
+          placeholder="#Rimba, #RentalHouse"
+          maxLength={280}
+        />
+        {parseTransactionLabels(labelDraft).length > 0 && (
+          <div className="transaction-label-list">
+            {parseTransactionLabels(labelDraft).map((label) => (
+              <span
+                className="transaction-label-chip"
+                key={label.toLowerCase()}
+              >
+                {transactionLabelText(label)}
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <label>
+        Note
+        <textarea
+          rows={3}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          maxLength={500}
+          placeholder="Optional details"
+        />
+      </label>
+
+      <div className="modal-actions">
+        <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="button primary" disabled={busy || !online}>{busy ? 'Saving…' : 'Save details'}</button>
+      </div>
+    </form>
+  </Modal>;
+}
+
+function TransactionDetails({ item, source, destination, space, category, online, receiptsOnly = false, onClose, onReverse, onCorrect, onUpdated, onAttachmentsChanged }: {
   item: FinancialTransaction;
   source?: Account;
   destination?: Account;
@@ -1101,8 +1396,12 @@ function TransactionDetails({ item, source, destination, space, category, online
   receiptsOnly?: boolean;
   onClose: () => void;
   onReverse: () => void;
+  onCorrect: () => void;
+  onUpdated: () => Promise<void>;
   onAttachmentsChanged?: (count: number) => void;
 }) {
+  const { user } = useAuth();
+  const [editingDetails, setEditingDetails] = useState(false);
   const [attachments, setAttachments] = useState<TransactionAttachment[]>([]);
   const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -1157,6 +1456,22 @@ function TransactionDetails({ item, source, destination, space, category, online
     }
   }
 
+  if (editingDetails) {
+    return <TransactionEditDetails
+      item={item}
+      source={source}
+      online={online}
+      onClose={() => setEditingDetails(false)}
+      onSaved={onUpdated}
+    />;
+  }
+
+  const canSafelyChangeRecord =
+    item.ownerId === user?.uid
+    && item.type !== 'reversal'
+    && item.status === 'posted'
+    && !transactionHasManagedSource(item);
+
   return <Modal title={receiptsOnly ? 'Receipts & documents' : 'Money activity details'} onClose={onClose}>
     {!receiptsOnly && <>
     <div className="transaction-detail-hero">
@@ -1196,6 +1511,7 @@ function TransactionDetails({ item, source, destination, space, category, online
       {item.recurringScheduledDate && <Detail label="Scheduled date">{item.recurringScheduledDate}</Detail>}
       {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
       {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
+      {Boolean(item.editCount) && <Detail label="Details edited">{item.editCount} time{item.editCount === 1 ? '' : 's'}</Detail>}
     </dl>
     </>}
 
@@ -1229,7 +1545,18 @@ function TransactionDetails({ item, source, destination, space, category, online
       <small>Images and PDFs only. Maximum 10 MB per file.</small>
     </section>
 
-    <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button>{!receiptsOnly && item.type !== 'reversal' && item.status === 'posted' && <button className="button danger" onClick={onReverse}>Undo this activity</button>}</div>
+    <div className="modal-actions">
+      <button className="button secondary" onClick={onClose}>Close</button>
+      {!receiptsOnly && canSafelyChangeRecord && (
+        <button className="button secondary" disabled={!online} onClick={() => setEditingDetails(true)}>Edit details</button>
+      )}
+      {!receiptsOnly && canSafelyChangeRecord && (
+        <button className="button secondary" disabled={!online} onClick={onCorrect}>Correct transaction</button>
+      )}
+      {!receiptsOnly && item.type !== 'reversal' && item.status === 'posted' && (
+        <button className="button danger" onClick={onReverse}>Undo this activity</button>
+      )}
+    </div>
   </Modal>;
 }
 
