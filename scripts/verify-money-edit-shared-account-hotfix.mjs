@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const read = (p) => fs.readFileSync(p, 'utf8');
+const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n?/g, '\n');
 const accounts = read('src/features/accounts/AccountsPage.tsx');
 const hub = read('src/features/spaces/SpaceActionHub.tsx');
 const details = read('src/features/spaces/SpaceDetailsPage.tsx');
