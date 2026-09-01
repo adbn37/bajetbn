@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 const requireText = (file, token) => {
   if (!fs.existsSync(path.join(root, file))) throw new Error(`Missing ${file}`);
   if (!read(file).includes(token)) throw new Error(`Expected ${file} to contain: ${token}`);
@@ -13,6 +13,13 @@ requireText('src/pages/DashboardPage.tsx', 'setShowMoneyActivity(true)');
 requireText('src/pages/DashboardPage.tsx', '<MoneyActivityModal');
 requireText('src/pages/DashboardPage.tsx', 'onSubmit={postTransaction}');
 requireText('src/features/transactions/TransactionsPage.tsx', "export function MoneyActivityModal");
+requireText('src/features/transactions/TransactionsPage.tsx', "const spaceTypeLabels: Record<Space['type'], string> = {");
+requireText('src/features/transactions/TransactionsPage.tsx', "trip: 'Trip'");
+requireText('src/features/transactions/TransactionsPage.tsx', "const preferredPersonalSpaceId = spaces.find((space) => space.type === 'personal')?.id || '';");
+requireText('src/features/transactions/TransactionsPage.tsx', 'Recorded in');
+requireText('src/features/transactions/TransactionsPage.tsx', 'contextual-space-field');
+requireText('src/features/transactions/TransactionsPage.tsx', 'spaceDisplayLabel(space)');
+requireText('src/styles/global.css', '.contextual-space-change');
 requireText('src/features/transactions/TransactionsPage.tsx', "'Add receipt'");
 requireText('src/features/transactions/TransactionsPage.tsx', 'View receipts (');
 requireText('src/features/transactions/TransactionsPage.tsx', 'receiptsOnly');

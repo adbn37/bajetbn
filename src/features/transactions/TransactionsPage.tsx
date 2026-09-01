@@ -77,6 +77,25 @@ function spaceScope(space?: Space): Exclude<CategoryScope, 'both'> {
   return space?.type === 'sme' ? 'business' : 'personal';
 }
 
+const spaceTypeLabels: Record<Space['type'], string> = {
+  personal: 'Personal',
+  household: 'Household',
+  sme: 'Business',
+  trip: 'Trip',
+  goal: 'Goal',
+  collection: 'Collection',
+  vehicle: 'Vehicle',
+  property: 'Property',
+  project: 'Project',
+  event: 'Event',
+  asset: 'Asset',
+  custom: 'Custom',
+};
+
+function spaceDisplayLabel(space: Space): string {
+  return [space.name, spaceTypeLabels[space.type], space.currency].join(' · ');
+}
+
 function transactionCategorySnapshot(item: FinancialTransaction): TransactionCategory {
   return {
     id: item.categoryId || `legacy-${item.category}`,
@@ -790,10 +809,12 @@ export function MoneyActivityModal({
   const cameraRef = useRef<HTMLInputElement>(null);
   const [type, setType] = useState<PrimaryType>(initialValues?.type || initialType || 'expense');
   const requestedInitialSpaceId = initialValues?.spaceId || lockedSpaceId || '';
+  const preferredPersonalSpaceId = spaces.find((space) => space.type === 'personal')?.id || '';
   const initialSpaceId = requestedInitialSpaceId && spaces.some((space) => space.id === requestedInitialSpaceId)
     ? requestedInitialSpaceId
-    : spaces[0]?.id || '';
+    : preferredPersonalSpaceId || spaces[0]?.id || '';
   const [spaceId, setSpaceId] = useState(initialSpaceId);
+  const [spaceChooserOpen, setSpaceChooserOpen] = useState(false);
   const selectedSpace = spaces.find((space) => space.id === spaceId);
   const ownsAccountsInThisForm = accounts.some((account) => account.ownerId === user?.uid);
   const canManageCategories = selectedSpace?.type !== 'sme' || ownsAccountsInThisForm;
@@ -1090,9 +1111,36 @@ export function MoneyActivityModal({
 
     <div className="form-grid">
       <label>Date<input required type="date" value={transactionDate} onChange={(event) => setTransactionDate(event.target.value)} /></label>
-      {lockedSpaceId
-        ? <div className="locked-space-field"><span>Space</span><strong>{selectedSpace?.name || 'This Space'}</strong><small>Locked to this Space</small></div>
-        : <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option value={space.id} key={space.id}>{space.name} · {space.type === 'sme' ? 'Business' : 'Personal'} · {space.currency}</option>)}</select></label>}
+      {lockedSpaceId ? (
+        <div className="locked-space-field">
+          <span>Recorded in</span>
+          <strong>{selectedSpace?.name || 'This Space'}</strong>
+          <small>{selectedSpace ? [spaceTypeLabels[selectedSpace.type], selectedSpace.currency, 'Locked to this Space'].join(' · ') : 'Locked to this Space'}</small>
+        </div>
+      ) : (
+        <div className="contextual-space-field">
+          <div className="contextual-space-summary">
+            <div>
+              <span>Recorded in</span>
+              <strong>{selectedSpace?.name || 'Choose Space'}</strong>
+              <small>{selectedSpace ? [spaceTypeLabels[selectedSpace.type], selectedSpace.currency].join(' · ') : 'Choose where this activity belongs'}</small>
+            </div>
+            {spaces.length > 1 && (
+              <button type="button" className="text-button contextual-space-change" aria-expanded={spaceChooserOpen} onClick={() => setSpaceChooserOpen((current) => !current)}>
+                {spaceChooserOpen ? 'Cancel' : 'Change'}
+              </button>
+            )}
+          </div>
+          {spaceChooserOpen && (
+            <label className="contextual-space-chooser">
+              Space
+              <select required value={spaceId} onChange={(event) => { setSpaceId(event.target.value); setSpaceChooserOpen(false); }}>
+                {spaces.map((space) => <option value={space.id} key={space.id}>{spaceDisplayLabel(space)}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       <label className={type === 'transfer' ? '' : 'span-2'}>{type === 'income' ? 'Money goes into' : type === 'expense' ? 'Money comes from' : 'Move from account'}<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.sharedCanViewBalance === false ? 'Balance hidden' : formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
       {type === 'transfer' && <label>Move to account<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Choose account</option>{destinationOptions.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.sharedCanViewBalance === false ? 'Balance hidden' : formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>}
       <label className="span-2 amount-field">Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})<input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
