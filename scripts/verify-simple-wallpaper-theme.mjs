@@ -20,6 +20,8 @@ const settings =
   read("src/pages/SettingsPage.tsx");
 const service =
   read("src/services/themeStudioV2.ts");
+const syncPanel =
+  read("src/components/ThemeStudioSyncPanel.tsx");
 const css =
   read("src/styles/global.css");
 
@@ -70,6 +72,11 @@ for (const token of [
   "cardOpacity",
   "Suggested colours",
   "Automatic card transparency",
+  "Automatic subject placement",
+  "subjectWeight",
+  "centralSubject",
+  "wallpaperFocusX: analysis.focusX",
+  "Subject-aware placement",
   "Colour matching is analysed on this device",
 ]) {
   need(
@@ -87,6 +94,9 @@ need(
 for (const token of [
   "wallpaperAutoMatch",
   "wallpaperAutoCards",
+  "wallpaperAutoFocus",
+  "wallpaperFocusX",
+  "wallpaperFocusY",
   "wallpaperPalette",
   "cardOpacity",
   "--theme-card-opacity",
@@ -96,6 +106,21 @@ for (const token of [
     "Theme Studio v2 service is missing " + token,
   );
 }
+
+need(
+  service.includes('String(settings.wallpaperFocusX) + "% " + String(settings.wallpaperFocusY) + "%"'),
+  "Runtime must apply the detected wallpaper focal point.",
+);
+
+need(
+  syncPanel.includes("wallpaperAutoFocus: false"),
+  "Manual wallpaper Position must override automatic subject placement.",
+);
+
+need(
+  syncPanel.includes("Automatic subject placement is active"),
+  "Advanced Position control must explain the automatic focus override.",
+);
 
 need(
   assistant.includes(

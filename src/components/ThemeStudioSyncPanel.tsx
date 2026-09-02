@@ -205,13 +205,24 @@ export function ThemeStudioSyncPanel() {
 
             <label>
               Position
-              <select value={settings.wallpaperPosition} onChange={(event) => updateGlobal({ wallpaperPosition: event.target.value as ThemeStudioV2Settings["wallpaperPosition"] })}>
+              <select
+                value={settings.wallpaperPosition}
+                onChange={(event) => updateGlobal({
+                  wallpaperPosition: event.target.value as ThemeStudioV2Settings["wallpaperPosition"],
+                  wallpaperAutoFocus: false,
+                })}
+              >
                 <option value="center">Centre</option>
                 <option value="top">Top</option>
                 <option value="bottom">Bottom</option>
                 <option value="left">Left</option>
                 <option value="right">Right</option>
               </select>
+              <small>
+                {settings.wallpaperAutoFocus
+                  ? "Automatic subject placement is active. Choosing a manual position turns it off."
+                  : "Manual position override is active."}
+              </small>
             </label>
           </div>
 

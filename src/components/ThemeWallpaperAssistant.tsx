@@ -24,6 +24,9 @@ interface WallpaperAnalysis {
   cardOpacity: number;
   blur: number;
   dim: number;
+  focusX: number;
+  focusY: number;
+  centralSubject: boolean;
 }
 
 function rgbToHex(r: number, g: number, b: number) {
@@ -221,6 +224,86 @@ async function analyseWallpaper(
       );
     const busyness = Math.sqrt(variance);
 
+    let subjectWeight = 0;
+    let subjectXWeight = 0;
+    let subjectYWeight = 0;
+
+    for (let y = 0; y < 48; y += 1) {
+      for (let x = 0; x < 48; x += 1) {
+        const index = (y * 48 + x) * 4;
+        const alpha = pixels[index + 3];
+
+        if (alpha < 160) {
+          continue;
+        }
+
+        const r = pixels[index];
+        const g = pixels[index + 1];
+        const b = pixels[index + 2];
+        const maximum = Math.max(r, g, b);
+        const minimum = Math.min(r, g, b);
+        const saturation = maximum - minimum;
+        const luminance =
+          0.2126 * r
+          + 0.7152 * g
+          + 0.0722 * b;
+        const contrast =
+          Math.abs(luminance - brightness);
+
+        if (saturation < 18 && contrast < 14) {
+          continue;
+        }
+
+        const distanceFromCentre = Math.min(
+          1,
+          Math.hypot(
+            (x - 23.5) / 23.5,
+            (y - 23.5) / 23.5,
+          ),
+        );
+
+        const centrePrior =
+          0.84 + (1 - distanceFromCentre) * 0.16;
+
+        const weight =
+          (
+            (saturation / 255) * 1.65
+            + (contrast / 255) * 0.9
+            + (luminance / 255) * 0.12
+          )
+          * (alpha / 255)
+          * centrePrior;
+
+        subjectWeight += weight;
+        subjectXWeight += weight * x;
+        subjectYWeight += weight * y;
+      }
+    }
+
+    const rawFocusX =
+      subjectWeight > 0
+        ? (subjectXWeight / subjectWeight) / 47 * 100
+        : 50;
+
+    const rawFocusY =
+      subjectWeight > 0
+        ? (subjectYWeight / subjectWeight) / 47 * 100
+        : 50;
+
+    const focusX = Math.round(
+      Math.max(8, Math.min(92, rawFocusX)),
+    );
+
+    const focusY = Math.round(
+      Math.max(8, Math.min(92, rawFocusY)),
+    );
+
+    const centralSubject =
+      focusX >= 28
+      && focusX <= 72
+      && focusY >= 18
+      && focusY <= 88;
+
     const ranked = [...buckets.values()]
       .map((entry) => ({
         ...entry,
@@ -283,7 +366,7 @@ async function analyseWallpaper(
         )
       : palette[0];
 
-    const cardOpacity =
+    const baseCardOpacity =
       busyness >= 58
         ? 94
         : busyness >= 42
@@ -294,6 +377,17 @@ async function analyseWallpaper(
               ? 76
               : 84;
 
+    const cardOpacity =
+      centralSubject
+        ? Math.min(
+            96,
+            Math.max(
+              baseCardOpacity,
+              busyness >= 42 ? 88 : 84,
+            ),
+          )
+        : baseCardOpacity;
+
     const blur =
       busyness >= 58
         ? 10
@@ -301,7 +395,7 @@ async function analyseWallpaper(
           ? 6
           : 2;
 
-    const dim =
+    const baseDim =
       brightness >= 178
         ? 52
         : brightness >= 128
@@ -309,6 +403,12 @@ async function analyseWallpaper(
           : brightness >= 82
             ? 28
             : 18;
+
+    const dim =
+      Math.min(
+        64,
+        baseDim + (centralSubject ? 6 : 0),
+      );
 
     return {
       palette,
@@ -318,6 +418,9 @@ async function analyseWallpaper(
       cardOpacity,
       blur,
       dim,
+      focusX,
+      focusY,
+      centralSubject,
     };
   } finally {
     decoded.cleanup();
@@ -423,6 +526,12 @@ export function ThemeWallpaperAssistant() {
           ...settings,
           wallpaperPath,
           wallpaperPalette: analysis.palette,
+          ...(settings.wallpaperAutoFocus
+            ? {
+                wallpaperFocusX: analysis.focusX,
+                wallpaperFocusY: analysis.focusY,
+              }
+            : {}),
           ...(settings.wallpaperAutoMatch
             ? {
                 accentColor: analysis.accent,
@@ -513,6 +622,26 @@ export function ThemeWallpaperAssistant() {
         100 - settings.cardOpacity,
       ),
     );
+
+  const subjectPosition = (() => {
+    const horizontal =
+      settings.wallpaperFocusX < 38
+        ? 'Left'
+        : settings.wallpaperFocusX > 62
+          ? 'Right'
+          : 'Centre';
+
+    const vertical =
+      settings.wallpaperFocusY < 35
+        ? 'upper'
+        : settings.wallpaperFocusY > 68
+          ? 'lower'
+          : '';
+
+    return vertical
+      ? vertical + ' ' + horizontal.toLowerCase()
+      : horizontal;
+  })();
 
   return (
     <section
@@ -627,6 +756,30 @@ export function ThemeWallpaperAssistant() {
             </small>
           </span>
         </label>
+
+        <label className="theme-wallpaper-toggle">
+          <input
+            type="checkbox"
+            checked={
+              settings.wallpaperAutoFocus
+            }
+            onChange={(event) =>
+              update({
+                wallpaperAutoFocus:
+                  event.target.checked,
+              })
+            }
+          />
+
+          <span>
+            <strong>
+              Automatic subject placement
+            </strong>
+            <small>
+              Detects the strongest foreground area, keeps it in view when the wallpaper crops, and protects readability when it sits behind content.
+            </small>
+          </span>
+        </label>
       </div>
 
       {settings.wallpaperPalette.length > 0 && (
@@ -717,6 +870,18 @@ export function ThemeWallpaperAssistant() {
             </strong>
             <small>
               Blur {settings.wallpaperBlur}px - dim {settings.wallpaperDim}%
+            </small>
+          </div>
+        )}
+
+      {settings.wallpaperPath
+        && settings.wallpaperAutoFocus
+        && (
+          <div className="theme-wallpaper-auto-result">
+            <span>Subject-aware placement</span>
+            <strong>{subjectPosition}</strong>
+            <small>
+              Focal point {settings.wallpaperFocusX}% / {settings.wallpaperFocusY}% - protected across screen crops
             </small>
           </div>
         )}

@@ -19,6 +19,9 @@ export interface ThemeStudioV2Settings {
   wallpaperDim: number;
   wallpaperAutoMatch: boolean;
   wallpaperAutoCards: boolean;
+  wallpaperAutoFocus: boolean;
+  wallpaperFocusX: number;
+  wallpaperFocusY: number;
   wallpaperPalette: string[];
   cardOpacity: number;
 }
@@ -57,6 +60,9 @@ export function defaultThemeStudioV2(): ThemeStudioV2Settings {
     wallpaperDim: 28,
     wallpaperAutoMatch: true,
     wallpaperAutoCards: true,
+    wallpaperAutoFocus: true,
+    wallpaperFocusX: 50,
+    wallpaperFocusY: 50,
     wallpaperPalette: [],
     cardOpacity: 88,
   };
@@ -154,6 +160,11 @@ export function sanitizeThemeStudioV2(value?: Partial<ThemeStudioV2Settings> | n
     wallpaperAutoCards: typeof value?.wallpaperAutoCards === "boolean"
       ? value.wallpaperAutoCards
       : defaults.wallpaperAutoCards,
+    wallpaperAutoFocus: typeof value?.wallpaperAutoFocus === "boolean"
+      ? value.wallpaperAutoFocus
+      : defaults.wallpaperAutoFocus,
+    wallpaperFocusX: Math.round(clamp(Number(value?.wallpaperFocusX ?? defaults.wallpaperFocusX), 0, 100)),
+    wallpaperFocusY: Math.round(clamp(Number(value?.wallpaperFocusY ?? defaults.wallpaperFocusY), 0, 100)),
     wallpaperPalette,
     cardOpacity: Math.round(clamp(Number(value?.cardOpacity ?? defaults.cardOpacity), 60, 100)),
   };
@@ -231,7 +242,12 @@ export function applyThemeStudioV2(value: ThemeStudioV2Settings) {
   root.style.setProperty("--theme-card-density-y", settings.cardDensity === "compact" ? "0.62rem" : settings.cardDensity === "roomy" ? "1.18rem" : "0.88rem");
   root.style.setProperty("--theme-font-family", FONT_STACKS[settings.fontChoice]);
   root.style.setProperty("--theme-wallpaper-fit", settings.wallpaperFit);
-  root.style.setProperty("--theme-wallpaper-position", settings.wallpaperPosition);
+  root.style.setProperty(
+    "--theme-wallpaper-position",
+    settings.wallpaperAutoFocus
+      ? String(settings.wallpaperFocusX) + "% " + String(settings.wallpaperFocusY) + "%"
+      : settings.wallpaperPosition,
+  );
   root.style.setProperty("--theme-wallpaper-blur", String(settings.wallpaperBlur) + "px");
   root.style.setProperty("--theme-wallpaper-dim", String(settings.wallpaperDim / 100));
   root.style.setProperty("--theme-card-opacity", String(settings.cardOpacity) + "%");
