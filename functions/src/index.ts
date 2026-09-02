@@ -5891,6 +5891,31 @@ export const getMarketplacePosWorkspace = onCall({ region, cpu: 'gcf_gen1', conc
     .map((item): DocumentData => ({ id: item.id, ...item.data() }))
     .filter((item) => !item.archivedAt && !item.sellerDeletedAt)
     .sort((a, b) => marketplaceSortValue(b) - marketplaceSortValue(a));
+
+  const sellerIdentities = allSellers.map((item) => ({
+    id: item.id,
+    displayId: item.displayId,
+    spaceId: item.spaceId,
+    ownerId: item.ownerId,
+    name: item.name,
+    sellerColor: item.sellerColor || '',
+    phone: '',
+    email: '',
+    note: '',
+    linkedUid: null,
+    inventoryManagementEnabled: false,
+    defaultCommissionType: 'percentage',
+    defaultCommissionRateBps: 0,
+    defaultCommissionMinor: 0,
+    grossSalesMinor: 0,
+    commissionEarnedMinor: 0,
+    balanceMinor: 0,
+    paidOutMinor: 0,
+    soldQuantity: 0,
+    currency: item.currency,
+    archivedAt: null,
+  }));
+
   const mySeller = allSellers.find((item) => item.linkedUid === uid) || null;
   const mySellerListings = mySeller
     ? allListings.filter((item) => item.sellerId === mySeller.id)
@@ -5968,27 +5993,7 @@ export const getMarketplacePosWorkspace = onCall({ region, cpu: 'gcf_gen1', conc
       .filter((item) => item.sourceMode === 'marketplace_consignment');
     payouts = (allPayoutSnapshot?.docs || []).map((item): DocumentData => ({ id: item.id, ...item.data() }));
   } else if (context.role === 'cashier') {
-    sellers = allSellers.map((item) => ({
-      id: item.id,
-      displayId: item.displayId,
-      spaceId: item.spaceId,
-      ownerId: item.ownerId,
-      name: item.name,
-      phone: '',
-      email: '',
-      note: '',
-      linkedUid: null,
-      defaultCommissionType: 'percentage',
-      defaultCommissionRateBps: 0,
-      defaultCommissionMinor: 0,
-      grossSalesMinor: 0,
-      commissionEarnedMinor: 0,
-      balanceMinor: 0,
-      paidOutMinor: 0,
-      soldQuantity: 0,
-      currency: item.currency,
-      archivedAt: null,
-    }));
+    sellers = sellerIdentities;
     listings = allListings.map((item) => ({
       ...item,
       commissionType: 'percentage', commissionRateBps: 0, commissionMinor: 0,
@@ -6015,12 +6020,14 @@ export const getMarketplacePosWorkspace = onCall({ region, cpu: 'gcf_gen1', conc
         costMinor: 0, profitMinor: 0, marketplaceCommissionMinor: 0, sellerEarningsMinor: 0,
       }));
   } else if (context.role === 'stock_staff') {
+    sellers = sellerIdentities;
     listings = allListings.map((item) => ({
       ...item,
       sellingPriceMinor: 0, commissionType: 'percentage', commissionRateBps: 0, commissionMinor: 0,
       grossSalesMinor: 0, commissionEarnedMinor: 0, sellerEarningsMinor: 0, note: '',
     }));
   } else if (context.role === 'viewer') {
+    sellers = sellerIdentities;
     listings = allListings.map((item) => ({
       ...item,
       commissionType: 'percentage', commissionRateBps: 0, commissionMinor: 0,
@@ -6064,6 +6071,17 @@ export const saveMarketplaceSeller = onCall({ region }, async (request) => {
   const email = optionalString(request.data?.email, 120);
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid email address.');
   const note = optionalString(request.data?.note, 300);
+  const requestedSellerColor = optionalString(request.data?.sellerColor, 7);
+  if (
+    requestedSellerColor
+    && !/^#[0-9a-fA-F]{6}$/.test(requestedSellerColor)
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Choose a valid seller colour.',
+    );
+  }
+  const sellerColor = requestedSellerColor || '';
   const linkedUid = optionalString(request.data?.linkedUid, 128) || null;
   const inventoryManagementEnabled = request.data?.inventoryManagementEnabled === true;
   const commission = marketplaceCommissionValues(request.data || {});
@@ -6111,7 +6129,9 @@ export const saveMarketplaceSeller = onCall({ region }, async (request) => {
 
     transaction.set(sellerRef, {
       displayId: existing.displayId || displayId('SEL'), spaceId, ownerId: context.settings.ownerId,
-      name, phone, email, note, linkedUid, inventoryManagementEnabled,
+      name, phone, email, note,
+      sellerColor: sellerColor || existing.sellerColor || '#46c2ff',
+      linkedUid, inventoryManagementEnabled,
       defaultCommissionType: commission.commissionType,
       defaultCommissionRateBps: commission.commissionRateBps,
       defaultCommissionMinor: commission.commissionMinor,

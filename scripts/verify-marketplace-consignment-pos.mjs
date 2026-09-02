@@ -38,6 +38,11 @@ for (const token of [
   'lineDiscountVersion: 2',
   'Item discount',
   'not distributed across other items or sellers',
+  'sellerColor',
+  'Out of stock (',
+  'marketplace-floating-cart',
+  'marketplace-report-thumb',
+  'sellerColourPalette',
 ]) need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', token);
 
 for (const token of [
@@ -46,6 +51,7 @@ for (const token of [
   'SmePosSellerLedgerEntry',
   "SmePosCommissionType = 'percentage' | 'fixed_per_item'",
   "SmePosListingCondition = 'new' | 'sealed' | 'open_box' | 'used' | 'other'",
+  'sellerColor?: string;',
 ]) need('src/types/models.ts', token);
 
 for (const token of [
@@ -56,6 +62,7 @@ for (const token of [
   'checkoutMarketplacePos',
   'listMarketplaceSellers',
   'listMarketplaceListings',
+  'sellerColor?: string | null;',
 ]) need('src/repositories/smePosRepository.ts', token);
 
 for (const token of [
@@ -75,7 +82,16 @@ for (const token of [
   'is out of stock',
   'only has ${available} available',
   'This login is already linked to another active seller.',
+  "sellerColor: sellerColor || existing.sellerColor || '#46c2ff'",
+  'sellerIdentities',
 ]) need('functions/src/index.ts', token);
+
+for (const token of [
+  '/* Marketplace seller colour UX v1 */',
+  '.marketplace-floating-cart',
+  '.marketplace-cart-drawer',
+  '.marketplace-report-thumb',
+]) need('src/styles/global.css', token);
 
 for (const token of [
   'match /smePosSellers/{sellerId}',

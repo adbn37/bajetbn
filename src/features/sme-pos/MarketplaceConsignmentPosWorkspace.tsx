@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
@@ -121,6 +121,34 @@ const tabLabels: Record<MarketplaceTab, string> = {
   balance: 'My balance',
 };
 
+const sellerColourPalette = [
+  '#46c2ff',
+  '#8b82ff',
+  '#c77dff',
+  '#42d392',
+  '#ff9f43',
+  '#ff6f91',
+  '#d6d95d',
+  '#9eb4c9',
+] as const;
+
+function normaliseSellerColour(
+  value: string | null | undefined,
+  fallbackKey: string,
+) {
+  if (value && /^#[0-9a-fA-F]{6}$/.test(value)) {
+    return value;
+  }
+
+  let hash = 0;
+  for (const char of fallbackKey) {
+    hash = ((hash * 31) + char.charCodeAt(0)) >>> 0;
+  }
+
+  return sellerColourPalette[
+    hash % sellerColourPalette.length
+  ];
+}
 function today() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Brunei', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -275,6 +303,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [paymentRows, setPaymentRows] = useState<SmePosPaymentDraft[]>([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
   const [saleDate, setSaleDate] = useState(today());
   const [checkoutNote, setCheckoutNote] = useState('');
+  const [showRegisterOutOfStock, setShowRegisterOutOfStock] = useState(false);
+  const [showInventoryOutOfStock, setShowInventoryOutOfStock] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
   const [sellerReportRange, setSellerReportRange] = useState<SellerReportRange>('month');
   const [sellerReportSellerId, setSellerReportSellerId] = useState('all');
   const [sellerReportFrom, setSellerReportFrom] = useState(`${today().slice(0, 7)}-01`);
@@ -301,6 +332,18 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const canUpdateListingStock = (listing: SmePosListing) =>
     canManageStock || (sellerInventoryEnabled && isOwnSellerListing(listing));
 
+  const sellerColourFor = (sellerId: string) => {
+    const seller = sellers.find((item) => item.id === sellerId);
+
+    return normaliseSellerColour(
+      seller?.sellerColor,
+      sellerId || seller?.name || 'seller',
+    );
+  };
+
+  const sellerStyleFor = (sellerId: string): CSSProperties => ({
+    '--seller-color': sellerColourFor(sellerId),
+  } as CSSProperties);
   async function load() {
     setLoading(true);
     setError('');
@@ -346,8 +389,29 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
   const filteredListings = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return listings.filter((item) => !term || [item.name, item.category, item.sku, item.barcode, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
-  }, [listings, search]);
+
+    return listings.filter((item) => {
+      const available = Math.max(
+        0,
+        item.quantityOnHand - (item.reservedQuantity || 0),
+      );
+
+      if (!showRegisterOutOfStock && available < 1) {
+        return false;
+      }
+
+      return !term || [
+        item.name,
+        item.category,
+        item.sku,
+        item.barcode,
+        item.sellerName,
+        conditionLabels[item.condition],
+      ].some((value) =>
+        value?.toLowerCase().includes(term),
+      );
+    });
+  }, [listings, search, showRegisterOutOfStock]);
 
   const inventoryListings = useMemo(() => {
     const source = inventoryScope === 'mine'
@@ -358,6 +422,42 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     const term = search.trim().toLowerCase();
     return source.filter((item) => !term || [item.name, item.category, item.sku, item.barcode, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
   }, [inventoryScope, listings, mySellerListings, search]);
+
+  const inventoryOutOfStockCount = inventoryListings.filter(
+    (item) =>
+      Math.max(
+        0,
+        item.quantityOnHand - (item.reservedQuantity || 0),
+      ) < 1,
+  ).length;
+
+  const visibleInventoryListings = showInventoryOutOfStock
+    ? inventoryListings
+    : inventoryListings.filter(
+        (item) =>
+          Math.max(
+            0,
+            item.quantityOnHand - (item.reservedQuantity || 0),
+          ) > 0,
+      );
+
+  const registerOutOfStockCount = listings.filter(
+    (item) =>
+      Math.max(
+        0,
+        item.quantityOnHand - (item.reservedQuantity || 0),
+      ) < 1,
+  ).length;
+
+  const visibleMySellerListings = showInventoryOutOfStock
+    ? mySellerListings
+    : mySellerListings.filter(
+        (item) =>
+          Math.max(
+            0,
+            item.quantityOnHand - (item.reservedQuantity || 0),
+          ) > 0,
+      );
 
   const cartLines = useMemo(() => Object.entries(cart).map(([id, quantity]) => {
     const listing = listings.find((item) => item.id === id);
@@ -489,6 +589,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     returnedMinor: number;
     commissionMinor: number;
     sellerEarningsMinor: number;
+    photoPath?: string | null;
   }>();
 
   let sellerReportQuantity = 0;
@@ -531,6 +632,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       const itemSellerId = item.sellerId || mySeller?.id || '';
       const key = `${itemSellerId}:${item.listingId || item.productId || item.productName}`;
+      const reportListing = item.listingId
+        ? listings.find((listing) => listing.id === item.listingId)
+        : null;
       const current = sellerReportItemMap.get(key);
 
       if (current) {
@@ -540,6 +644,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         current.returnedMinor += returnedMinor;
         current.commissionMinor += commissionMinor;
         current.sellerEarningsMinor += sellerEarningsMinor;
+        if (!current.photoPath && reportListing?.photoPath) {
+          current.photoPath = reportListing.photoPath;
+        }
       } else {
         sellerReportItemMap.set(key, {
           key,
@@ -550,6 +657,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
             || sellers.find((seller) => seller.id === itemSellerId)?.name
             || mySeller?.name
             || 'Seller',
+          photoPath: reportListing?.photoPath || null,
           quantity,
           returnedQuantity,
           grossMinor,
@@ -600,6 +708,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     : sellers.find((seller) => seller.id === selectedSellerReportId)?.name
       || mySeller?.name
       || 'My Seller Profile';
+
+  const sellerReportAccentStyle =
+    selectedSellerReportId !== 'all'
+      ? sellerStyleFor(selectedSellerReportId)
+      : undefined;
 
   function requireOnline() {
     if (navigator.onLine) return true;
@@ -706,6 +819,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         phone: String(form.get('phone') || ''),
         email: String(form.get('email') || ''),
         note: String(form.get('note') || ''),
+        sellerColor: String(form.get('sellerColor') || ''),
         linkedUid: String(form.get('linkedUid') || '') || null,
         inventoryManagementEnabled: form.get('inventoryManagementEnabled') === 'on',
         defaultCommissionType: commissionType,
@@ -1098,6 +1212,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       setCart({});
       setQuickItems([]);
       setLineDiscounts({});
+      setCartOpen(false);
       setCheckoutNote('');
       setCustomerId('');
       setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
@@ -1413,8 +1528,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
         <div className="panel-heading"><div><h3>Sellers</h3><p>Manage each seller's stock, commission, seller wallet and payouts. A seller profile does not automatically give the person BajetBN login access. For Seller-only access, invite them from Members and choose Seller. If they already have another staff role, link that team member to the seller profile. Inventory management stays off by default and can be enabled separately while their main staff role remains unchanged.</p></div><button className="button primary" type="button" aria-label="Add seller profile" onClick={() => openSellerForm('new')}>Add seller</button></div>
-        <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card" key={seller.id}>
-          <div><span className="type-badge">{seller.id === mySeller?.id ? `You · ${roleLabel(role)} + Seller` : 'Seller'}</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
+        <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card marketplace-seller-profile-card" key={seller.id} style={sellerStyleFor(seller.id)}>
+          <div><span className="type-badge marketplace-seller-badge">{seller.id === mySeller?.id ? `You · ${roleLabel(role)} + Seller` : 'Seller'}</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
           <div className="marketplace-balance-row"><span>Seller wallet · {sellerBalanceLabel(seller.balanceMinor)}</span><strong>{formatMoney(Math.abs(seller.balanceMinor), seller.currency)}</strong></div>
           <small>{seller.soldQuantity} item(s) sold · Shop commission {formatMoney(seller.commissionEarnedMinor, seller.currency)} · Paid out {formatMoney(seller.paidOutMinor, seller.currency)}</small>
@@ -1425,7 +1540,32 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       {tab === 'listings' && <section className="panel sme-pos-module-panel">
         <div className="panel-heading"><div><h3>{mySeller && !canViewAllSellerInventory ? 'My inventory' : 'Seller listings and stock'}</h3><p>{mySeller && !canViewAllSellerInventory ? 'Manage your own seller stock here. All shop stock remains available from the register according to your staff role.' : 'Every listing or stock batch keeps its own seller, price, condition, quantity and commission.'}</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!inventoryListings.some((item) => item.barcode)} onClick={() => setLabelItems(inventoryListings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}{role === 'cashier' && <button className="button primary" type="button" onClick={() => openManualListingForm(null)} disabled={!sellers.length}>+ Register seller stock</button>}{mySeller && sellerInventoryEnabled && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add my stock</button>}</div></div>
-        {(mySeller || canViewAllSellerInventory) && <div className="marketplace-inventory-filter"><label>Inventory view<select value={inventoryScope} onChange={(event) => setInventoryScope(event.target.value)}><option value="all">All stock</option>{mySeller && <option value="mine">My stock · {mySeller.name}</option>}{canViewAllSellerInventory && sellers.filter((seller) => seller.id !== mySeller?.id).map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label></div>}
+        {(mySeller || canViewAllSellerInventory) && <div className="marketplace-inventory-filter">
+          <label>
+            Inventory view
+            <select value={inventoryScope} onChange={(event) => setInventoryScope(event.target.value)}>
+              <option value="all">All stock</option>
+              {mySeller && <option value="mine">My stock · {mySeller.name}</option>}
+              {canViewAllSellerInventory && sellers
+                .filter((seller) => seller.id !== mySeller?.id)
+                .map((seller) => (
+                  <option key={seller.id} value={seller.id}>
+                    {seller.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            className={showInventoryOutOfStock ? 'button secondary small' : 'button ghost small'}
+            onClick={() => setShowInventoryOutOfStock((value) => !value)}
+          >
+            {showInventoryOutOfStock
+              ? 'Hide out-of-stock'
+              : `Out of stock (${inventoryOutOfStockCount})`}
+          </button>
+        </div>}
         <SmePosBarcodeInventoryPanel
           itemLabel="listing"
           items={inventoryListings}
@@ -1443,16 +1583,20 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           onPrintLabel={(canManageStock || (mySeller && sellerInventoryEnabled)) ? (listing) => { if (canUpdateListingStock(listing)) setLabelItems([listing]); } : undefined}
         />
         <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, seller, category, condition, SKU or barcode" />
-        <div className="sme-pos-product-grid">{inventoryListings.map((listing) => {
+        <div className="sme-pos-product-grid">{visibleInventoryListings.map((listing) => {
           const available = availableQuantity(listing);
           const outOfStock = available < 1;
           const low = available > 0 && available <= listing.lowStockLevel;
           const ownListing = isOwnSellerListing(listing);
           const mayEdit = canEditListing(listing);
           const mayStock = canUpdateListingStock(listing);
-          return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={listing.id}>
-            {listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} />}
-            <div><span className="type-badge">{ownListing ? 'My stock' : listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
+          return <article
+            className={`sme-pos-product-card marketplace-inventory-card ${outOfStock ? 'out-of-stock' : ''}`}
+            key={listing.id}
+            style={sellerStyleFor(listing.sellerId)}
+          >
+            {listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} className="marketplace-inventory-thumb" />}
+            <div><span className="type-badge marketplace-seller-badge">{ownListing ? 'My stock' : listing.sellerName}</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
             {role !== 'stock_staff' || ownListing ? <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong> : null}
             <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? `${listing.reservedQuantity || 0 ? 'Fully reserved' : 'Out of stock'}` : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}${low ? ' · Low stock' : ''}`}</p>
             {(canManageListings || ownListing || role === 'seller') && <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>}
@@ -1545,7 +1689,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
             )}
           </article>;
         })}</div>
-        {!inventoryListings.length && <div className="empty-inline">{inventoryScope === 'mine' ? 'No stock in your seller inventory yet. Use Add my stock to register your first item.' : 'No active seller listings found.'}</div>}
+        {!visibleInventoryListings.length && <div className="empty-inline">{inventoryScope === 'mine' ? 'No stock in your seller inventory yet. Use Add my stock to register your first item.' : 'No active seller listings found.'}</div>}
       </section>}
 
       {tab === 'customers' && <section className="panel sme-pos-module-panel">
@@ -1556,7 +1700,47 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
       {tab === 'register' && <form className="sme-pos-checkout-layout" onSubmit={completeCheckout}>
         <section className="panel sme-pos-checkout-products">
-          <div className="panel-heading"><div><span className="eyebrow">Shared register</span><h3>Choose seller listings</h3><p>Sell normal inventory or use Quick Add for a one-off item.</p></div><div className="button-row"><button className="button ghost" type="button" onClick={() => setQuickAddForm(true)} disabled={!sellers.length}>+ Quick Add</button>{canRegisterExistingStock && <button className="button secondary" type="button" onClick={() => openManualListingForm()} disabled={!sellers.length}>+ Register item</button>}</div></div>
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Shared register</span>
+              <h3>Choose seller listings</h3>
+              <p>Sell normal inventory or use Quick Add for a one-off item.</p>
+            </div>
+
+            <div className="button-row">
+              {registerOutOfStockCount > 0 && (
+                <button
+                  className={showRegisterOutOfStock ? 'button secondary' : 'button ghost'}
+                  type="button"
+                  onClick={() => setShowRegisterOutOfStock((value) => !value)}
+                >
+                  {showRegisterOutOfStock
+                    ? 'Hide out-of-stock'
+                    : `Out of stock (${registerOutOfStockCount})`}
+                </button>
+              )}
+
+              <button
+                className="button ghost"
+                type="button"
+                onClick={() => setQuickAddForm(true)}
+                disabled={!sellers.length}
+              >
+                + Quick Add
+              </button>
+
+              {canRegisterExistingStock && (
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => openManualListingForm()}
+                  disabled={!sellers.length}
+                >
+                  + Register item
+                </button>
+              )}
+            </div>
+          </div>
           <SmePosBarcodeCheckoutScanner
             itemLabel="listing"
             items={listings.map((listing) => ({ ...listing, quantityOnHand: availableQuantity(listing) }))}
@@ -1568,11 +1752,78 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           <div className="sme-pos-checkout-product-grid">{filteredListings.map((listing) => {
             const available = availableQuantity(listing);
             const outOfStock = available < 1;
-            return <button type="button" key={listing.id} disabled={outOfStock} className={outOfStock ? 'out-of-stock' : ''} onClick={() => addToCart(listing)}>{listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} className="register-thumb" />}<strong>{listing.name}</strong><span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span><small>{listing.sellerName} · {conditionLabels[listing.condition]}</small><small>{outOfStock ? (listing.reservedQuantity ? 'Reserved / unavailable' : 'Out of stock') : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}`}</small></button>;
+            return (
+              <button
+                type="button"
+                key={listing.id}
+                disabled={outOfStock}
+                className={`marketplace-register-item ${outOfStock ? 'out-of-stock' : ''}`}
+                style={sellerStyleFor(listing.sellerId)}
+                onClick={() => addToCart(listing)}
+              >
+                <span className="marketplace-seller-strip" aria-hidden="true" />
+
+                {listing.photoPath && (
+                  <SmePosItemPhoto
+                    photoPath={listing.photoPath}
+                    name={listing.name}
+                    className="register-thumb marketplace-register-thumb"
+                  />
+                )}
+
+                <span className="marketplace-register-item-copy">
+                  <strong>{listing.name}</strong>
+                  <span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span>
+                  <small className="marketplace-seller-badge">{listing.sellerName}</small>
+                  <small>{conditionLabels[listing.condition]}</small>
+                  <small>
+                    {outOfStock
+                      ? (listing.reservedQuantity ? 'Reserved / unavailable' : 'Out of stock')
+                      : `${available} available${listing.reservedQuantity ? ` - ${listing.reservedQuantity} reserved` : ''}`}
+                  </small>
+                </span>
+              </button>
+            );
           })}</div>
           {!filteredListings.length && <div className="empty-inline">No seller listings found.</div>}
         </section>
-        <section className="panel sme-pos-cart">
+
+        {(cartLines.length > 0 || quickItems.length > 0) && (
+          <div className="marketplace-floating-cart">
+            <button
+              type="button"
+              className="button primary marketplace-floating-cart-button"
+              onClick={() => setCartOpen(true)}
+            >
+              Cart - {cartLines.reduce((sum, item) => sum + item.quantity, 0)
+                + quickItems.reduce((sum, item) => sum + item.quantity, 0)}
+              {' - '}
+              {formatMoney(totalMinor, settings.currency)}
+            </button>
+          </div>
+        )}
+
+        {cartOpen && <div
+          className="marketplace-cart-backdrop"
+          role="presentation"
+          onClick={() => setCartOpen(false)}
+        >
+        <section
+          className="panel sme-pos-cart marketplace-cart-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Current sale"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="marketplace-cart-close-row">
+            <button
+              className="button ghost small"
+              type="button"
+              onClick={() => setCartOpen(false)}
+            >
+              Close cart
+            </button>
+          </div>
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Current sale</span>
@@ -1855,6 +2106,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           {discountMinor > 0 && <small>Per-item bundle discounts are checkout-only. Remove them before creating a booking.</small>}
           {cartLines.length > 0 && !customerId && <small>Choose a saved customer to reserve this cart.</small>}
         </section>
+        </div>}
       </form>}
 
       {tab === 'bookings' && canCheckout && <SmePosReservationsPanel space={space} settings={settings} role={role} reservations={reservations} paymentAccounts={paymentAccounts} onRefresh={async () => { await load(); await onChanged(); }} />}
@@ -1882,6 +2134,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
             <div className="button-row">
               {sellerInventoryEnabled && <button className="button secondary" type="button" disabled={!mySellerListings.some((item) => item.barcode)} onClick={() => setLabelItems(mySellerListings)}>Print barcode labels</button>}
               {sellerInventoryEnabled && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add stock</button>}
+              <button
+                className={showInventoryOutOfStock ? 'button secondary' : 'button ghost'}
+                type="button"
+                onClick={() => setShowInventoryOutOfStock((value) => !value)}
+              >
+                {showInventoryOutOfStock ? 'Hide out-of-stock' : 'Show out-of-stock'}
+              </button>
             </div>
           </div>
           <SmePosBarcodeInventoryPanel
@@ -1895,7 +2154,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
             onPrintLabel={sellerInventoryEnabled ? (listing) => { if (canUpdateListingStock(listing)) setLabelItems([listing]); } : undefined}
           />
           <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search my item, category, condition, SKU or barcode" />
-          <div className="sme-pos-product-grid">{mySellerListings.filter((listing) => {
+          <div className="sme-pos-product-grid">{visibleMySellerListings.filter((listing) => {
             const term = search.trim().toLowerCase();
             return !term || [listing.name, listing.category, listing.sku, listing.barcode, conditionLabels[listing.condition]].some((value) => value?.toLowerCase().includes(term));
           }).map((listing) => {
@@ -1904,9 +2163,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
             const low = available > 0 && available <= listing.lowStockLevel;
             const mayEdit = canEditListing(listing);
             const mayStock = canUpdateListingStock(listing);
-            return <article className={`sme-pos-product-card ${outOfStock ? 'out-of-stock' : ''}`} key={listing.id}>
-              {listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} />}
-              <div><span className="type-badge">My stock</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
+            return <article
+              className={`sme-pos-product-card marketplace-inventory-card ${outOfStock ? 'out-of-stock' : ''}`}
+              key={listing.id}
+              style={sellerStyleFor(listing.sellerId)}
+            >
+              {listing.photoPath && <SmePosItemPhoto photoPath={listing.photoPath} name={listing.name} className="marketplace-inventory-thumb" />}
+              <div><span className="type-badge marketplace-seller-badge">My stock</span><h3>{listing.name}</h3><small>{conditionLabels[listing.condition]} · {listing.sku || listing.displayId}</small>{listing.barcode && <small>Barcode · {listing.barcode}</small>}</div>
               <strong>{formatMoney(listing.sellingPriceMinor, listing.currency)}</strong>
               <p className={outOfStock ? 'stock-danger' : low ? 'stock-warning' : ''}>{outOfStock ? `${listing.reservedQuantity || 0 ? 'Fully reserved' : 'Out of stock'}` : `${available} available${listing.reservedQuantity ? ` · ${listing.reservedQuantity} reserved` : ''}${low ? ' · Low stock' : ''}`}</p>
               <small>{commissionCopy(listing.commissionType, listing.commissionRateBps, listing.commissionMinor, listing.currency)}</small>
@@ -2009,7 +2272,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       </div>}
 
       {tab === 'reports' && (canViewReports || mySeller) && <div className="sme-pos-sales-section">
-        <section className="panel sme-pos-module-panel">
+        <section className="panel sme-pos-module-panel marketplace-report-filter-panel" style={sellerReportAccentStyle}>
           <div className="panel-heading">
             <div>
               <span className="eyebrow">{canViewReports ? 'Seller Reports' : 'My Reports'}</span>
@@ -2045,7 +2308,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           <small>{sellerReportDateWindow.from} – {sellerReportDateWindow.to}</small>
         </section>
 
-        <div className="summary-grid sme-pos-report-grid">
+        <div className="summary-grid sme-pos-report-grid marketplace-report-summary" style={sellerReportAccentStyle}>
           <article className="summary-card featured">
             <span>Items sold</span>
             <strong>{Math.max(0, sellerReportQuantity - sellerReportReturnedQuantity)}</strong>
@@ -2104,16 +2367,38 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           </div>
 
           <div className="sme-pos-sales-list">
-            {sellerReportItems.map((item) => <div className="marketplace-ledger-row" key={item.key}>
-              <div>
-                <strong>{item.name}</strong>
-                <small>{item.sellerName}</small>
-                <small>{item.quantity} sold · {item.returnedQuantity} returned · {Math.max(0, item.quantity - item.returnedQuantity)} net</small>
-              </div>
+            {sellerReportItems.map((item) => (
+              <div
+                className="marketplace-ledger-row marketplace-report-row"
+                key={item.key}
+                style={sellerStyleFor(item.sellerId)}
+              >
+                <span className="marketplace-seller-strip" aria-hidden="true" />
 
-              <strong>{formatMoney(Math.max(0, item.grossMinor - item.returnedMinor), settings.currency)}</strong>
-              <small>Commission {formatMoney(item.commissionMinor, settings.currency)} · Seller earns {formatMoney(item.sellerEarningsMinor, settings.currency)}</small>
-            </div>)}
+                {item.photoPath && (
+                  <SmePosItemPhoto
+                    photoPath={item.photoPath}
+                    name={item.name}
+                    className="marketplace-report-thumb"
+                  />
+                )}
+
+                <div className="marketplace-report-item-copy">
+                  <strong>{item.name}</strong>
+                  <small className="marketplace-seller-badge">{item.sellerName}</small>
+                  <small>
+                    {item.quantity} sold - {item.returnedQuantity} returned - {Math.max(0, item.quantity - item.returnedQuantity)} net
+                  </small>
+                </div>
+
+                <strong>{formatMoney(Math.max(0, item.grossMinor - item.returnedMinor), settings.currency)}</strong>
+                <small>
+                  Commission {formatMoney(item.commissionMinor, settings.currency)}
+                  {' - '}
+                  Seller earns {formatMoney(item.sellerEarningsMinor, settings.currency)}
+                </small>
+              </div>
+            ))}
           </div>
 
           {!sellerReportItems.length && <div className="empty-inline">No seller items were sold during this period.</div>}
@@ -2166,6 +2451,19 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {sellerForm && <Modal title={sellerForm === 'new' ? 'Add seller profile' : 'Edit seller profile'} onClose={() => !busy && setSellerForm(null)}><form className="form-stack" onSubmit={saveSeller}>
       <label>Seller name<input name="name" defaultValue={sellerForm === 'new' ? '' : sellerForm.name} maxLength={100} required /></label>
+      <label>
+        Seller colour
+        <input
+          name="sellerColor"
+          type="color"
+          defaultValue={
+            sellerForm === 'new'
+              ? sellerColourPalette[sellers.length % sellerColourPalette.length]
+              : normaliseSellerColour(sellerForm.sellerColor, sellerForm.id)
+          }
+        />
+        <small>This colour follows the seller in Register, Inventory, Cart and Reports.</small>
+      </label>
       <div className="form-grid"><label>WhatsApp or phone<input name="phone" defaultValue={sellerForm === 'new' ? '' : sellerForm.phone || ''} maxLength={32} /></label><label>Email<input name="email" type="email" defaultValue={sellerForm === 'new' ? '' : sellerForm.email || ''} maxLength={120} /></label></div>
       <label>Link to team member<select name="linkedUid" defaultValue={sellerForm === 'new' ? '' : sellerForm.linkedUid || ''}><option value="">No login linked</option>{sellerAccess.map((item) => <option key={item.uid} value={item.uid}>{item.displayName && item.displayName !== item.uid
   ? `${item.displayName} · ${item.role.replace('_', ' ')}`

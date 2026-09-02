@@ -132,6 +132,7 @@ export interface SmePosSeller {
   phone?: string;
   email?: string;
   note?: string;
+  sellerColor?: string;
   linkedUid?: string | null;
   inventoryManagementEnabled?: boolean;
   defaultCommissionType: SmePosCommissionType;
