@@ -49,7 +49,17 @@ export function SmePosCreateReservationModal({ space, settings, sourceMode, item
 
   let discountMinor = 0;
   let depositMinor = 0;
-  try { discountMinor = Math.max(0, toMinorUnits(discount || '0')); } catch { discountMinor = 0; }
+  try {
+    discountMinor =
+      sourceMode === 'marketplace_consignment'
+        ? 0
+        : Math.max(
+            0,
+            toMinorUnits(discount || '0'),
+          );
+  } catch {
+    discountMinor = 0;
+  }
   try { depositMinor = Math.max(0, toMinorUnits(deposit || '0')); } catch { depositMinor = 0; }
   const totalMinor = Math.max(0, subtotalMinor - discountMinor);
 
@@ -93,7 +103,22 @@ export function SmePosCreateReservationModal({ space, settings, sourceMode, item
       <div className="sme-pos-booking-items">{items.map((item) => <div key={item.itemId}><span>{item.quantity} × {item.name}</span><strong>{formatMoney(item.lineTotalMinor, settings.currency)}</strong></div>)}</div>
       <label>Customer<select value={customerId} onChange={(event) => setCustomerId(event.target.value)} required><option value="">Choose customer</option>{customers.map((customer) => <option value={customer.id} key={customer.id}>{customer.name}</option>)}</select></label>
       <div className="form-grid"><label>Booking date<input type="date" value={reservationDate} onChange={(event) => setReservationDate(event.target.value)} required /></label><label>Hold until<input type="date" min={reservationDate} value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label></div>
-      <label>Discount ({settings.currency})<input inputMode="decimal" value={discount} onChange={(event) => setDiscount(event.target.value)} /></label>
+      {sourceMode === 'marketplace_consignment' ? (
+        <div className="notice">
+          Marketplace bookings do not use a cart-wide discount. Per-item bundle discounts are available during normal checkout.
+        </div>
+      ) : (
+        <label>
+          Discount ({settings.currency})
+          <input
+            inputMode="decimal"
+            value={discount}
+            onChange={(event) =>
+              setDiscount(event.target.value)
+            }
+          />
+        </label>
+      )}
       <div className="sme-pos-totals"><span>Subtotal <strong>{formatMoney(subtotalMinor, settings.currency)}</strong></span><span>Discount <strong>-{formatMoney(discountMinor, settings.currency)}</strong></span><span className="total">Booking total <strong>{formatMoney(totalMinor, settings.currency)}</strong></span></div>
       <label>Deposit now ({settings.currency})<input inputMode="decimal" value={deposit} onChange={(event) => setDepositAndPayment(event.target.value)} /></label>
       {depositMinor > 0 && <SmePosPaymentSplitEditor accounts={paymentAccounts} currency={settings.currency} totalMinor={depositMinor} rows={paymentRows} onChange={setPaymentRows} disabled={busy} label="Deposit payment" />}

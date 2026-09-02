@@ -35,6 +35,9 @@ for (const token of [
   'Out of stock',
   "role !== 'stock_staff'",
   'receipt.paymentAccountName &&',
+  'lineDiscountVersion: 2',
+  'Item discount',
+  'not distributed across other items or sellers',
 ]) need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', token);
 
 for (const token of [
@@ -64,6 +67,8 @@ for (const token of [
   'export const setMarketplaceListingArchived',
   'export const checkoutMarketplacePos',
   'marketplaceCommissionMinor + sellerEarningsMinor !== totalMinor',
+  'lineDiscountVersion === 2',
+  'requestedDiscountMinor',
   "entryType: 'marketplace_pos_sale'",
   "kind: 'sale_earning'",
   'sellerTotals.size',
@@ -124,4 +129,57 @@ if (commission + seller !== finalTotal) fail('Marketplace commission and seller 
 if (split[0].commission !== 285) fail('Percentage commission must apply after discount allocation.');
 if (split[1].commission !== 200) fail('Fixed commission must apply per sold item.');
 
-console.log('Marketplace Consignment POS checks passed (seller listings, mixed checkout, commission split, seller balances, role isolation and archive safety).');
+function splitPerItemDiscount(lines) {
+  return lines.map((line) => {
+    const gross = line.price * line.quantity;
+    const discount = line.discount || 0;
+
+    if (discount > gross) {
+      throw new Error('Discount exceeds item total.');
+    }
+
+    const net = gross - discount;
+    const commission = line.type === 'percentage'
+      ? Math.floor(net * line.rateBps / 10_000)
+      : Math.min(net, line.fixed * line.quantity);
+
+    return {
+      net,
+      commission,
+      seller: net - commission,
+    };
+  });
+}
+
+const bundle = splitPerItemDiscount([
+  {
+    price: 1_000,
+    quantity: 1,
+    type: 'percentage',
+    rateBps: 0,
+    fixed: 0,
+    discount: 0,
+  },
+  {
+    price: 1_000,
+    quantity: 1,
+    type: 'percentage',
+    rateBps: 0,
+    fixed: 0,
+    discount: 500,
+  },
+]);
+
+if (bundle[0].net !== 1_000 || bundle[0].seller !== 1_000) {
+  fail('Item 1 must remain BND 10.00 when it has no discount.');
+}
+
+if (bundle[1].net !== 500 || bundle[1].seller !== 500) {
+  fail('Item 2 must become BND 5.00 when only that item receives a BND 5.00 discount.');
+}
+
+if (bundle.reduce((sum, line) => sum + line.net, 0) !== 1_500) {
+  fail('Per-item bundle total must be BND 15.00.');
+}
+
+console.log('Marketplace Consignment POS checks passed (seller listings, mixed checkout, legacy compatibility, per-item bundle discounts, commission split, seller balances, role isolation and archive safety).');

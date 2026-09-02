@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 
 let checks = 0;
 const fail = (message) => { throw new Error(message); };
@@ -89,9 +89,32 @@ for (const file of [
     'paymentDraftsToInput(paymentRows)',
     'reservedQuantity',
     'availableQuantity',
-    'initialDiscountMinor={discountMinor}',
   ]) need(file, text);
 }
+
+need(
+  'src/features/sme-pos/StandardPosWorkspace.tsx',
+  'initialDiscountMinor={discountMinor}',
+  'Standard POS booking keeps its cart discount',
+);
+
+need(
+  'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
+  'initialDiscountMinor={0}',
+  'Marketplace booking does not reuse checkout line discounts',
+);
+
+need(
+  'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
+  'lineDiscountVersion: 2',
+  'Marketplace checkout uses per-item discount payload',
+);
+
+need(
+  'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
+  'not distributed across other items or sellers',
+  'Marketplace discount is scoped to the selected cart line',
+);
 need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', "sellerId: item.sellerId", 'Marketplace Quick Add seller attribution');
 need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', "The selected seller's default commission is applied automatically.", 'Marketplace Quick Add default commission guidance');
 need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', "defaultValue={mySeller?.id || sellers[0]?.id || ''}", 'Cashier/Seller Quick Add seller default');

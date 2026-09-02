@@ -10506,3 +10506,22 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   .theme-wallpaper-palette { align-items:flex-start; flex-direction:column; }
   .theme-wallpaper-swatches { justify-content:flex-start; }
 }
+
+
+/* Marketplace per-item bundle discount */
+.marketplace-line-discount-note{margin:0!important;font-size:.76rem}
+.sme-pos-cart-lines>.marketplace-cart-line{display:flex;flex-direction:column;align-items:stretch;gap:.55rem;padding:.8rem 0}
+.marketplace-cart-line-main{display:grid;grid-template-columns:minmax(0,1fr) 72px auto;align-items:center;gap:.65rem;width:100%}
+.marketplace-cart-line-main>strong{text-align:right}
+.marketplace-line-discount-row{display:grid;grid-template-columns:minmax(130px,.45fr) minmax(0,1fr);gap:.7rem;align-items:end;padding:.6rem;border:1px solid var(--border);border-radius:10px;background:var(--surface-soft)}
+.marketplace-line-discount-row label{font-size:.7rem}
+.marketplace-line-discount-row input{min-height:38px;padding:.55rem .65rem}
+.marketplace-line-discount-row>div{display:flex;flex-direction:column;gap:.2rem;align-items:flex-end;text-align:right}
+.marketplace-line-discount-row small{margin:0;color:var(--muted)}
+.marketplace-cart-line.discount-invalid .marketplace-line-discount-row{border-color:var(--danger)}
+@media(max-width:680px){
+  .marketplace-cart-line-main{grid-template-columns:minmax(0,1fr) 68px}
+  .marketplace-cart-line-main>strong{grid-column:1/-1}
+  .marketplace-line-discount-row{grid-template-columns:1fr}
+  .marketplace-line-discount-row>div{align-items:flex-start;text-align:left}
+}

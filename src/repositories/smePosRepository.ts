@@ -553,6 +553,7 @@ export interface StandardPosQuickItemInput {
 export interface MarketplaceQuickItemInput extends StandardPosQuickItemInput {
   sellerId: string;
   condition?: SmePosListingCondition;
+  discountMinor?: number;
 }
 
 export async function listSmePosReservations(spaceId: string, includeClosed = false): Promise<SmePosReservation[]> {
@@ -818,7 +819,12 @@ export async function deleteMarketplaceListingPermanently(
 
 export async function checkoutMarketplacePos(input: {
   spaceId: string;
-  items: Array<{ listingId: string; quantity: number }>;
+  lineDiscountVersion?: 2;
+  items: Array<{
+    listingId: string;
+    quantity: number;
+    discountMinor?: number;
+  }>;
   quickItems?: MarketplaceQuickItemInput[];
   customerId?: string | null;
   payments: SmePosPaymentInput[];

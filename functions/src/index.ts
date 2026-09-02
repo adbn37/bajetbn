@@ -4807,13 +4807,27 @@ function parseStandardQuickItems(value: unknown): Array<{ clientId: string; name
   });
 }
 
-function parseMarketplaceQuickItems(value: unknown): Array<{ clientId: string; sellerId: string; name: string; quantity: number; unitPriceMinor: number; condition: string }> {
+function parseMarketplaceQuickItems(value: unknown): Array<{
+  clientId: string;
+  sellerId: string;
+  name: string;
+  quantity: number;
+  unitPriceMinor: number;
+  condition: string;
+  discountMinor: number;
+}> {
   return parseStandardQuickItems(value).map((base, index) => {
     const row = (value as DocumentData[])[index] || {};
+
     return {
       ...base,
       sellerId: stringValue(row.sellerId, 'Quick Add seller', 80),
-      condition: oneOf(row.condition || 'other', smePosListingConditions, 'Quick Add condition'),
+      condition: oneOf(
+        row.condition || 'other',
+        smePosListingConditions,
+        'Quick Add condition',
+      ),
+      discountMinor: nonNegativeMoney(row.discountMinor ?? 0),
     };
   });
 }
@@ -5799,18 +5813,36 @@ export const checkoutStandardPos = onCall({ region }, async (request) => {
   });
 });
 
-function parseMarketplaceCheckoutItems(value: unknown): Array<{ listingId: string; quantity: number }> {
+function parseMarketplaceCheckoutItems(value: unknown): Array<{
+  listingId: string;
+  quantity: number;
+  discountMinor: number;
+}> {
   if (!Array.isArray(value) || value.length > 50) {
     throw new HttpsError('invalid-argument', 'Checkout can contain up to 50 listing lines.');
   }
+
   const seen = new Set<string>();
+
   return value.map((row) => {
-    if (!row || typeof row !== 'object') throw new HttpsError('invalid-argument', 'Invalid Marketplace listing.');
+    if (!row || typeof row !== 'object') {
+      throw new HttpsError('invalid-argument', 'Invalid Marketplace listing.');
+    }
+
     const item = row as Record<string, unknown>;
     const listingId = stringValue(item.listingId, 'Listing ID', 80);
-    if (seen.has(listingId)) throw new HttpsError('invalid-argument', 'The same listing appears more than once.');
+
+    if (seen.has(listingId)) {
+      throw new HttpsError('invalid-argument', 'The same listing appears more than once.');
+    }
+
     seen.add(listingId);
-    return { listingId, quantity: integerBetween(item.quantity, 'Quantity', 1, 9_999) };
+
+    return {
+      listingId,
+      quantity: integerBetween(item.quantity, 'Quantity', 1, 9_999),
+      discountMinor: nonNegativeMoney(item.discountMinor ?? 0),
+    };
   });
 }
 
@@ -6831,6 +6863,18 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
   if (requestedItems.length + quickItems.length > 50) throw new HttpsError('invalid-argument', 'Checkout can contain up to 50 lines.');
   const customerId = optionalString(request.data?.customerId, 80) || null;
   const discountMinor = nonNegativeMoney(request.data?.discountMinor ?? 0);
+  const lineDiscountVersion =
+    request.data?.lineDiscountVersion === 2
+      ? 2
+      : 1;
+
+  if (lineDiscountVersion === 2 && discountMinor !== 0) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Per-item Marketplace discounts cannot be combined with a cart-wide discount.',
+    );
+  }
+
   const saleDate = localDate(request.data?.saleDate, 'Sale date');
   const note = optionalString(request.data?.note, 500);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
@@ -6850,7 +6894,15 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
     if (command.exists) return command.data()?.result;
     if (customerSnapshot && (!customerSnapshot.exists || customerSnapshot.data()?.spaceId !== spaceId || customerSnapshot.data()?.archivedAt || customerSnapshot.data()?.deletedAt)) throw new HttpsError('failed-precondition', 'Choose an active customer.');
 
-    const prepared: Array<{ snapshot: DocumentReference | null; listing: DocumentData; quantity: number; unitPriceMinor: number; lineSubtotalMinor: number; quickAdd: boolean }> = listingSnapshots.map((snapshot, index) => {
+    const prepared: Array<{
+      snapshot: DocumentReference | null;
+      listing: DocumentData;
+      quantity: number;
+      unitPriceMinor: number;
+      lineSubtotalMinor: number;
+      quickAdd: boolean;
+      requestedDiscountMinor: number;
+    }> = listingSnapshots.map((snapshot, index) => {
       if (!snapshot.exists) throw new HttpsError('not-found', 'One of the seller listings was not found.');
       const listing = snapshot.data() || {};
       const requested = requestedItems[index];
@@ -6863,7 +6915,15 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
       const unitPriceMinor = positiveMoney(listing.sellingPriceMinor);
       const lineSubtotalMinor = unitPriceMinor * requested.quantity;
       if (!Number.isSafeInteger(lineSubtotalMinor)) throw new HttpsError('out-of-range', 'Sale amount is too large.');
-      return { snapshot: snapshot.ref, listing, quantity: requested.quantity, unitPriceMinor, lineSubtotalMinor, quickAdd: false };
+      return {
+        snapshot: snapshot.ref,
+        listing,
+        quantity: requested.quantity,
+        unitPriceMinor,
+        lineSubtotalMinor,
+        quickAdd: false,
+        requestedDiscountMinor: requested.discountMinor,
+      };
     });
 
     const sellerIds = [...new Set([
@@ -6899,6 +6959,7 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
         unitPriceMinor: item.unitPriceMinor,
         lineSubtotalMinor,
         quickAdd: true,
+        requestedDiscountMinor: item.discountMinor,
       });
     });
 
@@ -6909,18 +6970,69 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
     let marketplaceCommissionMinor = 0;
     let sellerEarningsMinor = 0;
     let itemCount = 0;
+    let lineDiscountTotalMinor = 0;
     const sellerTotals = new Map<string, { gross: number; commission: number; earnings: number; quantity: number }>();
+
     const saleItems = prepared.map((item, index) => {
-      const discountShareMinor = index === prepared.length - 1 ? remainingDiscount : Math.floor(discountMinor * item.lineSubtotalMinor / subtotalMinor);
-      remainingDiscount -= discountShareMinor;
-      const netLineMinor = item.lineSubtotalMinor - discountShareMinor;
-      const commissionType = oneOf(item.listing.commissionType, smePosCommissionTypes, 'listing commission type');
-      const commissionRateBps = commissionType === 'percentage' ? integerBetween(item.listing.commissionRateBps ?? 0, 'Commission percentage', 0, 10_000) : 0;
-      const fixedCommissionMinor = commissionType === 'fixed_per_item' ? nonNegativeMoney(item.listing.commissionMinor ?? 0) : 0;
-      const commissionMinor = commissionType === 'percentage'
-        ? Math.floor(netLineMinor * commissionRateBps / 10_000)
-        : Math.min(netLineMinor, fixedCommissionMinor * item.quantity);
-      const sellerEarningMinor = netLineMinor - commissionMinor;
+      const discountShareMinor =
+        lineDiscountVersion === 2
+          ? item.requestedDiscountMinor
+          : index === prepared.length - 1
+            ? remainingDiscount
+            : Math.floor(
+                discountMinor
+                * item.lineSubtotalMinor
+                / subtotalMinor,
+              );
+
+      if (lineDiscountVersion !== 2) {
+        remainingDiscount -= discountShareMinor;
+      }
+
+      if (discountShareMinor > item.lineSubtotalMinor) {
+        throw new HttpsError(
+          'invalid-argument',
+          'An item discount cannot be more than that item total.',
+        );
+      }
+
+      if (lineDiscountVersion === 2) {
+        lineDiscountTotalMinor += discountShareMinor;
+      }
+
+      const netLineMinor =
+        item.lineSubtotalMinor - discountShareMinor;
+      const commissionType = oneOf(
+        item.listing.commissionType,
+        smePosCommissionTypes,
+        'listing commission type',
+      );
+      const commissionRateBps =
+        commissionType === 'percentage'
+          ? integerBetween(
+              item.listing.commissionRateBps ?? 0,
+              'Commission percentage',
+              0,
+              10_000,
+            )
+          : 0;
+      const fixedCommissionMinor =
+        commissionType === 'fixed_per_item'
+          ? nonNegativeMoney(item.listing.commissionMinor ?? 0)
+          : 0;
+      const commissionMinor =
+        commissionType === 'percentage'
+          ? Math.floor(
+              netLineMinor
+              * commissionRateBps
+              / 10_000,
+            )
+          : Math.min(
+              netLineMinor,
+              fixedCommissionMinor * item.quantity,
+            );
+      const sellerEarningMinor =
+        netLineMinor - commissionMinor;
       marketplaceCommissionMinor += commissionMinor;
       sellerEarningsMinor += sellerEarningMinor;
       itemCount += item.quantity;
@@ -6943,8 +7055,27 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
         returnedQuantity: 0, returnedMinor: 0, commissionReturnedMinor: 0, sellerEarningReturnedMinor: 0, quickAdd: item.quickAdd,
       };
     });
-    const totalMinor = subtotalMinor - discountMinor;
-    if (marketplaceCommissionMinor + sellerEarningsMinor !== totalMinor) throw new HttpsError('internal', 'Marketplace sale split did not balance.');
+    const appliedDiscountMinor =
+      lineDiscountVersion === 2
+        ? lineDiscountTotalMinor
+        : discountMinor;
+
+    if (appliedDiscountMinor >= subtotalMinor) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Marketplace sale total must be more than zero.',
+      );
+    }
+
+    const totalMinor =
+      subtotalMinor - appliedDiscountMinor;
+
+    if (marketplaceCommissionMinor + sellerEarningsMinor !== totalMinor) {
+      throw new HttpsError(
+        'internal',
+        'Marketplace sale split did not balance.',
+      );
+    }
     const paymentRows = parseSmePosPaymentRows(request.data || {}, totalMinor);
     const now = FieldValue.serverTimestamp();
     const payments = await postSmePosPayments({
@@ -6996,7 +7127,7 @@ export const checkoutMarketplacePos = onCall({ region }, async (request) => {
       displayId: displayId('SAL'), receiptNumber, spaceId, ownerId: context.settings.ownerId, createdBy: uid, status: 'completed', returnStatus: 'not_returned', sourceMode: 'marketplace_consignment',
       customerId, customerName: customerSnapshot?.data()?.name || null,
       paymentAccountId: firstPayment.accountId, paymentAccountName: firstPayment.accountName, paymentMethod: firstPayment.paymentMethod, paymentMethodLabel: firstPayment.paymentMethodLabel, payments,
-      items: saleItems, itemCount, subtotalMinor, discountMinor, totalMinor, costMinor: sellerEarningsMinor, profitMinor: marketplaceCommissionMinor,
+      items: saleItems, itemCount, subtotalMinor, discountMinor: appliedDiscountMinor, totalMinor, costMinor: sellerEarningsMinor, profitMinor: marketplaceCommissionMinor,
       marketplaceCommissionMinor, sellerEarningsMinor, sellerCount: sellerTotals.size, returnedMinor: 0, currency: context.settings.currency, saleDate, note,
       transactionId: firstPayment.transactionId, ledgerEntryId: firstPayment.ledgerEntryId, transactionIds: payments.map((item) => item.transactionId), ledgerEntryIds: payments.map((item) => item.ledgerEntryId), reservationId: null,
       receiptName: context.settings.receiptName || context.settings.shopName || context.space.name || 'Receipt', receiptFooter: context.settings.receiptFooter || '',

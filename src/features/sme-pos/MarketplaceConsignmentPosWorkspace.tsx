@@ -184,6 +184,21 @@ function commissionCopy(type: SmePosCommissionType, rateBps: number, fixedMinor:
     : `${formatMoney(fixedMinor, currency)} per item`;
 }
 
+function marketplaceLineDiscountMinor(
+  value: string | undefined,
+) {
+  if (!value?.trim()) return 0;
+
+  try {
+    return Math.max(
+      0,
+      toMinorUnits(value),
+    );
+  } catch {
+    return -1;
+  }
+}
+
 function sellerBalanceLabel(balanceMinor: number) {
   if (balanceMinor < 0) return 'Seller owes shop';
   if (balanceMinor === 0) return 'Settled';
@@ -252,11 +267,12 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [quickItems, setQuickItems] = useState<MarketplaceQuickCartItem[]>([]);
+  const [lineDiscounts, setLineDiscounts] =
+    useState<Record<string, string>>({});
   const [quickAddForm, setQuickAddForm] = useState(false);
   const [bookingForm, setBookingForm] = useState(false);
   const [customerId, setCustomerId] = useState('');
   const [paymentRows, setPaymentRows] = useState<SmePosPaymentDraft[]>([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
-  const [discount, setDiscount] = useState('0.00');
   const [saleDate, setSaleDate] = useState(today());
   const [checkoutNote, setCheckoutNote] = useState('');
   const [sellerReportRange, setSellerReportRange] = useState<SellerReportRange>('month');
@@ -348,11 +364,90 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     return listing ? { listing, quantity } : null;
   }).filter((item): item is { listing: SmePosListing; quantity: number } => Boolean(item)), [cart, listings]);
 
-  const quickSubtotalMinor = quickItems.reduce((sum, item) => sum + item.unitPriceMinor * item.quantity, 0);
-  const subtotalMinor = cartLines.reduce((sum, item) => sum + item.listing.sellingPriceMinor * item.quantity, 0) + quickSubtotalMinor;
-  let discountMinor = 0;
-  try { discountMinor = Math.max(0, toMinorUnits(discount || '0')); } catch { discountMinor = 0; }
-  const totalMinor = Math.max(0, subtotalMinor - discountMinor);
+  const listingDiscountKey = (listingId: string) =>
+    'listing:' + listingId;
+  const quickDiscountKey = (clientId: string) =>
+    'quick:' + clientId;
+
+  const quickSubtotalMinor = quickItems.reduce(
+    (sum, item) =>
+      sum + item.unitPriceMinor * item.quantity,
+    0,
+  );
+
+  const subtotalMinor =
+    cartLines.reduce(
+      (sum, item) =>
+        sum
+        + item.listing.sellingPriceMinor
+        * item.quantity,
+      0,
+    )
+    + quickSubtotalMinor;
+
+  const lineDiscountRows = [
+    ...cartLines.map(({ listing, quantity }) => {
+      const key = listingDiscountKey(listing.id);
+      const lineTotalMinor =
+        listing.sellingPriceMinor * quantity;
+      const discountMinor =
+        marketplaceLineDiscountMinor(
+          lineDiscounts[key],
+        );
+
+      return {
+        key,
+        lineTotalMinor,
+        discountMinor,
+        valid:
+          discountMinor >= 0
+          && discountMinor <= lineTotalMinor,
+      };
+    }),
+    ...quickItems.map((item) => {
+      const key = quickDiscountKey(item.clientId);
+      const lineTotalMinor =
+        item.unitPriceMinor * item.quantity;
+      const discountMinor =
+        marketplaceLineDiscountMinor(
+          lineDiscounts[key],
+        );
+
+      return {
+        key,
+        lineTotalMinor,
+        discountMinor,
+        valid:
+          discountMinor >= 0
+          && discountMinor <= lineTotalMinor,
+      };
+    }),
+  ];
+
+  const lineDiscountByKey =
+    new Map(
+      lineDiscountRows.map(
+        (item) => [item.key, item],
+      ),
+    );
+
+  const invalidLineDiscount =
+    lineDiscountRows.some(
+      (item) => !item.valid,
+    );
+
+  const discountMinor =
+    lineDiscountRows.reduce(
+      (sum, item) =>
+        sum + Math.max(0, item.discountMinor),
+      0,
+    );
+
+  const totalMinor =
+    Math.max(
+      0,
+      subtotalMinor - discountMinor,
+    );
   useEffect(() => {
     setPaymentRows((current) => current.length === 1 ? [{ ...current[0], amount: (totalMinor / 100).toFixed(2) }] : current);
   }, [totalMinor]);
@@ -857,12 +952,35 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
   function changeQuantity(listing: SmePosListing, quantity: number) {
     const available = availableQuantity(listing);
+    const remove =
+      !Number.isFinite(quantity)
+      || quantity < 1;
+
     setCart((current) => {
       const next = { ...current };
-      if (!Number.isFinite(quantity) || quantity < 1) delete next[listing.id];
-      else next[listing.id] = Math.min(Math.floor(quantity), available);
+
+      if (remove) {
+        delete next[listing.id];
+      } else {
+        next[listing.id] =
+          Math.min(
+            Math.floor(quantity),
+            available,
+          );
+      }
+
       return next;
     });
+
+    if (remove) {
+      const key = 'listing:' + listing.id;
+
+      setLineDiscounts((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
   }
 
   function addQuickItem(event: FormEvent<HTMLFormElement>) {
@@ -890,30 +1008,98 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   }
 
   function changeQuickQuantity(clientId: string, quantity: number) {
-    setQuickItems((current) => current
-      .map((item) => item.clientId === clientId ? { ...item, quantity: Math.max(0, Math.floor(quantity || 0)) } : item)
-      .filter((item) => item.quantity > 0));
+    const nextQuantity =
+      Math.max(
+        0,
+        Math.floor(quantity || 0),
+      );
+
+    setQuickItems((current) =>
+      current
+        .map((item) =>
+          item.clientId === clientId
+            ? {
+                ...item,
+                quantity: nextQuantity,
+              }
+            : item,
+        )
+        .filter((item) => item.quantity > 0),
+    );
+
+    if (nextQuantity < 1) {
+      const key = 'quick:' + clientId;
+
+      setLineDiscounts((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
   }
 
   async function completeCheckout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canCheckout || !requireOnline()) return;
-    if (!cartLines.length && !quickItems.length) { setError('Add at least one seller listing or Quick Add item to the sale.'); return; }
+    if (!cartLines.length && !quickItems.length) {
+      setError('Add at least one seller listing or Quick Add item to the sale.');
+      return;
+    }
+
+    if (invalidLineDiscount) {
+      setError('Each item discount must be a valid amount no greater than that item total.');
+      return;
+    }
+
+    if (discountMinor >= subtotalMinor) {
+      setError('Marketplace sale total must be more than zero.');
+      return;
+    }
+
     if (paymentRows.some((row) => !row.accountId)) { setError('Choose an account for each payment.'); return; }
     if (paymentDraftTotalMinor(paymentRows) !== totalMinor) { setError('Split payments must add up exactly to the sale total.'); return; }
     setBusy(true); setError(''); setSuccess('');
     try {
       const result = await checkoutMarketplacePos({
         spaceId: space.id,
-        items: cartLines.map((item) => ({ listingId: item.listing.id, quantity: item.quantity })),
-        quickItems: quickItems.map((item) => ({ clientId: item.clientId, sellerId: item.sellerId, name: item.name, quantity: item.quantity, unitPriceMinor: item.unitPriceMinor, condition: item.condition })),
+        lineDiscountVersion: 2,
+        items: cartLines.map((item) => ({
+          listingId: item.listing.id,
+          quantity: item.quantity,
+          discountMinor:
+            Math.max(
+              0,
+              lineDiscountByKey.get(
+                'listing:' + item.listing.id,
+              )?.discountMinor || 0,
+            ),
+        })),
+        quickItems: quickItems.map((item) => ({
+          clientId: item.clientId,
+          sellerId: item.sellerId,
+          name: item.name,
+          quantity: item.quantity,
+          unitPriceMinor: item.unitPriceMinor,
+          condition: item.condition,
+          discountMinor:
+            Math.max(
+              0,
+              lineDiscountByKey.get(
+                'quick:' + item.clientId,
+              )?.discountMinor || 0,
+            ),
+        })),
         customerId: customerId || null,
         payments: paymentDraftsToInput(paymentRows),
-        discountMinor,
+        discountMinor: 0,
         saleDate,
         note: checkoutNote,
       });
-      setCart({}); setQuickItems([]); setDiscount('0.00'); setCheckoutNote(''); setCustomerId('');
+      setCart({});
+      setQuickItems([]);
+      setLineDiscounts({});
+      setCheckoutNote('');
+      setCustomerId('');
       setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
       setSuccess(`Sale completed. Receipt ${result.data.receiptNumber}. Seller balances were updated.`);
       await load(); await onChanged();
@@ -1387,18 +1573,286 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           {!filteredListings.length && <div className="empty-inline">No seller listings found.</div>}
         </section>
         <section className="panel sme-pos-cart">
-          <div className="panel-heading"><div><span className="eyebrow">Current sale</span><h3>Cart</h3><p>{cartLines.reduce((sum, item) => sum + item.quantity, 0) + quickItems.reduce((sum, item) => sum + item.quantity, 0)} item(s) · {new Set([...cartLines.map((item) => item.listing.sellerId), ...quickItems.map((item) => item.sellerId)]).size} seller(s)</p></div>{(cartLines.length > 0 || quickItems.length > 0) && <button className="button ghost small" type="button" onClick={() => { setCart({}); setQuickItems([]); }}>Clear cart</button>}</div>
-          <div className="sme-pos-cart-lines">{cartLines.map(({ listing, quantity }) => <div key={listing.id}><div><strong>{listing.name}</strong><small>{listing.sellerName} · {formatMoney(listing.sellingPriceMinor, listing.currency)} each</small></div><input type="number" min="0" max={availableQuantity(listing)} value={quantity} onChange={(event) => changeQuantity(listing, Number(event.target.value))} aria-label={`${listing.name} quantity`} /><strong>{formatMoney(listing.sellingPriceMinor * quantity, listing.currency)}</strong></div>)}{quickItems.map((item) => <div key={item.clientId}><div><strong>{item.name}</strong><small>{item.sellerName} · Quick Add · this sale only</small></div><input type="number" min="0" max="9999" value={item.quantity} onChange={(event) => changeQuickQuantity(item.clientId, Number(event.target.value))} aria-label={`${item.name} quantity`} /><strong>{formatMoney(item.unitPriceMinor * item.quantity, settings.currency)}</strong></div>)}</div>
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Current sale</span>
+              <h3>Cart</h3>
+              <p>
+                {cartLines.reduce((sum, item) => sum + item.quantity, 0)
+                  + quickItems.reduce((sum, item) => sum + item.quantity, 0)} item(s)
+                {' - '}
+                {new Set([
+                  ...cartLines.map((item) => item.listing.sellerId),
+                  ...quickItems.map((item) => item.sellerId),
+                ]).size} seller(s)
+              </p>
+            </div>
+
+            {(cartLines.length > 0 || quickItems.length > 0) && (
+              <button
+                className="button ghost small"
+                type="button"
+                onClick={() => {
+                  setCart({});
+                  setQuickItems([]);
+                  setLineDiscounts({});
+                }}
+              >
+                Clear cart
+              </button>
+            )}
+          </div>
+
+          <div className="notice marketplace-line-discount-note">
+            Bundle discount applies only to the item you enter it on. It is not distributed across other items or sellers.
+          </div>
+
+          <div className="sme-pos-cart-lines marketplace-cart-lines">
+            {cartLines.map(({ listing, quantity }) => {
+              const key = 'listing:' + listing.id;
+              const line = lineDiscountByKey.get(key);
+              const lineTotalMinor =
+                listing.sellingPriceMinor * quantity;
+              const finalMinor =
+                lineTotalMinor
+                - Math.max(
+                    0,
+                    line?.discountMinor || 0,
+                  );
+
+              return (
+                <div
+                  key={listing.id}
+                  className={
+                    'marketplace-cart-line'
+                    + (line?.valid === false
+                      ? ' discount-invalid'
+                      : '')
+                  }
+                >
+                  <div className="marketplace-cart-line-main">
+                    <div>
+                      <strong>{listing.name}</strong>
+                      <small>
+                        {listing.sellerName}
+                        {' - '}
+                        {formatMoney(
+                          listing.sellingPriceMinor,
+                          listing.currency,
+                        )} each
+                      </small>
+                    </div>
+
+                    <input
+                      type="number"
+                      min="0"
+                      max={availableQuantity(listing)}
+                      value={quantity}
+                      onChange={(event) =>
+                        changeQuantity(
+                          listing,
+                          Number(event.target.value),
+                        )
+                      }
+                      aria-label={listing.name + ' quantity'}
+                    />
+
+                    <strong>
+                      {formatMoney(
+                        lineTotalMinor,
+                        listing.currency,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="marketplace-line-discount-row">
+                    <label>
+                      Item discount
+                      <input
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={lineDiscounts[key] || ''}
+                        onChange={(event) =>
+                          setLineDiscounts((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <div>
+                      <small>
+                        Discount affects this item only. Commission is calculated from its final amount.
+                      </small>
+                      <strong>
+                        Final {formatMoney(
+                          finalMinor,
+                          settings.currency,
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {line?.valid === false && (
+                    <small className="stock-danger">
+                      Discount cannot be more than this item total.
+                    </small>
+                  )}
+                </div>
+              );
+            })}
+
+            {quickItems.map((item) => {
+              const key = 'quick:' + item.clientId;
+              const line = lineDiscountByKey.get(key);
+              const lineTotalMinor =
+                item.unitPriceMinor * item.quantity;
+              const finalMinor =
+                lineTotalMinor
+                - Math.max(
+                    0,
+                    line?.discountMinor || 0,
+                  );
+
+              return (
+                <div
+                  key={item.clientId}
+                  className={
+                    'marketplace-cart-line'
+                    + (line?.valid === false
+                      ? ' discount-invalid'
+                      : '')
+                  }
+                >
+                  <div className="marketplace-cart-line-main">
+                    <div>
+                      <strong>{item.name}</strong>
+                      <small>
+                        {item.sellerName}
+                        {' - Quick Add - this sale only'}
+                      </small>
+                    </div>
+
+                    <input
+                      type="number"
+                      min="0"
+                      max="9999"
+                      value={item.quantity}
+                      onChange={(event) =>
+                        changeQuickQuantity(
+                          item.clientId,
+                          Number(event.target.value),
+                        )
+                      }
+                      aria-label={item.name + ' quantity'}
+                    />
+
+                    <strong>
+                      {formatMoney(
+                        lineTotalMinor,
+                        settings.currency,
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="marketplace-line-discount-row">
+                    <label>
+                      Item discount
+                      <input
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={lineDiscounts[key] || ''}
+                        onChange={(event) =>
+                          setLineDiscounts((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <div>
+                      <small>
+                        Discount affects this item only. Commission is calculated from its final amount.
+                      </small>
+                      <strong>
+                        Final {formatMoney(
+                          finalMinor,
+                          settings.currency,
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {line?.valid === false && (
+                    <small className="stock-danger">
+                      Discount cannot be more than this item total.
+                    </small>
+                  )}
+                </div>
+              );
+            })}
+          </div>
           {!cartLines.length && !quickItems.length && <div className="empty-inline">Tap a listing or use Quick Add to begin the sale.</div>}
           <div className="form-stack compact">
             <label>Customer<select value={customerId} onChange={(event) => setCustomerId(event.target.value)}><option value="">Walk-in customer</option>{customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             <SmePosPaymentSplitEditor accounts={paymentAccounts} currency={settings.currency} totalMinor={totalMinor} rows={paymentRows} onChange={setPaymentRows} disabled={busy} />
-            <div className="form-grid"><label>Sale date<input type="date" value={saleDate} onChange={(event) => setSaleDate(event.target.value)} /></label><label>Discount (BND)<input inputMode="decimal" value={discount} onChange={(event) => setDiscount(event.target.value)} /></label></div>
+            <label>
+              Sale date
+              <input
+                type="date"
+                value={saleDate}
+                onChange={(event) =>
+                  setSaleDate(event.target.value)
+                }
+              />
+            </label>
             <label>Note<textarea rows={2} value={checkoutNote} onChange={(event) => setCheckoutNote(event.target.value)} placeholder="Optional" /></label>
           </div>
           <div className="sme-pos-totals"><span>Subtotal <strong>{formatMoney(subtotalMinor, settings.currency)}</strong></span><span>Discount <strong>-{formatMoney(discountMinor, settings.currency)}</strong></span><span className="total">Customer pays <strong>{formatMoney(totalMinor, settings.currency)}</strong></span></div>
-          <div className="pos-checkout-actions">{cartLines.length > 0 && <button className="button secondary" type="button" disabled={busy || quickItems.length > 0 || !customerId} onClick={() => setBookingForm(true)}>Reserve / take deposit</button>}<button className="button primary pos-complete-sale" type="submit" disabled={busy || !canCheckout || settings.status !== 'active' || (!cartLines.length && !quickItems.length)}>{busy ? 'Completing sale…' : settings.status !== 'active' ? 'POS is not active' : `Complete sale · ${formatMoney(totalMinor, settings.currency)}`}</button></div>
+          <div className="pos-checkout-actions">
+            {cartLines.length > 0 && (
+              <button
+                className="button secondary"
+                type="button"
+                disabled={
+                  busy
+                  || quickItems.length > 0
+                  || !customerId
+                  || discountMinor > 0
+                }
+                onClick={() => setBookingForm(true)}
+              >
+                Reserve / take deposit
+              </button>
+            )}
+
+            <button
+              className="button primary pos-complete-sale"
+              type="submit"
+              disabled={
+                busy
+                || invalidLineDiscount
+                || totalMinor <= 0
+                || !canCheckout
+                || settings.status !== 'active'
+                || (!cartLines.length && !quickItems.length)
+              }
+            >
+              {busy
+                ? 'Completing sale...'
+                : settings.status !== 'active'
+                  ? 'POS is not active'
+                  : 'Complete sale - '
+                    + formatMoney(
+                        totalMinor,
+                        settings.currency,
+                      )}
+            </button>
+          </div>
           {quickItems.length > 0 && <small>Quick Add items are sale-only and cannot be reserved. Remove them to create a booking.</small>}
+          {discountMinor > 0 && <small>Per-item bundle discounts are checkout-only. Remove them before creating a booking.</small>}
           {cartLines.length > 0 && !customerId && <small>Choose a saved customer to reserve this cart.</small>}
         </section>
       </form>}
@@ -1675,7 +2129,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
 
     {quickAddForm && <Modal title="Quick Add · this sale only" onClose={() => setQuickAddForm(false)}><form className="form-stack" onSubmit={addQuickItem}><div className="notice">Use this for a one-off sale. It is not saved in Inventory. The selected seller's default commission is applied automatically.</div><label>Seller<select name="sellerId" defaultValue={mySeller?.id || sellers[0]?.id || ''} required><option value="">Choose seller</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label><div className="form-grid"><label>Item name<input name="name" maxLength={100} required autoFocus /></label><label>Condition<select name="condition" defaultValue="new">{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Selling price (BND)<input name="price" inputMode="decimal" required /></label><label>Quantity<input name="quantity" type="number" min="1" max="9999" defaultValue="1" required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setQuickAddForm(false)}>Cancel</button><button className="button primary" type="submit">Add to sale</button></div></form></Modal>}
 
-    {bookingForm && <SmePosCreateReservationModal space={space} settings={settings} sourceMode="marketplace_consignment" items={cartLines.map(({ listing, quantity }) => ({ itemId: listing.id, name: `${listing.name} · ${listing.sellerName}`, quantity, lineTotalMinor: listing.sellingPriceMinor * quantity }))} customers={customers} paymentAccounts={paymentAccounts} initialCustomerId={customerId} initialDiscountMinor={discountMinor} onClose={() => setBookingForm(false)} onSaved={async () => { setCart({}); setDiscount('0.00'); setCustomerId(''); setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]); setSuccess('Booking created and stock reserved.'); await load(); await onChanged(); }} />}
+    {bookingForm && <SmePosCreateReservationModal space={space} settings={settings} sourceMode="marketplace_consignment" items={cartLines.map(({ listing, quantity }) => ({ itemId: listing.id, name: `${listing.name} · ${listing.sellerName}`, quantity, lineTotalMinor: listing.sellingPriceMinor * quantity }))} customers={customers} paymentAccounts={paymentAccounts} initialCustomerId={customerId} initialDiscountMinor={0} onClose={() => setBookingForm(false)} onSaved={async () => { setCart({}); setLineDiscounts({}); setCustomerId(''); setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]); setSuccess('Booking created and stock reserved.'); await load(); await onChanged(); }} />}
 
     {manualListingForm && <Modal title={manualListingSellerId === mySeller?.id ? 'Add stock · My inventory' : 'Register existing seller stock'} onClose={() => { if (!busy) closeManualListingForm(); }}>
       <form key={`${manualListingSelectedSellerId}:${manualListingPrefill?.id || 'new'}:${manualListingExistingMatch ? 'existing' : 'copy'}`} className="form-stack" onSubmit={registerExistingListing}>
