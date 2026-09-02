@@ -58,7 +58,8 @@ need(
 );
 
 for (const token of [
-  "URL.createObjectURL",
+  "createImageBitmap(file)",
+  "reader.readAsDataURL(file);",
   "document.createElement('canvas')",
   "getImageData",
   "uploadThemeStudioWallpaper",
@@ -76,6 +77,12 @@ for (const token of [
     "Wallpaper assistant is missing " + token,
   );
 }
+
+
+need(
+  !assistant.includes("URL.createObjectURL(file)"),
+  "Wallpaper analysis must not depend on blob image URLs blocked by BajetBN CSP.",
+);
 
 for (const token of [
   "wallpaperAutoMatch",

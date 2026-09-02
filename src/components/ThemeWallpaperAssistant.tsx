@@ -45,228 +45,283 @@ function colourDistance(a: number[], b: number[]) {
   );
 }
 
-function analyseWallpaper(file: File): Promise<WallpaperAnalysis> {
+function fileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
+    const reader = new FileReader();
 
-    image.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = 48;
-        canvas.height = 48;
+    reader.onload = () => {
+      const result = reader.result;
 
-        const context = canvas.getContext('2d', {
-          willReadFrequently: true,
-        });
+      if (typeof result === 'string' && result.startsWith('data:')) {
+        resolve(result);
+        return;
+      }
 
-        if (!context) {
-          throw new Error('This browser cannot analyse the wallpaper.');
-        }
+      reject(new Error('BajetBN could not prepare this wallpaper image.'));
+    };
 
-        context.drawImage(image, 0, 0, 48, 48);
+    reader.onerror = () => {
+      reject(new Error('BajetBN could not read this wallpaper file.'));
+    };
 
-        const pixels = context.getImageData(
-          0,
-          0,
-          48,
-          48,
-        ).data;
+    reader.readAsDataURL(file);
+  });
+}
 
-        const buckets = new Map<
-          string,
-          {
-            count: number;
-            r: number;
-            g: number;
-            b: number;
-            saturation: number;
-            luminance: number;
-          }
-        >();
+async function decodeWallpaperSource(
+  file: File,
+): Promise<{
+  source: CanvasImageSource;
+  cleanup: () => void;
+}> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file);
 
-        let sampleCount = 0;
-        let luminanceSum = 0;
-        let luminanceSquaredSum = 0;
+      return {
+        source: bitmap,
+        cleanup: () => bitmap.close(),
+      };
+    } catch {
+      // Fall through to the data URL decoder for browser compatibility.
+    }
+  }
 
-        for (let index = 0; index < pixels.length; index += 4) {
-          const alpha = pixels[index + 3];
+  const dataUrl = await fileAsDataUrl(file);
+  const image = new Image();
 
-          if (alpha < 160) {
-            continue;
-          }
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => {
+      reject(new Error('BajetBN could not decode this wallpaper image.'));
+    };
+    image.src = dataUrl;
+  });
 
-          const r = pixels[index];
-          const g = pixels[index + 1];
-          const b = pixels[index + 2];
-          const maximum = Math.max(r, g, b);
-          const minimum = Math.min(r, g, b);
-          const saturation = maximum - minimum;
-          const luminance =
-            0.2126 * r
-            + 0.7152 * g
-            + 0.0722 * b;
+  return {
+    source: image,
+    cleanup: () => undefined,
+  };
+}
 
-          sampleCount += 1;
-          luminanceSum += luminance;
-          luminanceSquaredSum += luminance * luminance;
+async function analyseWallpaper(
+  file: File,
+): Promise<WallpaperAnalysis> {
+  const decoded = await decodeWallpaperSource(file);
 
-          const quantize = (value: number) =>
-            Math.min(
-              255,
-              Math.max(
-                0,
-                Math.round(value / 32) * 32,
-              ),
-            );
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 48;
+    canvas.height = 48;
 
-          const qr = quantize(r);
-          const qg = quantize(g);
-          const qb = quantize(b);
-          const key = `${qr},${qg},${qb}`;
-          const existing = buckets.get(key);
+    const context = canvas.getContext('2d', {
+      willReadFrequently: true,
+    });
 
-          if (existing) {
-            existing.count += 1;
-            existing.saturation += saturation;
-            existing.luminance += luminance;
-          } else {
-            buckets.set(key, {
-              count: 1,
-              r: qr,
-              g: qg,
-              b: qb,
-              saturation,
-              luminance,
-            });
-          }
-        }
+    if (!context) {
+      throw new Error('This browser cannot analyse the wallpaper.');
+    }
 
-        if (sampleCount === 0) {
-          throw new Error('The wallpaper does not contain enough visible colour information.');
-        }
+    context.drawImage(
+      decoded.source,
+      0,
+      0,
+      48,
+      48,
+    );
 
-        const brightness = luminanceSum / sampleCount;
-        const variance =
+    const pixels = context.getImageData(
+      0,
+      0,
+      48,
+      48,
+    ).data;
+
+    const buckets = new Map<
+      string,
+      {
+        count: number;
+        r: number;
+        g: number;
+        b: number;
+        saturation: number;
+        luminance: number;
+      }
+    >();
+
+    let sampleCount = 0;
+    let luminanceSum = 0;
+    let luminanceSquaredSum = 0;
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const alpha = pixels[index + 3];
+
+      if (alpha < 160) {
+        continue;
+      }
+
+      const r = pixels[index];
+      const g = pixels[index + 1];
+      const b = pixels[index + 2];
+      const maximum = Math.max(r, g, b);
+      const minimum = Math.min(r, g, b);
+      const saturation = maximum - minimum;
+      const luminance =
+        0.2126 * r
+        + 0.7152 * g
+        + 0.0722 * b;
+
+      sampleCount += 1;
+      luminanceSum += luminance;
+      luminanceSquaredSum += luminance * luminance;
+
+      const quantize = (value: number) =>
+        Math.min(
+          255,
           Math.max(
             0,
-            luminanceSquaredSum / sampleCount
-            - brightness * brightness,
-          );
-        const busyness = Math.sqrt(variance);
-
-        const ranked = [...buckets.values()]
-          .map((entry) => ({
-            ...entry,
-            averageSaturation:
-              entry.saturation / entry.count,
-            averageLuminance:
-              entry.luminance / entry.count,
-            score:
-              entry.count
-              * (
-                1
-                + (entry.saturation / entry.count) / 150
-              ),
-          }))
-          .sort((a, b) => b.score - a.score);
-
-        const selected: number[][] = [];
-
-        for (const entry of ranked) {
-          const colour = [entry.r, entry.g, entry.b];
-
-          if (
-            selected.some(
-              (existing) =>
-                colourDistance(existing, colour) < 64,
-            )
-          ) {
-            continue;
-          }
-
-          selected.push(colour);
-
-          if (selected.length >= 5) {
-            break;
-          }
-        }
-
-        if (selected.length === 0) {
-          selected.push([45, 212, 191]);
-        }
-
-        const palette = selected.map(
-          ([r, g, b]) => rgbToHex(r, g, b),
+            Math.round(value / 32) * 32,
+          ),
         );
 
-        const accentEntry =
-          ranked.find(
-            (entry) =>
-              entry.averageSaturation >= 42
-              && entry.averageLuminance >= 48
-              && entry.averageLuminance <= 215,
-          )
-          || ranked[0];
+      const qr = quantize(r);
+      const qg = quantize(g);
+      const qb = quantize(b);
+      const key = `${qr},${qg},${qb}`;
+      const existing = buckets.get(key);
 
-        const accent = accentEntry
-          ? rgbToHex(
-              accentEntry.r,
-              accentEntry.g,
-              accentEntry.b,
-            )
-          : palette[0];
-
-        const cardOpacity =
-          busyness >= 58
-            ? 94
-            : busyness >= 42
-              ? 90
-              : brightness >= 170
-                ? 89
-                : brightness <= 78
-                  ? 76
-                  : 84;
-
-        const blur =
-          busyness >= 58
-            ? 10
-            : busyness >= 38
-              ? 6
-              : 2;
-
-        const dim =
-          brightness >= 178
-            ? 52
-            : brightness >= 128
-              ? 40
-              : brightness >= 82
-                ? 28
-                : 18;
-
-        resolve({
-          palette,
-          accent,
-          brightness,
-          busyness,
-          cardOpacity,
-          blur,
-          dim,
+      if (existing) {
+        existing.count += 1;
+        existing.saturation += saturation;
+        existing.luminance += luminance;
+      } else {
+        buckets.set(key, {
+          count: 1,
+          r: qr,
+          g: qg,
+          b: qb,
+          saturation,
+          luminance,
         });
-      } catch (error) {
-        reject(error);
-      } finally {
-        URL.revokeObjectURL(objectUrl);
       }
-    };
+    }
 
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('BajetBN could not read this wallpaper image.'));
-    };
+    if (sampleCount === 0) {
+      throw new Error(
+        'The wallpaper does not contain enough visible colour information.',
+      );
+    }
 
-    image.src = objectUrl;
-  });
+    const brightness = luminanceSum / sampleCount;
+    const variance =
+      Math.max(
+        0,
+        luminanceSquaredSum / sampleCount
+        - brightness * brightness,
+      );
+    const busyness = Math.sqrt(variance);
+
+    const ranked = [...buckets.values()]
+      .map((entry) => ({
+        ...entry,
+        averageSaturation:
+          entry.saturation / entry.count,
+        averageLuminance:
+          entry.luminance / entry.count,
+        score:
+          entry.count
+          * (
+            1
+            + (entry.saturation / entry.count) / 150
+          ),
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const selected: number[][] = [];
+
+    for (const entry of ranked) {
+      const colour = [entry.r, entry.g, entry.b];
+
+      if (
+        selected.some(
+          (existing) =>
+            colourDistance(existing, colour) < 64,
+        )
+      ) {
+        continue;
+      }
+
+      selected.push(colour);
+
+      if (selected.length >= 5) {
+        break;
+      }
+    }
+
+    if (selected.length === 0) {
+      selected.push([45, 212, 191]);
+    }
+
+    const palette = selected.map(
+      ([r, g, b]) => rgbToHex(r, g, b),
+    );
+
+    const accentEntry =
+      ranked.find(
+        (entry) =>
+          entry.averageSaturation >= 42
+          && entry.averageLuminance >= 48
+          && entry.averageLuminance <= 215,
+      )
+      || ranked[0];
+
+    const accent = accentEntry
+      ? rgbToHex(
+          accentEntry.r,
+          accentEntry.g,
+          accentEntry.b,
+        )
+      : palette[0];
+
+    const cardOpacity =
+      busyness >= 58
+        ? 94
+        : busyness >= 42
+          ? 90
+          : brightness >= 170
+            ? 89
+            : brightness <= 78
+              ? 76
+              : 84;
+
+    const blur =
+      busyness >= 58
+        ? 10
+        : busyness >= 38
+          ? 6
+          : 2;
+
+    const dim =
+      brightness >= 178
+        ? 52
+        : brightness >= 128
+          ? 40
+          : brightness >= 82
+            ? 28
+            : 18;
+
+    return {
+      palette,
+      accent,
+      brightness,
+      busyness,
+      cardOpacity,
+      blur,
+      dim,
+    };
+  } finally {
+    decoded.cleanup();
+  }
 }
 
 export function ThemeWallpaperAssistant() {
