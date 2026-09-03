@@ -4,9 +4,10 @@ import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listSpaceMembers } from '../../repositories/collaborationRepository';
+import { getBusinessProfile } from '../../repositories/businessAdvancedRepository';
 import { getMySmePosAccess, getSmePosSettings } from '../../repositories/smePosRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
-import type { SmePosAccess, SmePosRole, SmePosSettings, Space, SpaceMember } from '../../types/models';
+import type { BusinessProfile, SmePosAccess, SmePosRole, SmePosSettings, Space, SpaceMember } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { MarketplaceConsignmentPosWorkspace } from './MarketplaceConsignmentPosWorkspace';
 import { StandardPosWorkspace } from './StandardPosWorkspace';
@@ -26,6 +27,7 @@ export function SmePosPage() {
   const [space, setSpace] = useState<Space | null>(null);
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [settings, setSettings] = useState<SmePosSettings | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [myAccess, setMyAccess] = useState<SmePosAccess | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -56,6 +58,12 @@ export function SmePosPage() {
       setSpace(nextSpace);
       setMembers(nextMembers);
       if (!nextSpace || nextSpace.type !== 'sme') return;
+
+      const nextBusinessProfile =
+        await getBusinessProfile(spaceId)
+          .catch(() => null);
+
+      setBusinessProfile(nextBusinessProfile);
 
       const owner =
         nextSpace.ownerId === user.uid;
@@ -165,6 +173,10 @@ export function SmePosPage() {
       {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
         space={space}
         settings={settings}
+        inventoryProfile={
+          businessProfile?.marketplaceInventoryProfile
+          || 'general'
+        }
         role={role}
         onChanged={load}
       /> : <StandardPosWorkspace

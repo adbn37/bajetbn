@@ -33,6 +33,7 @@ import {
   uploadSmePosItemPhoto,
 } from '../../repositories/smePosRepository';
 import type {
+  MarketplaceInventoryProfile,
   SmePosAccess,
   SmePosCommissionType,
   SmePosCustomer,
@@ -54,6 +55,7 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 interface Props {
   space: Space;
   settings: SmePosSettings;
+  inventoryProfile: MarketplaceInventoryProfile;
   role: SmePosRole;
   onChanged: () => Promise<void> | void;
 }
@@ -239,13 +241,67 @@ function ledgerKindLabel(entry: SmePosSellerLedgerEntry) {
   if (entry.kind === 'void_adjustment') return 'Void adjustment';  return 'Seller payout';
 }
 
+function hasCollectibleDetails(
+  listing: SmePosListing | null | undefined,
+) {
+  return Boolean(
+    listing?.franchise
+    || listing?.series
+    || listing?.itemNumber
+    || listing?.language
+    || listing?.variantRarity
+  );
+}
+
+function marketplaceCategoryPlaceholder(
+  profile: MarketplaceInventoryProfile,
+) {
+  if (profile === 'collectibles') {
+    return 'Trading Card, Figure, Die-cast...';
+  }
+
+  if (profile === 'fashion') {
+    return 'Clothing, Shoes, Bags...';
+  }
+
+  if (profile === 'electronics') {
+    return 'Phone, Laptop, Accessory...';
+  }
+
+  if (profile === 'toys_hobby') {
+    return 'Toy, Figure, Model Kit...';
+  }
+
+  if (profile === 'books_comics') {
+    return 'Book, Comic, Manga...';
+  }
+
+  if (profile === 'beauty') {
+    return 'Skincare, Makeup, Fragrance...';
+  }
+
+  if (profile === 'food') {
+    return 'Snack, Drink, Homemade product...';
+  }
+
+  if (profile === 'automotive') {
+    return 'Car Part, Accessory, Tool...';
+  }
+
+  if (profile === 'handmade') {
+    return 'Craft, Art, Handmade item...';
+  }
+
+  return 'Item category or type...';
+}
+
 function roleLabel(role: SmePosRole) {
   if (role === 'stock_staff') return 'Stock Staff';
   if (role === 'viewer') return 'View Only';
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
-export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onChanged }: Props) {
+export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryProfile, role, onChanged }: Props) {
   const [mySeller, setMySeller] = useState<SmePosSeller | null>(null);
   const [mySellerListings, setMySellerListings] = useState<SmePosListing[]>([]);
   const [mySellerSales, setMySellerSales] = useState<SmePosSale[]>([]);
@@ -274,6 +330,8 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
   const [listingCondition, setListingCondition] = useState<SmePosListingCondition>('new');
   const [listingPhotoFile, setListingPhotoFile] = useState<File | null>(null);
   const [removeListingPhoto, setRemoveListingPhoto] = useState(false);
+  const [showListingCollectibleDetails, setShowListingCollectibleDetails] = useState(false);
+  const [showManualCollectibleDetails, setShowManualCollectibleDetails] = useState(false);
   const [manualListingForm, setManualListingForm] = useState(false);
   const [manualListingSellerId, setManualListingSellerId] = useState<string | null>(null);
   const [manualListingSelectedSellerId, setManualListingSelectedSellerId] = useState('');
@@ -739,6 +797,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     setNewListingBarcode(value === 'new' ? barcode : '');
     setListingPhotoFile(null);
     setRemoveListingPhoto(false);
+    setShowListingCollectibleDetails(
+      inventoryProfile === 'collectibles'
+      || (
+        value !== 'new'
+        && hasCollectibleDetails(value)
+      ),
+    );
     if (value === 'new') {
       const firstSeller = sellers[0];
       setListingCommissionType(firstSeller?.defaultCommissionType || 'percentage');
@@ -766,6 +831,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     const sameSellerMatch = matches.find((item) => item.sellerId === sellerId) || null;
     const referenceMatch = sameSellerMatch || matches[0] || null;
     setManualListingPrefill(referenceMatch);
+    setShowManualCollectibleDetails(
+      inventoryProfile === 'collectibles'
+      || hasCollectibleDetails(referenceMatch),
+    );
 
     if (sameSellerMatch) {
       setManualListingCondition(sameSellerMatch.condition);
@@ -792,6 +861,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     setManualListingLookupNotice('');
     setManualListingPhotoFile(null);
     setManualListingCondition('new');
+    setShowManualCollectibleDetails(
+      inventoryProfile === 'collectibles',
+    );
     setManualListingForm(true);
     if (barcode) lookupManualListingBarcode(barcode, selectedSellerId);
   }
@@ -805,6 +877,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     setManualListingLookupNotice('');
     setManualListingPhotoFile(null);
     setManualListingCondition('new');
+    setShowManualCollectibleDetails(false);
   }
 
   function openMyInventory() {
@@ -2485,7 +2558,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         </div> : <SmePosItemPhotoField currentPhotoPath={null} file={manualListingPhotoFile} removeExisting={false} onFileChange={setManualListingPhotoFile} onRemoveExisting={() => undefined} disabled={busy} />}
         <div className="form-grid">
           <label>Item name<input name="name" defaultValue={manualListingPrefill?.name || ''} maxLength={100} required readOnly={Boolean(manualListingExistingMatch)} /></label>
-          <label>Item Genre<input name="category" defaultValue={manualListingPrefill?.category || ''} maxLength={60} placeholder="Trading Card, Toy, Figure, Die-cast..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Group / Franchise<input name="franchise" defaultValue={manualListingExistingMatch?.franchise || manualListingPrefill?.franchise || ''} maxLength={80} placeholder="Pokémon, One Piece, Hot Wheels..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Series / Set<input name="series" defaultValue={manualListingExistingMatch?.series || manualListingPrefill?.series || ''} maxLength={100} placeholder="151, OP-13, Car Culture..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Card / Item Number<input name="itemNumber" defaultValue={manualListingExistingMatch?.itemNumber || manualListingPrefill?.itemNumber || ''} maxLength={80} placeholder="199/165, HKC20..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Language<input name="language" defaultValue={manualListingExistingMatch?.language || manualListingPrefill?.language || ''} maxLength={40} placeholder="English, Japanese..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Variant / Rarity<input name="variantRarity" defaultValue={manualListingExistingMatch?.variantRarity || manualListingPrefill?.variantRarity || ''} maxLength={80} placeholder="SAR, Holo, Promo, Limited..." readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <label>Item Category / Type<input name="category" defaultValue={manualListingPrefill?.category || ''} maxLength={60} placeholder={marketplaceCategoryPlaceholder(inventoryProfile)} readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <div className="form-grid" style={{ display: showManualCollectibleDetails ? undefined : 'none' }}><label>Group / Franchise<input name="franchise" defaultValue={manualListingExistingMatch?.franchise || manualListingPrefill?.franchise || ''} maxLength={80} placeholder="Pokémon, One Piece, Hot Wheels..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Series / Set<input name="series" defaultValue={manualListingExistingMatch?.series || manualListingPrefill?.series || ''} maxLength={100} placeholder="151, OP-13, Car Culture..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Card / Item Number<input name="itemNumber" defaultValue={manualListingExistingMatch?.itemNumber || manualListingPrefill?.itemNumber || ''} maxLength={80} placeholder="199/165, HKC20..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Language<input name="language" defaultValue={manualListingExistingMatch?.language || manualListingPrefill?.language || ''} maxLength={40} placeholder="English, Japanese..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Variant / Rarity<input name="variantRarity" defaultValue={manualListingExistingMatch?.variantRarity || manualListingPrefill?.variantRarity || ''} maxLength={80} placeholder="SAR, Holo, Promo, Limited..." readOnly={Boolean(manualListingExistingMatch)} /></label></div>
+          {!showManualCollectibleDetails && !manualListingExistingMatch && <button className="button secondary" type="button" onClick={() => setShowManualCollectibleDetails(true)}>+ Add collectible details for this item</button>}
           <label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={manualListingExistingMatch ? (manualListingExistingMatch.sellingPriceMinor / 100).toFixed(2) : ''} required readOnly={Boolean(manualListingExistingMatch)} /></label>
           <label>{manualListingExistingMatch ? 'Quantity to add' : 'Quantity on hand'}<input name="quantity" type="number" min={manualListingExistingMatch ? 1 : 0} max="999999" defaultValue={1} required /></label>
           <label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={manualListingExistingMatch?.lowStockLevel ?? 1} required readOnly={Boolean(manualListingExistingMatch)} /></label>
@@ -2540,7 +2615,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     {listingForm && <Modal title={listingForm === 'new' ? 'Add seller listing' : 'Edit seller listing'} onClose={() => !busy && setListingForm(null)}><form className="form-stack" onSubmit={saveListing}>
       <SmePosItemPhotoField currentPhotoPath={listingForm === 'new' ? null : listingForm.photoPath} file={listingPhotoFile} removeExisting={removeListingPhoto} onFileChange={setListingPhotoFile} onRemoveExisting={setRemoveListingPhoto} disabled={busy} />
       {listingForm !== 'new' && !canManageListings ? <label>Seller<input value={listingForm.sellerName} readOnly /><input type="hidden" name="sellerId" value={listingForm.sellerId} /></label> : <label>Seller<select name="sellerId" defaultValue={listingForm === 'new' ? sellers[0]?.id || '' : listingForm.sellerId} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>}
-      <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Item Genre<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} placeholder="Trading Card, Toy, Figure, Die-cast..." /></label><label>Group / Franchise<input name="franchise" defaultValue={listingForm === 'new' ? '' : listingForm.franchise || ''} maxLength={80} placeholder="Pokémon, One Piece, Hot Wheels..." /></label><label>Series / Set<input name="series" defaultValue={listingForm === 'new' ? '' : listingForm.series || ''} maxLength={100} placeholder="151, OP-13, Car Culture..." /></label><label>Card / Item Number<input name="itemNumber" defaultValue={listingForm === 'new' ? '' : listingForm.itemNumber || ''} maxLength={80} placeholder="199/165, HKC20..." /></label><label>Language<input name="language" defaultValue={listingForm === 'new' ? '' : listingForm.language || ''} maxLength={40} placeholder="English, Japanese..." /></label><label>Variant / Rarity<input name="variantRarity" defaultValue={listingForm === 'new' ? '' : listingForm.variantRarity || ''} maxLength={80} placeholder="SAR, Holo, Promo, Limited..." /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Barcode (optional)<input name="barcode" defaultValue={listingForm === 'new' ? newListingBarcode : listingForm.barcode || ''} maxLength={240} autoComplete="off" /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
+      <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Item Category / Type<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} placeholder={marketplaceCategoryPlaceholder(inventoryProfile)} /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Barcode (optional)<input name="barcode" defaultValue={listingForm === 'new' ? newListingBarcode : listingForm.barcode || ''} maxLength={240} autoComplete="off" /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
+      {!showListingCollectibleDetails && <button className="button secondary" type="button" onClick={() => setShowListingCollectibleDetails(true)}>+ Add collectible details for this item</button>}
+      <div className="form-grid" style={{ display: showListingCollectibleDetails ? undefined : 'none' }}><label>Group / Franchise<input name="franchise" defaultValue={listingForm === 'new' ? '' : listingForm.franchise || ''} maxLength={80} placeholder="Pokémon, One Piece, Hot Wheels..." /></label><label>Series / Set<input name="series" defaultValue={listingForm === 'new' ? '' : listingForm.series || ''} maxLength={100} placeholder="151, OP-13, Car Culture..." /></label><label>Card / Item Number<input name="itemNumber" defaultValue={listingForm === 'new' ? '' : listingForm.itemNumber || ''} maxLength={80} placeholder="199/165, HKC20..." /></label><label>Language<input name="language" defaultValue={listingForm === 'new' ? '' : listingForm.language || ''} maxLength={40} placeholder="English, Japanese..." /></label><label>Variant / Rarity<input name="variantRarity" defaultValue={listingForm === 'new' ? '' : listingForm.variantRarity || ''} maxLength={80} placeholder="SAR, Holo, Promo, Limited..." /></label></div>
       <div className="form-grid"><label>Condition<select name="condition" value={listingCondition} onChange={(event) => setListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Condition details<input name="conditionNote" defaultValue={listingForm === 'new' ? '' : listingForm.conditionNote || ''} maxLength={120} placeholder="Optional" /></label></div>
       {canManageListings ? <><fieldset className="pos-item-type-fieldset"><legend>Commission for this listing</legend><label className={`pos-item-type-option ${listingCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={listingCommissionType === 'percentage'} onChange={() => setListingCommissionType('percentage')} /><span><strong>Percentage</strong><small>Calculated after any sale discount is shared across the cart.</small></span></label><label className={`pos-item-type-option ${listingCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={listingCommissionType === 'fixed_per_item'} onChange={() => setListingCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>Must be lower than the item selling price.</small></span></label></fieldset>{listingCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={listingForm === 'new' ? '3' : (listingForm.commissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={listingForm === 'new' ? '0.00' : (listingForm.commissionMinor / 100).toFixed(2)} required /></label>}</> : listingForm !== 'new' ? <div className="notice">Shop commission is controlled by the owner or manager: <strong>{commissionCopy(listingForm.commissionType, listingForm.commissionRateBps, listingForm.commissionMinor, listingForm.currency)}</strong>.</div> : null}
       <div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={listingForm === 'new' ? 0 : listingForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={listingForm === 'new' ? 1 : listingForm.lowStockLevel} required /></label></div>

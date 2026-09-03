@@ -17,11 +17,13 @@ import type {
   BusinessContactKind,
   BusinessIndustry,
   BusinessProfile,
+  MarketplaceInventoryProfile,
 } from '../types/models';
 
 export interface BusinessProfileInput {
   businessName: string;
   industry: BusinessIndustry;
+  marketplaceInventoryProfile?: MarketplaceInventoryProfile;
   registrationNumber: string;
   address: string;
   phone: string;
@@ -106,12 +108,19 @@ export async function saveBusinessProfile(
   );
 
   const existing = await getDoc(ref);
+  const existingProfile = existing.exists()
+    ? existing.data() as BusinessProfile
+    : null;
 
   const shared = {
     spaceId,
     ownerId: uid,
     businessName: input.businessName.trim(),
     industry: input.industry,
+    marketplaceInventoryProfile:
+      input.marketplaceInventoryProfile
+      || existingProfile?.marketplaceInventoryProfile
+      || 'general',
     registrationNumber:
       input.registrationNumber.trim(),
     address: input.address.trim(),

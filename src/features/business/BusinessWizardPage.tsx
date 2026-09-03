@@ -32,6 +32,7 @@ import {
 import type {
   BusinessIndustry,
   BusinessProfile,
+  MarketplaceInventoryProfile,
   Space,
 } from '../../types/models';
 
@@ -85,6 +86,23 @@ const industries: IndustryOption[] = [
     value: 'other',
     label: 'Other business',
   },
+];
+
+const marketplaceInventoryProfiles: Array<{
+  value: MarketplaceInventoryProfile;
+  label: string;
+}> = [
+  { value: 'general', label: 'General / Mixed items' },
+  { value: 'collectibles', label: 'Trading Cards & Collectibles' },
+  { value: 'fashion', label: 'Fashion / Clothing' },
+  { value: 'electronics', label: 'Electronics' },
+  { value: 'toys_hobby', label: 'Toys / Hobby' },
+  { value: 'books_comics', label: 'Books / Comics' },
+  { value: 'beauty', label: 'Beauty / Personal Care' },
+  { value: 'food', label: 'Food / Homemade Products' },
+  { value: 'automotive', label: 'Automotive / Parts' },
+  { value: 'handmade', label: 'Handmade / Crafts' },
+  { value: 'other', label: 'Other / Custom' },
 ];
 
 const setupPlans:
@@ -195,6 +213,10 @@ function profileInput(
 
     industry:
       profile?.industry
+      || 'general',
+
+    marketplaceInventoryProfile:
+      profile?.marketplaceInventoryProfile
       || 'general',
 
     registrationNumber:
@@ -636,6 +658,49 @@ export function BusinessWizardPage() {
                   )}
                 </select>
               </label>
+
+              {form.industry === 'marketplace' && (
+                <label className="span-2">
+                  What does this marketplace mainly sell?
+
+                  <select
+                    value={
+                      form.marketplaceInventoryProfile
+                      || 'general'
+                    }
+                    onChange={(event) => {
+                      const selectedProfile =
+                        marketplaceInventoryProfiles.find(
+                          (option) =>
+                            option.value === event.target.value,
+                        )?.value
+                        || 'general';
+
+                      updateField(
+                        'marketplaceInventoryProfile',
+                        selectedProfile,
+                      );
+                    }}
+                  >
+                    {marketplaceInventoryProfiles.map(
+                      (option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                        >
+                          {option.label}
+                        </option>
+                      ),
+                    )}
+                  </select>
+
+                  <small>
+                    BajetBN uses this as the default inventory
+                    profile. You can change it later in
+                    Business Setup.
+                  </small>
+                </label>
+              )}
 
               <div className="notice span-2">
                 BajetBN will recommend the most useful Business tools based on how this Business operates. All Business records remain attached to this Business Space.

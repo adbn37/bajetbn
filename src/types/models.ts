@@ -488,6 +488,19 @@ export type BusinessIndustry =
   | 'transport_delivery'
   | 'other';
 
+export type MarketplaceInventoryProfile =
+  | 'general'
+  | 'collectibles'
+  | 'fashion'
+  | 'electronics'
+  | 'toys_hobby'
+  | 'books_comics'
+  | 'beauty'
+  | 'food'
+  | 'automotive'
+  | 'handmade'
+  | 'other';
+
 export type BusinessContactKind =
   | 'customer'
   | 'vendor'
@@ -499,6 +512,7 @@ export interface BusinessProfile {
   ownerId: string;
   businessName: string;
   industry: BusinessIndustry;
+  marketplaceInventoryProfile?: MarketplaceInventoryProfile;
   registrationNumber: string;
   address: string;
   phone: string;

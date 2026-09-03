@@ -591,6 +591,7 @@ service cloud.firestore {
         && isSpaceOwner(spaceId)
         && request.resource.data.keys().hasOnly([
           'spaceId', 'ownerId', 'businessName', 'industry',
+          'marketplaceInventoryProfile',
           'registrationNumber', 'address', 'phone', 'email',
           'fiscalYearStartMonth', 'invoicePrefix',
           'taxEnabled', 'taxName', 'taxRateBps',
@@ -605,6 +606,11 @@ service cloud.firestore {
         && request.resource.data.industry in [
           'general', 'retail', 'service', 'marketplace',
           'rental', 'transport_delivery', 'other'
+        ]
+        && request.resource.data.marketplaceInventoryProfile in [
+          'general', 'collectibles', 'fashion', 'electronics',
+          'toys_hobby', 'books_comics', 'beauty', 'food',
+          'automotive', 'handmade', 'other'
         ]
         && request.resource.data.registrationNumber is string
         && request.resource.data.registrationNumber.size() <= 100
@@ -639,7 +645,9 @@ service cloud.firestore {
         && request.resource.data.spaceId == resource.data.spaceId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'businessName', 'industry', 'registrationNumber',
+          'businessName', 'industry',
+          'marketplaceInventoryProfile',
+          'registrationNumber',
           'address', 'phone', 'email',
           'fiscalYearStartMonth', 'invoicePrefix',
           'taxEnabled', 'taxName', 'taxRateBps',
@@ -653,6 +661,14 @@ service cloud.firestore {
           'general', 'retail', 'service', 'marketplace',
           'rental', 'transport_delivery', 'other'
         ]
+        && (
+          !('marketplaceInventoryProfile' in request.resource.data)
+          || request.resource.data.marketplaceInventoryProfile in [
+            'general', 'collectibles', 'fashion', 'electronics',
+            'toys_hobby', 'books_comics', 'beauty', 'food',
+            'automotive', 'handmade', 'other'
+          ]
+        )
         && request.resource.data.fiscalYearStartMonth is int
         && request.resource.data.fiscalYearStartMonth >= 1
         && request.resource.data.fiscalYearStartMonth <= 12

@@ -29,7 +29,7 @@ for (const token of [
 }
 
 for (const token of [
-  "Item Genre",
+  "Item Category / Type",
   "Group / Franchise",
   "Series / Set",
   "Card / Item Number",
