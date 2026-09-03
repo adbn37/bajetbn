@@ -407,6 +407,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       return !term || [
         item.name,
         item.category,
+        item.franchise,
+        item.series,
+        item.itemNumber,
+        item.language,
+        item.variantRarity,
         item.sku,
         item.barcode,
         item.sellerName,
@@ -424,7 +429,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         ? listings
         : listings.filter((item) => item.sellerId === inventoryScope);
     const term = search.trim().toLowerCase();
-    return source.filter((item) => !term || [item.name, item.category, item.sku, item.barcode, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
+    return source.filter((item) => !term || [item.name, item.category, item.franchise, item.series, item.itemNumber, item.language, item.variantRarity, item.sku, item.barcode, item.sellerName, conditionLabels[item.condition]].some((value) => value?.toLowerCase().includes(term)));
   }, [inventoryScope, listings, mySellerListings, search]);
 
   const inventoryOutOfStockCount = inventoryListings.filter(
@@ -860,6 +865,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         photoPath,
         note: String(form.get('note') || ''),
         condition: String(form.get('condition') || 'new') as SmePosListingCondition,
+        franchise: String(form.get('franchise') || ''),
+        series: String(form.get('series') || ''),
+        itemNumber: String(form.get('itemNumber') || ''),
+        language: String(form.get('language') || ''),
+        variantRarity: String(form.get('variantRarity') || ''),
         conditionNote: String(form.get('conditionNote') || ''),
         sellingPriceMinor: toMinorUnits(String(form.get('sellingPrice') || '')),
         commissionType,
@@ -919,6 +929,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         photoPath: uploadedPhotoPath,
         note: String(form.get('note') || ''),
         condition: manualListingCondition,
+        franchise: String(form.get('franchise') || ''),
+        series: String(form.get('series') || ''),
+        itemNumber: String(form.get('itemNumber') || ''),
+        language: String(form.get('language') || ''),
+        variantRarity: String(form.get('variantRarity') || ''),
         conditionNote: String(form.get('conditionNote') || ''),
         sellingPriceMinor: toMinorUnits(String(form.get('sellingPrice') || '')),
         quantityOnHand: Number(form.get('quantity') || 0),
@@ -2191,7 +2206,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           <input className="sme-pos-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search my item, category, condition, SKU or barcode" />
           <div className="sme-pos-product-grid">{visibleMySellerListings.filter((listing) => {
             const term = search.trim().toLowerCase();
-            return !term || [listing.name, listing.category, listing.sku, listing.barcode, conditionLabels[listing.condition]].some((value) => value?.toLowerCase().includes(term));
+            return !term || [listing.name, listing.category, listing.franchise, listing.series, listing.itemNumber, listing.language, listing.variantRarity, listing.sku, listing.barcode, conditionLabels[listing.condition]].some((value) => value?.toLowerCase().includes(term));
           }).map((listing) => {
             const available = availableQuantity(listing);
             const outOfStock = available < 1;
@@ -2470,7 +2485,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         </div> : <SmePosItemPhotoField currentPhotoPath={null} file={manualListingPhotoFile} removeExisting={false} onFileChange={setManualListingPhotoFile} onRemoveExisting={() => undefined} disabled={busy} />}
         <div className="form-grid">
           <label>Item name<input name="name" defaultValue={manualListingPrefill?.name || ''} maxLength={100} required readOnly={Boolean(manualListingExistingMatch)} /></label>
-          <label>Category<input name="category" defaultValue={manualListingPrefill?.category || ''} maxLength={60} readOnly={Boolean(manualListingExistingMatch)} /></label>
+          <label>Item Genre<input name="category" defaultValue={manualListingPrefill?.category || ''} maxLength={60} placeholder="Trading Card, Toy, Figure, Die-cast..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Group / Franchise<input name="franchise" defaultValue={manualListingExistingMatch?.franchise || manualListingPrefill?.franchise || ''} maxLength={80} placeholder="Pokémon, One Piece, Hot Wheels..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Series / Set<input name="series" defaultValue={manualListingExistingMatch?.series || manualListingPrefill?.series || ''} maxLength={100} placeholder="151, OP-13, Car Culture..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Card / Item Number<input name="itemNumber" defaultValue={manualListingExistingMatch?.itemNumber || manualListingPrefill?.itemNumber || ''} maxLength={80} placeholder="199/165, HKC20..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Language<input name="language" defaultValue={manualListingExistingMatch?.language || manualListingPrefill?.language || ''} maxLength={40} placeholder="English, Japanese..." readOnly={Boolean(manualListingExistingMatch)} /></label><label>Variant / Rarity<input name="variantRarity" defaultValue={manualListingExistingMatch?.variantRarity || manualListingPrefill?.variantRarity || ''} maxLength={80} placeholder="SAR, Holo, Promo, Limited..." readOnly={Boolean(manualListingExistingMatch)} /></label>
           <label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={manualListingExistingMatch ? (manualListingExistingMatch.sellingPriceMinor / 100).toFixed(2) : ''} required readOnly={Boolean(manualListingExistingMatch)} /></label>
           <label>{manualListingExistingMatch ? 'Quantity to add' : 'Quantity on hand'}<input name="quantity" type="number" min={manualListingExistingMatch ? 1 : 0} max="999999" defaultValue={1} required /></label>
           <label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={manualListingExistingMatch?.lowStockLevel ?? 1} required readOnly={Boolean(manualListingExistingMatch)} /></label>
@@ -2525,7 +2540,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
     {listingForm && <Modal title={listingForm === 'new' ? 'Add seller listing' : 'Edit seller listing'} onClose={() => !busy && setListingForm(null)}><form className="form-stack" onSubmit={saveListing}>
       <SmePosItemPhotoField currentPhotoPath={listingForm === 'new' ? null : listingForm.photoPath} file={listingPhotoFile} removeExisting={removeListingPhoto} onFileChange={setListingPhotoFile} onRemoveExisting={setRemoveListingPhoto} disabled={busy} />
       {listingForm !== 'new' && !canManageListings ? <label>Seller<input value={listingForm.sellerName} readOnly /><input type="hidden" name="sellerId" value={listingForm.sellerId} /></label> : <label>Seller<select name="sellerId" defaultValue={listingForm === 'new' ? sellers[0]?.id || '' : listingForm.sellerId} required>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label>}
-      <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Category<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Barcode (optional)<input name="barcode" defaultValue={listingForm === 'new' ? newListingBarcode : listingForm.barcode || ''} maxLength={240} autoComplete="off" /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
+      <div className="form-grid"><label>Item name<input name="name" defaultValue={listingForm === 'new' ? '' : listingForm.name} maxLength={100} required /></label><label>Item Genre<input name="category" defaultValue={listingForm === 'new' ? '' : listingForm.category || ''} maxLength={60} placeholder="Trading Card, Toy, Figure, Die-cast..." /></label><label>Group / Franchise<input name="franchise" defaultValue={listingForm === 'new' ? '' : listingForm.franchise || ''} maxLength={80} placeholder="Pokémon, One Piece, Hot Wheels..." /></label><label>Series / Set<input name="series" defaultValue={listingForm === 'new' ? '' : listingForm.series || ''} maxLength={100} placeholder="151, OP-13, Car Culture..." /></label><label>Card / Item Number<input name="itemNumber" defaultValue={listingForm === 'new' ? '' : listingForm.itemNumber || ''} maxLength={80} placeholder="199/165, HKC20..." /></label><label>Language<input name="language" defaultValue={listingForm === 'new' ? '' : listingForm.language || ''} maxLength={40} placeholder="English, Japanese..." /></label><label>Variant / Rarity<input name="variantRarity" defaultValue={listingForm === 'new' ? '' : listingForm.variantRarity || ''} maxLength={80} placeholder="SAR, Holo, Promo, Limited..." /></label><label>SKU (optional)<input name="sku" defaultValue={listingForm === 'new' ? '' : listingForm.sku || ''} maxLength={50} /></label><label>Barcode (optional)<input name="barcode" defaultValue={listingForm === 'new' ? newListingBarcode : listingForm.barcode || ''} maxLength={240} autoComplete="off" /></label><label>Selling price (BND)<input name="sellingPrice" inputMode="decimal" defaultValue={listingForm === 'new' ? '' : (listingForm.sellingPriceMinor / 100).toFixed(2)} required /></label></div>
       <div className="form-grid"><label>Condition<select name="condition" value={listingCondition} onChange={(event) => setListingCondition(event.target.value as SmePosListingCondition)}>{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Condition details<input name="conditionNote" defaultValue={listingForm === 'new' ? '' : listingForm.conditionNote || ''} maxLength={120} placeholder="Optional" /></label></div>
       {canManageListings ? <><fieldset className="pos-item-type-fieldset"><legend>Commission for this listing</legend><label className={`pos-item-type-option ${listingCommissionType === 'percentage' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="percentage" checked={listingCommissionType === 'percentage'} onChange={() => setListingCommissionType('percentage')} /><span><strong>Percentage</strong><small>Calculated after any sale discount is shared across the cart.</small></span></label><label className={`pos-item-type-option ${listingCommissionType === 'fixed_per_item' ? 'selected' : ''}`}><input type="radio" name="commissionType" value="fixed_per_item" checked={listingCommissionType === 'fixed_per_item'} onChange={() => setListingCommissionType('fixed_per_item')} /><span><strong>Fixed amount per item</strong><small>Must be lower than the item selling price.</small></span></label></fieldset>{listingCommissionType === 'percentage' ? <label>Commission percentage<input name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue={listingForm === 'new' ? '3' : (listingForm.commissionRateBps / 100).toFixed(2)} required /></label> : <label>Commission per item (BND)<input name="commissionFixed" inputMode="decimal" defaultValue={listingForm === 'new' ? '0.00' : (listingForm.commissionMinor / 100).toFixed(2)} required /></label>}</> : listingForm !== 'new' ? <div className="notice">Shop commission is controlled by the owner or manager: <strong>{commissionCopy(listingForm.commissionType, listingForm.commissionRateBps, listingForm.commissionMinor, listingForm.currency)}</strong>.</div> : null}
       <div className="form-grid"><label>Available quantity<input name="quantity" type="number" min="0" max="999999" defaultValue={listingForm === 'new' ? 0 : listingForm.quantityOnHand} required /></label><label>Low stock alert<input name="lowStock" type="number" min="0" max="999999" defaultValue={listingForm === 'new' ? 1 : listingForm.lowStockLevel} required /></label></div>

@@ -160,6 +160,11 @@ export interface SmePosListing {
   sellerUid?: string | null;
   name: string;
   category?: string;
+  franchise?: string;
+  series?: string;
+  itemNumber?: string;
+  language?: string;
+  variantRarity?: string;
   sku?: string;
   barcode?: string;
   photoPath?: string | null;

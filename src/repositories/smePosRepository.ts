@@ -730,6 +730,11 @@ export async function saveMarketplaceListing(input: {
   sellerId: string;
   name: string;
   category?: string;
+  franchise?: string;
+  series?: string;
+  itemNumber?: string;
+  language?: string;
+  variantRarity?: string;
   sku?: string;
   barcode?: string;
   photoPath?: string | null;
@@ -753,6 +758,11 @@ export async function registerExistingMarketplaceListing(input: {
   sellerId: string;
   name: string;
   category?: string;
+  franchise?: string;
+  series?: string;
+  itemNumber?: string;
+  language?: string;
+  variantRarity?: string;
   sku?: string;
   barcode?: string;
   photoPath?: string | null;

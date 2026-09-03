@@ -6279,6 +6279,11 @@ export const saveMarketplaceListing = onCall({ region, cpu: 'gcf_gen1', concurre
   const sellerId = stringValue(request.data?.sellerId, 'Seller', 80);
   const name = stringValue(request.data?.name, 'Item name', 100);
   const category = optionalString(request.data?.category, 60);
+  const franchise = optionalString(request.data?.franchise, 80);
+  const series = optionalString(request.data?.series, 100);
+  const itemNumber = optionalString(request.data?.itemNumber, 80);
+  const language = optionalString(request.data?.language, 40);
+  const variantRarity = optionalString(request.data?.variantRarity, 80);
   const sku = optionalString(request.data?.sku, 50);
   const { barcode, barcodeKey } = smePosBarcode(request.data?.barcode);
   const photoPathProvided = Object.prototype.hasOwnProperty.call(request.data || {}, 'photoPath');
@@ -6342,7 +6347,16 @@ export const saveMarketplaceListing = onCall({ region, cpu: 'gcf_gen1', concurre
     transaction.set(listingRef, {
       displayId: existing.displayId || displayId('LST'), spaceId, ownerId: context.settings.ownerId,
       sellerId, sellerName: seller.data()?.name || 'Seller', sellerUid: seller.data()?.linkedUid || null,
-      name, category, sku, barcode, barcodeKey,
+      name,
+      category,
+      franchise,
+      series,
+      itemNumber,
+      language,
+      variantRarity,
+      sku,
+      barcode,
+      barcodeKey,
       photoPath: photoPathProvided ? photoPath : (existing.photoPath || null),
       note, condition, conditionNote, sellingPriceMinor, currency: context.settings.currency || 'BND',
       commissionType: canManageAnySellerListing ? commission.commissionType : existing.commissionType,
@@ -6369,6 +6383,11 @@ export const registerExistingMarketplaceListing = onCall({ region, cpu: 'gcf_gen
   const sellerId = stringValue(request.data?.sellerId, 'Seller', 80);
   const name = stringValue(request.data?.name, 'Item name', 100);
   const category = optionalString(request.data?.category, 60);
+  const franchise = optionalString(request.data?.franchise, 80);
+  const series = optionalString(request.data?.series, 100);
+  const itemNumber = optionalString(request.data?.itemNumber, 80);
+  const language = optionalString(request.data?.language, 40);
+  const variantRarity = optionalString(request.data?.variantRarity, 80);
   const sku = optionalString(request.data?.sku, 50);
   const { barcode, barcodeKey } = smePosBarcode(request.data?.barcode);
   const photoPath = smePosItemPhotoPath(request.data?.photoPath, spaceId);
@@ -6435,6 +6454,11 @@ export const registerExistingMarketplaceListing = onCall({ region, cpu: 'gcf_gen
       sellerUid: seller.data()?.linkedUid || null,
       name,
       category,
+      franchise,
+      series,
+      itemNumber,
+      language,
+      variantRarity,
       sku,
       barcode,
       barcodeKey,
