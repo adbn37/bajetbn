@@ -47,6 +47,7 @@ for (const token of [
   '&& !showRegisterOutOfStock',
   'showInventoryOutOfStock || Boolean(search.trim())',
   'marketplace-register-price',
+  'className="marketplace-register-thumb"',
   'Low stock',
 ]) need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', token);
 
@@ -98,6 +99,9 @@ for (const token of [
   '.marketplace-report-thumb',
   '.marketplace-register-price',
   '.marketplace-pos-workspace .sme-pos-checkout-product-grid',
+  'grid-template-columns: repeat(3, minmax(0, 1fr));',
+  'max-height: none !important;',
+  'aspect-ratio: 1 / 1 !important;',
   'border-top: 5px solid var(--seller-color) !important;',
 ]) need('src/styles/global.css', token);
 

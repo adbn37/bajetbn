@@ -1775,7 +1775,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
                   <SmePosItemPhoto
                     photoPath={listing.photoPath}
                     name={listing.name}
-                    className="register-thumb marketplace-register-thumb"
+                    className="marketplace-register-thumb"
                   />
                 )}
 

@@ -10527,6 +10527,59 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
 }
 
 
+/* Marketplace Register uses Inventory card geometry */
+.marketplace-pos-workspace .sme-pos-checkout-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.marketplace-pos-workspace .sme-pos-checkout-products {
+  width: 100%;
+  min-width: 0;
+}
+
+.marketplace-pos-workspace .sme-pos-checkout-product-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.marketplace-pos-workspace
+.sme-pos-checkout-product-grid
+.marketplace-register-item {
+  width: 100%;
+  min-width: 0;
+}
+
+.marketplace-pos-workspace
+.sme-pos-checkout-product-grid
+.marketplace-register-item
+.marketplace-register-price {
+  color: var(--text) !important;
+}
+
+.marketplace-pos-workspace
+.sme-pos-checkout-product-grid
+.marketplace-register-item
+.marketplace-seller-badge {
+  color:
+    color-mix(
+      in srgb,
+      var(--seller-color) 78%,
+      white
+    ) !important;
+}
+
+@media (max-width: 1050px) {
+  .marketplace-pos-workspace .sme-pos-checkout-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .marketplace-pos-workspace .sme-pos-checkout-product-grid,
+  .marketplace-pos-workspace .sme-pos-product-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
 /* Marketplace seller colour UX v1 */
 .marketplace-seller-profile-card,
 .marketplace-inventory-card,
@@ -10628,7 +10681,8 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   width: 100% !important;
   height: auto !important;
   max-width: none !important;
-  aspect-ratio: 1 / 1;
+  max-height: none !important;
+  aspect-ratio: 1 / 1 !important;
   box-sizing: border-box;
   padding: 0.55rem;
   object-fit: contain !important;
