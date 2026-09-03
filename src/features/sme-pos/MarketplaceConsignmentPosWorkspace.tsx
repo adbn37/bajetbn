@@ -396,7 +396,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
         item.quantityOnHand - (item.reservedQuantity || 0),
       );
 
-      if (!showRegisterOutOfStock && available < 1) {
+      if (
+        !term
+        && !showRegisterOutOfStock
+        && available < 1
+      ) {
         return false;
       }
 
@@ -431,9 +435,10 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
       ) < 1,
   ).length;
 
-  const visibleInventoryListings = showInventoryOutOfStock
-    ? inventoryListings
-    : inventoryListings.filter(
+  const visibleInventoryListings =
+    showInventoryOutOfStock || Boolean(search.trim())
+      ? inventoryListings
+      : inventoryListings.filter(
         (item) =>
           Math.max(
             0,
@@ -1752,6 +1757,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
           <div className="sme-pos-checkout-product-grid">{filteredListings.map((listing) => {
             const available = availableQuantity(listing);
             const outOfStock = available < 1;
+            const low =
+              available > 0
+              && available <= listing.lowStockLevel;
             return (
               <button
                 type="button"
@@ -1772,14 +1780,41 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, role, onCh
                 )}
 
                 <span className="marketplace-register-item-copy">
+                  <small className="marketplace-seller-badge">
+                    {listing.sellerName}
+                  </small>
+
                   <strong>{listing.name}</strong>
-                  <span>{formatMoney(listing.sellingPriceMinor, listing.currency)}</span>
-                  <small className="marketplace-seller-badge">{listing.sellerName}</small>
-                  <small>{conditionLabels[listing.condition]}</small>
+
                   <small>
+                    {conditionLabels[listing.condition]}
+                    {' - '}
+                    {listing.sku || listing.displayId}
+                  </small>
+
+                  <span className="marketplace-register-price">
+                    {formatMoney(
+                      listing.sellingPriceMinor,
+                      listing.currency,
+                    )}
+                  </span>
+
+                  <small
+                    className={
+                      outOfStock
+                        ? 'stock-danger'
+                        : low
+                          ? 'stock-warning'
+                          : ''
+                    }
+                  >
                     {outOfStock
-                      ? (listing.reservedQuantity ? 'Reserved / unavailable' : 'Out of stock')
-                      : `${available} available${listing.reservedQuantity ? ` - ${listing.reservedQuantity} reserved` : ''}`}
+                      ? (
+                          listing.reservedQuantity
+                            ? 'Reserved / unavailable'
+                            : 'Out of stock'
+                        )
+                      : `${available} available${low ? ' - Low stock' : ''}${listing.reservedQuantity ? ` - ${listing.reservedQuantity} reserved` : ''}`}
                   </small>
                 </span>
               </button>

@@ -10603,20 +10603,24 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   display: flex !important;
   flex-direction: column;
   align-items: stretch !important;
-  gap: 0 !important;
+  gap: 0.5rem !important;
   min-height: 0;
-  padding: 0 !important;
+  padding: 0 0 0.75rem !important;
   overflow: hidden;
   text-align: left;
-  border-color: color-mix(in srgb, var(--seller-color) 34%, var(--border)) !important;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--seller-color) 6%, transparent), transparent 42%);
+  border-top: 5px solid var(--seller-color) !important;
+  border-right-color:
+    color-mix(in srgb, var(--seller-color) 28%, var(--border)) !important;
+  border-bottom-color:
+    color-mix(in srgb, var(--seller-color) 28%, var(--border)) !important;
+  border-left-color:
+    color-mix(in srgb, var(--seller-color) 28%, var(--border)) !important;
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .marketplace-register-item > .marketplace-seller-strip {
-  inset: 0 0 auto 0;
-  width: auto;
-  height: 5px;
-  border-radius: inherit inherit 0 0;
+  display: none;
 }
 
 .sme-pos-item-photo.marketplace-register-thumb {
@@ -10626,12 +10630,17 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   max-width: none !important;
   aspect-ratio: 1 / 1;
   box-sizing: border-box;
-  padding: 0.5rem;
+  padding: 0.55rem;
   object-fit: contain !important;
   border: 0 !important;
   border-bottom: 2px solid var(--seller-color) !important;
   border-radius: 0 !important;
-  background: color-mix(in srgb, var(--seller-color) 6%, rgba(255,255,255,0.025));
+  background:
+    color-mix(
+      in srgb,
+      var(--seller-color) 6%,
+      rgba(255,255,255,0.025)
+    );
 }
 
 .marketplace-register-item-copy {
@@ -10639,13 +10648,23 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.7rem 0.72rem 0.75rem;
+  gap: 0.22rem;
+  margin-right: 0.75rem;
+  margin-left: 0.75rem;
+  padding: 0;
 }
 
 .marketplace-register-item-copy > strong {
-  line-height: 1.16;
+  margin: 0.15rem 0 0;
+  line-height: 1.18;
   overflow-wrap: anywhere;
+}
+
+.marketplace-register-price {
+  margin-top: 0.18rem;
+  font-size: 1rem;
+  font-weight: 850;
+  color: var(--text);
 }
 
 .marketplace-inventory-filter {
@@ -10746,13 +10765,20 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
 }
 
 @media (max-width: 760px) {
+  .marketplace-pos-workspace .sme-pos-checkout-product-grid,
+  .marketplace-pos-workspace .sme-pos-product-grid {
+    grid-template-columns: 1fr !important;
+  }
+
   .marketplace-inventory-card > :not(.marketplace-inventory-thumb) {
     margin-right: 0.65rem;
     margin-left: 0.65rem;
   }
 
   .marketplace-register-item-copy {
-    padding: 0.62rem 0.62rem 0.68rem;
+    margin-right: 0.65rem;
+    margin-left: 0.65rem;
+    padding: 0;
   }
 
   .marketplace-cart-backdrop {

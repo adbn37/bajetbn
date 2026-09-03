@@ -43,6 +43,11 @@ for (const token of [
   'marketplace-floating-cart',
   'marketplace-report-thumb',
   'sellerColourPalette',
+  '!term',
+  '&& !showRegisterOutOfStock',
+  'showInventoryOutOfStock || Boolean(search.trim())',
+  'marketplace-register-price',
+  'Low stock',
 ]) need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', token);
 
 for (const token of [
@@ -91,6 +96,9 @@ for (const token of [
   '.marketplace-floating-cart',
   '.marketplace-cart-drawer',
   '.marketplace-report-thumb',
+  '.marketplace-register-price',
+  '.marketplace-pos-workspace .sme-pos-checkout-product-grid',
+  'border-top: 5px solid var(--seller-color) !important;',
 ]) need('src/styles/global.css', token);
 
 for (const token of [
