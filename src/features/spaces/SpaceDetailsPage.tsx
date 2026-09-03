@@ -874,6 +874,26 @@ export function SpaceDetailsPage() {
       currentMember={currentMember}
     />}
       {activeTab === 'settings' && currentMember?.role === 'owner' && <>
+      {space.type === 'sme' && (
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Business Setup</h2>
+              <p className="muted">
+                Change the business type, marketplace inventory profile and operating setup for this Business Space.
+              </p>
+            </div>
+
+            <Link
+              className="button secondary"
+              to={`/spaces/${space.id}/business/setup`}
+            >
+              Open Business Setup
+            </Link>
+          </div>
+        </section>
+      )}
+
       <SpaceAvatarSettings space={space} onSaved={load} />
       {space.type === 'custom' && <CustomSpaceModuleSettings space={space} onSaved={load} />}
       <SpaceLifecyclePanel space={space} onFinished={() => navigate('/spaces')} />

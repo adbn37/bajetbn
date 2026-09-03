@@ -764,6 +764,14 @@ export function SpaceActionHub({
 
               {space.type === 'sme' && (
                 <>
+                  {isBusinessOwner && (
+                    <ShortcutLink
+                      to={`/spaces/${space.id}/business/setup`}
+                      label="Business Setup"
+                      onClick={() => setSpaceMoreOpen(false)}
+                    />
+                  )}
+
                   <ShortcutLink
                     to={`/spaces/${space.id}/business/industry`}
                     label="Industry Workflow"
