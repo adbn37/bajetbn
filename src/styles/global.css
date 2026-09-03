@@ -10559,16 +10559,16 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
 
 .marketplace-inventory-card {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
   align-items: start;
-  gap: 0.7rem;
-  min-height: 104px;
+  gap: 0.8rem;
+  min-height: 118px;
 }
 
 .sme-pos-item-photo.marketplace-inventory-thumb {
-  width: 76px !important;
-  height: 76px !important;
-  max-width: 76px !important;
+  width: 96px !important;
+  height: 96px !important;
+  max-width: 96px !important;
   object-fit: contain !important;
   border: 2px solid var(--seller-color) !important;
   border-radius: 0.8rem;
@@ -10577,10 +10577,10 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
 
 .marketplace-register-item {
   display: grid !important;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
   align-items: start !important;
-  gap: 0.75rem !important;
-  min-height: 96px;
+  gap: 0.85rem !important;
+  min-height: 118px;
   padding: 0.75rem 0.8rem 0.75rem 0.95rem !important;
   text-align: left;
   border-color: color-mix(in srgb, var(--seller-color) 28%, var(--border)) !important;
@@ -10593,9 +10593,9 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
 }
 
 .sme-pos-item-photo.marketplace-register-thumb {
-  width: 72px !important;
-  height: 72px !important;
-  max-width: 72px !important;
+  width: 96px !important;
+  height: 96px !important;
+  max-width: 96px !important;
   object-fit: contain !important;
   border: 2px solid var(--seller-color) !important;
   border-radius: 0.75rem;
@@ -10708,23 +10708,23 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
 
 @media (max-width: 760px) {
   .marketplace-inventory-card {
-    grid-template-columns: 62px minmax(0, 1fr);
+    grid-template-columns: 84px minmax(0, 1fr);
   }
 
   .sme-pos-item-photo.marketplace-inventory-thumb {
-    width: 62px !important;
-    height: 62px !important;
-    max-width: 62px !important;
+    width: 84px !important;
+    height: 84px !important;
+    max-width: 84px !important;
   }
 
   .marketplace-register-item {
-    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-columns: 84px minmax(0, 1fr);
   }
 
   .sme-pos-item-photo.marketplace-register-thumb {
-    width: 58px !important;
-    height: 58px !important;
-    max-width: 58px !important;
+    width: 84px !important;
+    height: 84px !important;
+    max-width: 84px !important;
   }
 
   .marketplace-cart-backdrop {
