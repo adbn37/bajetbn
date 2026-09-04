@@ -57,7 +57,7 @@ const industries: Array<{
   { value: 'general', label: 'General business' },
   { value: 'retail', label: 'Retail / shop' },
   { value: 'service', label: 'Services' },
-  { value: 'marketplace', label: 'Marketplace / consignment' },
+  { value: 'marketplace', label: 'Multi-Seller Shop' },
   { value: 'rental', label: 'Rental' },
   { value: 'transport_delivery', label: 'Transport / delivery' },
   { value: 'other', label: 'Other' },
@@ -109,7 +109,7 @@ export function BusinessAdvancedPage() {
     useState<BusinessContact[]>([]);
 
   const [view, setView] =
-    useState<View>('overview');
+    useState<View>('contacts');
 
   const [loading, setLoading] =
     useState(true);
@@ -376,9 +376,9 @@ export function BusinessAdvancedPage() {
   return (
     <main className="page business-admin-page">
       <PageHeader
-        eyebrow="Advanced Business"
+        eyebrow="Business"
         title={space.name}
-        description="Reusable business details and contacts for accounting, invoices, tax and payroll."
+        description="Business details and contacts."
         action={
           <Link
             className="button secondary"
@@ -407,6 +407,7 @@ export function BusinessAdvancedPage() {
       >
         <button
           type="button"
+          hidden
           className={
             view === 'overview'
               ? 'active'

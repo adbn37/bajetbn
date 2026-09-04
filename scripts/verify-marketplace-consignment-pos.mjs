@@ -27,7 +27,7 @@ for (const token of [
   'Add seller',
   'Add listing',
   'Shared register',
-  'Sell items from multiple sellers.',
+  'Sell shop and seller items.',
   'Seller money waiting',
   'My balance',
   'Seller area',

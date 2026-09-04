@@ -10,7 +10,6 @@ import {
   businessSpaceIdsForAccount,
   createAccount,
   listAccountAccess,
-  listAllAccounts,
   listAllPersonalAccounts,
   listAccountsForOwnerSpace,
   listAccountsForSpace,
@@ -116,16 +115,11 @@ export function AccountsPage({
         ownedAccounts,
         nextSpaces,
       ] = await Promise.all([
-        listAllAccounts(user.uid),
+        listAllPersonalAccounts(user.uid),
         listSpaces(user.uid),
       ]);
 
-      const sharedSmeSpaces = nextSpaces.filter(
-        (space) =>
-          space.type === 'sme'
-          && space.ownerId !== user.uid
-          && !space.archivedAt,
-      );
+      const sharedSmeSpaces: Space[] = [];
 
       const sharedGroups = await Promise.all(
         sharedSmeSpaces.map(async (space) => ({
@@ -353,7 +347,7 @@ export function AccountsPage({
               ? 'Manage the Business accounts linked to this Business Space.'
               : 'Business Account management stays with the owner. Accounts shared with you appear on your main Accounts page.'
             : 'Manage the personal accounts available to this Personal Space.'
-          : 'See accounts you own and Business accounts shared with you. Owners keep control of account setup, sharing, POS links, closing and deletion.'
+          : 'Your bank, cash, card and e-wallet accounts.'
       }
       action={accountHeaderAction}
     />
@@ -387,15 +381,8 @@ export function AccountsPage({
     </section>
     {!embedded && (
       <div className="info-banner">
-        <strong>
-          Business accounts can serve multiple Businesses
-        </strong>
-        <span>
-          Personal accounts stay Personal-only. A Business account can be linked
-          to several Business Spaces without duplicating its real balance.
-          Choose POS availability per Business, then share that account with
-          selected members when they need financial access.
-        </span>
+        <strong>Personal accounts</strong>
+        <span>Business accounts are managed inside their Business Space.</span>
       </div>
     )}
     {!embedded
@@ -472,7 +459,7 @@ export function AccountsPage({
       <AccountForm
         currency={profile.currency}
         spaces={visibleSmeSpaces}
-        lockedPersonal={embeddedSpace?.type === 'personal'}
+        lockedPersonal={!embedded || embeddedSpace?.type === 'personal'}
         onClose={() => setModal(null)}
         onSubmit={async (values) => {
           await createAccount(values);
@@ -487,7 +474,7 @@ export function AccountsPage({
         currency={selected.currency}
         spaces={visibleSmeSpaces}
         initial={selected}
-        lockedPersonal={embeddedSpace?.type === 'personal'}
+        lockedPersonal={!embedded || embeddedSpace?.type === 'personal'}
         onClose={() => setModal(null)}
         onSubmit={async (values) => {
           await updateAccount({

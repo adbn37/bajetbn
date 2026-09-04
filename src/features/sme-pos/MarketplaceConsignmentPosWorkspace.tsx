@@ -1,5 +1,5 @@
 import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
 import { Modal } from '../../components/Modal';
@@ -302,11 +302,20 @@ function roleLabel(role: SmePosRole) {
 }
 
 export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryProfile, role, onChanged }: Props) {
+  const [searchParams] = useSearchParams();
   const [mySeller, setMySeller] = useState<SmePosSeller | null>(null);
   const [mySellerListings, setMySellerListings] = useState<SmePosListing[]>([]);
   const [mySellerSales, setMySellerSales] = useState<SmePosSale[]>([]);
   const availableTabs = useMemo(() => tabsForRole(role, Boolean(mySeller)), [role, mySeller]);
-  const [tab, setTab] = useState<MarketplaceTab>(() => initialTab(role));
+  const requestedTab = searchParams.get('tab') as MarketplaceTab | null;
+  const [tab, setTab] = useState<MarketplaceTab>(() =>
+    requestedTab && tabsForRole(role, false).includes(requestedTab)
+      ? requestedTab
+      : initialTab(role),
+  );
+  const primaryTabOrder: MarketplaceTab[] = ['register', 'listings', 'sellers', 'sales', 'balance'];
+  const primaryTabs = primaryTabOrder.filter((item) => availableTabs.includes(item));
+  const moreTabs = availableTabs.filter((item) => !primaryTabs.includes(item));
   const [sellers, setSellers] = useState<SmePosSeller[]>([]);
   const [listings, setListings] = useState<SmePosListing[]>([]);
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
@@ -1576,11 +1585,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
   return <section className="sme-standard-pos-workspace marketplace-pos-workspace">
     <div className="pos-workspace-heading">
       <div>
-        <h2>{role === 'cashier' ? 'Register' : role === 'seller' ? 'Seller area' : 'Consignment POS'}</h2>
-        <p>{role === 'seller' ? 'Your stock, sales, earnings and payouts.' : 'Sell items from multiple sellers.'}</p>
+        <h2>{role === 'cashier' ? 'Register' : role === 'seller' ? 'Seller area' : 'Multi-Seller POS'}</h2>
+        <p>{role === 'seller' ? 'Your stock, sales, earnings and payouts.' : 'Sell shop and seller items.'}</p>
       </div>
 
-      {(role === 'owner' || role === 'manager') && (
+      {false && (role === 'owner' || role === 'manager') && (
         <Link className="button secondary" to={`/spaces/${space.id}/pos/archived`}>
           Archived Records
         </Link>
@@ -1592,7 +1601,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
     {success && <div className="notice success">{success}</div>}
 
     <div className="sme-pos-workspace-tabs" role="tablist" aria-label="Consignment POS">
-      {availableTabs.map((item) => (
+      {primaryTabs.map((item) => (
         <button
           key={item}
           type="button"
@@ -1618,9 +1627,38 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
       ))}
     </div>
 
+    {(moreTabs.length > 0 || role === 'owner' || role === 'manager') && (
+      <details className="marketplace-pos-more" data-marketplace-pos-more>
+        <summary>More</summary>
+        <div className="button-row">
+          {moreTabs.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="button secondary small"
+              onClick={() => {
+                setTab(item);
+                setError('');
+                setSuccess('');
+                setSearch('');
+              }}
+            >
+              {tabLabels[item]}
+            </button>
+          ))}
+          {(role === 'owner' || role === 'manager') && (
+            <Link className="button secondary small" to={`/spaces/${space.id}/pos/archived`}>Archived</Link>
+          )}
+          {role === 'owner' && (
+            <Link className="button secondary small" to={`/spaces/${space.id}/pos/settings`}>Settings</Link>
+          )}
+        </div>
+      </details>
+    )}
+
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>Sellers</h3><p>Manage each seller's stock, commission, seller wallet and payouts. A seller profile does not automatically give the person BajetBN login access. For Seller-only access, invite them from Members and choose Seller. If they already have another staff role, link that team member to the seller profile. Inventory management stays off by default and can be enabled separately while their main staff role remains unchanged.</p></div><button className="button primary" type="button" aria-label="Add seller profile" onClick={() => openSellerForm('new')}>Add seller</button></div>
+        <div className="panel-heading"><div><h3>Sellers</h3><p>Manage seller stock, commission and payouts.</p></div><button className="button primary" type="button" aria-label="Add seller profile" onClick={() => openSellerForm('new')}>Add seller</button></div>
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card marketplace-seller-profile-card" key={seller.id} style={sellerStyleFor(seller.id)}>
           <div><span className="type-badge marketplace-seller-badge">{seller.id === mySeller?.id ? `You · ${roleLabel(role)} + Seller` : 'Seller'}</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || seller.displayId}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
@@ -1632,7 +1670,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
       </section>}
 
       {tab === 'listings' && <section className="panel sme-pos-module-panel">
-        <div className="panel-heading"><div><h3>{mySeller && !canViewAllSellerInventory ? 'My inventory' : 'Seller listings and stock'}</h3><p>{mySeller && !canViewAllSellerInventory ? 'Manage your own seller stock here. All shop stock remains available from the register according to your staff role.' : 'Every listing or stock batch keeps its own seller, price, condition, quantity and commission.'}</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!inventoryListings.some((item) => item.barcode)} onClick={() => setLabelItems(inventoryListings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}{role === 'cashier' && <button className="button primary" type="button" onClick={() => openManualListingForm(null)} disabled={!sellers.length}>+ Register seller stock</button>}{mySeller && sellerInventoryEnabled && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add my stock</button>}</div></div>
+        <div className="panel-heading"><div><h3>{mySeller && !canViewAllSellerInventory ? 'My inventory' : 'Seller listings and stock'}</h3><p>{mySeller && !canViewAllSellerInventory ? 'Manage your own seller stock here. All shop stock remains available from the register according to your staff role.' : 'Seller, price, stock and commission stay linked to each listing.'}</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!inventoryListings.some((item) => item.barcode)} onClick={() => setLabelItems(inventoryListings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}{role === 'cashier' && <button className="button primary" type="button" onClick={() => openManualListingForm(null)} disabled={!sellers.length}>+ Register seller stock</button>}{mySeller && sellerInventoryEnabled && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add my stock</button>}</div></div>
         {(mySeller || canViewAllSellerInventory) && <div className="marketplace-inventory-filter">
           <label>
             Inventory view

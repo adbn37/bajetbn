@@ -8,7 +8,6 @@ import { suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_TRANSACTION_CATEGORIES, categoryIconGlyph } from '../categories/defaultCategories';
 import {
-  listAccounts,
   listAccountsForOwnerSpace,
   listPersonalAccounts,
 } from '../../repositories/accountRepository';
@@ -132,21 +131,21 @@ export function CommitmentsPage({
       ] = await Promise.all([
         listAllCommitments(user.uid),
         listCommitmentPayments(user.uid),
-        listAccounts(user.uid),
+        listPersonalAccounts(user.uid),
         listSpaces(user.uid),
         listCustomCategories(user.uid),
       ]);
 
-      setItems(nextItems);
-      setPayments(nextPayments);
-      setAccounts(nextAccounts);
-
-      setSpaces(
-        nextSpaces.filter(
-          (item) =>
-            !item.archivedAt,
-        ),
-      );
+      const personalSpace =
+        nextSpaces.find((item) => item.type === 'personal' && !item.archivedAt) || null;
+      const personalItems = personalSpace
+        ? nextItems.filter((item) => item.spaceId === personalSpace.id)
+        : [];
+      const personalItemIds = new Set(personalItems.map((item) => item.id));
+      setItems(personalItems);
+      setPayments(nextPayments.filter((item) => personalItemIds.has(item.commitmentId)));
+      setAccounts(nextAccounts.filter((item) => item.classification === 'personal'));
+      setSpaces(personalSpace ? [personalSpace] : []);
 
       setCategories([
         ...DEFAULT_TRANSACTION_CATEGORIES.filter(

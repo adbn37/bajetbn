@@ -133,10 +133,10 @@ expect(
  */
 
 const navTokens = [
-  'Business',
   '<small>Home</small>',
+  '<small>Money</small>',
   'mobile-bottom-add',
-  '<small>Space</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ];
 
@@ -162,14 +162,14 @@ for (const token of navTokens) {
 
 expect(
   correctOrder,
-  'Mobile navigation must be Business | Home | + | Space | More.',
+  'Mobile navigation must be Home | Money | + | Spaces | More.',
 );
 
 expect(
   mobileNavigation.includes(
     'to="/spaces"',
   ),
-  'The mobile Space destination is missing.',
+  'The mobile Spaces destination is missing.',
 );
 
 expect(

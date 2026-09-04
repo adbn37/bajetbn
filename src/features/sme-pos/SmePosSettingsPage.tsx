@@ -42,8 +42,8 @@ const modeCopy: Record<SmePosMode, { title: string; detail: string; points: stri
     points: ['Normal shop stock', 'Simple register', 'Sales and profit reports'],
   },
   marketplace_consignment: {
-    title: 'Marketplace Consignment POS',
-    detail: 'Sell products owned by different independent sellers.',
+    title: 'Multi-Seller POS',
+    detail: 'Sell your own items or items for other sellers.',
     points: ['Seller-linked stock', 'Automatic commission split', 'Seller balances and payouts'],
   },
 };
@@ -191,13 +191,13 @@ export function SmePosSettingsPage() {
     const downgrading = settings.mode === 'marketplace_consignment' && mode === 'standard';
     setConfirm({
       payload: { kind: 'save' },
-      title: downgrading ? 'Change to Standard POS?' : 'Upgrade to Marketplace POS?',
+      title: downgrading ? 'Change to Standard POS?' : 'Upgrade to Multi-Seller POS?',
       description: downgrading
         ? 'BajetBN will only allow this when no seller listing, commission, payout, or Marketplace sale depends on the current mode.'
         : 'Your existing shop products, customers, sales, and settings will stay.',
       note: downgrading
         ? 'The change will be stopped when Marketplace records need protection.'
-        : 'Seller and commission tools are added in the Marketplace POS phase.',
+        : 'Seller and commission tools are added in the Multi-Seller POS phase.',
       confirmLabel: downgrading ? 'Check and change mode' : 'Upgrade POS mode',
     });
   }
@@ -374,7 +374,7 @@ export function SmePosSettingsPage() {
           <span className="type-badge">{roleLabels[invitation.posRole!]} · Invite pending</span>
         </div>)}
       </div>
-      {settings.mode === 'standard' && <div className="notice">Seller access appears after upgrading this shop to Marketplace Consignment POS.</div>}
+      {settings.mode === 'standard' && <div className="notice">Seller access appears after upgrading this shop to Multi-Seller POS.</div>}
     </section>}
 
     {confirm && <ActionConfirmModal state={confirm} busy={busy} error={error} onClose={() => { setConfirm(null); setError(''); }} onConfirm={() => void confirmAction()} />}

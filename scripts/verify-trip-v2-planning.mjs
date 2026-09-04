@@ -45,14 +45,14 @@ need(
 );
 
 for (const text of [
-  'Itinerary, Tasks & Bookings',
+  'Trip Plan',
   'Add itinerary item',
   'Add Task',
   'Add Booking',
-  'one source',
+  'Bookings are for planning.',
   'No itinerary yet.',
-  'No Trip Tasks yet.',
-  'No Trip Bookings yet.',
+  'No tasks yet.',
+  'No bookings yet.',
 ]) {
   need(panel.includes(text), `Missing Trip planning UI text: ${text}`);
 }

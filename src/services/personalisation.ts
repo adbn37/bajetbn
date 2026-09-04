@@ -39,11 +39,11 @@ export interface PersonalisationSettings {
 }
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
-  { id: 'overview', path: '/', label: 'Overview', icon: '⌂', protected: true },
+  { id: 'overview', path: '/', label: 'Home', icon: '⌂', protected: true },
   { id: 'spaces', path: '/spaces', label: 'Spaces', icon: '◫', protected: true },
-  { id: 'inbox', path: '/inbox', label: 'Needs Attention', icon: '✓' },
+  { id: 'inbox', path: '/inbox', label: 'Attention', icon: '✓' },
   { id: 'accounts', path: '/accounts', label: 'Accounts', icon: '◉' },
-  { id: 'transactions', path: '/transactions', label: 'Money activity', icon: '↔' },
+  { id: 'transactions', path: '/transactions', label: 'Money', icon: '↔' },
   { id: 'recurring', path: '/recurring', label: 'Recurring money', icon: '↻' },
   { id: 'budgets', path: '/budgets', label: 'Budgets', icon: '▤' },
   { id: 'goals', path: '/goals', label: 'Goals', icon: '◇' },
@@ -59,9 +59,9 @@ const ALL_NAVIGATION_IDS = NAVIGATION_ITEMS.map((item) => item.id);
 
 export const RECOMMENDED_NAVIGATION_ORDER: NavigationId[] = [
   'overview',
+  'transactions',
   'spaces',
   'inbox',
-  'transactions',
   'accounts',
   'debt',
   'budgets',
@@ -75,6 +75,8 @@ export const RECOMMENDED_NAVIGATION_ORDER: NavigationId[] = [
 ];
 
 export const RECOMMENDED_HIDDEN_NAVIGATION: NavigationId[] = [
+  'accounts',
+  'debt',
   'budgets',
   'bills',
   'recurring',
@@ -227,37 +229,31 @@ export function savePersonalisation(uid: string, value: PersonalisationSettings)
   return next;
 }
 
-export function orderedNavigation(settings: PersonalisationSettings): NavigationItem[] {
-  const byId = new Map(NAVIGATION_ITEMS.map((item) => [item.id, item]));
-  const hidden = new Set(settings.hiddenNavigation);
-  const pinned = new Set(settings.pinnedNavigation);
-  const ordered = settings.navigationOrder
-    .map((id) => byId.get(id))
-    .filter((item): item is NavigationItem => Boolean(item))
-    .filter((item) => !hidden.has(item.id));
+const CORE_NAVIGATION_ORDER: NavigationId[] = [
+  'overview',
+  'transactions',
+  'spaces',
+  'inbox',
+];
 
-  return [
-    ...ordered.filter((item) => pinned.has(item.id)),
-    ...ordered.filter((item) => !pinned.has(item.id)),
-  ];
+export function orderedNavigation(
+  settings: PersonalisationSettings,
+): NavigationItem[] {
+  void settings;
+  const byId = new Map(
+    NAVIGATION_ITEMS.map((item) => [item.id, item]),
+  );
+
+  return CORE_NAVIGATION_ORDER
+    .map((id) => byId.get(id))
+    .filter((item): item is NavigationItem => Boolean(item));
 }
 
 export function secondaryNavigation(
   settings: PersonalisationSettings,
 ): NavigationItem[] {
-  const byId = new Map<NavigationId, NavigationItem>(
-    NAVIGATION_ITEMS.map((item) => [item.id, item]),
-  );
-
-  const hidden = new Set(settings.hiddenNavigation);
-
-  return settings.navigationOrder
-    .map((id) => byId.get(id))
-    .filter(
-      (item): item is NavigationItem =>
-        item !== undefined,
-    )
-    .filter((item) => hidden.has(item.id));
+  void settings;
+  return [];
 }
 export function navigationIcon(pack: IconPack, id: NavigationId, fallback: string): string {
   return ICONS[pack][id] || fallback;

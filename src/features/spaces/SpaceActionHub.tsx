@@ -300,6 +300,8 @@ export function SpaceActionHub({
       || businessIndustry === 'transport_delivery'
     );
 
+  const simplifiedSpaceNavigation = true;
+
   return (
     <>
       <section
@@ -324,9 +326,7 @@ export function SpaceActionHub({
             <strong>{experience.roleLabel}</strong>
           </div>
 
-          <small className="muted">
-            {experience.accessSummary}
-          </small>
+          <small className="muted">{space.type === 'sme' ? 'Business' : 'Shared Space'}</small>
         </div>
 
         {feedback && (
@@ -338,6 +338,101 @@ export function SpaceActionHub({
         )}
 
 
+        {simplifiedSpaceNavigation && (
+          <div
+            className="space-action-buttons simplified-space-actions"
+            data-simplified-space-navigation
+            data-space-launcher={space.type}
+            style={shortcutGridStyle}
+          >
+            {space.type === 'sme' && businessIndustry === 'marketplace' && <>
+              <ShortcutLink to={`/spaces/${space.id}/pos`} label="POS" primary />
+              <ShortcutLink to={`/spaces/${space.id}/pos?tab=listings`} label="Inventory" />
+              {(smePosRole === 'owner' || smePosRole === 'manager') && (
+                <ShortcutLink to={`/spaces/${space.id}/pos?tab=sellers`} label="Sellers" />
+              )}
+              {canViewSmeFinancials && (
+                <ShortcutLink to={`/spaces/${space.id}?section=accounts`} label="Money" />
+              )}
+              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+            </>}
+
+            {space.type === 'sme' && businessIndustry === 'retail' && <>
+              <ShortcutLink to={`/spaces/${space.id}/pos`} label="POS" primary />
+              {canViewSmeFinancials && (
+                <ShortcutLink to={`/spaces/${space.id}?section=accounts`} label="Money" />
+              )}
+              <ShortcutButton label="Purchases" onClick={() => setTool('shopping')} />
+              <ShortcutButton label="Tasks" onClick={() => setTool('tasks')} />
+              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+            </>}
+
+            {space.type === 'sme' && !salesFocusedBusiness && <>
+              {businessIndustry === 'service' || businessIndustry === 'rental' ? (
+                <ShortcutLink
+                  to={`/spaces/${space.id}/business/invoices`}
+                  label={businessIndustry === 'rental' ? 'Rent' : 'Invoices'}
+                  primary
+                />
+              ) : businessIndustry === 'transport_delivery' ? (
+                <ShortcutButton label="Jobs" primary onClick={() => setTool('tasks')} />
+              ) : canViewSmeFinancials ? (
+                <ShortcutLink to={`/spaces/${space.id}?section=accounts`} label="Money" primary />
+              ) : (
+                <ShortcutButton label="Tasks" primary onClick={() => setTool('tasks')} />
+              )}
+
+              {canViewSmeFinancials && businessIndustry !== 'general' && businessIndustry !== 'other' && (
+                <ShortcutLink to={`/spaces/${space.id}?section=accounts`} label="Money" />
+              )}
+              {isBusinessOwner && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}/business`}
+                  label={businessIndustry === 'rental' ? 'Renters' : 'Customers'}
+                />
+              )}
+              {businessIndustry !== 'transport_delivery' && (
+                <ShortcutButton label="Tasks" onClick={() => setTool('tasks')} />
+              )}
+              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+            </>}
+
+            {space.type === 'trip' && <>
+              <ShortcutButton label="Plan" primary onClick={() => setTool('trip_planning')} />
+              <ShortcutButton label="Fund" onClick={() => setTool('fund')} />
+              <ShortcutButton label="Expenses" onClick={() => setTool('expenses')} />
+              <ShortcutButton label="Settle" onClick={() => setTool('balances')} />
+              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+            </>}
+
+            {space.type === 'household' && <>
+              <ShortcutButton label="Fund" primary onClick={() => setTool('fund')} />
+              <ShortcutButton label="Expenses" onClick={() => setTool('expenses')} />
+              <ShortcutButton label="To-Do" onClick={() => setTool('tasks')} />
+              <ShortcutButton label="Shopping" onClick={() => setTool('shopping')} />
+              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+            </>}
+
+            {space.type === 'personal' && <>
+              <ShortcutLink to="/accounts" label="Accounts" primary />
+              <ShortcutLink to="/transactions" label="Money" />
+              <ShortcutLink to="/bills" label="Bills" />
+              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+            </>}
+
+            {!['sme', 'trip', 'household', 'personal'].includes(space.type) && <>
+              {supportsGroupFund && (
+                <ShortcutButton label={fundLabel} primary onClick={() => setTool('fund')} />
+              )}
+              <ShortcutButton label="Expenses" onClick={() => setTool('expenses')} />
+              <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" />
+              <ShortcutLink to={`/spaces/${space.id}?tab=chat`} label="Chat" />
+            </>}
+          </div>
+        )}
+
+        {!simplifiedSpaceNavigation && (
+          <>
         {space.type === 'sme' ? (
           <div
             className="space-action-buttons sme-space-actions-v111"
@@ -599,6 +694,8 @@ export function SpaceActionHub({
             )}
           </div>
         )}
+          </>
+        )}
 
       </section>
 
@@ -614,16 +711,68 @@ export function SpaceActionHub({
           >
             <div className="space-more-context-v111">
               <strong>{space.name}</strong>
-              <span>
-                These tools belong to this Space.
-                Global More remains in the bottom navigation.
-              </span>
+              <span>More for this Space.</span>
             </div>
 
             <div
               className="space-action-buttons space-more-actions-v111"
               style={shortcutGridStyle}
             >
+              {simplifiedSpaceNavigation && <>
+                {space.type === 'household' && <>
+                  <ShortcutButton label="Bills" onClick={() => { setSpaceMoreOpen(false); setTool('bills'); }} />
+                  <ShortcutButton label="Settlements" onClick={() => { setSpaceMoreOpen(false); setTool('balances'); }} />
+                  <ShortcutLink to={`/spaces/${space.id}?section=budgets`} label="Budget" onClick={() => setSpaceMoreOpen(false)} />
+                  <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" onClick={() => setSpaceMoreOpen(false)} />
+                  {currentMember?.role === 'owner' && (
+                    <ShortcutLink to={`/spaces/${space.id}?tab=settings`} label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                  )}
+                </>}
+
+                {space.type === 'trip' && <>
+                  <ShortcutLink to={`/spaces/${space.id}?section=budgets`} label="Budget" onClick={() => setSpaceMoreOpen(false)} />
+                  <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" onClick={() => setSpaceMoreOpen(false)} />
+                  <ShortcutLink to={`/spaces/${space.id}?tab=chat`} label="Chat" onClick={() => setSpaceMoreOpen(false)} />
+                  {currentMember?.role === 'owner' && (
+                    <ShortcutLink to={`/spaces/${space.id}?tab=settings`} label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                  )}
+                </>}
+
+                {space.type === 'sme' && <>
+                  {businessIndustry === 'marketplace' ? (
+                    <ShortcutLink to={`/spaces/${space.id}/pos?tab=customers`} label="Customers" onClick={() => setSpaceMoreOpen(false)} />
+                  ) : (
+                    <ShortcutLink to={`/spaces/${space.id}/business`} label={businessAdminLabel} onClick={() => setSpaceMoreOpen(false)} />
+                  )}
+                  {salesFocusedBusiness && (
+                    <ShortcutButton label="Purchases" onClick={() => { setSpaceMoreOpen(false); setTool('shopping'); }} />
+                  )}
+                  {businessIndustry === 'marketplace' ? (
+                    <ShortcutLink to={`/spaces/${space.id}/pos?tab=reports`} label="Reports" onClick={() => setSpaceMoreOpen(false)} />
+                  ) : canViewSmeFinancials ? (
+                    <ShortcutLink to={`/spaces/${space.id}?section=reports`} label="Reports" onClick={() => setSpaceMoreOpen(false)} />
+                  ) : null}
+                  <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" onClick={() => setSpaceMoreOpen(false)} />
+                  {(smePosRole === 'owner' || currentMember?.role === 'owner') && (
+                    <ShortcutLink to={`/spaces/${space.id}/business/setup`} label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                  )}
+                </>}
+
+                {space.type === 'personal' && <>
+                  <ShortcutLink to="/transactions" label="Money" onClick={() => setSpaceMoreOpen(false)} />
+                  <ShortcutLink to="/settings" label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                </>}
+
+                {!['sme', 'trip', 'household', 'personal'].includes(space.type) && <>
+                  <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" onClick={() => setSpaceMoreOpen(false)} />
+                  <ShortcutLink to={`/spaces/${space.id}?tab=chat`} label="Chat" onClick={() => setSpaceMoreOpen(false)} />
+                  {currentMember?.role === 'owner' && (
+                    <ShortcutLink to={`/spaces/${space.id}?tab=settings`} label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                  )}
+                </>}
+              </>}
+
+              {!simplifiedSpaceNavigation && <>
               {space.type === 'personal' && (
                 <>
                   <ShortcutLink
@@ -869,6 +1018,8 @@ export function SpaceActionHub({
                   )}
                 </>
               )}
+
+              </>}
             </div>
           </div>
         </Modal>

@@ -257,10 +257,10 @@ const nav =
     : '';
 
 const tokens = [
-  'Business',
   '<small>Home</small>',
+  '<small>Money</small>',
   'mobile-bottom-add',
-  '<small>Space</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ];
 
@@ -284,7 +284,7 @@ for (const token of tokens) {
 
 check(
   correctOrder,
-  'Mobile navigation order is Business | Home | + | Space | More.',
+  'Mobile navigation order is Home | Money | + | Spaces | More.',
 );
 
 check(
@@ -294,7 +294,7 @@ check(
     && !nav.includes(
       '<small>Alerts</small>',
     ),
-  'Space replaces Alerts in mobile bottom slot four.',
+  'Spaces remains in the mobile bottom navigation.',
 );
 
 check(

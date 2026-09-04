@@ -93,6 +93,7 @@ const spaceTypeLabels: Record<Space['type'], string> = {
 };
 
 function spaceDisplayLabel(space: Space): string {
+  if (space.type === 'personal') return 'Personal money (no Space)';
   return [space.name, spaceTypeLabels[space.type], space.currency].join(' · ');
 }
 
@@ -224,9 +225,18 @@ export function TransactionsPage() {
       nextAttachments.forEach((attachment) => {
         nextAttachmentCounts[attachment.transactionId] = (nextAttachmentCounts[attachment.transactionId] || 0) + 1;
       });
-      setTransactions(nextTransactions);
+      const personalAccountIds = new Set(
+        nextAccounts
+          .filter((account) => account.classification === 'personal')
+          .map((account) => account.id),
+      );
+      setTransactions(
+        nextTransactions.filter((item) => personalAccountIds.has(item.accountId)),
+      );
       setAccounts(nextAccounts);
-      setSpaces(nextSpaces.filter((space) => !space.archivedAt));
+      setSpaces(
+        nextSpaces.filter((space) => !space.archivedAt && space.type !== 'sme'),
+      );
       setCustomCategories(nextCustomCategories);
       setTransactionAttachmentCounts(nextAttachmentCounts);
     } catch (nextError) {
@@ -250,7 +260,7 @@ export function TransactionsPage() {
   }
   const categoryMap = useMemo(() => new Map(allCategories.map((category) => [category.id, category])), [allCategories]);
   const accountMap = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
-  const activeAccounts = useMemo(() => accounts.filter((account) => !account.archivedAt && !account.closedAt), [accounts]);
+  const activeAccounts = useMemo(() => accounts.filter((account) => account.classification === 'personal' && !account.archivedAt && !account.closedAt), [accounts]);
   const spaceMap = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
 
   const availableLabels = useMemo(() => {
@@ -508,7 +518,7 @@ export function TransactionsPage() {
       />
       {error && <div className="notice error">{error}</div>}
       {feedback && <div className="notice success">{feedback} {feedback.includes('device') && <Link to="/offline-sync">View Offline & sync</Link>}</div>}
-      <div className="info-banner"><strong>Safe account updates</strong><span>Saving money activity updates your account balance. Use Undo when something was entered wrongly.</span></div>
+      <div className="info-banner"><strong>Saved to your account.</strong><span>Use Undo to fix a mistake.</span></div>
 
       <section className="transaction-summary">
         <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
@@ -533,17 +543,17 @@ export function TransactionsPage() {
       </section>}
 
       {!accounts.length && !loading && <div className="notice">Add an account before recording money.</div>}
-      {!spaces.length && !loading && <div className="notice">Add or restore a Space before recording money.</div>}
+      {!spaces.length && !loading && <div className="notice">Your personal budget is not ready. Refresh BajetBN and try again.</div>}
 
       <section className="transaction-toolbar transaction-toolbar-expanded">
         <div className="segmented-control" role="group" aria-label="Transaction type filter">
           {(['all', 'income', 'expense', 'transfer'] as const).map((value) => <button key={value} type="button" className={typeFilter === value ? 'active' : ''} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All' : typeLabels[value]}</button>)}
         </div>
-        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, Space, Account, payee…" />
+        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, account or payee…" />
         <div className="transaction-filter-grid">
           <label>Period<select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}><option value="current_month">This month</option><option value="all">All time</option></select></label>
           <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Saved</option><option value="reversed">Undone</option></select></label>
-          <label>Space<select value={spaceFilter} onChange={(event) => setSpaceFilter(event.target.value)}><option value="all">All Spaces</option>{spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label>
+          {spaces.some((space) => space.type !== 'personal') && <label>Space<select value={spaceFilter} onChange={(event) => setSpaceFilter(event.target.value)}><option value="all">All</option>{spaces.filter((space) => space.type !== 'personal').map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label>}
           <div className="transaction-account-filter">
             <span className="transaction-filter-label">Accounts</span>
 
@@ -640,7 +650,7 @@ export function TransactionsPage() {
                 <small>{item.displayId}</small>
               </div>
               <div className="transaction-context">
-                <strong>{space?.name || 'Unknown Space'}</strong>
+                <strong>{space?.type === 'personal' ? 'Personal' : space?.name || 'Unknown'}</strong>
                 <small>{source?.name || 'Unknown Account'}{destination ? ` → ${destination.name}` : ''}</small>
               </div>
               <div className="transaction-amount">
@@ -1002,7 +1012,7 @@ export function MoneyActivityModal({
     try {
       const nextAmountMinor = toMinorUnits(amount);
       if (nextAmountMinor <= 0) throw new Error('Enter an amount greater than BND 0.00.');
-      if (!spaceId || !accountId) throw new Error('Choose a Space and Account.');
+      if (!spaceId || !accountId) throw new Error('Choose an Account and where this money belongs.');
       if (type === 'transfer' && !destinationAccountId) throw new Error('Choose a destination Account.');
       if (type !== 'transfer' && !selectedCategory) throw new Error('Choose a category.');
       if (pendingFiles.length > 0 && !online) {
@@ -1121,13 +1131,13 @@ export function MoneyActivityModal({
         <div className="contextual-space-field">
           <div className="contextual-space-summary">
             <div>
-              <span>Recorded in</span>
-              <strong>{selectedSpace?.name || 'Choose Space'}</strong>
-              <small>{selectedSpace ? [spaceTypeLabels[selectedSpace.type], selectedSpace.currency].join(' · ') : 'Choose where this activity belongs'}</small>
+              <span>{selectedSpace?.type === 'personal' ? 'Personal money' : 'Recorded in'}</span>
+              <strong>{selectedSpace?.type === 'personal' ? 'BajetBN' : selectedSpace?.name || 'Choose Space'}</strong>
+              <small>{selectedSpace?.type === 'personal' ? 'No Space needed' : selectedSpace ? [spaceTypeLabels[selectedSpace.type], selectedSpace.currency].join(' · ') : 'Choose where this activity belongs'}</small>
             </div>
-            {spaces.length > 1 && (
+            {spaces.some((space) => space.type !== 'personal') && (
               <button type="button" className="text-button contextual-space-change" aria-expanded={spaceChooserOpen} onClick={() => setSpaceChooserOpen((current) => !current)}>
-                {spaceChooserOpen ? 'Cancel' : 'Change'}
+                {spaceChooserOpen ? 'Cancel' : 'Use a Space'}
               </button>
             )}
           </div>

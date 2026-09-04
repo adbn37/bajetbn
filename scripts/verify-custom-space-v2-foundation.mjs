@@ -48,8 +48,28 @@ need(spaces.includes("CUSTOM_SPACE_MODULE_OPTIONS.map"), "Module picker must use
 need(spaces.includes("normalizeCustomSpaceModules(initial.customModules)"), "Existing Custom Space edit flow must normalize saved modules.");
 need(spaces.includes("Money activity, Members, Chat, Shared expenses and Settlements are always included."), "Core shared-space tools must remain always enabled.");
 
-for (const label of ["Vehicle", "Property", "Project", "Event", "Asset", "Custom"]) {
-  need(spaces.includes(">" + label + "</option>"), "Space type option disappeared: " + label);
+for (const label of [
+  "Project / group",
+  "Event / group",
+  "Other shared Space",
+]) {
+  need(
+    spaces.includes(">" + label + "</option>"),
+    "Simplified shared Space option disappeared: " + label,
+  );
+}
+
+for (const legacyType of [
+  "'collection'",
+  "'vehicle'",
+  "'property'",
+  "'asset'",
+]) {
+  need(
+    models.includes(legacyType),
+    "Existing extended Space runtime support disappeared: "
+      + legacyType,
+  );
 }
 
 need(css.includes("/* Custom Space v2 - module picker */"), "Custom Space module picker styles are missing.");

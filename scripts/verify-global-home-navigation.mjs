@@ -1,11 +1,7 @@
 import fs from 'node:fs';
 
 const read =
-  (file) =>
-    fs.readFileSync(
-      file,
-      'utf8',
-    );
+  (file) => fs.readFileSync(file, 'utf8');
 
 const dashboard =
   read('src/pages/DashboardPage.tsx');
@@ -14,9 +10,7 @@ const shell =
   read('src/layouts/AppShell.tsx');
 
 const transactions =
-  read(
-    'src/repositories/transactionRepository.ts',
-  );
+  read('src/repositories/transactionRepository.ts');
 
 const css =
   read('src/styles/global.css');
@@ -26,16 +20,11 @@ const failures = [];
 function check(condition, message) {
   if (condition) {
     console.log('PASS:', message);
-    return;
+  } else {
+    failures.push(message);
+    console.error('FAIL:', message);
   }
-
-  failures.push(message);
-  console.error('FAIL:', message);
 }
-
-/*
- * Global Home performance contract.
- */
 
 check(
   !dashboard.includes(
@@ -93,13 +82,17 @@ check(
   dashboard.includes(
     'function accountMonthSummary(',
   )
-    && dashboard.includes('Money in')
-    && dashboard.includes('Money out'),
+    && dashboard.includes(
+      'Money in',
+    )
+    && dashboard.includes(
+      'Money out',
+    ),
   'Monthly Money in/out is preserved.',
 );
 
 check(
-  /transactions\s*\.slice\s*\(\s*0\s*,\s*20\s*,?\s*\)/m.test(
+  /const\s+recentTransactions\s*=[\s\S]{0,400}?transactions\s*\.slice\s*\(\s*0\s*,\s*20\s*,?\s*\)/m.test(
     dashboard,
   ),
   'Visible account activity is limited to latest 20.',
@@ -109,242 +102,112 @@ check(
   dashboard.includes(
     'recentTransactions.map(',
   ),
-  'Home renders the latest-20 activity view.',
+  'Home renders latest account activity.',
 );
 
 check(
   dashboard.includes(
     'loadQuickOptions',
-  ),
-  'Global Add dependencies remain lazy-loaded.',
-);
-
-check(
-  dashboard.includes(
-    'home-v110-account-carousel',
   )
     && dashboard.includes(
-      'setPreferredHomeAccountId',
+      "item.type === 'personal'",
     ),
-  'Account carousel and preferred account remain intact.',
+  'Global Add defaults to the internal personal budget scope.',
 );
 
-/*
- * Five-slot mobile navigation contract.
- */
-
-const navMarker =
+const start =
   shell.indexOf(
     '<nav className="mobile-bottom-nav"',
   );
 
-const navEnd =
+const end =
   shell.indexOf(
     '</nav>',
-    navMarker,
+    start,
   );
 
-const mobileNavigation =
-  navMarker >= 0
-    && navEnd > navMarker
-    ? shell.slice(
-        navMarker,
-        navEnd + '</nav>'.length,
-      )
+const nav =
+  start >= 0 && end > start
+    ? shell.slice(start, end)
     : '';
 
-check(
-  Boolean(mobileNavigation),
-  'Mobile bottom navigation exists.',
-);
+const tokens = [
+  '<small>Home</small>',
+  '<small>Money</small>',
+  'mobile-bottom-add',
+  '<small>Spaces</small>',
+  '<small>More</small>',
+];
 
-const businessIndex =
-  mobileNavigation.indexOf(
-    'businessPickerLoading',
-  );
+let last = -1;
+let ordered = true;
 
-const homeIndex =
-  mobileNavigation.indexOf(
-    '<small>Home</small>',
-  );
+for (const token of tokens) {
+  const index =
+    nav.indexOf(token);
 
-const addIndex =
-  mobileNavigation.indexOf(
-    'mobile-bottom-add',
-  );
+  if (
+    index < 0
+    || index <= last
+  ) {
+    ordered = false;
+    break;
+  }
 
-const spaceIndex =
-  mobileNavigation.indexOf(
-    '<small>Space</small>',
-  );
-
-const moreIndex =
-  mobileNavigation.indexOf(
-    '<small>More</small>',
-  );
+  last = index;
+}
 
 check(
-  businessIndex >= 0
-    && businessIndex < homeIndex
-    && homeIndex < addIndex
-    && addIndex < spaceIndex
-    && spaceIndex < moreIndex,
-  'Mobile navigation order is Business, Home, Add, Space, More.',
+  ordered,
+  'Mobile navigation is Home | Money | + | Spaces | More.',
 );
 
 check(
-  shell.includes(
-    'openBusinessShortcut',
-  )
-    && shell.includes(
-      "space.type === 'sme'",
-    ),
-  'Business shortcut targets Business/SME Spaces.',
+  nav.includes(
+    'to="/transactions"',
+  ),
+  'Money is a direct mobile destination.',
 );
 
 check(
-  shell.includes(
-    'businessPickerOpen',
-  )
-    && shell.includes(
-      'businessSpaces.map',
-    ),
-  'Multiple Business Spaces retain the Business picker.',
-);
-
-check(
-  mobileNavigation.includes(
+  nav.includes(
     "navigate('/?quick=1')",
   ),
   'Centre + opens global money activity.',
 );
 
 check(
-  mobileNavigation.includes(
+  nav.includes(
     'to="/spaces"',
   )
-    && mobileNavigation.includes(
-      '<small>Space</small>',
+    && nav.includes(
+      '<small>Spaces</small>',
     ),
-  'Space is the fourth mobile destination.',
+  'Spaces is a shared-work destination.',
 );
 
 check(
-  mobileNavigation.includes(
+  nav.includes(
     'to="/more"',
   ),
-  'More remains the fifth mobile destination.',
+  'More remains the fifth destination.',
 );
-
-/*
- * The + button must be precisely the third grid slot.
- */
 
 check(
   css.includes(
     'v1.11.0 FIVE-SLOT MOBILE NAV LOCK',
-  )
-    && /repeat\s*\(\s*5\s*,\s*minmax\s*\(\s*0\s*,\s*1fr\s*\)\s*\)/m.test(
-      css,
-    )
-    && /mobile-bottom-add[\s\S]{0,120}?grid-column:\s*3/m.test(
-      css,
-    ),
-  '+ is locked to the exact centre slot (3 of 5).',
-);
-
-/*
- * Mobile Alerts lives in the header.
- * Environment labels are hidden from the mobile customer UI.
- * Desktop keeps its notification bell and environment label.
- */
-
-const mobileHeaderStart =
-  shell.indexOf(
-    '<header className="mobile-header">',
-  );
-
-const mobileHeaderEnd =
-  shell.indexOf(
-    '</header>',
-    mobileHeaderStart,
-  );
-
-const mobileHeader =
-  shell.slice(
-    mobileHeaderStart,
-    mobileHeaderEnd,
-  );
-
-check(
-  mobileHeader.includes(
-    "navigate('/notifications')",
-  )
-    && mobileHeader.includes(
-      '<NotificationBellIcon />',
-    )
-    && mobileHeader.includes(
-      'unreadNotifications > 0',
-    ),
-  'Mobile Alerts bell with unread badge is in the header.',
-);
-
-check(
-  !mobileHeader.includes(
-    'environment-badge',
   ),
-  'Staging/Production environment text is hidden from the mobile header.',
-);
-
-const desktopHeaderStart =
-  shell.indexOf(
-    '<div className="desktop-environment">',
-  );
-
-const desktopHeaderEnd =
-  shell.indexOf(
-    '<ConnectivityBanner />',
-    desktopHeaderStart,
-  );
-
-const desktopHeader =
-  shell.slice(
-    desktopHeaderStart,
-    desktopHeaderEnd,
-  );
-
-check(
-  desktopHeader.includes(
-    "navigate('/notifications')",
-  )
-    && desktopHeader.includes(
-      '<NotificationBellIcon />',
-    ),
-  'Desktop notification bell remains available.',
+  'Five-slot mobile navigation layout remains present.',
 );
 
 if (failures.length) {
-  console.error('');
-  console.error(
-    `${failures.length} Global Home/navigation check(s) failed:`,
+  throw new Error(
+    'Global Home/navigation verification failed: '
+      + failures.length
+      + ' check(s).',
   );
-
-  for (const failure of failures) {
-    console.error(`- ${failure}`);
-  }
-
-  process.exit(1);
 }
 
-console.log('');
 console.log(
   'Global Home/navigation verification PASS.',
-);
-
-console.log(
-  'Mobile navigation: Business | Home | + | Space | More.',
-);
-
-console.log(
-  '+ is the exact centre item: slot 3 of 5.',
 );

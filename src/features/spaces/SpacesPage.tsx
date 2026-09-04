@@ -79,11 +79,14 @@ export function SpacesPage() {
   };
   useEffect(() => { void load(); }, [user, profile?.email]);
 
-  const active = useMemo(() => spaces.filter((item) => !item.archivedAt), [spaces]);
-  const archived = useMemo(() => spaces.filter((item) => item.archivedAt), [spaces]);
-
-  const personalSpace =
-    active.find((item) => item.type === 'personal') || null;
+  const active = useMemo(
+    () => spaces.filter((item) => !item.archivedAt && item.type !== 'personal'),
+    [spaces],
+  );
+  const archived = useMemo(
+    () => spaces.filter((item) => item.archivedAt && item.type !== 'personal'),
+    [spaces],
+  );
 
   const openEdit = (space: Space) => { setSelected(space); setModal('edit'); };
   const pendingInvitations = useMemo(() => invitations.filter((item) => item.status === 'pending'), [invitations]);
@@ -150,69 +153,27 @@ export function SpacesPage() {
 
 
   return <main className="page">
-    <PageHeader eyebrow="One app. Separate Spaces." title="Spaces" description="A Space is one part of your life. Accounts inside it are where that money is kept." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived Spaces <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
+    <PageHeader eyebrow="Shared & separate" title="Spaces" description="Use a Space for a business, trip, household or group you manage with other people." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
     {error && <div className="notice error">{error}</div>}
     {welcomeFromOnboarding && (
-      <section className="panel space-discovery-welcome-v111 guided-onboarding-next-v113">
+      <section className="panel guided-onboarding-next-v113">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">
-              Setup complete
-            </span>
-
-            <h2>
-              Your Personal Space is ready
-            </h2>
+            <span className="eyebrow">Optional</span>
+            <h2>Spaces are for shared or separate work</h2>
           </div>
-
-          <span className="status-pill">
-            Start here
-          </span>
         </div>
-
         <p>
-          You do not need another Space yet. Start by adding the bank,
-          cash, card or e-wallet you actually use, then record your first
-          income or expense inside your Personal Space.
+          Personal budgeting stays on Home. Create a Space only when a business,
+          trip, household or group needs its own people and activity.
         </p>
-
-        <div className="guided-next-actions">
-          {personalSpace ? (
-            <>
-              <Link
-                className="button primary"
-                to={`/spaces/${personalSpace.id}?section=accounts`}
-              >
-                Add your first account
-              </Link>
-
-              <Link
-                className="button secondary"
-                to={`/spaces/${personalSpace.id}`}
-              >
-                Open Personal Space
-              </Link>
-            </>
-          ) : (
-            <Link
-              className="button primary"
-              to="/accounts"
-            >
-              Add your first account
-            </Link>
-          )}
-        </div>
-
-        <small className="muted">
-          Create a Household, Trip, Business or other Space later only
-          when that part of your life needs its own separate environment.
-        </small>
+        <Link className="button primary" to="/">Back to my money</Link>
       </section>
     )}
 
-    <div className="info-banner"><strong>Safe Space removal</strong><span>Empty Spaces can be deleted. Spaces with members or money history can be archived and restored later.</span></div>
+    <div className="info-banner"><strong>Personal money does not need a Space.</strong><span>Create one when you need to work with other people or keep a business or trip separate.</span></div>
     {pendingInvitations.length > 0 && <section className="panel incoming-invitations-panel"><div className="panel-heading"><div><span className="eyebrow">Invitations for me</span><h2>Spaces you can join</h2></div><span className="type-badge">{pendingInvitations.length}</span></div><div className="incoming-invitation-list">{pendingInvitations.map((invitation) => { const expired = Boolean(invitation.expiresAt?.toDate?.().getTime() && invitation.expiresAt.toDate().getTime() < Date.now()); return <article className="incoming-invitation-row" key={invitation.id}><div><strong>{invitation.spaceName || 'Shared Space'}</strong><span>{invitation.spaceType ? `${labels[invitation.spaceType]} Space` : 'Shared Space'} · Invited by {invitation.invitedByName || 'the Space owner'}</span><small>Access: {invitation.role === 'admin' ? 'Manager' : invitation.role === 'viewer' ? 'View only' : invitation.role === 'payer' ? 'Record payments' : 'Add money records'}{invitation.posRole ? ` · POS: ${invitation.posRole === 'stock_staff' ? 'Stock staff' : invitation.posRole.charAt(0).toUpperCase() + invitation.posRole.slice(1)}` : ''}{expired ? ' · Invite expired' : ''}</small></div><div className="button-row">{expired ? <span className="status-pill">Ask for a new invite</span> : <><button className="button primary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'accept')}>{busyId === invitation.id ? 'Working…' : 'Join Space'}</button><button className="button secondary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'decline')}>Decline</button></>}</div></article>; })}</div></section>}
-    {loading ? <div className="loading-panel">Loading Spaces…</div> : active.length === 0 ? <EmptyState title="No active Spaces" description="Add a Space or restore one from the Archived Spaces page." /> : <SpaceGrid spaces={active} busyId={busyId} navigate={navigate} onEdit={openEdit} onArchive={(space) => askLifecycle(space, 'archive')} onDelete={(space) => askLifecycle(space, 'delete')} />}
+    {loading ? <div className="loading-panel">Loading Spaces…</div> : active.length === 0 ? <EmptyState title="No Spaces yet" description="That is fine. Use BajetBN normally for your personal budget, and add a Space when you need one." /> : <SpaceGrid spaces={active} busyId={busyId} navigate={navigate} onEdit={openEdit} onArchive={(space) => askLifecycle(space, 'archive')} onDelete={(space) => askLifecycle(space, 'delete')} />}
 
 
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
@@ -264,13 +225,12 @@ function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { 
 
       <div className="space-card-copy">
         <h2>{space.name}</h2>
-        <p>{space.description || spaceDefaultDescription(space.type)}</p>
+        {space.description && <p>{space.description}</p>}
       </div>
 
       <div className="meta-row">
         <span>{space.currency}</span>
         <span>{space.collaborationMode === 'private' ? 'Private' : 'Shared'}</span>
-        <span>{space.timezone}</span>
       </div>
 
       <footer>
@@ -402,28 +362,23 @@ function SpaceForm({
           required
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="e.g. Our Household"
+          placeholder="e.g. Japan Trip 2027"
         />
       </label>
 
       <label>
-        What is this Space for?
+        What are you sharing or managing?
         <select
           disabled={lockType}
           value={type}
           onChange={(event) => setType(event.target.value as Exclude<SpaceType, 'personal'>)}
         >
-          <option value="household">Household</option>
           <option value="sme">Business</option>
-          <option value="trip">Trip</option>
-          <option value="goal">Goal</option>
-          <option value="collection">Collection</option>
-          <option value="vehicle">Vehicle</option>
-          <option value="property">Property</option>
-          <option value="project">Project</option>
-          <option value="event">Event</option>
-          <option value="asset">Asset</option>
-          <option value="custom">Custom</option>
+          <option value="trip">Trip with others</option>
+          <option value="household">Household / family</option>
+          <option value="project">Project / group</option>
+          <option value="event">Event / group</option>
+          <option value="custom">Other shared Space</option>
         </select>
 
         <small className="muted">
@@ -453,7 +408,7 @@ function SpaceForm({
       </fieldset>}
 
       <label>
-        Description
+        Description (optional)
         <textarea
           value={description}
           onChange={(event) => setDescription(event.target.value)}

@@ -69,7 +69,7 @@ if (
 const page = read('src/features/sme-pos/SmePosPage.tsx') + '\n' + read('src/features/sme-pos/SmePosSettingsPage.tsx');
 for (const token of [
   'Standard POS',
-  'Marketplace Consignment POS',
+  'Multi-Seller POS',
   'Default payment account',
   'Activate POS',
   'Pause POS',

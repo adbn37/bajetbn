@@ -299,6 +299,10 @@ export function AppShell() {
               )}
             </div>
           )}
+          <NavLink to="/more" onClick={() => setMobileOpen(false)}>
+            <span className="nav-icon">☷</span>
+            <span className="nav-label">More</span>
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <NavLink
@@ -321,6 +325,7 @@ export function AppShell() {
 
           <button
             type="button"
+            hidden
             className="sidebar-customize-button"
             onClick={() => setMenuCustomizerOpen(true)}
           >
@@ -409,13 +414,13 @@ export function AppShell() {
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
           <button
             type="button"
-            className={businessPickerOpen ? 'active' : ''}
+            hidden
+            aria-hidden="true"
+            tabIndex={-1}
             onClick={() => void openBusinessShortcut()}
-            aria-label="Open Business"
-            aria-expanded={businessPickerOpen}
           >
             <span aria-hidden="true">▦</span>
-            <small>{businessPickerLoading ? 'Loading…' : 'Business'}</small>
+            <small>Business</small>
           </button>
 
           <NavLink
@@ -427,7 +432,13 @@ export function AppShell() {
             <small>Home</small>
           </NavLink>
 
-
+          <NavLink
+            to="/transactions"
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span aria-hidden="true">↔</span>
+            <small>Money</small>
+          </NavLink>
 
           <button
             type="button"
@@ -444,7 +455,7 @@ export function AppShell() {
             className={({ isActive }) => isActive ? 'active' : ''}
           >
             <span aria-hidden="true">▣</span>
-            <small>Space</small>
+            <small>Spaces</small>
           </NavLink>
 
           <NavLink

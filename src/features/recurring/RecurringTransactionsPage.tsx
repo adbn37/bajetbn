@@ -12,7 +12,7 @@ import {
   categoryApplies,
   categoryIconGlyph,
 } from '../categories/defaultCategories';
-import { listAccounts } from '../../repositories/accountRepository';
+import { listPersonalAccounts } from '../../repositories/accountRepository';
 import { listCustomCategories } from '../../repositories/categoryRepository';
 import {
   createRecurringTransactionTemplate,
@@ -149,7 +149,7 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
       const amountMinor = toMinorUnits(amount);
       if (amountMinor <= 0) throw new Error('Enter an amount greater than BND 0.00.');
       if (!name.trim()) throw new Error('Add a name for this recurring money.');
-      if (!spaceId || !accountId) throw new Error('Choose a Space and Account.');
+      if (!spaceId || !accountId) throw new Error('Choose an Account.');
       if (!selectedCategory) throw new Error('Choose a category.');
       if (!nextRunDate) throw new Error('Choose the next date.');
       if (endDate && endDate < nextRunDate) throw new Error('The end date must be on or after the next date.');
@@ -188,7 +188,7 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
       </div>
       <div className="form-grid">
         <label className="span-2">Name<input required value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder={type === 'income' ? 'Example: Monthly salary' : 'Example: Monthly subscription'} /></label>
-        <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option key={space.id} value={space.id}>{space.name} · {space.type === 'sme' ? 'Business' : 'Personal'}</option>)}</select></label>
+        {spaces.length === 1 && spaces[0].type === 'personal' ? <div className="locked-space-field"><span>Budget</span><strong>Personal money</strong><small>No Space needed</small></div> : <label>Space<select required value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>{spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label>}
         <label>Account<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
         <label className="span-2 amount-field">Amount ({selectedSpace?.currency || 'BND'})<input required inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
       </div>
@@ -259,13 +259,19 @@ export function RecurringTransactionsPage() {
     try {
       const [nextTemplates, nextAccounts, nextSpaces, customCategories] = await Promise.all([
         listRecurringTransactionTemplates(user.uid),
-        listAccounts(user.uid),
+        listPersonalAccounts(user.uid),
         listSpaces(user.uid),
         listCustomCategories(user.uid),
       ]);
-      setTemplates(nextTemplates);
+      const personalSpace =
+        nextSpaces.find((space) => space.type === 'personal' && !space.archivedAt) || null;
+      setTemplates(
+        personalSpace
+          ? nextTemplates.filter((item) => item.spaceId === personalSpace.id)
+          : [],
+      );
       setAccounts(nextAccounts);
-      setSpaces(nextSpaces.filter((space) => !space.archivedAt));
+      setSpaces(personalSpace ? [personalSpace] : []);
       setCategories([...DEFAULT_TRANSACTION_CATEGORIES, ...customCategories]);
     } catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setLoading(false); }
@@ -320,7 +326,7 @@ export function RecurringTransactionsPage() {
     </section>
     <div className="info-banner"><strong>How it works</strong><span>On each due date, BajetBN saves a normal money activity record and safely updates the selected Account. You can pause, skip, edit future dates, or stop at any time.</span></div>
     {!accounts.length && <div className="notice">Add an active Account before creating recurring money.</div>}
-    {!spaces.length && <div className="notice">Add or restore a Space before creating recurring money.</div>}
+    {!spaces.length && <div className="notice">Your personal budget is not ready. Refresh BajetBN and try again.</div>}
     {visible.length === 0 ? <EmptyState title="No recurring money yet" description="Add repeating salary, allowance, rent income, subscriptions, or regular expenses." action={accounts.length && spaces.length ? <button className="button primary" onClick={() => setShowForm(true)}>Add recurring money</button> : undefined} /> : <section className="recurring-card-grid">
       {visible.map((template) => {
         const account = accountMap.get(template.accountId);
@@ -329,7 +335,7 @@ export function RecurringTransactionsPage() {
         return <article className={`recurring-card status-${template.status}`} key={template.id}>
           <div className="recurring-card-heading"><div className={`category-icon category-${template.categoryColor}`}>{categoryIconGlyph(template.categoryIcon)}</div><div><span className="eyebrow">{template.type === 'income' ? 'Money in' : 'Money out'}</span><h2>{template.name}</h2></div><span className={`status-badge ${template.status}`}>{statusLabels[template.status]}</span></div>
           <strong className={template.type === 'income' ? 'money-positive recurring-amount' : 'money-negative recurring-amount'}>{template.type === 'income' ? '+' : '−'}{formatMoney(template.amountMinor, template.currency)}</strong>
-          <dl className="recurring-details"><div><dt>Repeats</dt><dd>{frequencyLabels[template.frequency]}</dd></div><div><dt>Next date</dt><dd>{readableDate(template.nextRunDate)}</dd></div><div><dt>Space</dt><dd>{space?.name || 'Unavailable Space'}</dd></div><div><dt>Account</dt><dd>{account?.name || 'Unavailable Account'}</dd></div><div><dt>Category</dt><dd>{template.category}</dd></div><div><dt>Posted</dt><dd>{template.generatedCount} time{template.generatedCount === 1 ? '' : 's'}</dd></div></dl>
+          <dl className="recurring-details"><div><dt>Repeats</dt><dd>{frequencyLabels[template.frequency]}</dd></div><div><dt>Next date</dt><dd>{readableDate(template.nextRunDate)}</dd></div><div><dt>Budget</dt><dd>{space?.type === 'personal' ? 'Personal' : space?.name || 'Unavailable'}</dd></div><div><dt>Account</dt><dd>{account?.name || 'Unavailable Account'}</dd></div><div><dt>Category</dt><dd>{template.category}</dd></div><div><dt>Posted</dt><dd>{template.generatedCount} time{template.generatedCount === 1 ? '' : 's'}</dd></div></dl>
           {template.lastError && <div className="notice error compact-notice">{template.lastError}</div>}
           <div className="card-actions recurring-actions"><button className="button secondary" onClick={() => { setEditing(template); setShowForm(true); }}>Edit future</button>{due && <button className="button primary" onClick={() => ask(template, 'run')}>Post due now</button>}{template.status === 'active' && <button className="button secondary" onClick={() => ask(template, 'pause')}>Pause</button>}{template.status === 'active' && template.nextRunDate && <button className="button secondary" onClick={() => ask(template, 'skip')}>Skip next</button>}{['paused', 'needs_attention'].includes(template.status) && <button className="button primary" onClick={() => setResuming(template)}>Resume</button>}<button className="text-button danger" onClick={() => ask(template, 'stop')}>Stop</button></div>
         </article>;

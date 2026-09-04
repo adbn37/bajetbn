@@ -100,52 +100,78 @@ const mobileNavigation = shell.slice(
   mobileNavEnd,
 );
 
-const businessIndex = mobileNavigation.indexOf(
-  '<small>{businessPickerLoading',
-);
-const homeIndex = mobileNavigation.indexOf('<small>Home</small>');
-const addIndex = mobileNavigation.indexOf('mobile-bottom-add');
-const spaceIndex = mobileNavigation.indexOf('<small>Space</small>');
-const moreIndex = mobileNavigation.indexOf('<small>More</small>');
+const homeIndex =
+  mobileNavigation.indexOf(
+    '<small>Home</small>',
+  );
+
+const moneyIndex =
+  mobileNavigation.indexOf(
+    '<small>Money</small>',
+  );
+
+const addIndex =
+  mobileNavigation.indexOf(
+    'mobile-bottom-add',
+  );
+
+const spacesIndex =
+  mobileNavigation.indexOf(
+    '<small>Spaces</small>',
+  );
+
+const moreIndex =
+  mobileNavigation.indexOf(
+    '<small>More</small>',
+  );
 
 need(
-  businessIndex >= 0
-    && businessIndex < homeIndex
-    && homeIndex < addIndex
-    && addIndex < spaceIndex
-    && spaceIndex < moreIndex,
-  'Mobile bottom navigation must remain Business, Home, Add, Space, More.',
+  homeIndex >= 0
+    && homeIndex < moneyIndex
+    && moneyIndex < addIndex
+    && addIndex < spacesIndex
+    && spacesIndex < moreIndex,
+  'Mobile bottom navigation must remain Home, Money, Add, Spaces, More.',
 );
 
 need(
-  !mobileNavigation.includes('<small>Activity</small>')
-    && !mobileNavigation.includes('to="/transactions"'),
-  'Mobile Activity shortcut must remain removed.',
+  mobileNavigation.includes(
+    'to="/transactions"',
+  )
+    && mobileNavigation.includes(
+      '<small>Money</small>',
+    ),
+  'Mobile Money destination must remain available.',
 );
 
 need(
-  mobileNavigation.includes('openBusinessShortcut'),
-  'Mobile Business shortcut must remain available.',
-);
-
-need(
-  mobileNavigation.includes("navigate('/?quick=1')"),
+  mobileNavigation.includes(
+    "navigate('/?quick=1')",
+  ),
   'Mobile Add action must open money activity.',
 );
 
 need(
-  mobileNavigation.includes('to="/spaces"'),
-  'Mobile Space destination is missing.',
+  mobileNavigation.includes(
+    'to="/spaces"',
+  ),
+  'Mobile Spaces destination is missing.',
 );
 
 need(
-  mobileNavigation.includes('<small>Space</small>'),
-  'Mobile Space label is missing.',
+  mobileNavigation.includes(
+    '<small>Spaces</small>',
+  ),
+  'Mobile Spaces label is missing.',
 );
 
 need(
-  !mobileNavigation.includes('to="/notifications"')
-    && !mobileNavigation.includes('<small>Alerts</small>'),
+  !mobileNavigation.includes(
+    'to="/notifications"',
+  )
+    && !mobileNavigation.includes(
+      '<small>Alerts</small>',
+    ),
   'Alerts must not remain in the fixed mobile bottom navigation.',
 );
 

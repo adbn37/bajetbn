@@ -11,7 +11,7 @@ import {
 } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
-import { listAccounts } from '../repositories/accountRepository';
+import { listPersonalAccounts } from '../repositories/accountRepository';
 import {
   accountColorClass,
   getAccountColor,
@@ -69,6 +69,9 @@ export function DashboardPage() {
     searchParams,
     setSearchParams,
   ] = useSearchParams();
+
+  const welcomeFromOnboarding =
+    searchParams.get('welcome') === '1';
 
   const [
     accounts,
@@ -192,7 +195,7 @@ export function DashboardPage() {
 
       try {
         const nextAccounts =
-          await listAccounts(user.uid);
+          await listPersonalAccounts(user.uid);
 
         setAccounts(nextAccounts);
       } catch {
@@ -268,17 +271,20 @@ export function DashboardPage() {
             (item) => !item.archivedAt,
           );
 
-        setSpaces(nextSpaces);
+        setSpaces(nextSpaces.filter((item) => !item.archivedAt && item.type !== 'sme'));
         setCustomCategories(
           nextCategories,
         );
         setQuickOptionsLoaded(true);
 
-        if (
-          nextActiveSpaces.length === 0
-        ) {
+        const personalBudget =
+          nextActiveSpaces.find(
+            (item) => item.type === 'personal',
+          );
+
+        if (!personalBudget) {
           setFeedback(
-            'Create or restore a Space before recording money activity.',
+            'Your personal budget is not ready yet. Refresh BajetBN and try again.',
           );
 
           return false;
@@ -642,6 +648,13 @@ export function DashboardPage() {
           ♢
         </Link>
       </header>
+
+      {welcomeFromOnboarding && (
+        <div className="notice success">
+          <strong>Your budget is ready.</strong>
+          <span>Add an account, then start recording money. Spaces are optional.</span>
+        </div>
+      )}
 
       {feedback && (
         <div className="notice success">

@@ -58,6 +58,8 @@ export function TripPlanningPanel({
     title: string;
   } | null>(null);
 
+  const [planningView, setPlanningView] = useState<'itinerary' | 'tasks' | 'bookings'>('itinerary');
+
   const activeMembers = members.filter(
     (member) => (member.status || 'active') === 'active',
   );
@@ -219,11 +221,8 @@ export function TripPlanningPanel({
       <div className="panel-heading">
         <div>
           <span className="eyebrow">Trip planning</span>
-          <h2>Itinerary, Tasks & Bookings</h2>
-          <p className="muted">
-            Keep the group plan together without mixing travel Bookings with Business
-            POS reservations.
-          </p>
+          <h2>Trip Plan</h2>
+          <p className="muted">Plan the trip together.</p>
         </div>
       </div>
 
@@ -260,11 +259,17 @@ export function TripPlanningPanel({
         </div>
       )}
 
+      <div className="segmented-control trip-planning-tabs" role="tablist" aria-label="Trip Plan">
+        <button type="button" className={planningView === 'itinerary' ? 'active' : ''} onClick={() => setPlanningView('itinerary')}>Itinerary</button>
+        <button type="button" className={planningView === 'tasks' ? 'active' : ''} onClick={() => setPlanningView('tasks')}>Tasks</button>
+        <button type="button" className={planningView === 'bookings' ? 'active' : ''} onClick={() => setPlanningView('bookings')}>Bookings</button>
+      </div>
+
       {loading ? (
         <div className="notice">Loading Trip planning…</div>
       ) : (
         <div className="trip-planning-grid">
-          <section className="trip-planning-section">
+          <section className="trip-planning-section" hidden={planningView !== 'itinerary'}>
             <div className="trip-planning-heading">
               <div>
                 <h3>Itinerary</h3>
@@ -330,8 +335,7 @@ export function TripPlanningPanel({
 
             {!itinerary.length ? (
               <div className="notice">
-                <strong>No itinerary yet.</strong>{' '}
-                Add the first flight, hotel, transport or activity.
+                <strong>No itinerary yet.</strong>{' '}Add a stop.
               </div>
             ) : (
               <div className="trip-planning-list">
@@ -371,7 +375,7 @@ export function TripPlanningPanel({
             )}
           </section>
 
-          <section className="trip-planning-section">
+          <section className="trip-planning-section" hidden={planningView !== 'tasks'}>
             <div className="trip-planning-heading">
               <div>
                 <h3>Trip Tasks</h3>
@@ -422,8 +426,7 @@ export function TripPlanningPanel({
 
             {!tasks.length ? (
               <div className="notice">
-                <strong>No Trip Tasks yet.</strong>{' '}
-                Assign useful preparation work to Trip members.
+                <strong>No tasks yet.</strong>{' '}Add a task.
               </div>
             ) : (
               <div className="trip-planning-list">
@@ -492,7 +495,7 @@ export function TripPlanningPanel({
             )}
           </section>
 
-          <section className="trip-planning-section">
+          <section className="trip-planning-section" hidden={planningView !== 'bookings'}>
             <div className="trip-planning-heading">
               <div>
                 <h3>Trip Bookings</h3>
@@ -501,9 +504,7 @@ export function TripPlanningPanel({
             </div>
 
             <div className="notice">
-              Booking amounts here are planning references only. Record actual
-              spending under Trip Expenses so financial totals keep one source
-              of truth.
+              Bookings are for planning. Record actual payments in Trip Expenses.
             </div>
 
             {canPlan && (
@@ -574,8 +575,7 @@ export function TripPlanningPanel({
 
             {!bookings.length ? (
               <div className="notice">
-                <strong>No Trip Bookings yet.</strong>{' '}
-                Save confirmed flights, hotels and activities here.
+                <strong>No bookings yet.</strong>{' '}Add a booking.
               </div>
             ) : (
               <div className="trip-planning-list">

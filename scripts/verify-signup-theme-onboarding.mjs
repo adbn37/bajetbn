@@ -62,18 +62,18 @@ check(
     'type OnboardingStep = 1 | 2 | 3;',
   )
     && onboarding.includes(
-      'How BajetBN organises your money',
+      'BajetBN starts with your money',
     )
     && onboarding.includes(
       'Your first steps',
     )
     && onboarding.includes(
-      'Space = purpose',
+      'Personal money first',
     )
     && onboarding.includes(
       'Account = where money is kept',
     ),
-  'Onboarding provides the simplified guided three-step setup.',
+  'Onboarding provides the Personal-First guided three-step setup.',
 );
 
 check(
@@ -88,12 +88,12 @@ check(
 
 check(
   onboarding.includes(
-    "'/spaces?welcome=1'",
+    '/?welcome=1',
   )
     && !onboarding.includes(
-      '/spaces?welcome=1&setup=${purpose}',
+      '/spaces?welcome=1&setup=',
     ),
-  'New users enter simple Personal-first Space discovery.',
+  'New users enter Personal-First Home before optional Space discovery.',
 );
 
 check(
@@ -124,15 +124,15 @@ check(
       'guided-onboarding-next-v113',
     )
     && spaces.includes(
-      'Your Personal Space is ready',
+      'Spaces are for shared or separate work',
     )
     && spaces.includes(
-      'You do not need another Space yet.',
+      'Personal money does not need a Space.',
     )
     && spaces.includes(
-      'A Space is one part of your life. Accounts inside it are where that money is kept.',
+      'No Spaces yet',
     ),
-  'Spaces page gives simple Personal-first guidance.',
+  'Spaces page explains that personal money does not require a Space.',
 );
 
 check(

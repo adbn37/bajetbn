@@ -50,12 +50,12 @@ check(
       "value: 'household'",
     )
     && onboarding.includes(
-      'Space = purpose',
+      'Personal money first',
     )
     && onboarding.includes(
       'Account = where money is kept',
     ),
-  'First-use onboarding starts simple and teaches Space versus Account.',
+  'First-use onboarding starts with normal personal budgeting.',
 );
 
 check(
@@ -87,18 +87,18 @@ check(
 
 check(
   spaces.includes(
-    'A Space is one part of your life. Accounts inside it are where that money is kept.',
+    'Personal money does not need a Space.',
   )
     && spaces.includes(
-      '?section=accounts',
+      'Trip with others',
     )
-    && spaces.includes(
-      'You do not need another Space yet.',
+    && !spaces.includes(
+      '<option value="goal">Goal</option>',
     )
     && !spaces.includes(
       'space-pos-shortcut',
     ),
-  'Space discovery starts with Personal and avoids a generic Business POS shortcut.',
+  'Space discovery is reserved for shared or separate operations.',
 );
 
 check(

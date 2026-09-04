@@ -321,15 +321,15 @@ check(
     'type OnboardingStep = 1 | 2 | 3;',
   )
     && onboarding.includes(
-      "'/spaces?welcome=1'",
+      '/?welcome=1',
     )
     && onboarding.includes(
-      'Space = purpose',
+      'Personal money first',
     )
     && onboarding.includes(
       'Account = where money is kept',
     ),
-  'Guided Onboarding starts with Personal and teaches Space versus Account.',
+  'Guided Onboarding starts with personal money and keeps Spaces optional.',
 );
 
 check(

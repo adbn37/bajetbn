@@ -83,7 +83,7 @@ export function OnboardingPage() {
       await refreshProfile();
 
       navigate(
-        '/spaces?welcome=1',
+        '/?welcome=1',
         { replace: true },
       );
     } catch (nextError) {
@@ -152,7 +152,7 @@ export function OnboardingPage() {
               {step === 1
                 ? 'Tell us about you'
                 : step === 2
-                  ? 'How BajetBN organises your money'
+                  ? 'BajetBN starts with your money'
                   : 'Your first steps'}
             </h1>
           </div>
@@ -178,25 +178,20 @@ export function OnboardingPage() {
 
         {step === 1 && (
           <p>
-            Start with the basics.
-            BajetBN always creates one private
-            Personal Space for your own money.
+            Start with your own money. You do not need a Space for normal personal budgeting.
           </p>
         )}
 
         {step === 2 && (
           <p>
-            Start with your Personal Space. A Space separates one part
-            of your financial life; Accounts inside it show where that
-            money is actually kept.
+            BajetBN is your personal budget. Spaces are optional places for a business,
+            trip, household or group that involves other people.
           </p>
         )}
 
         {step === 3 && (
           <p>
-            Keep the first setup simple. Add another Space later only
-            when a household, trip, business or other purpose needs to
-            stay separate from your personal money.
+            Add your first account and start recording money. Create a Space later only when you need to collaborate or keep a separate operation together.
           </p>
         )}
 
@@ -289,7 +284,7 @@ export function OnboardingPage() {
 
                 <div>
                   <strong>
-                    Personal Space
+                    Personal budget
                   </strong>
 
                   <small>
@@ -320,13 +315,12 @@ export function OnboardingPage() {
                   </span>
 
                   <h2>
-                    Space = purpose
+                    Personal money first
                   </h2>
 
                   <p>
-                    Your Personal Space is your private money home.
-                    Household, Trip and Business Spaces are separate
-                    environments you can add only when you need them.
+                    Home, Accounts, Money, Bills, Budgets and Goals are for you.
+                    Spaces are only for shared people or a separate business, trip or group.
                   </p>
                 </div>
               </article>
@@ -337,11 +331,11 @@ export function OnboardingPage() {
 
                   <div>
                     <strong>
-                      Space = purpose
+                      Your money = BajetBN
                     </strong>
 
                     <small>
-                      Personal, Household, Trip or Business.
+                      Accounts, spending, bills, budgets and goals.
                     </small>
                   </div>
 
@@ -359,8 +353,7 @@ export function OnboardingPage() {
                     </strong>
 
                     <small>
-                      BIBD, Baiduri, cash, card or e-wallet can
-                      live inside the right Space.
+                      BIBD, Baiduri, cash, card or e-wallet.
                     </small>
                   </div>
 
@@ -380,7 +373,7 @@ export function OnboardingPage() {
 
                   <div>
                     <strong>
-                      Personal Space
+                      Personal budget
                     </strong>
 
                     <small>
@@ -420,7 +413,7 @@ export function OnboardingPage() {
                     </strong>
 
                     <small>
-                      Add income or an expense inside your Personal Space.
+                      Add income or an expense inside your Personal budget.
                     </small>
                   </div>
 
@@ -473,7 +466,7 @@ export function OnboardingPage() {
               disabled={busy}
             >
               {busy
-                ? 'Creating your Personal Space...'
+                ? 'Creating your Personal budget...'
                 : step === 1
                   ? 'Continue'
                   : step === 2

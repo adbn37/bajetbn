@@ -45,7 +45,7 @@ requireText('src/app/App.tsx', 'CollectionItemDetailsPage');
 requireText('src/app/App.tsx', 'spaces/:spaceId/collection/items/:itemId');
 const spacesPageForCollection = read('src/features/spaces/SpacesPage.tsx');
 const hasCollectionSpaceOption = spacesPageForCollection.includes('<option value="collection">Collection</option>') || spacesPageForCollection.includes('<option value={"collection"}>Collection</option>');
-if (!hasCollectionSpaceOption) fail('Collection must remain available as a Space type option.');
+if (hasCollectionSpaceOption) fail('Collection should stay out of the simplified normal new-Space menu while existing Collection Spaces remain supported.');
 requireText('src/features/spaces/SpaceDetailsPage.tsx', 'Open collection');
 requireText('src/components/BarcodeCameraScanner.tsx', 'BrowserMultiFormatReader');
 rejectText('src/features/collection/CollectionInventoryPage.tsx', /BrowserMultiFormatReader/, 'Collection page must use the shared camera scanner.');

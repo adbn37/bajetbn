@@ -610,6 +610,13 @@ export function SpaceDetailsPage() {
     || space.type === 'household'
     || space.type === 'trip';
 
+  /*
+   * Legacy detailed dashboards remain intentionally disabled.
+   * Use an opaque boolean function instead of a literal false guard
+   * so TypeScript can still narrow Space after space.type checks.
+   */
+  const showDetailedSpaceOverviews = () => false;
+
   return <main className="page space-details-page">
     <PageHeader
       eyebrow={`${spaceTypeLabel[space.type]} Space`}
@@ -625,7 +632,7 @@ export function SpaceDetailsPage() {
     {error && <div className="notice error">{error}</div>}
     {space.archivedAt && <div className="notice">This Space is hidden. Its previous money records are still kept.</div>}
 
-    {space.type !== 'sme' && (
+    {space.type !== 'sme' && !compactActionHome && (
       <section className="space-details-identity">
         <SpaceAvatar space={space} size="large" />
 
@@ -673,7 +680,7 @@ export function SpaceDetailsPage() {
       />
     )}
 
-    {activeTab === 'overview' && space.type === 'trip' && (
+    {showDetailedSpaceOverviews() && activeTab === 'overview' && space.type === 'trip' && (
       <details
         open={detailedOverviewRequested}
         onToggle={(event) => {
@@ -720,7 +727,7 @@ export function SpaceDetailsPage() {
     )}
 
 
-    {activeTab === 'overview' && space.type === 'household' && (
+    {showDetailedSpaceOverviews() && activeTab === 'overview' && space.type === 'household' && (
       <details
         open={detailedOverviewRequested}
         onToggle={(event) => {
@@ -771,7 +778,7 @@ export function SpaceDetailsPage() {
       </details>
     )}
 
-    {activeTab === 'overview' && space.type === 'sme' && (
+    {showDetailedSpaceOverviews() && activeTab === 'overview' && space.type === 'sme' && (
       <details
         open={detailedOverviewRequested}
         onToggle={(event) => {
@@ -879,9 +886,7 @@ export function SpaceDetailsPage() {
           <div className="panel-heading">
             <div>
               <h2>Business Setup</h2>
-              <p className="muted">
-                Change the business type, marketplace inventory profile and operating setup for this Business Space.
-              </p>
+              <p className="muted">Business type and shop setup.</p>
             </div>
 
             <Link

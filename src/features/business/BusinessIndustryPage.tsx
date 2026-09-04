@@ -114,7 +114,7 @@ const workflows:
 
     marketplace: {
       label:
-        'Marketplace / consignment',
+        'Multi-Seller Shop',
       headline:
         'Seller inventory and payouts',
       description:

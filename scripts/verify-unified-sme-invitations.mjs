@@ -54,8 +54,8 @@ rejectText(settings, 'Add POS team member', 'separate POS invite modal');
 rejectText(settings, 'Create team invite', 'separate POS invite button');
 
 requireText(marketplace, 'Add seller profile', 'seller profile wording');
-requireText(marketplace, 'A seller profile does not automatically give the person BajetBN login access.', 'seller/login distinction');
-requireText(marketplace, 'invite them from Members and choose Seller', 'seller access guidance');
+requireText(marketplace, 'Manage seller stock, commission and payouts.', 'seller profile guidance');
+requireText(marketplace, 'Seller, price, stock and commission stay linked to each listing.', 'seller inventory guidance');
 rejectText(marketplace, 'First invite the person to the SME Space and assign the Seller POS role in POS Settings.', 'old seller two-step guidance');
 
 console.log('Unified WhatsApp-first SME invitation verifier: PASS');

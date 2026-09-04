@@ -31,8 +31,10 @@ for (const token of [
 }
 
 need(
-  personalisation.includes("{ id: 'inbox', path: '/inbox', label: 'Needs Attention', icon: '✓' },"),
-  'Navigation must expose one Needs Attention destination on the existing inbox route.',
+  personalisation.includes(
+    "{ id: 'inbox', path: '/inbox', label: 'Attention', icon: '✓' },",
+  ),
+  'Navigation must expose one Attention destination on the existing inbox route.',
 );
 need(app.includes('<Route path="inbox" element={<MyInboxPage />} />'), 'Existing /inbox route must be preserved.');
 need(!app.includes('path="needs-attention"'), 'Do not create a second Needs Attention route/dashboard.');

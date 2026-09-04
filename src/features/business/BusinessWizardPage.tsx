@@ -72,7 +72,7 @@ const industries: IndustryOption[] = [
   },
   {
     value: 'marketplace',
-    label: 'Marketplace / consignment',
+    label: 'Multi-Seller Shop',
   },
   {
     value: 'rental',
@@ -661,7 +661,7 @@ export function BusinessWizardPage() {
 
               {form.industry === 'marketplace' && (
                 <label className="span-2">
-                  What does this marketplace mainly sell?
+                  What does this shop mainly sell?
 
                   <select
                     value={
@@ -695,9 +695,7 @@ export function BusinessWizardPage() {
                   </select>
 
                   <small>
-                    BajetBN uses this as the default inventory
-                    profile. You can change it later in
-                    Business Setup.
+                    This controls the default inventory fields.
                   </small>
                 </label>
               )}

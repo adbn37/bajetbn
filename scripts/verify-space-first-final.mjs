@@ -57,7 +57,7 @@ check(
     'data-space-more-v111',
   )
     && hub.includes(
-      'Global More remains in the bottom navigation.',
+      'More for this Space.',
     ),
   'Phase 4: Space More is separate from Global More.',
 );
@@ -99,14 +99,8 @@ check(
 
 check(
   hub.includes(
-    'data-space-launcher="sme"',
+    'data-simplified-space-navigation',
   )
-    && hub.includes(
-      'data-business-industry={businessIndustry}',
-    )
-    && hub.includes(
-      'label="Business Overview"',
-    )
     && hub.includes(
       "businessIndustry === 'retail'",
     )
@@ -114,61 +108,22 @@ check(
       "businessIndustry === 'marketplace'",
     )
     && hub.includes(
-      'salesFocusedBusiness',
+      "businessIndustry === 'service'",
     )
     && hub.includes(
-      'to={`/spaces/${space.id}/pos`}',
+      "businessIndustry === 'rental'",
     )
     && hub.includes(
-      'businessWorkflowLabel',
+      "businessIndustry === 'transport_delivery'",
     )
     && hub.includes(
-      "'Service Operations'",
-    )
-    && hub.includes(
-      "'Rental Operations'",
-    )
-    && hub.includes(
-      "'Delivery Operations'",
-    )
-    && hub.includes(
-      'label="Business Accounts"',
-    )
-    && hub.includes(
-      'businessAdminLabel',
-    )
-    && hub.includes(
-      "'Renters & Admin'",
-    )
-    && hub.includes(
-      "'Customers & Admin'",
-    )
-    && hub.includes(
-      'label="Tasks"',
-    )
-    && hub.includes(
-      'label="Purchase List"',
-    )
-    && hub.includes(
-      'to={`/spaces/${space.id}?tab=activity`}',
+      'label="Money"',
     )
     && hub.includes(
       'label="More"',
     )
     && hub.includes(
-      'label="Staff Guide"',
-    )
-    && hub.includes(
-      'to={`/spaces/${space.id}?section=accounts`}',
-    )
-    && hub.includes(
-      'to={`/spaces/${space.id}/business`}',
-    )
-    && hub.includes(
-      'to={`/spaces/${space.id}/business/industry`}',
-    )
-    && !hub.includes(
-      'to="/accounts"',
+      'to={`/spaces/${space.id}/pos`}',
     ),
   'Phase 6: industry-aware Business Space home complete.',
 );
@@ -224,12 +179,12 @@ check(
 
 check(
   onboarding.includes(
-    '/spaces?welcome=1',
+    '/?welcome=1',
   )
     && spaces.includes(
-      'Your Personal Space is ready',
+      'Personal money does not need a Space.',
     ),
-  'Phase 9: Space discovery complete.',
+  'Personal budgeting is primary and Spaces are optional.',
 );
 
 check(
@@ -266,10 +221,10 @@ const nav =
     : '';
 
 const navTokens = [
-  'Business',
   '<small>Home</small>',
+  '<small>Money</small>',
   'mobile-bottom-add',
-  '<small>Space</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ];
 
@@ -293,7 +248,7 @@ for (const token of navTokens) {
 
 check(
   navValid,
-  'Business | Home | + | Space | More remains locked.',
+  'Home | Money | + | Spaces | More is the simplified navigation.',
 );
 
 if (failures.length) {

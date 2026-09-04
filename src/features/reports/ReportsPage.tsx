@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePreferences } from '../../contexts/PreferencesContext';
 import { categoryIconGlyph } from '../categories/defaultCategories';
-import { listAccounts } from '../../repositories/accountRepository';
+import { listPersonalAccounts } from '../../repositories/accountRepository';
 import { listBudgets } from '../../repositories/budgetRepository';
 import { listCommitments } from '../../repositories/commitmentRepository';
 import { listGoals } from '../../repositories/goalRepository';
@@ -233,25 +233,36 @@ export function ReportsPage() {
     setLoading(true);
     setError('');
     Promise.all([
-      listAccounts(user.uid),
+      listPersonalAccounts(user.uid),
       listSpaces(user.uid),
       listTransactions(user.uid),
       listBudgets(user.uid),
       listGoals(user.uid),
       listCommitments(user.uid),
     ]).then(([nextAccounts, nextSpaces, nextTransactions, nextBudgets, nextGoals, nextCommitments]) => {
+      const personalSpace =
+        nextSpaces.find((item) => item.type === 'personal' && !item.archivedAt) || null;
+      const personalAccountIds = new Set(nextAccounts.map((item) => item.id));
       setAccounts(nextAccounts);
-      setSpaces(nextSpaces.filter((item) => !item.archivedAt));
-      setTransactions(nextTransactions);
-      setBudgets(nextBudgets);
-      setGoals(nextGoals);
-      setCommitments(nextCommitments);
+      setSpaces(personalSpace ? [personalSpace] : []);
+      setTransactions(
+        nextTransactions.filter((item) => personalAccountIds.has(item.accountId)),
+      );
+      setBudgets(
+        personalSpace ? nextBudgets.filter((item) => item.spaceId === personalSpace.id) : [],
+      );
+      setGoals(
+        personalSpace ? nextGoals.filter((item) => item.spaceId === personalSpace.id) : [],
+      );
+      setCommitments(
+        personalSpace ? nextCommitments.filter((item) => item.spaceId === personalSpace.id) : [],
+      );
     }).catch((nextError) => setError(getErrorMessage(nextError))).finally(() => setLoading(false));
   }, [user]);
 
   const currency = profile?.currency || 'BND';
   const accountNames = useMemo(() => new Map(accounts.map((item) => [item.id, item.name])), [accounts]);
-  const spaceNames = useMemo(() => new Map(spaces.map((item) => [item.id, item.name])), [spaces]);
+  const spaceNames = useMemo(() => new Map(spaces.map((item) => [item.id, item.type === 'personal' ? 'Personal' : item.name])), [spaces]);
   const categoryOptions = useMemo(() => {
     const options = new Map<string, string>();
     transactions.forEach((item) => options.set(categoryKey(item), item.category || 'Other'));

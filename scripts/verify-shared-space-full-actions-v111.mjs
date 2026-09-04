@@ -256,15 +256,15 @@ check(
 
 check(
   hub.includes(
-    'label="Business Accounts"',
+    'label="Money"',
   )
     && hub.includes(
-      'to={`/spaces/${space.id}?section=accounts`}',
+      'listAccountsForSpace(space.id)',
     )
-    && !hub.includes(
-      'to="/accounts"',
+    && hub.includes(
+      '?section=accounts',
     ),
-  'SME Business Accounts stays inside the current SME Space.',
+  'SME Business Money stays inside the current SME Space.',
 );
 
 check(
@@ -348,10 +348,10 @@ const nav =
     : '';
 
 const navTokens = [
-  'Business',
   '<small>Home</small>',
+  '<small>Money</small>',
   'mobile-bottom-add',
-  '<small>Space</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ];
 
@@ -375,7 +375,7 @@ for (const token of navTokens) {
 
 check(
   navigationValid,
-  'Business | Home | + | Space | More remains locked.',
+  'Home | Money | + | Spaces | More is the simplified navigation.',
 );
 
 if (failures.length) {
