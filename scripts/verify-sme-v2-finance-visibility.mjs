@@ -51,11 +51,31 @@ expect(
 );
 
 expect(
-  details.includes('const canReadSmeFinancials =\n        canManageSmeFinancials;')
-    && details.includes("smePosRole === 'manager'")
-    && details.includes("currentMember?.role === 'admin';")
-    && !details.includes('listAccountsForSpace('),
-  'SME finance must follow role and must not load globally shared account cards.',
+  details.includes(
+    'const canReadSmeFinancials =\n        canManageSmeFinancials;',
+  )
+    && details.includes(
+      "nextSmePosRole === 'manager'",
+    )
+    && details.includes(
+      'nextSmePosRole === null',
+    )
+    && details.includes(
+      "smePosRole === 'manager'",
+    )
+    && details.includes(
+      'smePosRole === null',
+    )
+    && !details.includes(
+      "|| currentSpaceMember?.role === 'admin';",
+    )
+    && !details.includes(
+      "|| currentMember?.role === 'admin';",
+    )
+    && !details.includes(
+      'listAccountsForSpace(',
+    ),
+  'SME finance prefers the active Business role and uses legacy admin only when no Business role exists.',
 );
 
 expect(

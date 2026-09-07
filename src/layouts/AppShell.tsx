@@ -2,13 +2,10 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { ConnectivityBanner } from '../components/ConnectivityBanner';
-import { ContextualHelp } from '../components/ContextualHelp';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { subscribeUserNotifications } from '../repositories/collaborationRepository';
 import { listenForForegroundPush } from '../repositories/notificationRepository';
-import { listSpaces } from '../repositories/spaceRepository';
-import type { Space } from '../types/models';
 import { planLabel } from '../services/entitlements';
 import { SidebarCustomizer } from '../components/SidebarCustomizer';
 import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
@@ -57,10 +54,6 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [businessSpaces, setBusinessSpaces] = useState<Space[]>([]);
-  const [businessPickerOpen, setBusinessPickerOpen] = useState(false);
-  const [businessPickerLoading, setBusinessPickerLoading] = useState(false);
-  const [businessPickerError, setBusinessPickerError] = useState('');
   const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
   const [menuCustomizerOpen, setMenuCustomizerOpen] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
@@ -105,6 +98,14 @@ export function AppShell() {
   useEffect(() => {
     if (location.pathname === '/search') setSearchText(new URLSearchParams(location.search).get('q') || '');
   }, [location]);
+
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'auto',
+    });
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!user) {
@@ -174,48 +175,6 @@ export function AppShell() {
     return () => { active = false; stop(); };
   }, [navigate, profile?.browserPushEnabled]);
 
-  async function openBusinessShortcut() {
-    if (!user || businessPickerLoading) return;
-
-    setBusinessPickerLoading(true);
-    setBusinessPickerError('');
-    setBusinessPickerOpen(false);
-
-    try {
-      const accessibleSpaces = await listSpaces(user.uid);
-      const smeSpaces = accessibleSpaces.filter(
-        (space) => space.type === 'sme' && !space.archivedAt,
-      );
-
-      setBusinessSpaces(smeSpaces);
-
-      if (smeSpaces.length === 0) {
-        navigate('/spaces');
-        return;
-      }
-
-      if (smeSpaces.length === 1) {
-        navigate(`/spaces/${smeSpaces[0].id}`);
-        return;
-      }
-
-      setBusinessPickerOpen(true);
-    } catch {
-      setBusinessSpaces([]);
-      setBusinessPickerError(
-        'Your Business Spaces could not be loaded. Open Spaces and try again.',
-      );
-      setBusinessPickerOpen(true);
-    } finally {
-      setBusinessPickerLoading(false);
-    }
-  }
-
-  function chooseBusinessSpace(space: Space) {
-    setBusinessPickerOpen(false);
-    setBusinessPickerError('');
-    navigate(`/spaces/${space.id}`);
-  }
   function submitSearch(event: FormEvent) {
     event.preventDefault();
     const query = searchText.trim();
@@ -409,20 +368,8 @@ export function AppShell() {
           </button>
         )}
         <Outlet />
-        <ContextualHelp />
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
-          <button
-            type="button"
-            hidden
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => void openBusinessShortcut()}
-          >
-            <span aria-hidden="true">▦</span>
-            <small>Business</small>
-          </button>
-
           <NavLink
             to="/"
             end
@@ -474,89 +421,6 @@ export function AppShell() {
           />
         )}
 
-        {businessPickerOpen && (
-          <>
-            <button
-              type="button"
-              className="mobile-business-picker-backdrop"
-              aria-label="Close business menu"
-              onClick={() => {
-                setBusinessPickerOpen(false);
-                setBusinessPickerError('');
-              }}
-            />
-
-            <section
-              className="mobile-business-picker"
-              aria-label="Choose a Business"
-            >
-              <header className="mobile-business-picker-header">
-                <div>
-                  <small>Business</small>
-                  <strong>
-                    {businessPickerError
-                      ? 'Business unavailable'
-                      : 'Choose a Business'}
-                  </strong>
-                </div>
-
-                <button
-                  type="button"
-                  aria-label="Close business menu"
-                  onClick={() => {
-                    setBusinessPickerOpen(false);
-                    setBusinessPickerError('');
-                  }}
-                >
-                  ×
-                </button>
-              </header>
-
-              {businessPickerError ? (
-                <div className="notice error">
-                  {businessPickerError}
-                </div>
-              ) : (
-                <div className="mobile-business-picker-list">
-                  {businessSpaces.map((space) => (
-                    <button
-                      type="button"
-                      key={space.id}
-                      className="mobile-business-picker-option"
-                      onClick={() => chooseBusinessSpace(space)}
-                    >
-                      <span className="space-icon sme" aria-hidden="true">
-                        B
-                      </span>
-
-                      <span>
-                        <strong>{space.name}</strong>
-                        <small>
-                          Business Space · {space.currency}
-                        </small>
-                      </span>
-
-                      <b aria-hidden="true">›</b>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="mobile-business-picker-all"
-                onClick={() => {
-                  setBusinessPickerOpen(false);
-                  setBusinessPickerError('');
-                  navigate('/spaces');
-                }}
-              >
-                View all Spaces
-                <span aria-hidden="true">›</span>
-              </button>
-            </section>
-          </>
-        )}
       </div>
     </div>
   );

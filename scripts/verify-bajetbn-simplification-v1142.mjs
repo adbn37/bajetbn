@@ -6,6 +6,7 @@ const onboarding = read('src/features/onboarding/OnboardingPage.tsx');
 const more = read('src/pages/MorePage.tsx');
 const hub = read('src/features/spaces/SpaceActionHub.tsx');
 const details = read('src/features/spaces/SpaceDetailsPage.tsx');
+const css = read('src/styles/global.css');
 const trip = read('src/features/spaces/TripPlanningPanel.tsx');
 const marketplace = read('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx');
 const wizard = read('src/features/business/BusinessWizardPage.tsx');
@@ -16,7 +17,7 @@ function check(value, message) {
   else { failures.push(message); console.error('FAIL:', message); }
 }
 
-check(shell.includes('<small>Home</small>') && shell.includes('<small>Money</small>') && shell.includes('<small>Spaces</small>') && shell.includes('<small>More</small>'), 'Global navigation is personal-budget first.');
+check(shell.includes('<small>Home</small>') && shell.includes('<small>Money</small>') && shell.includes('<small>Spaces</small>') && shell.includes('<small>More</small>') && !shell.includes('<small>Business</small>'), 'Global navigation is personal-budget first.');
 check(spaces.includes("item.type !== 'personal'") && spaces.includes('Personal money does not need a Space.'), 'Personal Space is hidden from normal Space discovery.');
 for (const legacyOption of ['<option value="goal">Goal</option>', '<option value="collection">Collection</option>', '<option value="vehicle">Vehicle</option>', '<option value="property">Property</option>', '<option value="asset">Asset</option>']) {
   check(!spaces.includes(legacyOption), 'New Space creation omits personal-only type: ' + legacyOption);
@@ -36,6 +37,11 @@ check(
 check(trip.includes('trip-planning-tabs') && trip.includes("hidden={planningView !== 'bookings'}"), 'Trip Plan uses focused tabs.');
 check(marketplace.includes('data-marketplace-pos-more') && marketplace.includes('primaryTabOrder'), 'Marketplace POS keeps primary tabs focused.');
 check(wizard.includes('Multi-Seller Shop') && wizard.includes('What does this shop mainly sell?'), 'Marketplace wording is simplified.');
+
+check(!shell.includes('openBusinessShortcut') && !shell.includes('businessPickerOpen'), 'Global Business shortcut runtime is removed.');
+check(!shell.includes('<ContextualHelp') && !more.includes('Replay tips'), 'Repeating contextual help is removed from normal runtime.');
+check(shell.includes('window.scrollTo({') && css.includes('v1.14.2 staging mobile shell cleanup') && css.includes('min-height: 100dvh'), 'Mobile pages reset to the top and use dynamic viewport spacing.');
+check(details.includes('nextSmePosRole === null') && details.includes('businessAccessLabel') && hub.includes('accessRoleLabel') && hub.includes("return 'Cashier';"), 'Business role authority prefers the active Business/POS role.');
 
 if (failures.length) throw new Error('BajetBN simplification verification failed: ' + failures.length + ' check(s).');
 console.log('BAJETBN PERSONAL-FIRST SIMPLIFICATION PASS');

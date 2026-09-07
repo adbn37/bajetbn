@@ -121,6 +121,25 @@ function smePosLabel(role: SmePosRole | null) {
   return 'POS & Operations';
 }
 
+function smePosRoleLabel(role: SmePosRole | null) {
+  switch (role) {
+    case 'owner':
+      return 'Owner';
+    case 'manager':
+      return 'Manager';
+    case 'cashier':
+      return 'Cashier';
+    case 'stock_staff':
+      return 'Stock Staff';
+    case 'seller':
+      return 'Seller';
+    case 'viewer':
+      return 'View Only';
+    default:
+      return 'Member';
+  }
+}
+
 export function SpaceActionHub({
   space,
   members,
@@ -249,12 +268,29 @@ export function SpaceActionHub({
 
   const shared = space.type !== 'personal';
   const canManage =
-    space.ownerId === user?.uid
-    || currentMember?.role === 'owner'
-    || currentMember?.role === 'admin';
+    space.type === 'sme'
+      ? (
+          space.ownerId === user?.uid
+          || smePosRole === 'owner'
+          || smePosRole === 'manager'
+          || (
+            smePosRole === null
+            && currentMember?.role === 'admin'
+          )
+        )
+      : (
+          space.ownerId === user?.uid
+          || currentMember?.role === 'owner'
+          || currentMember?.role === 'admin'
+        );
 
   const experience =
     getSpaceHomeExperience(space, currentMember);
+
+  const accessRoleLabel =
+    space.type === 'sme' && smePosRole
+      ? smePosRoleLabel(smePosRole)
+      : experience.roleLabel;
 
   const isPrimary = (
     action: 'expense' | 'income' | 'fund' | 'expenses' | 'balances' | 'bills',
@@ -323,7 +359,7 @@ export function SpaceActionHub({
         >
           <div>
             <span className="muted">Your access</span>{' '}
-            <strong>{experience.roleLabel}</strong>
+            <strong>{accessRoleLabel}</strong>
           </div>
 
           <small className="muted">{space.type === 'sme' ? 'Business' : 'Shared Space'}</small>

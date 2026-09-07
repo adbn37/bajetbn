@@ -184,6 +184,27 @@ const spaceTypeLabel: Record<SpaceType, string> = {
   custom: 'Custom',
 };
 
+function smePosRoleLabel(
+  role: SmePosRole | null,
+) {
+  switch (role) {
+    case 'owner':
+      return 'Owner';
+    case 'manager':
+      return 'Manager';
+    case 'cashier':
+      return 'Cashier';
+    case 'stock_staff':
+      return 'Stock Staff';
+    case 'seller':
+      return 'Seller';
+    case 'viewer':
+      return 'View Only';
+    default:
+      return 'Member';
+  }
+}
+
 function tabFromSearch(value: string | null, shared: boolean): SpaceDetailsTab {
   if (value === 'settings') return 'settings';
   if (shared && (value === 'approvals' || value === 'updates' || value === 'members' || value === 'bills' || value === 'expenses' || value === 'balances' || value === 'trip_money' || value === 'group_fund' || value === 'activity' || value === 'chat')) return value;
@@ -301,7 +322,10 @@ export function SpaceDetailsPage() {
         || nextSpace.ownerId === user.uid
         || nextSmePosRole === 'owner'
         || nextSmePosRole === 'manager'
-        || currentSpaceMember?.role === 'admin';
+        || (
+          nextSmePosRole === null
+          && currentSpaceMember?.role === 'admin'
+        );
 
       const canReadSmeFinancials =
         canManageSmeFinancials;
@@ -551,7 +575,19 @@ export function SpaceDetailsPage() {
     || space.ownerId === user?.uid
     || smePosRole === 'owner'
     || smePosRole === 'manager'
-    || currentMember?.role === 'admin';
+    || (
+      smePosRole === null
+      && currentMember?.role === 'admin'
+    );
+
+  const businessAccessLabel =
+    smePosRole
+      ? smePosRoleLabel(smePosRole)
+      : currentMember?.role === 'admin'
+        ? 'Manager'
+        : currentMember?.role === 'owner'
+          ? 'Owner'
+          : 'Member';
 
   function chooseTab(tab: SpaceDetailsTab) {
     setSearchParams(tab === 'overview' ? {} : { tab });
@@ -624,7 +660,7 @@ export function SpaceDetailsPage() {
       leading={<SpaceAvatar space={space} size="large" />}
       description={
         space.type === 'sme'
-          ? `${space.ownerId === user?.uid || currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Business`
+          ? `${businessAccessLabel} · Business`
           : spaceDescription(space)
       }
       action={<Link className="button secondary" to="/spaces">Back</Link>}

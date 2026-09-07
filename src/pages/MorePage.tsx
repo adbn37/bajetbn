@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { resetContextualHelp } from '../services/contextualHelp';
 
 const moneyTools = [
   { to: '/accounts', label: 'Accounts' },
@@ -20,7 +19,7 @@ const appTools = [
 ];
 
 export function MorePage() {
-  const { user, logOut } = useAuth();
+  const { logOut } = useAuth();
 
   return (
     <main className="page more-v110" data-simplified-more>
@@ -57,23 +56,6 @@ export function MorePage() {
             </Link>
           ))}
         </div>
-      </section>
-
-      <section className="more-v110-help">
-        <div className="more-v110-help-copy">
-          <span className="more-v110-help-icon" aria-hidden="true">?</span>
-          <div><h2>Help</h2></div>
-        </div>
-        <button
-          type="button"
-          className="button secondary"
-          disabled={!user}
-          onClick={() => {
-            if (user) resetContextualHelp(user.uid);
-          }}
-        >
-          Replay tips
-        </button>
       </section>
 
       <section className="more-v110-account">

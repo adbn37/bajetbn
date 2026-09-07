@@ -158,7 +158,10 @@ for (const token of tokens) {
 }
 
 check(
-  ordered,
+  ordered
+    && !nav.includes(
+      '<small>Business</small>',
+    ),
   'Mobile navigation is Home | Money | + | Spaces | More.',
 );
 

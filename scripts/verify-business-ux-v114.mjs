@@ -283,7 +283,10 @@ for (const token of tokens) {
 }
 
 check(
-  correctOrder,
+  correctOrder
+    && !nav.includes(
+      '<small>Business</small>',
+    ),
   'Mobile navigation order is Home | Money | + | Spaces | More.',
 );
 

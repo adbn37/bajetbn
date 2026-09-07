@@ -60,6 +60,12 @@ const onboarding =
 const help =
   read('src/components/ContextualHelp.tsx');
 
+const shell =
+  read('src/layouts/AppShell.tsx');
+
+const more =
+  read('src/pages/MorePage.tsx');
+
 const failures = [];
 
 function check(condition, label) {
@@ -336,10 +342,13 @@ check(
   help.includes(
     'markContextualHelpSeen',
   )
-    && help.includes(
-      'CONTEXTUAL_HELP_REPLAY_EVENT',
+    && !shell.includes(
+      '<ContextualHelp',
+    )
+    && !more.includes(
+      'Replay tips',
     ),
-  'One-time contextual help with replay remains present.',
+  'Contextual help capability remains while repeating runtime tips stay disabled.',
 );
 
 // Permanent regression coverage added by this audit.

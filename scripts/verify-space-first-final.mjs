@@ -30,6 +30,9 @@ const spaces =
 const help =
   read('src/components/ContextualHelp.tsx');
 
+const more =
+  read('src/pages/MorePage.tsx');
+
 const failures = [];
 
 function check(condition, message) {
@@ -191,13 +194,13 @@ check(
   help.includes(
     'markContextualHelpSeen',
   )
-    && help.includes(
-      'CONTEXTUAL_HELP_REPLAY_EVENT',
+    && !shell.includes(
+      '<ContextualHelp',
     )
-    && help.includes(
-      'This tip normally appears only once.',
+    && !more.includes(
+      'Replay tips',
     ),
-  'One-time contextual help with replay remains present.',
+  'Contextual help capability remains available but repeating runtime tips are disabled.',
 );
 
 const navStart =
@@ -247,7 +250,10 @@ for (const token of navTokens) {
 }
 
 check(
-  navValid,
+  navValid
+    && !nav.includes(
+      '<small>Business</small>',
+    ),
   'Home | Money | + | Spaces | More is the simplified navigation.',
 );
 
