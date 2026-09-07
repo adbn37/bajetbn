@@ -10871,6 +10871,7 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     min-height: 100%;
     min-height: 100dvh;
     scroll-padding-top: 64px;
+    scroll-padding-bottom: calc(10rem + env(safe-area-inset-bottom));
   }
 
   body,
@@ -10884,7 +10885,7 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   .page {
     min-height: calc(100dvh - 64px);
     padding-bottom:
-      calc(8rem + env(safe-area-inset-bottom)) !important;
+      calc(10rem + env(safe-area-inset-bottom)) !important;
   }
 
   .mobile-bottom-nav {
