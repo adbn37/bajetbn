@@ -17285,6 +17285,74 @@ export const archiveDebt = onCall(
   },
 );
 
+export const restoreDebt = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const debtId =
+      stringValue(
+        request.data?.debtId,
+        'Debt record',
+        160,
+      );
+
+    const debtRef =
+      db.collection('debts').doc(debtId);
+
+    const debtSnapshot =
+      await debtRef.get();
+
+    if (!debtSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Debt record not found.',
+      );
+    }
+
+    const debt =
+      debtSnapshot.data() || {};
+
+    if (debt.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'You cannot restore this debt record.',
+      );
+    }
+
+    if (debt.status !== 'archived') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only archived debt can be restored.',
+      );
+    }
+
+    const balanceMinor =
+      nonNegativeMoney(debt.balanceMinor);
+
+    const nextStatus =
+      balanceMinor === 0
+        ? 'settled'
+        : 'active';
+
+    await debtRef.update({
+      status: nextStatus,
+      archivedAt: null,
+      settledAt:
+        balanceMinor === 0
+          ? debt.settledAt || FieldValue.serverTimestamp()
+          : null,
+      updatedAt:
+        FieldValue.serverTimestamp(),
+    });
+
+    return {
+      debtId,
+      status: nextStatus,
+    };
+  },
+);
+
 export const recordDebtPayment = onCall(
   { region },
   async (request) => {
@@ -17390,6 +17458,16 @@ export const recordDebtPayment = onCall(
             uid,
             'Account',
           );
+
+        if (
+          accountSnapshot.data()?.classification
+          !== 'personal'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt payments must use a Personal account.',
+          );
+        }
 
         if (account.currency !== 'BND') {
           throw new HttpsError(

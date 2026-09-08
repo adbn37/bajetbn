@@ -8,7 +8,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
-import { listAccounts } from '../../repositories/accountRepository';
+import { listPersonalAccounts } from '../../repositories/accountRepository';
 import {
   archiveDebt,
   createDebt,
@@ -17,6 +17,7 @@ import {
   listDebtPayments,
   recordDebtPayment,
   removeDebtPaymentProof,
+  restoreDebt,
   reverseDebtPayment,
   uploadDebtPaymentProof,
 } from '../../repositories/debtRepository';
@@ -52,6 +53,9 @@ export function DebtPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [direction, setDirection] = useState<DebtDirection>('owe');
+  const [statusFilter, setStatusFilter] = useState<
+    'active' | 'settled' | 'archived'
+  >('active');
   const [showAdd, setShowAdd] = useState(false);
   const [paymentDebt, setPaymentDebt] = useState<DebtRecord | null>(null);
   const [historyDebt, setHistoryDebt] = useState<DebtRecord | null>(null);
@@ -74,7 +78,7 @@ export function DebtPage() {
       ] = await Promise.all([
         listDebts(user.uid),
         listDebtPayments(user.uid),
-        listAccounts(user.uid),
+        listPersonalAccounts(user.uid),
         listSpaces(user.uid),
       ]);
 
@@ -93,14 +97,14 @@ export function DebtPage() {
     void load();
   }, [user]);
 
-  const active = useMemo(
+  const visibleDebts = useMemo(
     () =>
       debts.filter(
         (item) =>
           item.direction === direction
-          && item.status !== 'archived',
+          && item.status === statusFilter,
       ),
-    [debts, direction],
+    [debts, direction, statusFilter],
   );
 
   const totalOwe = debts
@@ -117,6 +121,20 @@ export function DebtPage() {
 
     try {
       await archiveDebt(item.id);
+      await load();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function runRestore(item: DebtRecord) {
+    setBusyId(item.id);
+    setError('');
+
+    try {
+      await restoreDebt(item.id);
       await load();
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -182,9 +200,35 @@ export function DebtPage() {
         </button>
       </div>
 
+      <div className="debt-tabs">
+        <button
+          type="button"
+          className={statusFilter === 'active' ? 'active' : ''}
+          onClick={() => setStatusFilter('active')}
+        >
+          Active
+        </button>
+
+        <button
+          type="button"
+          className={statusFilter === 'settled' ? 'active' : ''}
+          onClick={() => setStatusFilter('settled')}
+        >
+          Settled
+        </button>
+
+        <button
+          type="button"
+          className={statusFilter === 'archived' ? 'active' : ''}
+          onClick={() => setStatusFilter('archived')}
+        >
+          Archived
+        </button>
+      </div>
+
       {loading ? (
         <div className="loading-panel">Loading debt records…</div>
-      ) : active.length === 0 ? (
+      ) : visibleDebts.length === 0 ? (
         <EmptyState
           title={direction === 'owe' ? 'Nothing you owe' : 'Nothing owed to you'}
           description={
@@ -195,7 +239,7 @@ export function DebtPage() {
         />
       ) : (
         <section className="debt-list">
-          {active.map((item) => {
+          {visibleDebts.map((item) => {
             const overdue =
               item.status === 'active'
               && Boolean(item.dueDate)
@@ -218,6 +262,14 @@ export function DebtPage() {
                         {item.dueDate
                           ? `${overdue ? 'Overdue' : 'Due'} ${item.dueDate}`
                           : 'No due date'}
+                      </span>
+
+                      <span>
+                        {item.status === 'active'
+                          ? 'Active'
+                          : item.status === 'settled'
+                            ? 'Settled'
+                            : 'Archived'}
                       </span>
 
                       <span>
@@ -288,14 +340,25 @@ export function DebtPage() {
                       History
                     </button>
 
-                    <button
-                      type="button"
-                      className="button secondary"
-                      disabled={busyId === item.id}
-                      onClick={() => void runArchive(item)}
-                    >
-                      {busyId === item.id ? 'Working…' : 'Archive'}
-                    </button>
+                    {item.status === 'archived' ? (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        disabled={busyId === item.id}
+                        onClick={() => void runRestore(item)}
+                      >
+                        {busyId === item.id ? 'Working…' : 'Restore'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        disabled={busyId === item.id}
+                        onClick={() => void runArchive(item)}
+                      >
+                        {busyId === item.id ? 'Working…' : 'Archive'}
+                      </button>
+                    )}
                   </div>
                 </footer>
               </article>

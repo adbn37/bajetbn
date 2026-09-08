@@ -92,6 +92,27 @@ export async function archiveDebt(debtId: string) {
   return result.data;
 }
 
+export async function restoreDebt(debtId: string) {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable<
+    { debtId: string },
+    {
+      debtId: string;
+      status: 'active' | 'settled';
+    }
+  >(
+    functions,
+    'restoreDebt',
+  );
+
+  const result = await call({
+    debtId,
+  });
+
+  return result.data;
+}
+
 export async function listDebtPayments(
   uid: string,
 ): Promise<DebtPayment[]> {
