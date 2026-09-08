@@ -70,6 +70,46 @@ export async function createDebt(input: {
   return result.data;
 }
 
+export async function updateDebt(input: {
+  debtId: string;
+  direction: DebtDirection;
+  counterparty: string;
+  description?: string;
+  principalMinor: number;
+  interestType: DebtInterestType;
+  interestRateBps?: number;
+  interestMinor?: number;
+  startDate: string;
+  dueDate?: string;
+  schedule: DebtSchedule;
+  scheduleNote?: string;
+  reminderEnabled: boolean;
+  spaceId?: string;
+}) {
+  if (!navigator.onLine) {
+    throw new Error(
+      'Connect to the internet before editing debt.',
+    );
+  }
+
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable<
+    typeof input,
+    {
+      debtId: string;
+      financialLocked: boolean;
+    }
+  >(
+    functions,
+    'updateDebt',
+  );
+
+  const result = await call(input);
+
+  return result.data;
+}
+
 export async function archiveDebt(debtId: string) {
   const { functions } = requireFirebase();
 

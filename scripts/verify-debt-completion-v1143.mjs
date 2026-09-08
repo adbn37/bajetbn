@@ -84,6 +84,62 @@ check(
   'Debt completion verifier is part of the structural suite.',
 );
 
+check(
+  page.includes('setEditDebt(item)')
+    && page.includes('function DebtEditForm')
+    && page.includes('Save changes'),
+  'Debt records can be edited.',
+);
+
+check(
+  page.includes('financialLocked')
+    && page.includes(
+      'disabled={financialLocked}',
+    )
+    && page.includes(
+      'already has payment history',
+    ),
+  'Paid Debt financial fields lock in the UI.',
+);
+
+check(
+  repo.includes(
+    'export async function updateDebt',
+  )
+    && repo.includes("'updateDebt'"),
+  'Debt repository exposes updateDebt.',
+);
+
+check(
+  functions.includes(
+    'export const updateDebt = onCall',
+  )
+    && functions.includes(
+      'Debt financial terms cannot be changed after payment history exists.',
+    ),
+  'Debt backend protects financial history.',
+);
+
+check(
+  functions.includes(
+    'Restore archived debt before editing it.',
+  ),
+  'Archived Debt must be restored before editing.',
+);
+
+check(
+  functions.includes(
+    'if (!hasPaymentHistory)',
+  )
+    && functions.includes(
+      'updateData.balanceMinor',
+    )
+    && functions.includes(
+      'updateData.totalMinor',
+    ),
+  'Unpaid Debt edits safely recalculate totals.',
+);
+
 if (failures.length) {
   console.error('');
 

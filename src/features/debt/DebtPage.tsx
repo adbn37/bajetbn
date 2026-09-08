@@ -12,6 +12,7 @@ import { listPersonalAccounts } from '../../repositories/accountRepository';
 import {
   archiveDebt,
   createDebt,
+  updateDebt,
   listDebts,
   getDebtPaymentProofUrl,
   listDebtPayments,
@@ -57,6 +58,7 @@ export function DebtPage() {
     'active' | 'settled' | 'archived'
   >('active');
   const [showAdd, setShowAdd] = useState(false);
+  const [editDebt, setEditDebt] = useState<DebtRecord | null>(null);
   const [paymentDebt, setPaymentDebt] = useState<DebtRecord | null>(null);
   const [historyDebt, setHistoryDebt] = useState<DebtRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -332,6 +334,17 @@ export function DebtPage() {
                       Record payment
                     </button>
 
+                    {item.status !== 'archived' && (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        disabled={busyId === item.id}
+                        onClick={() => setEditDebt(item)}
+                      >
+                        Edit
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       className="button secondary"
@@ -374,6 +387,21 @@ export function DebtPage() {
           onClose={() => setShowAdd(false)}
           onSaved={async () => {
             setShowAdd(false);
+            await load();
+          }}
+        />
+      )}
+
+      {editDebt && (
+        <DebtEditForm
+          debt={editDebt}
+          spaces={spaces}
+          hasPaymentHistory={payments.some(
+            (payment) => payment.debtId === editDebt.id,
+          )}
+          onClose={() => setEditDebt(null)}
+          onSaved={async () => {
+            setEditDebt(null);
             await load();
           }}
         />
@@ -653,6 +681,384 @@ function DebtForm({
             disabled={busy}
           >
             {busy ? 'Saving…' : 'Add debt'}
+          </button>
+
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function DebtEditForm({
+  debt,
+  spaces,
+  hasPaymentHistory,
+  onClose,
+  onSaved,
+}: {
+  debt: DebtRecord;
+  spaces: Space[];
+  hasPaymentHistory: boolean;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const financialLocked = hasPaymentHistory;
+
+  const [direction, setDirection] =
+    useState<DebtDirection>(debt.direction);
+
+  const [counterparty, setCounterparty] =
+    useState(debt.counterparty);
+
+  const [description, setDescription] =
+    useState(debt.description || '');
+
+  const [principal, setPrincipal] =
+    useState(
+      (debt.principalMinor / 100).toFixed(2),
+    );
+
+  const [interestType, setInterestType] =
+    useState<DebtInterestType>(
+      debt.interestType,
+    );
+
+  const [interestRate, setInterestRate] =
+    useState(
+      debt.interestType === 'percentage'
+        ? String(debt.interestRateBps / 100)
+        : '',
+    );
+
+  const [fixedInterest, setFixedInterest] =
+    useState(
+      debt.interestType === 'fixed'
+        ? (debt.interestMinor / 100).toFixed(2)
+        : '',
+    );
+
+  const [startDate, setStartDate] =
+    useState(debt.startDate);
+
+  const [dueDate, setDueDate] =
+    useState(debt.dueDate || '');
+
+  const [schedule, setSchedule] =
+    useState<DebtSchedule>(debt.schedule);
+
+  const [scheduleNote, setScheduleNote] =
+    useState(debt.scheduleNote || '');
+
+  const [spaceId, setSpaceId] =
+    useState(debt.spaceId || '');
+
+  const [reminderEnabled, setReminderEnabled] =
+    useState(debt.reminderEnabled !== false);
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const principalMinor =
+        moneyToMinor(principal);
+
+      if (principalMinor <= 0) {
+        throw new Error(
+          'Enter an amount greater than zero.',
+        );
+      }
+
+      await updateDebt({
+        debtId: debt.id,
+        direction,
+        counterparty: counterparty.trim(),
+        description:
+          description.trim() || undefined,
+        principalMinor,
+        interestType,
+        interestRateBps:
+          interestType === 'percentage'
+            ? Math.round(
+                Number(interestRate || 0) * 100,
+              )
+            : 0,
+        interestMinor:
+          interestType === 'fixed'
+            ? moneyToMinor(fixedInterest)
+            : 0,
+        startDate,
+        dueDate: dueDate || undefined,
+        schedule,
+        scheduleNote:
+          scheduleNote.trim() || undefined,
+        reminderEnabled,
+        spaceId: spaceId || undefined,
+      });
+
+      await onSaved();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="Edit debt" onClose={onClose}>
+      <form
+        className="form-stack"
+        onSubmit={submit}
+      >
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
+
+        {financialLocked && (
+          <div className="notice">
+            This debt already has payment history.
+            Amount, direction and interest are locked.
+            You can still update the person, notes,
+            dates, schedule, reminders and Space.
+          </div>
+        )}
+
+        <label>
+          Type
+          <select
+            value={direction}
+            disabled={financialLocked}
+            onChange={(event) =>
+              setDirection(
+                event.target.value as DebtDirection,
+              )
+            }
+          >
+            <option value="owe">I Owe</option>
+            <option value="owed">Owed to Me</option>
+          </select>
+        </label>
+
+        <label>
+          Person / lender / borrower
+          <input
+            required
+            value={counterparty}
+            onChange={(event) =>
+              setCounterparty(event.target.value)
+            }
+          />
+        </label>
+
+        <label>
+          Amount
+          <input
+            required
+            inputMode="decimal"
+            value={principal}
+            disabled={financialLocked}
+            onChange={(event) =>
+              setPrincipal(event.target.value)
+            }
+          />
+        </label>
+
+        <label>
+          Interest
+          <select
+            value={interestType}
+            disabled={financialLocked}
+            onChange={(event) =>
+              setInterestType(
+                event.target.value as DebtInterestType,
+              )
+            }
+          >
+            <option value="none">
+              No interest
+            </option>
+            <option value="fixed">
+              Fixed amount
+            </option>
+            <option value="percentage">
+              Percentage
+            </option>
+          </select>
+        </label>
+
+        {interestType === 'fixed' && (
+          <label>
+            Interest amount
+            <input
+              inputMode="decimal"
+              value={fixedInterest}
+              disabled={financialLocked}
+              onChange={(event) =>
+                setFixedInterest(
+                  event.target.value,
+                )
+              }
+            />
+          </label>
+        )}
+
+        {interestType === 'percentage' && (
+          <label>
+            Interest rate %
+            <input
+              inputMode="decimal"
+              value={interestRate}
+              disabled={financialLocked}
+              onChange={(event) =>
+                setInterestRate(
+                  event.target.value,
+                )
+              }
+            />
+          </label>
+        )}
+
+        <label>
+          Start date
+          <input
+            required
+            type="date"
+            value={startDate}
+            onChange={(event) =>
+              setStartDate(event.target.value)
+            }
+          />
+        </label>
+
+        <label>
+          Due date
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(event) =>
+              setDueDate(event.target.value)
+            }
+          />
+        </label>
+
+        <label>
+          Repayment schedule
+          <select
+            value={schedule}
+            onChange={(event) =>
+              setSchedule(
+                event.target.value as DebtSchedule,
+              )
+            }
+          >
+            <option value="none">
+              No schedule
+            </option>
+            <option value="weekly">
+              Weekly
+            </option>
+            <option value="monthly">
+              Monthly
+            </option>
+            <option value="custom">
+              Custom
+            </option>
+          </select>
+        </label>
+
+        {schedule === 'custom' && (
+          <label>
+            Schedule note
+            <input
+              value={scheduleNote}
+              onChange={(event) =>
+                setScheduleNote(
+                  event.target.value,
+                )
+              }
+            />
+          </label>
+        )}
+
+        <label>
+          Space
+          <select
+            value={spaceId}
+            onChange={(event) =>
+              setSpaceId(event.target.value)
+            }
+          >
+            <option value="">
+              No Space
+            </option>
+
+            {spaces.map((space) => (
+              <option
+                key={space.id}
+                value={space.id}
+              >
+                {space.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Notes
+          <textarea
+            value={description}
+            onChange={(event) =>
+              setDescription(
+                event.target.value,
+              )
+            }
+          />
+        </label>
+
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={reminderEnabled}
+            onChange={(event) =>
+              setReminderEnabled(
+                event.target.checked,
+              )
+            }
+          />
+
+          <span>
+            <strong>Debt reminders</strong>
+            <small>
+              Use this due date for BajetBN
+              reminders.
+            </small>
+          </span>
+        </label>
+
+        <div className="button-row">
+          <button
+            type="submit"
+            className="button primary"
+            disabled={busy}
+          >
+            {busy
+              ? 'Saving…'
+              : 'Save changes'}
           </button>
 
           <button

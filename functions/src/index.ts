@@ -17227,6 +17227,405 @@ export const createDebt = onCall(
   },
 );
 
+export const updateDebt = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+
+    const debtId =
+      stringValue(
+        request.data?.debtId,
+        'Debt record',
+        160,
+      );
+
+    const direction =
+      request.data?.direction === 'owe'
+      || request.data?.direction === 'owed'
+        ? request.data.direction
+        : '';
+
+    const counterparty =
+      typeof request.data?.counterparty === 'string'
+        ? request.data.counterparty.trim()
+        : '';
+
+    const description =
+      typeof request.data?.description === 'string'
+        ? request.data.description
+            .trim()
+            .slice(0, 1000)
+        : '';
+
+    const principalMinor =
+      Number.isInteger(
+        request.data?.principalMinor,
+      )
+        ? Number(
+            request.data.principalMinor,
+          )
+        : 0;
+
+    const interestType =
+      ['none', 'fixed', 'percentage'].includes(
+        request.data?.interestType,
+      )
+        ? request.data.interestType
+        : 'none';
+
+    const interestRateBps =
+      Number.isInteger(
+        request.data?.interestRateBps,
+      )
+        ? Math.max(
+            0,
+            Math.min(
+              100000,
+              Number(
+                request.data.interestRateBps,
+              ),
+            ),
+          )
+        : 0;
+
+    const suppliedInterestMinor =
+      Number.isInteger(
+        request.data?.interestMinor,
+      )
+        ? Math.max(
+            0,
+            Number(
+              request.data.interestMinor,
+            ),
+          )
+        : 0;
+
+    const startDate =
+      typeof request.data?.startDate
+        === 'string'
+        ? request.data.startDate
+        : '';
+
+    const dueDate =
+      typeof request.data?.dueDate
+        === 'string'
+      && request.data.dueDate
+        ? request.data.dueDate
+        : null;
+
+    const schedule =
+      [
+        'none',
+        'weekly',
+        'monthly',
+        'custom',
+      ].includes(request.data?.schedule)
+        ? request.data.schedule
+        : 'none';
+
+    const scheduleNote =
+      typeof request.data?.scheduleNote
+        === 'string'
+        ? request.data.scheduleNote
+            .trim()
+            .slice(0, 300)
+        : '';
+
+    const reminderEnabled =
+      request.data?.reminderEnabled
+        !== false;
+
+    const spaceId =
+      typeof request.data?.spaceId
+        === 'string'
+      && request.data.spaceId.trim()
+        ? request.data.spaceId.trim()
+        : null;
+
+    if (!direction) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose whether you owe this money or it is owed to you.',
+      );
+    }
+
+    if (
+      !counterparty
+      || counterparty.length > 160
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Enter a valid person, lender or borrower.',
+      );
+    }
+
+    if (
+      principalMinor <= 0
+      || principalMinor > 999999999999
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Enter a valid debt amount.',
+      );
+    }
+
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(
+        startDate,
+      )
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a valid start date.',
+      );
+    }
+
+    if (
+      dueDate
+      && !/^\d{4}-\d{2}-\d{2}$/.test(
+        dueDate,
+      )
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Choose a valid due date.',
+      );
+    }
+
+    if (spaceId) {
+      const memberId =
+        `${spaceId}_${uid}`;
+
+      const [
+        spaceSnapshot,
+        memberSnapshot,
+      ] = await Promise.all([
+        db.collection('spaces')
+          .doc(spaceId)
+          .get(),
+
+        db.collection('spaceMembers')
+          .doc(memberId)
+          .get(),
+      ]);
+
+      if (
+        !spaceSnapshot.exists
+        || spaceSnapshot.data()?.archivedAt
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'The linked Space is unavailable.',
+        );
+      }
+
+      const memberStatus =
+        memberSnapshot.exists
+          ? String(
+              memberSnapshot
+                .data()
+                ?.status || '',
+            )
+          : '';
+
+      const activeMember =
+        memberSnapshot.exists
+        && (
+          !memberStatus
+          || memberStatus === 'active'
+        );
+
+      const ownsSpace =
+        spaceSnapshot.data()?.ownerId
+        === uid;
+
+      if (!ownsSpace && !activeMember) {
+        throw new HttpsError(
+          'permission-denied',
+          'You cannot link this debt to that Space.',
+        );
+      }
+    }
+
+    const normalizedInterestRateBps =
+      interestType === 'percentage'
+        ? interestRateBps
+        : 0;
+
+    const interestMinor =
+      interestType === 'percentage'
+        ? Math.round(
+            principalMinor
+            * normalizedInterestRateBps
+            / 10000,
+          )
+        : interestType === 'fixed'
+          ? suppliedInterestMinor
+          : 0;
+
+    const totalMinor =
+      principalMinor + interestMinor;
+
+    const debtRef =
+      db.collection('debts')
+        .doc(debtId);
+
+    const paymentQuery =
+      db.collection('debtPayments')
+        .where(
+          'debtId',
+          '==',
+          debtId,
+        )
+        .limit(1);
+
+    const result =
+      await db.runTransaction(
+        async (transaction) => {
+          const debtSnapshot =
+            await transaction.get(
+              debtRef,
+            );
+
+          const paymentSnapshot =
+            await transaction.get(
+              paymentQuery,
+            );
+
+          if (!debtSnapshot.exists) {
+            throw new HttpsError(
+              'not-found',
+              'Debt record not found.',
+            );
+          }
+
+          const debt =
+            debtSnapshot.data() || {};
+
+          if (debt.ownerId !== uid) {
+            throw new HttpsError(
+              'permission-denied',
+              'You cannot edit this debt.',
+            );
+          }
+
+          if (
+            debt.status === 'archived'
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Restore archived debt before editing it.',
+            );
+          }
+
+          const currentPaid =
+            Number.isInteger(
+              debt.paidMinor,
+            )
+              ? Math.max(
+                  0,
+                  Number(
+                    debt.paidMinor,
+                  ),
+                )
+              : 0;
+
+          const hasPaymentHistory =
+            !paymentSnapshot.empty
+            || currentPaid > 0;
+
+          const financialChanged =
+            String(
+              debt.direction || '',
+            ) !== direction
+            || Number(
+              debt.principalMinor || 0,
+            ) !== principalMinor
+            || String(
+              debt.interestType
+                || 'none',
+            ) !== interestType
+            || Number(
+              debt.interestRateBps
+                || 0,
+            ) !==
+              normalizedInterestRateBps
+            || Number(
+              debt.interestMinor || 0,
+            ) !== interestMinor;
+
+          if (
+            hasPaymentHistory
+            && financialChanged
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Debt financial terms cannot be changed after payment history exists.',
+            );
+          }
+
+          const now =
+            FieldValue.serverTimestamp();
+
+          const updateData:
+            DocumentData = {
+              counterparty,
+              description,
+              startDate,
+              dueDate,
+              schedule,
+              scheduleNote,
+              reminderEnabled,
+              spaceId,
+              updatedAt: now,
+            };
+
+          if (!hasPaymentHistory) {
+            updateData.direction =
+              direction;
+
+            updateData.principalMinor =
+              principalMinor;
+
+            updateData.interestType =
+              interestType;
+
+            updateData.interestRateBps =
+              normalizedInterestRateBps;
+
+            updateData.interestMinor =
+              interestMinor;
+
+            updateData.totalMinor =
+              totalMinor;
+
+            updateData.paidMinor = 0;
+            updateData.balanceMinor =
+              totalMinor;
+
+            updateData.status =
+              'active';
+
+            updateData.settledAt = null;
+          }
+
+          transaction.update(
+            debtRef,
+            updateData,
+          );
+
+          return {
+            debtId,
+            financialLocked:
+              hasPaymentHistory,
+          };
+        },
+      );
+
+    return result;
+  },
+);
+
 export const archiveDebt = onCall(
   { region },
   async (request) => {
