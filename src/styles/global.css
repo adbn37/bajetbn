@@ -10893,3 +10893,66 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
       repeat(5, minmax(0, 1fr));
   }
 }
+
+/* v1.14.4 production UI reconciliation */
+.spaces-title-help {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--accent-2);
+  font-size: .95rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.spaces-title-help:hover,
+.spaces-title-help:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+  outline: none;
+}
+
+.spaces-help-content .button {
+  align-self: flex-start;
+}
+
+.space-card-actions-footer {
+  justify-content: flex-end !important;
+}
+
+@media (max-width: 900px) {
+  html,
+  body,
+  #root,
+  .app-shell,
+  .app-main {
+    min-height: 100dvh;
+  }
+
+  .app-main {
+    width: 100%;
+    min-width: 0;
+    padding-bottom: calc(
+      5.75rem + env(safe-area-inset-bottom)
+    );
+  }
+
+  .page {
+    width: 100%;
+    min-width: 0;
+    min-height: calc(100dvh - 3.5rem);
+    padding-bottom: calc(
+      8rem + env(safe-area-inset-bottom)
+    );
+  }
+
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

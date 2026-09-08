@@ -153,7 +153,6 @@ export function ContextualHelp() {
 
         <small>
           This tip normally appears only once.
-          Replay tips anytime from More.
         </small>
       </section>
     </div>

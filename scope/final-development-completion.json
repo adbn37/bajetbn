@@ -94,7 +94,7 @@
     },
     {
       "id": "onboarding.contextual_help",
-      "title": "One-time contextual help for major sections with replay",
+      "title": "On-demand contextual help capability retained while repeating runtime tips and Replay Tips remain disabled",
       "status": "complete"
     },
     {

@@ -69,11 +69,24 @@ check(
   'Debt payment backend rejects Business accounts.',
 );
 
+const packageData = JSON.parse(packageJson);
+const releaseData = JSON.parse(release);
+
+const versionParts = packageData.version.split('.').map(Number);
+const isV1143OrNewer =
+  versionParts[0] > 1
+  || (versionParts[0] === 1 && versionParts[1] > 14)
+  || (
+    versionParts[0] === 1
+    && versionParts[1] === 14
+    && versionParts[2] >= 3
+  );
+
 check(
-  packageJson.includes('"version": "1.14.3"')
-    && release.includes('"version":  "1.14.3"')
-    && release.includes('"label":  "BajetBN v1.14.3"'),
-  'v1.14.3 release metadata is consistent.',
+  packageData.version === releaseData.version
+    && releaseData.label === 'BajetBN v' + releaseData.version
+    && isV1143OrNewer,
+  'Release metadata remains aligned at v1.14.3 or newer.',
 );
 
 check(
