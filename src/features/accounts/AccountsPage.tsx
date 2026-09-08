@@ -379,12 +379,6 @@ export function AccountsPage({
         </Link>
       )}
     </section>
-    {!embedded && (
-      <div className="info-banner">
-        <strong>Personal accounts</strong>
-        <span>Business accounts are managed inside their Business Space.</span>
-      </div>
-    )}
     {!embedded
       && unassignedBusinessCount > 0
       && (

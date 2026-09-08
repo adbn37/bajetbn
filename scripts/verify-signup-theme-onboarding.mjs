@@ -120,19 +120,19 @@ check(
   !spaces.includes(
     'setupFromOnboarding',
   )
-    && spaces.includes(
+    && !spaces.includes(
       'guided-onboarding-next-v113',
     )
-    && spaces.includes(
+    && !spaces.includes(
       'Spaces are for shared or separate work',
     )
-    && spaces.includes(
+    && !spaces.includes(
       'Personal money does not need a Space.',
     )
     && spaces.includes(
       'No Spaces yet',
     ),
-  'Spaces page explains that personal money does not require a Space.',
+  'Spaces discovery stays Personal-First without permanent explanatory banners.',
 );
 
 check(

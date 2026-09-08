@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
@@ -51,11 +51,6 @@ function spaceDefaultDescription(type: SpaceType) {
 export function SpacesPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-
-  const welcomeFromOnboarding =
-    searchParams.get('welcome') === '1';
-
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [invitations, setInvitations] = useState<SpaceInvitation[]>([]);
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
@@ -155,23 +150,6 @@ export function SpacesPage() {
   return <main className="page">
     <PageHeader eyebrow="Shared & separate" title="Spaces" description="Use a Space for a business, trip, household or group you manage with other people." action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
     {error && <div className="notice error">{error}</div>}
-    {welcomeFromOnboarding && (
-      <section className="panel guided-onboarding-next-v113">
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">Optional</span>
-            <h2>Spaces are for shared or separate work</h2>
-          </div>
-        </div>
-        <p>
-          Personal budgeting stays on Home. Create a Space only when a business,
-          trip, household or group needs its own people and activity.
-        </p>
-        <Link className="button primary" to="/">Back to my money</Link>
-      </section>
-    )}
-
-    <div className="info-banner"><strong>Personal money does not need a Space.</strong><span>Create one when you need to work with other people or keep a business or trip separate.</span></div>
     {pendingInvitations.length > 0 && <section className="panel incoming-invitations-panel"><div className="panel-heading"><div><span className="eyebrow">Invitations for me</span><h2>Spaces you can join</h2></div><span className="type-badge">{pendingInvitations.length}</span></div><div className="incoming-invitation-list">{pendingInvitations.map((invitation) => { const expired = Boolean(invitation.expiresAt?.toDate?.().getTime() && invitation.expiresAt.toDate().getTime() < Date.now()); return <article className="incoming-invitation-row" key={invitation.id}><div><strong>{invitation.spaceName || 'Shared Space'}</strong><span>{invitation.spaceType ? `${labels[invitation.spaceType]} Space` : 'Shared Space'} · Invited by {invitation.invitedByName || 'the Space owner'}</span><small>Access: {invitation.role === 'admin' ? 'Manager' : invitation.role === 'viewer' ? 'View only' : invitation.role === 'payer' ? 'Record payments' : 'Add money records'}{invitation.posRole ? ` · POS: ${invitation.posRole === 'stock_staff' ? 'Stock staff' : invitation.posRole.charAt(0).toUpperCase() + invitation.posRole.slice(1)}` : ''}{expired ? ' · Invite expired' : ''}</small></div><div className="button-row">{expired ? <span className="status-pill">Ask for a new invite</span> : <><button className="button primary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'accept')}>{busyId === invitation.id ? 'Working…' : 'Join Space'}</button><button className="button secondary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'decline')}>Decline</button></>}</div></article>; })}</div></section>}
     {loading ? <div className="loading-panel">Loading Spaces…</div> : active.length === 0 ? <EmptyState title="No Spaces yet" description="That is fine. Use BajetBN normally for your personal budget, and add a Space when you need one." /> : <SpaceGrid spaces={active} busyId={busyId} navigate={navigate} onEdit={openEdit} onArchive={(space) => askLifecycle(space, 'archive')} onDelete={(space) => askLifecycle(space, 'delete')} />}
 

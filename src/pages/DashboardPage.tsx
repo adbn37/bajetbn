@@ -597,30 +597,6 @@ export function DashboardPage() {
       [transactions],
     );
 
-  const recentIncome =
-    recentTransactions
-      .filter(
-        (item) =>
-          item.type === 'income',
-      )
-      .reduce(
-        (sum, item) =>
-          sum + item.amountMinor,
-        0,
-      );
-
-  const recentExpense =
-    recentTransactions
-      .filter(
-        (item) =>
-          item.type === 'expense',
-      )
-      .reduce(
-        (sum, item) =>
-          sum + item.amountMinor,
-        0,
-      );
-
   const firstName =
     profile?.fullName
       ?.trim()
@@ -993,42 +969,6 @@ export function DashboardPage() {
           </div>
         ) : recentTransactions.length > 0 ? (
           <>
-            <div className="home-v111-recent-summary">
-              <span>
-                <small>
-                  Recent money in
-                </small>
-
-                <strong>
-                  {formatMoney(
-                    recentIncome,
-                    activeAccount?.currency
-                      || currency,
-                  )}
-                </strong>
-              </span>
-
-              <span>
-                <small>
-                  Recent money out
-                </small>
-
-                <strong>
-                  {formatMoney(
-                    recentExpense,
-                    activeAccount?.currency
-                      || currency,
-                  )}
-                </strong>
-              </span>
-
-              <small>
-                Latest {
-                  recentTransactions.length
-                } entries
-              </small>
-            </div>
-
             <div className="home-v110-activity-list">
               {recentTransactions.map(
                 (transaction) => (

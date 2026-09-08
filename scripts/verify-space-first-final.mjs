@@ -184,10 +184,16 @@ check(
   onboarding.includes(
     '/?welcome=1',
   )
-    && spaces.includes(
+    && !onboarding.includes(
+      '/spaces?welcome=1&setup=',
+    )
+    && !spaces.includes(
       'Personal money does not need a Space.',
+    )
+    && !spaces.includes(
+      'guided-onboarding-next-v113',
     ),
-  'Personal budgeting is primary and Spaces are optional.',
+  'Personal budgeting is primary and Spaces stay optional without permanent guidance banners.',
 );
 
 check(

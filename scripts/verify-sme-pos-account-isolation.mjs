@@ -31,7 +31,9 @@ must(read('src/features/transactions/TransactionsPage.tsx'), 'canManageCategorie
 must(read('src/features/transactions/TransactionsPage.tsx'), 'canAttachFiles', 'shared-member attachment ownership guard');
 must(read('src/features/transactions/TransactionsPage.tsx'), 'accountAvailableInSelectedSpace', 'Personal/Business account Space isolation UI');
 
-must(accountsPage, 'Business accounts are managed inside their Business Space.', 'Personal-First Business account guidance');
+must(accountsPage, 'Your bank, cash, card and e-wallet accounts.', 'Personal-First main Accounts guidance');
+must(accountsPage, 'Manage the Business accounts linked to this Business Space.', 'Business Space account management guidance');
+reject(accountsPage, 'Business accounts are managed inside their Business Space.', 'permanent Business account guidance banner');
 must(accountsPage, 'Available in Business Spaces', 'multi-select Business account UI');
 must(accountsPage, 'Share only inside linked Business Spaces', 'member sharing UI');
 must(accountsPage, 'Can use account', 'per-member account-use permission');

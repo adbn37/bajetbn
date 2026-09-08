@@ -86,9 +86,18 @@ check(
 );
 
 check(
-  spaces.includes(
+  !spaces.includes(
     'Personal money does not need a Space.',
   )
+    && !spaces.includes(
+      'guided-onboarding-next-v113',
+    )
+    && !spaces.includes(
+      'Spaces are for shared or separate work',
+    )
+    && spaces.includes(
+      'No Spaces yet',
+    )
     && spaces.includes(
       'Trip with others',
     )
@@ -98,7 +107,7 @@ check(
     && !spaces.includes(
       'space-pos-shortcut',
     ),
-  'Space discovery is reserved for shared or separate operations.',
+  'Space discovery stays Personal-First and reserved for shared or separate operations.',
 );
 
 check(

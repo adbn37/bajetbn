@@ -7,7 +7,6 @@ import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { subscribeUserNotifications } from '../repositories/collaborationRepository';
 import { listenForForegroundPush } from '../repositories/notificationRepository';
 import { planLabel } from '../services/entitlements';
-import { SidebarCustomizer } from '../components/SidebarCustomizer';
 import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
 import {
   PERSONALISATION_EVENT,
@@ -17,7 +16,6 @@ import {
   navigationIcon,
   orderedNavigation,
   secondaryNavigation,
-  savePersonalisation,
   type PersonalisationSettings,
 } from '../services/personalisation';
 
@@ -55,7 +53,6 @@ export function AppShell() {
   const [searchText, setSearchText] = useState('');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
-  const [menuCustomizerOpen, setMenuCustomizerOpen] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [activityToast, setActivityToast] = useState<ActivityToast | null>(null);
   const { profile, user, logOut } = useAuth();
@@ -64,14 +61,9 @@ export function AppShell() {
   const location = useLocation();
 
 
-  const visibleNavigation = useMemo(() => orderedNavigation(personalisation), [personalisation]);
-  const secondaryTools = useMemo(() => secondaryNavigation(personalisation), [personalisation]);
+  const visibleNavigation = useMemo(() => orderedNavigation(defaultPersonalisation()), []);
+  const secondaryTools = useMemo(() => secondaryNavigation(defaultPersonalisation()), []);
   const currentPlanLabel = planLabel(profile);
-
-  function updatePersonalisation(next: PersonalisationSettings) {
-    if (!user) return;
-    setPersonalisation(savePersonalisation(user.uid, next));
-  }
 
   useEffect(() => {
     if (!user) {
@@ -282,22 +274,6 @@ export function AppShell() {
             </span>
           </NavLink>
 
-          <button
-            type="button"
-            hidden
-            className="sidebar-customize-button"
-            onClick={() => setMenuCustomizerOpen(true)}
-          >
-            <span className="nav-icon">
-              {navigationIcon(
-                personalisation.iconPack,
-                'spaces',
-                '☷',
-              )}
-            </span>
-            <span className="nav-label">Customize menu</span>
-          </button>
-
           <NavLink to="/settings" onClick={() => setMobileOpen(false)}>
             <span className="nav-icon">⚙</span>
             <span className="nav-label">Settings</span>
@@ -413,14 +389,6 @@ export function AppShell() {
             <small>More</small>
           </NavLink>
         </nav>
-        {menuCustomizerOpen && (
-          <SidebarCustomizer
-            settings={personalisation}
-            onChange={updatePersonalisation}
-            onClose={() => setMenuCustomizerOpen(false)}
-          />
-        )}
-
       </div>
     </div>
   );
