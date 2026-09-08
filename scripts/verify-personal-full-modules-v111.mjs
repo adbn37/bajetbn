@@ -349,10 +349,10 @@ const nav =
     : '';
 
 const navTokens = [
+  '<small>Business</small>',
   '<small>Home</small>',
-  '<small>Money</small>',
   'mobile-bottom-add',
-  '<small>Spaces</small>',
+  '<small>Space</small>',
   '<small>More</small>',
 ];
 
@@ -376,7 +376,7 @@ for (const token of navTokens) {
 
 check(
   navPass,
-  'Home | Money | + | Spaces | More is the simplified navigation.',
+  'Business | Home | + | Space | More is the mobile navigation.',
 );
 
 if (failures.length) {

@@ -100,14 +100,14 @@ const mobileNavigation = shell.slice(
   mobileNavEnd,
 );
 
+const businessIndex =
+  mobileNavigation.indexOf(
+    '<small>Business</small>',
+  );
+
 const homeIndex =
   mobileNavigation.indexOf(
     '<small>Home</small>',
-  );
-
-const moneyIndex =
-  mobileNavigation.indexOf(
-    '<small>Money</small>',
   );
 
 const addIndex =
@@ -115,9 +115,9 @@ const addIndex =
     'mobile-bottom-add',
   );
 
-const spacesIndex =
+const spaceIndex =
   mobileNavigation.indexOf(
-    '<small>Spaces</small>',
+    '<small>Space</small>',
   );
 
 const moreIndex =
@@ -126,22 +126,22 @@ const moreIndex =
   );
 
 need(
-  homeIndex >= 0
-    && homeIndex < moneyIndex
-    && moneyIndex < addIndex
-    && addIndex < spacesIndex
-    && spacesIndex < moreIndex,
-  'Mobile bottom navigation must remain Home, Money, Add, Spaces, More.',
+  businessIndex >= 0
+    && businessIndex < homeIndex
+    && homeIndex < addIndex
+    && addIndex < spaceIndex
+    && spaceIndex < moreIndex,
+  'Mobile bottom navigation must remain Business, Home, Add, Space, More.',
 );
 
 need(
   mobileNavigation.includes(
-    'to="/transactions"',
+    'openBusinessShortcut',
   )
-    && mobileNavigation.includes(
-      '<small>Money</small>',
+    && shell.includes(
+      'businessSpaces.map',
     ),
-  'Mobile Money destination must remain available.',
+  'Mobile Business shortcut and multi-Business picker must remain available.',
 );
 
 need(
@@ -154,15 +154,18 @@ need(
 need(
   mobileNavigation.includes(
     'to="/spaces"',
-  ),
-  'Mobile Spaces destination is missing.',
+  )
+    && mobileNavigation.includes(
+      '<small>Space</small>',
+    ),
+  'Mobile Space destination is missing.',
 );
 
 need(
-  mobileNavigation.includes(
-    '<small>Spaces</small>',
+  !mobileNavigation.includes(
+    '<small>Money</small>',
   ),
-  'Mobile Spaces label is missing.',
+  'Money must not occupy a fixed bottom-navigation slot.',
 );
 
 need(
@@ -174,7 +177,6 @@ need(
     ),
   'Alerts must not remain in the fixed mobile bottom navigation.',
 );
-
 need(!shell.includes('<small>My Inbox</small>'), 'My Inbox must not replace the fixed mobile bottom navigation.');
 
 console.log('My Inbox verification passed (' + checks + ' structural checks).');

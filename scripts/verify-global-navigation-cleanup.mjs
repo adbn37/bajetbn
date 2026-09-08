@@ -21,10 +21,10 @@ check(navigation.includes('return [];'), 'Secondary desktop tools stay out of th
 const start = shell.indexOf('<nav className="mobile-bottom-nav"');
 const end = shell.indexOf('</nav>', start);
 const mobile = start >= 0 && end > start ? shell.slice(start, end) : '';
-for (const token of ['<small>Home</small>', '<small>Money</small>', 'mobile-bottom-add', '<small>Spaces</small>', '<small>More</small>']) {
+for (const token of ['<small>Business</small>', '<small>Home</small>', 'mobile-bottom-add', '<small>Space</small>', '<small>More</small>']) {
   check(mobile.includes(token), `Mobile navigation missing ${token}.`);
 }
-check(mobile.includes('to="/transactions"'), 'Mobile Money destination is missing.');
+check(mobile.includes('openBusinessShortcut') && shell.includes('businessSpaces.map'), 'Mobile Business shortcut or Business picker is missing.');
 check(mobile.includes("navigate('/?quick=1')"), 'Mobile Add action is missing.');
 check(mobile.includes('to="/spaces"'), 'Mobile Spaces destination is missing.');
 check(mobile.includes('to="/more"'), 'Mobile More destination is missing.');

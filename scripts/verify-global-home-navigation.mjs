@@ -132,10 +132,10 @@ const nav =
     : '';
 
 const tokens = [
+  '<small>Business</small>',
   '<small>Home</small>',
-  '<small>Money</small>',
   'mobile-bottom-add',
-  '<small>Spaces</small>',
+  '<small>Space</small>',
   '<small>More</small>',
 ];
 
@@ -160,16 +160,22 @@ for (const token of tokens) {
 check(
   ordered
     && !nav.includes(
-      '<small>Business</small>',
+      '<small>Money</small>',
     ),
-  'Mobile navigation is Home | Money | + | Spaces | More.',
+  'Mobile navigation is Business | Home | + | Space | More.',
 );
 
 check(
   nav.includes(
-    'to="/transactions"',
-  ),
-  'Money is a direct mobile destination.',
+    'openBusinessShortcut',
+  )
+    && shell.includes(
+      "space.type === 'sme'",
+    )
+    && shell.includes(
+      'businessSpaces.map',
+    ),
+  'Business shortcut targets Business Spaces and supports multiple Businesses.',
 );
 
 check(
@@ -184,9 +190,9 @@ check(
     'to="/spaces"',
   )
     && nav.includes(
-      '<small>Spaces</small>',
+      '<small>Space</small>',
     ),
-  'Spaces is a shared-work destination.',
+  'Space remains the shared-work destination.',
 );
 
 check(

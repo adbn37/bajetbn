@@ -133,10 +133,10 @@ expect(
  */
 
 const navTokens = [
+  '<small>Business</small>',
   '<small>Home</small>',
-  '<small>Money</small>',
   'mobile-bottom-add',
-  '<small>Spaces</small>',
+  '<small>Space</small>',
   '<small>More</small>',
 ];
 
@@ -162,7 +162,7 @@ for (const token of navTokens) {
 
 expect(
   correctOrder,
-  'Mobile navigation must be Home | Money | + | Spaces | More.',
+  'Mobile navigation must be Business | Home | + | Space | More.',
 );
 
 expect(
