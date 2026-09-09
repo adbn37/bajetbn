@@ -260,11 +260,30 @@ check(
 );
 
 check(
-  commitmentRepo.includes(
-    'listCommitmentPaymentsForCommitment',
-  )
+  (
+    commitmentRepo.includes(
+      'listCommitmentPaymentsForCommitment',
+    )
     && commitments.includes(
       'listCommitmentPaymentsForCommitment',
+    )
+  )
+    || (
+      commitmentRepo.includes(
+        'export async function listCommitmentPayments(uid: string)',
+      )
+      && commitmentRepo.includes(
+        "where('ownerId', '==', uid)",
+      )
+      && commitments.includes(
+        'listCommitmentPayments(',
+      )
+      && commitments.includes(
+        'scopedPayments',
+      )
+      && commitments.includes(
+        'nextPayment.commitmentId',
+      )
     ),
   'Commitment payment history loads per commitment.',
 );

@@ -13,7 +13,6 @@ import {
   createCommitment,
   listAllCommitments,
   listCommitmentPayments,
-  listCommitmentPaymentsForCommitment,
   listCommitmentsForOwnerSpace,
   payCommitment,
   updateCommitment,
@@ -83,20 +82,33 @@ export function CommitmentsPage({
           );
         }
 
-        const nextItems =
-          await listCommitmentsForOwnerSpace(
+        const [
+          nextItems,
+          nextPayments,
+        ] = await Promise.all([
+          listCommitmentsForOwnerSpace(
             user.uid,
             spaceIdOverride,
-          );
+          ),
+          listCommitmentPayments(
+            user.uid,
+          ),
+        ]);
 
-        const paymentGroups =
-          await Promise.all(
+        const itemIds =
+          new Set(
             nextItems.map(
               (nextItem) =>
-                listCommitmentPaymentsForCommitment(
-                  nextItem.id,
-                ),
+                nextItem.id,
             ),
+          );
+
+        const scopedPayments =
+          nextPayments.filter(
+            (nextPayment) =>
+              itemIds.has(
+                nextPayment.commitmentId,
+              ),
           );
 
         const editableSpaces =
@@ -111,7 +123,7 @@ export function CommitmentsPage({
               ];
 
         setItems(nextItems);
-        setPayments(paymentGroups.flat());
+        setPayments(scopedPayments);
         setAccounts(nextAccounts);
         setSpaces(editableSpaces);
 
@@ -137,40 +149,11 @@ export function CommitmentsPage({
         listCommitmentPayments(user.uid),
       ]);
 
-      const personalSpace =
-        nextSpaces.find(
-          (nextSpace) =>
-            nextSpace.type === 'personal'
-            && !nextSpace.archivedAt,
-        ) || null;
-
-      const personalItems =
-        personalSpace
-          ? nextItems.filter(
-              (nextItem) =>
-                nextItem.spaceId === personalSpace.id,
-            )
-          : [];
-
-      const personalItemIds =
-        new Set(
-          personalItems.map(
-            (nextItem) =>
-              nextItem.id,
-          ),
-        );
-
-      setItems(personalItems);
-
-      setPayments(
-        nextPayments.filter(
-          (nextPayment) =>
-            personalItemIds.has(
-              nextPayment.commitmentId,
-            ),
-        ),
-      );
-
+      /*
+       * Main Bills is global across all Spaces owned by the user.
+       */
+      setItems(nextItems);
+      setPayments(nextPayments);
       setAccounts(nextAccounts);
       setSpaces(ownedSpaces);
 
@@ -219,6 +202,28 @@ export function CommitmentsPage({
   const upcoming = active.filter((item) => dueState(item) === 'upcoming' || dueState(item) === 'due').length; const overdue = active.filter((item) => dueState(item) === 'overdue').length; const outstanding = active.reduce((sum, item) => sum + (item.type === 'instalment' && item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : item.status === 'active' ? item.amountMinor : 0), 0);
   const accountMap = useMemo(() => new Map(accounts.map((item) => [item.id, item])), [accounts]);
 
+  const spaceMap =
+    useMemo(
+      () =>
+        new Map(
+          spaces.map(
+            (item) => [
+              item.id,
+              item.name,
+            ],
+          ),
+        ),
+      [spaces],
+    );
+
+  const currentSpace =
+    spaceIdOverride
+      ? spaces.find(
+          (item) =>
+            item.id === spaceIdOverride,
+        )
+      : undefined;
+
   const accountsForCommitment = (
     commitment: Commitment,
   ) => {
@@ -263,9 +268,15 @@ export function CommitmentsPage({
   return <main className={embedded ? 'page embedded-module-page' : 'page'}><PageHeader
       eyebrow={
         embedded
-          ? spaces[0]?.type === 'sme'
+          ? currentSpace?.type === 'sme'
             ? 'Business Space'
-            : 'Personal Space'
+            : currentSpace?.type === 'household'
+              ? 'Household Space'
+              : currentSpace?.type === 'trip'
+                ? 'Trip Space'
+                : currentSpace?.type === 'collection'
+                  ? 'Collection Space'
+                  : 'Personal Space'
           : 'Planning'
       }
       title={
@@ -319,15 +330,15 @@ export function CommitmentsPage({
     />{error && <div className="notice error">{error}</div>}
     <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     {!typeOverride && <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>}
-    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} busyId={busyId} onPay={setPaying} onEdit={(item) => { setEditing(item); setShowForm(true); }} onStop={(item) => askLifecycle(item, 'stop')} onDelete={(item) => askLifecycle(item, 'delete')} onShare={(item, payment) => shareBillToWhatsApp(item, payment)} />
+    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} spaceMap={spaceMap} showSpace={!spaceIdOverride} busyId={busyId} onPay={setPaying} onEdit={(item) => { setEditing(item); setShowForm(true); }} onStop={(item) => askLifecycle(item, 'stop')} onDelete={(item) => askLifecycle(item, 'delete')} onShare={(item, payment) => shareBillToWhatsApp(item, payment)} />
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit bill or instalment' : 'Add bill or instalment'} onClose={() => setShowForm(false)}><CommitmentForm item={editing} accounts={accounts} spaces={spaces} categories={categories} lockedSpaceId={spaceIdOverride} typeOverride={typeOverride} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
     {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accountsForCommitment(paying)} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
   </main>;
 }
 
-function CommitmentGrid({ items, payments, accountMap, busyId, inactive = false, onPay, onEdit, onStop, onDelete, onRestore, onShare }: { items: Commitment[]; payments: CommitmentPayment[]; accountMap: Map<string, Account>; busyId: string; inactive?: boolean; onPay?: (item: Commitment) => void; onEdit?: (item: Commitment) => void; onStop?: (item: Commitment) => void; onDelete?: (item: Commitment) => void; onRestore?: (item: Commitment) => void; onShare?: (item: Commitment, payment?: CommitmentPayment) => void }) {
-  return <section className="planning-card-grid">{items.map((item) => { const state = inactive ? 'completed' : dueState(item); const remaining = item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0; const ratio = item.totalAmountMinor ? Math.min(100, Math.round(item.amountPaidMinor / item.totalAmountMinor * 100)) : item.status === 'completed' ? 100 : 0; const recent = payments.filter((payment) => payment.commitmentId === item.id).slice(0, 2); return <article className={`planning-card commitment-card state-${state} ${inactive ? 'archived' : ''}`} key={item.id}><div className="planning-card-head"><div><span className="eyebrow">{inactive ? 'Stopped' : dueLabels[state]}</span><h3>{item.name}</h3></div><span className="type-badge">{item.type === 'bill' ? 'Bill' : 'Instalment'}</span></div><div className="budget-amount-line"><span>{item.type === 'bill' ? 'Amount due each cycle' : 'Instalment amount per cycle'}</span><strong>{formatMoney(item.amountMinor, item.currency)}</strong><span>{frequencyLabels[item.frequency]}</span></div>{item.type === 'instalment' && <><div className="progress planning-progress"><span style={{ width: `${ratio}%` }} /></div><div className="planning-meta"><span>Paid {formatMoney(item.amountPaidMinor, item.currency)}</span><span>Left {formatMoney(remaining, item.currency)}</span></div></>}<div className="planning-meta"><span>{item.payee || item.categoryName}</span><span>{inactive ? 'Future dates stopped' : item.nextDueDate ? `Due ${item.nextDueDate}` : 'Finished'}</span></div><div className="planning-meta"><span>{accountMap.get(item.accountId || '')?.name || 'Choose an account when you pay'}</span><span>Remind me {item.reminderDays} day(s)</span></div>{recent.length > 0 && <div className="mini-history">{recent.map((payment) => <div key={payment.id}><span>{payment.paymentDate}</span><strong>{formatMoney(payment.amountMinor, payment.currency)}</strong><span>{payment.status === 'posted' ? 'Saved' : 'Undone'}</span></div>)}</div>}<div className="button-row">{inactive ? <button className="button secondary" disabled={busyId === item.id} onClick={() => onRestore?.(item)}>Restore</button> : <><button className="button primary" disabled={item.status === 'completed'} onClick={() => onPay?.(item)}>Add payment</button>{item.type === 'bill' && <button className="button secondary" title="Share to WhatsApp" onClick={() => onShare?.(item, recent.find((payment) => payment.status === 'posted'))}>Share</button>}<button className="button secondary" onClick={() => onEdit?.(item)}>Edit</button><button className="text-button" disabled={busyId === item.id} onClick={() => onStop?.(item)}>Stop</button><button className="text-button danger" disabled={busyId === item.id} onClick={() => onDelete?.(item)}>Delete</button></>}</div></article>; })}</section>;
+function CommitmentGrid({ items, payments, accountMap, spaceMap, showSpace = false, busyId, inactive = false, onPay, onEdit, onStop, onDelete, onRestore, onShare }: { items: Commitment[]; payments: CommitmentPayment[]; accountMap: Map<string, Account>; spaceMap: Map<string, string>; showSpace?: boolean; busyId: string; inactive?: boolean; onPay?: (item: Commitment) => void; onEdit?: (item: Commitment) => void; onStop?: (item: Commitment) => void; onDelete?: (item: Commitment) => void; onRestore?: (item: Commitment) => void; onShare?: (item: Commitment, payment?: CommitmentPayment) => void }) {
+  return <section className="planning-card-grid">{items.map((item) => { const state = inactive ? 'completed' : dueState(item); const remaining = item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0; const ratio = item.totalAmountMinor ? Math.min(100, Math.round(item.amountPaidMinor / item.totalAmountMinor * 100)) : item.status === 'completed' ? 100 : 0; const recent = payments.filter((payment) => payment.commitmentId === item.id).slice(0, 2); return <article className={`planning-card commitment-card state-${state} ${inactive ? 'archived' : ''}`} key={item.id}><div className="planning-card-head"><div><span className="eyebrow">{inactive ? 'Stopped' : dueLabels[state]}</span><h3>{item.name}</h3></div><span className="type-badge">{item.type === 'bill' ? 'Bill' : 'Instalment'}</span></div><div className="budget-amount-line"><span>{item.type === 'bill' ? 'Amount due each cycle' : 'Instalment amount per cycle'}</span><strong>{formatMoney(item.amountMinor, item.currency)}</strong><span>{frequencyLabels[item.frequency]}</span></div>{item.type === 'instalment' && <><div className="progress planning-progress"><span style={{ width: `${ratio}%` }} /></div><div className="planning-meta"><span>Paid {formatMoney(item.amountPaidMinor, item.currency)}</span><span>Left {formatMoney(remaining, item.currency)}</span></div></>}<div className="planning-meta"><span>{item.payee || item.categoryName}{showSpace ? ` · ${spaceMap.get(item.spaceId) || 'Space'}` : ''}</span><span>{inactive ? 'Future dates stopped' : item.nextDueDate ? `Due ${item.nextDueDate}` : 'Finished'}</span></div><div className="planning-meta"><span>{accountMap.get(item.accountId || '')?.name || 'Choose an account when you pay'}</span><span>Remind me {item.reminderDays} day(s)</span></div>{recent.length > 0 && <div className="mini-history">{recent.map((payment) => <div key={payment.id}><span>{payment.paymentDate}</span><strong>{formatMoney(payment.amountMinor, payment.currency)}</strong><span>{payment.status === 'posted' ? 'Saved' : 'Undone'}</span></div>)}</div>}<div className="button-row">{inactive ? <button className="button secondary" disabled={busyId === item.id} onClick={() => onRestore?.(item)}>Restore</button> : <><button className="button primary" disabled={item.status === 'completed'} onClick={() => onPay?.(item)}>Add payment</button>{item.type === 'bill' && <button className="button secondary" title="Share to WhatsApp" onClick={() => onShare?.(item, recent.find((payment) => payment.status === 'posted'))}>Share</button>}<button className="button secondary" onClick={() => onEdit?.(item)}>Edit</button><button className="text-button" disabled={busyId === item.id} onClick={() => onStop?.(item)}>Stop</button><button className="text-button danger" disabled={busyId === item.id} onClick={() => onDelete?.(item)}>Delete</button></>}</div></article>; })}</section>;
 }
 
 function CommitmentForm({
@@ -440,11 +451,7 @@ function CommitmentForm({
               nextSpace.id
               === lockedSpaceId,
           )
-        : spaces.filter(
-            (nextSpace) =>
-              nextSpace.type
-              === 'personal',
-          );
+        : spaces;
 
   const selectedSpace =
     spaces.find(
