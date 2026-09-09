@@ -591,8 +591,7 @@ function CommitmentForm({
             value={type}
             onChange={(event) =>
               setType(
-                event.target.value
-                as CommitmentType,
+                event.target.value as CommitmentType,
               )
             }
             disabled={
@@ -766,6 +765,9 @@ function CommitmentForm({
                   inputMode="decimal"
                   required
                 />
+                <small>
+                  The full amount you need to pay from start to finish.
+                </small>
               </label>
 
               <label>
@@ -780,6 +782,9 @@ function CommitmentForm({
                   inputMode="decimal"
                   required
                 />
+                <small>
+                  The amount you normally pay each time.
+                </small>
               </label>
             </>
           )}
@@ -790,8 +795,7 @@ function CommitmentForm({
             value={frequency}
             onChange={(event) =>
               setFrequency(
-                event.target.value
-                as CommitmentFrequency,
+                event.target.value as CommitmentFrequency,
               )
             }
           >

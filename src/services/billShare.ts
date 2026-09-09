@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Commitment,
   CommitmentPayment,
 } from '../types/models';
@@ -174,8 +174,7 @@ export function decodeBillSharePayload(
         decodeBase64Url(
           encoded,
         ),
-      )
-      as Partial<PublicBillSharePayload>;
+      ) as Partial<PublicBillSharePayload>;
 
     if (
       parsed.v !== 1
@@ -224,8 +223,7 @@ export function decodeBillSharePayload(
           .slice(0, 8),
 
       status:
-        parsed.status
-        as PublicBillSharePayload['status'],
+        parsed.status as PublicBillSharePayload['status'],
 
       latestPaymentMinor:
         typeof parsed.latestPaymentMinor
