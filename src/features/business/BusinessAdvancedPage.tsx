@@ -912,9 +912,6 @@ export function BusinessAdvancedPage() {
                     >
                       <div>
                         <div className="business-contact-meta">
-                          <span>
-                            {item.displayId}
-                          </span>
 
                           <span>
                             {item.kind === 'both'

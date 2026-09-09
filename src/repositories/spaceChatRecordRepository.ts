@@ -48,8 +48,6 @@ function option(
       spec.type
       + ' '
       + label
-      + ' '
-      + value(row, 'displayId')
     ).toLowerCase(),
   };
 }
@@ -59,61 +57,61 @@ const specs: RecordSpec[] = [
     collectionName: 'sharedExpenses',
     type: 'expense',
     include: (row) => !row.closedAt,
-    label: (row) => 'Expense - ' + value(row, 'title', value(row, 'displayId', 'Shared expense')),
+    label: (row) => 'Expense - ' + value(row, 'title', 'Shared expense'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '?tab=expenses&expenseId=' + encodeURIComponent(id),
   },
   {
     collectionName: 'sharedBillAssignments',
     type: 'shared_bill',
     include: (row) => row.status !== 'paid' || Boolean(row.displayId),
-    label: (row) => 'Shared bill - ' + value(row, 'commitmentName', value(row, 'displayId', 'Assignment')),
+    label: (row) => 'Shared bill - ' + value(row, 'commitmentName', 'Assignment'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '?tab=bills&assignmentId=' + encodeURIComponent(id),
   },
   {
     collectionName: 'commitments',
     type: 'commitment',
     include: (row) => !row.archivedAt,
-    label: (row) => 'Bill - ' + value(row, 'name', value(row, 'displayId', 'Commitment')),
+    label: (row) => 'Bill - ' + value(row, 'name', 'Commitment'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '?tab=bills&commitmentId=' + encodeURIComponent(id),
   },
   {
     collectionName: 'tripTasks',
     type: 'trip_task',
     include: (row) => !row.archivedAt,
-    label: (row) => 'Task - ' + value(row, 'title', value(row, 'displayId', 'Trip task')),
+    label: (row) => 'Task - ' + value(row, 'title', 'Trip task'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '?tab=overview&taskId=' + encodeURIComponent(id) + '#trip-planning',
   },
   {
     collectionName: 'tripBookings',
     type: 'booking',
     include: (row) => !row.archivedAt,
-    label: (row) => 'Booking - ' + value(row, 'title', value(row, 'displayId', 'Trip booking')),
+    label: (row) => 'Booking - ' + value(row, 'title', 'Trip booking'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '?tab=overview&bookingId=' + encodeURIComponent(id) + '#trip-planning',
   },
   {
     collectionName: 'budgets',
     type: 'budget',
     include: (row) => !row.archivedAt,
-    label: (row) => 'Budget - ' + value(row, 'name', value(row, 'displayId', 'Budget')),
+    label: (row) => 'Budget - ' + value(row, 'name', 'Budget'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '?tab=overview&section=budgets&budgetId=' + encodeURIComponent(id),
   },
   {
     collectionName: 'smePosPayouts',
     type: 'payout',
-    label: (row) => 'Payout - ' + value(row, 'sellerName', value(row, 'displayId', 'Seller payout')),
+    label: (row) => 'Payout - ' + value(row, 'sellerName', 'Seller payout'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '/pos?tab=payouts&payoutId=' + encodeURIComponent(id),
   },
   {
     collectionName: 'collectionItems',
     type: 'collection_item',
     include: (row) => !row.archivedAt,
-    label: (row) => 'Collection item - ' + value(row, 'name', value(row, 'displayId', 'Item')),
+    label: (row) => 'Collection item - ' + value(row, 'name', 'Item'),
     targetPath: (spaceId, id) => '/spaces/' + spaceId + '/collection/items/' + encodeURIComponent(id),
   },
   {
     collectionName: 'spaceApprovals',
     type: 'approval',
-    label: (row) => 'Approval - ' + value(row, 'title', value(row, 'displayId', 'Request')),
+    label: (row) => 'Approval - ' + value(row, 'title', 'Request'),
     targetPath: (spaceId, id, row) =>
       value(row, 'targetPath')
       || ('/spaces/' + spaceId + '?tab=approvals&approvalId=' + encodeURIComponent(id)),

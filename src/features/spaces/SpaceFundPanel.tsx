@@ -138,9 +138,9 @@ export function SpaceFundPanel({
       <div className="info-banner"><strong>{fund.holderName || fund.holderEmail || 'Selected member'} holds the collected money</strong><span>When adding a shared expense, choose “{copy.paidLabel}” to reduce the available amount. Other shared expenses can still use direct payments.</span></div>
       <div className="panel-heading subheading"><div><span className="eyebrow">Collected money</span><h2>Member contributions</h2></div></div>
       <div className="trip-contribution-list">{contributions.length === 0 ? <p>No contributions recorded yet.</p> : contributions.map((item) => <article className={`trip-contribution-row status-${item.status}`} key={item.id}>
-        <div><strong>{item.memberName || item.memberEmail || 'Member'}</strong><small>{item.contributionDate} · {item.status === 'reversed' ? 'Undone' : item.displayId}</small></div>
+        <div><strong>{item.memberName || item.memberEmail || 'Member'}</strong><small>{item.contributionDate} · {item.status === 'reversed' ? 'Undone' : 'Recorded'}</small></div>
         <strong>{formatMoney(item.amountMinor, item.currency)}</strong>
-        {item.status === 'posted' && (canManage || currentMember?.uid === item.memberUid) && <button className="button danger-outline" onClick={() => setUndoDialog({ payload: item, title: `Undo ${item.displayId}?`, description: 'This contribution will be reversed if the collected money has not already been spent.', note: 'The original contribution stays in the history as an undone record.', confirmLabel: 'Undo contribution', tone: 'danger' })}>Undo</button>}
+        {item.status === 'posted' && (canManage || currentMember?.uid === item.memberUid) && <button className="button danger-outline" onClick={() => setUndoDialog({ payload: item, title: 'Undo this contribution?', description: 'This contribution will be reversed if the collected money has not already been spent.', note: 'The original contribution stays in the history as an undone record.', confirmLabel: 'Undo contribution', tone: 'danger' })}>Undo</button>}
       </article>)}</div>
     </>}
     {undoDialog && <ActionConfirmModal state={undoDialog} busy={undoBusy} error={error} onClose={() => { setUndoDialog(null); setError(''); }} onConfirm={() => void runUndoContribution()} />}

@@ -180,12 +180,12 @@ export function SharedExpensesPanel({
           const canReview = canManage && payment.status === 'submitted';
           const canUndo = payment.status === 'posted' && (canManage || currentMember?.uid === payment.fromUid);
           return <article className={`shared-payment-row status-${payment.status}`} key={payment.id}>
-            <div><strong>{payment.fromName || 'Member'} → {payment.toName || 'Member'}</strong><small>{payment.paymentDate} · {paymentStatusLabel(payment.status)} · {payment.displayId}</small></div>
+            <div><strong>{payment.fromName || 'Member'} → {payment.toName || 'Member'}</strong><small>{payment.paymentDate} · {paymentStatusLabel(payment.status)}</small></div>
             <strong>{formatMoney(payment.amountMinor, payment.currency)}</strong>
             <div className="button-row">
               {payment.proofPath && <button className="text-button" onClick={() => void getSharedExpenseProofUrl(payment.proofPath || '').then((url) => window.open(url, '_blank', 'noopener,noreferrer'))}>View proof</button>}
               {canReview && <><button className="button primary" onClick={() => void run(() => reviewSharedExpensePayment({ paymentId: payment.id, decision: 'confirmed' }))}>Confirm</button><button className="button danger-outline" onClick={() => void run(() => reviewSharedExpensePayment({ paymentId: payment.id, decision: 'rejected' }))}>Decline</button></>}
-              {canUndo && <button className="button danger-outline" onClick={() => setUndoDialog({ payload: payment, title: `Undo ${payment.displayId}?`, description: 'The payment will be reversed and the amount will be shown as owed again.', note: 'The original payment stays in the history as an undone record.', confirmLabel: 'Undo member payment', tone: 'danger' })}>Undo payment</button>}
+              {canUndo && <button className="button danger-outline" onClick={() => setUndoDialog({ payload: payment, title: 'Undo this payment?', description: 'The payment will be reversed and the amount will be shown as owed again.', note: 'The original payment stays in the history as an undone record.', confirmLabel: 'Undo member payment', tone: 'danger' })}>Undo payment</button>}
             </div>
           </article>;
         })}

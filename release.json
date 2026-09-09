@@ -1,6 +1,6 @@
 {
-    "version": "1.14.4",
-    "label": "BajetBN v1.14.4",
+    "version":  "1.14.5",
+    "label":  "BajetBN v1.14.5",
     "channel":  "stable",
-    "releasedAt":  "2026-09-08"
+    "releasedAt":  "2026-09-09"
 }

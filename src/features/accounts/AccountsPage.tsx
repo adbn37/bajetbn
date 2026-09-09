@@ -10,6 +10,7 @@ import {
   businessSpaceIdsForAccount,
   createAccount,
   listAccountAccess,
+  listAllAccounts,
   listAllPersonalAccounts,
   listAccountsForOwnerSpace,
   listAccountsForSpace,
@@ -115,11 +116,11 @@ export function AccountsPage({
         ownedAccounts,
         nextSpaces,
       ] = await Promise.all([
-        listAllPersonalAccounts(user.uid),
+        listAllAccounts(user.uid),
         listSpaces(user.uid),
       ]);
 
-      const sharedSmeSpaces: Space[] = [];
+      const sharedSmeSpaces = nextSpaces.filter((space) => space.type === 'sme' && space.ownerId !== user.uid && !space.archivedAt);
 
       const sharedGroups = await Promise.all(
         sharedSmeSpaces.map(async (space) => ({
@@ -598,7 +599,7 @@ function AccountList({
 
     return <article className={`account-card ${accountColorClass(getAccountColor(user?.uid || '', account.id, index))}`} key={account.id}>
       <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
-      <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {canManage ? (account.classification === 'personal' ? 'Personal only' : businessNames(account)) : sharedLabel}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div><small>{account.displayId}</small></div>
+      <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {canManage ? (account.classification === 'personal' ? 'Personal only' : businessNames(account)) : sharedLabel}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div></div>
       <div className="account-balance">
         <span>Current balance</span>
         <strong>

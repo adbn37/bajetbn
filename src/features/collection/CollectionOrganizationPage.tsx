@@ -79,7 +79,6 @@ function searchable(item: CollectionItem): string {
 
   return [
     item.name,
-    firstText(record, ['displayId']),
     conditionOf(item),
     groupOf(item),
     firstText(record, [

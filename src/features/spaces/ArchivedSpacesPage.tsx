@@ -73,7 +73,7 @@ export function ArchivedSpacesPage() {
     </section>
     {loading ? <div className="loading-panel">Loading Archived Spaces…</div> : filtered.length === 0 ? <EmptyState title={spaces.length ? 'No matching archived Spaces' : 'No archived Spaces'} description={spaces.length ? 'Try another search.' : 'Spaces you archive will be kept here.'} /> : <section className="archive-card-grid">{filtered.map((space) => <article className="archive-record-card" key={space.id}>
       <div className="archive-record-main"><span className={`space-icon large ${space.type}`}>{space.name.charAt(0)}</span><div><span className="eyebrow">{labels[space.type]}</span><h2>{space.name}</h2><p>{space.description || 'Previous records are kept.'}</p></div></div>
-      <dl className="archive-record-meta"><div><dt>Archived</dt><dd>{archivedDate(space)}</dd></div><div><dt>Record</dt><dd>{space.displayId}</dd></div></dl>
+      <dl className="archive-record-meta"><div><dt>Archived</dt><dd>{archivedDate(space)}</dd></div></dl>
       <div className="archive-record-actions"><Link className="button secondary" to={`/spaces/${space.id}`}>View records</Link><button className="button primary" onClick={() => ask(space, 'restore')}>Restore</button><button className="text-button danger" onClick={() => ask(space, 'delete')}>Delete permanently</button></div>
     </article>)}</section>}
     {dialog && <LifecycleConfirmModal state={dialog} busy={busy} error={error} onClose={() => { setDialog(null); setError(''); }} onConfirm={() => void run()} />}

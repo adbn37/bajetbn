@@ -398,7 +398,6 @@ export function TransactionsPage() {
       .join(' ');
 
     return [
-      item.displayId,
       item.category,
       item.counterparty,
       item.note,
@@ -421,7 +420,7 @@ export function TransactionsPage() {
     setError('');
     setReverseDialog({
       payload: item,
-      title: `Undo ${item.displayId}?`,
+      title: 'Undo this money activity?',
       description: 'BajetBN will add a correction record instead of changing or deleting the original money record.',
       note: item.sharedBillPaymentId
         ? 'The account balance will be restored and the shared bill will open again.'
@@ -466,7 +465,7 @@ export function TransactionsPage() {
 
     setCorrectionDialog({
       payload: item,
-      title: `Correct ${item.displayId}?`,
+      title: 'Correct this money activity?',
       description: 'BajetBN will undo the original record first, then open a pre-filled replacement. This keeps the account ledger and audit history accurate.',
       note: 'Use this when the amount, account, date, category, Space, or transaction type is wrong.',
       confirmLabel: 'Undo and create correction',
@@ -647,7 +646,7 @@ export function TransactionsPage() {
                   )}
                 </div>
 
-                <small>{item.displayId}</small>
+
               </div>
               <div className="transaction-context">
                 <strong>{space?.type === 'personal' ? 'Personal' : space?.name || 'Unknown'}</strong>
@@ -662,7 +661,7 @@ export function TransactionsPage() {
                 {(item.type !== 'reversal' || (transactionAttachmentCounts[item.id] || 0) > 0) && <button
                   type="button"
                   className="text-button receipt-shortcut"
-                  aria-label={`${transactionAttachmentCounts[item.id] ? 'View receipts' : 'Add receipt'} for ${item.displayId}`}
+                  aria-label={`${transactionAttachmentCounts[item.id] ? 'View receipts' : 'Add receipt'} for this money activity`}
                   onClick={() => setReceiptTransaction(item)}
                 >{transactionAttachmentCounts[item.id] ? `View receipts (${transactionAttachmentCounts[item.id]})` : 'Add receipt'}</button>}
                 <button type="button" className="text-button" onClick={() => setSelectedTransaction(item)}>Details</button>
@@ -1538,7 +1537,7 @@ function TransactionDetails({ item, source, destination, space, category, online
       <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
     </div>
     <dl className="detail-list">
-      <Detail label="Record number">{item.displayId}</Detail>
+
       <Detail label="Type">{item.type === 'reversal' && item.originalType ? `Undo of ${typeLabels[item.originalType]}` : typeLabels[item.type]}</Detail>
       <Detail label="Date">{item.transactionDate}</Detail>
       <Detail label="Space">{space?.name || 'Unknown Space'}</Detail>
@@ -1573,7 +1572,7 @@ function TransactionDetails({ item, source, destination, space, category, online
     </dl>
     </>}
 
-    {receiptsOnly && <div className="transaction-receipt-shortcut-summary"><strong>{item.category || typeLabels[item.type]}</strong><span>{item.displayId} · {item.transactionDate}</span></div>}
+    {receiptsOnly && <div className="transaction-receipt-shortcut-summary"><strong>{item.category || typeLabels[item.type]}</strong><span>{item.transactionDate}</span></div>}
 
     <section className="transaction-attachments" aria-labelledby="transaction-attachments-title">
       <div className="transaction-attachments-heading">

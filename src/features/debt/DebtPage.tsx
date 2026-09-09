@@ -318,7 +318,7 @@ export function DebtPage() {
                 </div>
 
                 <footer className="debt-card-footer">
-                  <small>{item.displayId}</small>
+
 
                   <div className="button-row">
                     <button

@@ -746,7 +746,7 @@ export function BusinessPayrollPage() {
       );
 
       setFeedback(
-        `${run.displayId} posted successfully.`,
+        `Payroll posted successfully.`,
       );
 
       await load();
@@ -1152,12 +1152,7 @@ export function BusinessPayrollPage() {
                       key={employee.id}
                     >
                       <div>
-                        <small>
-                          {employee.displayId}
-                          {employee.archivedAt
-                            ? ' · Archived'
-                            : ''}
-                        </small>
+                        {employee.archivedAt && <small>Archived</small>}
 
                         <h3>
                           {employee.name}
@@ -1481,8 +1476,7 @@ export function BusinessPayrollPage() {
                     >
                       <div>
                         <small>
-                          {run.displayId}
-                          {' · '}
+
                           {run.period}
                           {' · '}
                           {run.status}

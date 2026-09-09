@@ -480,8 +480,8 @@ export function CollaborationPage({
         const whatsapp = selectedSpace?.headWhatsapp ? whatsappHref(selectedSpace.headWhatsapp, `Hi, I have recorded ${lastPayment ? formatMoney(lastPayment.amountMinor, lastPayment.currency) : formatMoney(assignment.assignedMinor, assignment.currency)} for ${assignment.commitmentName}. BajetBN status: ${statusLabel[assignment.status] || assignment.status}.`) : '';
         return <article className={`shared-bill-card status-${assignment.status}`} key={assignment.id}>
           <div className="planning-card-head"><div><span className="eyebrow">{statusLabel[assignment.status] || assignment.status}</span><h3>{assignment.commitmentName}</h3></div><strong>{formatMoney(assignment.assignedMinor, assignment.currency)}</strong></div>
-          <div className="planning-meta"><span>{assignment.memberName || assignment.memberEmail || assignment.memberUid}</span><span>Due {assignment.dueDate}</span></div>
-          <div className="transaction-preview"><div><span>Paid</span><strong>{formatMoney(settled, assignment.currency)}</strong></div><div><span>Left to pay</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div>{currentPayment && <small>Payment {currentPayment.displayId}: {formatMoney(currentPayment.amountMinor, currentPayment.currency)} · {paymentMethodLabel(currentPayment.paymentMethod, currentPayment.paymentMethodLabel)}</small>}{lastPayment && !currentPayment && <small>Last payment {lastPayment.displayId}: {lastPayment.settlementMode === 'account' ? 'Account updated' : 'Paid another way'}.</small>}</div>
+          <div className="planning-meta"><span>{assignment.memberName || assignment.memberEmail || 'Member'}</span><span>Due {assignment.dueDate}</span></div>
+          <div className="transaction-preview"><div><span>Paid</span><strong>{formatMoney(settled, assignment.currency)}</strong></div><div><span>Left to pay</span><strong>{formatMoney(outstanding, assignment.currency)}</strong></div>{currentPayment && <small>Payment: {formatMoney(currentPayment.amountMinor, currentPayment.currency)} · {paymentMethodLabel(currentPayment.paymentMethod, currentPayment.paymentMethodLabel)}</small>}{lastPayment && !currentPayment && <small>Last payment: {lastPayment.settlementMode === 'account' ? 'Account updated' : 'Paid another way'}.</small>}</div>
           {assignment.note && <p>{assignment.note}</p>}
           <div className="button-row">
             {maySubmit && <button className="button primary" onClick={() => setSubmitting(assignment)}>{assignment.status === 'confirmed' ? 'Finish old payment' : 'Add payment'}</button>}
@@ -490,7 +490,7 @@ export function CollaborationPage({
             {canReview && currentPayment && <><button className="button primary" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'confirmed' }))}>Confirm payment</button><button className="button danger-outline" onClick={() => void runAction(() => reviewSharedBillPayment({ paymentId: currentPayment.id, decision: 'rejected' }))}>Decline</button></>}
             {canReverse && lastPayment && <button className="button danger-outline" onClick={() => setConfirmDialog({
               payload: { kind: 'reverse-payment', payment: lastPayment },
-              title: `Undo ${lastPayment.displayId}?`,
+              title: 'Undo this payment?',
               description: 'The payment will be reversed and the shared bill will open again.',
               note: lastPayment.settlementMode === 'account' ? 'The linked BajetBN account balance will be restored.' : 'No BajetBN account balance was changed by this payment.',
               confirmLabel: 'Undo shared-bill payment',
@@ -501,7 +501,7 @@ export function CollaborationPage({
       })}</div>
     </section> : <section className="panel collaboration-panel">
       <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Recent activity</h2></div></div>
-      <div className="activity-list">{activities.length === 0 ? <p>No activity recorded yet.</p> : activities.map((activity) => <article key={activity.id}><span className="activity-dot"/><div><strong>{activity.summary}</strong><small>{activity.actorName || activity.actorUid} · {activity.createdAt?.toDate?.().toLocaleString() || 'recently'}</small></div></article>)}</div>
+      <div className="activity-list">{activities.length === 0 ? <p>No activity recorded yet.</p> : activities.map((activity) => <article key={activity.id}><span className="activity-dot"/><div><strong>{activity.summary}</strong><small>{activity.actorName || 'Member'} · {activity.createdAt?.toDate?.().toLocaleString() || 'recently'}</small></div></article>)}</div>
     </section>}
 
     {confirmDialog && <ActionConfirmModal state={confirmDialog} busy={confirmBusy} error={error} onClose={() => { setConfirmDialog(null); setError(''); }} onConfirm={() => void runConfirmedAction()} />}

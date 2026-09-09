@@ -684,7 +684,7 @@ export function SpaceDetailsPage() {
         <div className="space-details-meta">
           <span>{space.currency}</span>
           <span>Brunei time</span>
-          <span>{space.displayId}</span>
+
         </div>
       </section>
     )}
