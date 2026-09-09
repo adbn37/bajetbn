@@ -11,7 +11,7 @@ import {
 } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
-import { listPersonalAccounts } from '../repositories/accountRepository';
+import { listAccounts } from '../repositories/accountRepository';
 import {
   accountColorClass,
   getAccountColor,
@@ -150,7 +150,44 @@ export function DashboardPage() {
 
   const homeAccounts =
     useMemo(
-      () => accounts,
+      () =>
+        [...accounts].sort(
+          (a, b) => {
+            const aGroup =
+              a.classification === 'business'
+                ? 1
+                : 0;
+
+            const bGroup =
+              b.classification === 'business'
+                ? 1
+                : 0;
+
+            if (aGroup !== bGroup) {
+              return aGroup - bGroup;
+            }
+
+            return a.name.localeCompare(
+              b.name,
+            );
+          },
+        ),
+      [accounts],
+    );
+
+  /*
+   * Global Add remains personal-first.
+   * Business accounts may appear on Home, but normal Home
+   * money entry continues through the Personal Space.
+   */
+  const quickAccounts =
+    useMemo(
+      () =>
+        accounts.filter(
+          (account) =>
+            account.classification
+              === 'personal',
+        ),
       [accounts],
     );
 
@@ -195,7 +232,7 @@ export function DashboardPage() {
 
       try {
         const nextAccounts =
-          await listPersonalAccounts(user.uid);
+          await listAccounts(user.uid);
 
         setAccounts(nextAccounts);
       } catch {
@@ -311,7 +348,7 @@ export function DashboardPage() {
       if (
         loading
         || quickLoading
-        || accounts.length === 0
+        || quickAccounts.length === 0
       ) {
         return;
       }
@@ -323,7 +360,7 @@ export function DashboardPage() {
         setShowMoneyActivity(true);
       }
     }, [
-      accounts.length,
+      quickAccounts.length,
       loadQuickOptions,
       loading,
       quickLoading,
@@ -1062,7 +1099,7 @@ export function DashboardPage() {
               disabled={
                 loading
                 || quickLoading
-                || accounts.length === 0
+                || quickAccounts.length === 0
               }
               onClick={() =>
                 void openQuickActivity()
@@ -1097,7 +1134,7 @@ export function DashboardPage() {
         && profile
         && (
           <MoneyActivityModal
-            accounts={accounts}
+            accounts={quickAccounts}
             spaces={activeSpaces}
             categories={
               allCategories
