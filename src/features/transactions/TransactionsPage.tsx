@@ -9,6 +9,7 @@ import { PaymentMethodField } from '../../components/PaymentMethodField';
 import { paymentMethodLabel, suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
+import { shareTransactionToWhatsApp, type TransactionShareSnapshot } from '../../services/transactionShare';
 import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
@@ -872,6 +873,10 @@ export function MoneyActivityModal({
     spaceId: string;
     uploadedCount: number;
   } | null>(null);
+  const [sharePrompt, setSharePrompt] = useState<{
+    message: string;
+    snapshot: TransactionShareSnapshot;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
@@ -903,6 +908,36 @@ export function MoneyActivityModal({
 
   const sourceAccount = accounts.find((account) => account.id === accountId);
   const destinationAccount = accounts.find((account) => account.id === destinationAccountId);
+
+  function currentShareSnapshot(
+    nextAmountMinor: number,
+  ): TransactionShareSnapshot {
+    return {
+      type,
+      amountMinor: nextAmountMinor,
+      currency:
+        sourceAccount?.currency
+        || selectedSpace?.currency
+        || 'BND',
+      transactionDate,
+      category:
+        selectedCategory?.name,
+      counterparty:
+        counterparty.trim()
+        || undefined,
+      note:
+        note.trim()
+        || undefined,
+      spaceName:
+        selectedSpace?.type === 'personal'
+          ? 'Personal'
+          : selectedSpace?.name,
+      sourceAccountName:
+        sourceAccount?.name,
+      destinationAccountName:
+        destinationAccount?.name,
+    };
+  }
   useEffect(() => {
     if (preserveInitialPaymentMethodRef.current) {
       preserveInitialPaymentMethodRef.current = false;
@@ -1051,7 +1086,13 @@ export function MoneyActivityModal({
       }
 
       if (pendingFiles.length === 0) {
-        await onComplete('Money activity saved.', true);
+        setSharePrompt({
+          message: 'Money activity saved.',
+          snapshot:
+            currentShareSnapshot(
+              nextAmountMinor,
+            ),
+        });
         return;
       }
 
@@ -1063,7 +1104,14 @@ export function MoneyActivityModal({
 
       const result = await uploadFiles(outcome.transactionId, spaceId, pendingFiles);
       if (result.failed.length === 0) {
-        await onComplete(`Money activity saved with ${result.uploaded} attachment${result.uploaded === 1 ? '' : 's'}.`, true);
+        setSharePrompt({
+          message:
+            `Money activity saved with ${result.uploaded} attachment${result.uploaded === 1 ? '' : 's'}.`,
+          snapshot:
+            currentShareSnapshot(
+              nextAmountMinor,
+            ),
+        });
         return;
       }
 
@@ -1077,8 +1125,57 @@ export function MoneyActivityModal({
     }
   };
 
-  if (savedState) {
-    const queued = savedState.mode === 'queued_with_files';
+  if (sharePrompt) {
+    return <Modal
+      title="Money activity saved"
+      onClose={() => {
+        if (!busy) {
+          void finishSaved(
+            sharePrompt.message,
+            true,
+          );
+        }
+      }}
+    >
+      <div className="notice success">
+        <strong>Transaction saved</strong>
+        <span>
+          Share it to a WhatsApp contact or group if needed.
+        </span>
+      </div>
+
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="button secondary"
+          disabled={busy}
+          onClick={() =>
+            void finishSaved(
+              sharePrompt.message,
+              true,
+            )
+          }
+        >
+          Done
+        </button>
+
+        <button
+          type="button"
+          className="button primary"
+          disabled={busy}
+          onClick={() =>
+            shareTransactionToWhatsApp(
+              sharePrompt.snapshot,
+            )
+          }
+        >
+          Share to WhatsApp
+        </button>
+      </div>
+    </Modal>;
+  }
+
+  if (savedState) {    const queued = savedState.mode === 'queued_with_files';
     return <Modal title="Money activity saved" onClose={() => { if (!busy) void finishSaved(queued ? 'Saved on this device. Attachments can be added after it syncs.' : 'Money activity saved. You can add the remaining attachments later from Details.', !queued); }}>
       <div className={`notice ${queued ? 'warning' : 'success'}`}>
         <strong>{queued ? 'Saved for offline sync' : 'Transaction saved safely'}</strong>
@@ -1604,6 +1701,40 @@ function TransactionDetails({ item, source, destination, space, category, online
 
     <div className="modal-actions">
       <button className="button secondary" onClick={onClose}>Close</button>
+      {!receiptsOnly && item.type !== 'reversal' && (
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() =>
+            shareTransactionToWhatsApp({
+              type: item.type,
+              amountMinor:
+                item.amountMinor,
+              currency:
+                item.currency,
+              transactionDate:
+                item.transactionDate,
+              category:
+                item.category
+                || category.name,
+              counterparty:
+                item.counterparty,
+              note:
+                item.note,
+              spaceName:
+                space?.type === 'personal'
+                  ? 'Personal'
+                  : space?.name,
+              sourceAccountName:
+                source?.name,
+              destinationAccountName:
+                destination?.name,
+            })
+          }
+        >
+          Share to WhatsApp
+        </button>
+      )}
       {!receiptsOnly && canSafelyChangeRecord && (
         <button className="button secondary" disabled={!online} onClick={() => setEditingDetails(true)}>Edit details</button>
       )}

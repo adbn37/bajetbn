@@ -11,6 +11,8 @@ import {
 } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
+import { Modal } from '../components/Modal';
+import { shareTransactionToWhatsApp } from '../services/transactionShare';
 import { listAccounts } from '../repositories/accountRepository';
 import {
   accountColorClass,
@@ -58,6 +60,81 @@ function transactionLabel(
   return 'Money activity';
 }
 
+function homeActivityTitle(
+  transaction: FinancialTransaction,
+) {
+  return (
+    transaction.counterparty?.trim()
+    || transaction.note?.trim()
+    || transaction.category?.trim()
+    || transactionLabel(transaction)
+  );
+}
+
+function homeActivityDate(
+  value: string,
+) {
+  const parts =
+    value.split('-');
+
+  if (parts.length !== 3) {
+    return value;
+  }
+
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  try {
+    return new Intl.DateTimeFormat(
+      'en-BN',
+      {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'Asia/Brunei',
+      },
+    ).format(
+      new Date(
+        Date.UTC(
+          year,
+          month - 1,
+          day,
+          4,
+        ),
+      ),
+    );
+  } catch {
+    return value;
+  }
+}
+
+function homeActivityMeta(
+  transaction: FinancialTransaction,
+) {
+  const title =
+    homeActivityTitle(
+      transaction,
+    );
+
+  return [
+    transactionLabel(transaction),
+    transaction.category
+      && transaction.category !== title
+      ? transaction.category
+      : '',
+    homeActivityDate(
+      transaction.transactionDate,
+    ),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 export function DashboardPage() {
   const { user, profile } = useAuth();
   const {
@@ -96,6 +173,21 @@ export function DashboardPage() {
     transactions,
     setTransactions,
   ] = useState<FinancialTransaction[]>([]);
+
+  const [
+    selectedActivity,
+    setSelectedActivity,
+  ] = useState<FinancialTransaction | null>(null);
+
+  const [
+    selectedActivitySpaceName,
+    setSelectedActivitySpaceName,
+  ] = useState('');
+
+  const [
+    activityDetailLoading,
+    setActivityDetailLoading,
+  ] = useState(false);
 
   const [
     showMoneyActivity,
@@ -634,6 +726,75 @@ export function DashboardPage() {
       [transactions],
     );
 
+  const openHomeActivityDetails =
+    useCallback(
+      async (
+        transaction: FinancialTransaction,
+      ) => {
+        setSelectedActivity(
+          transaction,
+        );
+
+        setSelectedActivitySpaceName(
+          '',
+        );
+
+        if (!user) {
+          return;
+        }
+
+        setActivityDetailLoading(true);
+
+        try {
+          const nextSpaces =
+            await listSpaces(
+              user.uid,
+            );
+
+          const transactionSpace =
+            nextSpaces.find(
+              (space) =>
+                space.id
+                  === transaction.spaceId,
+            );
+
+          setSelectedActivitySpaceName(
+            transactionSpace?.type
+              === 'personal'
+              ? 'Personal'
+              : transactionSpace?.name
+                || 'Unknown Space',
+          );
+        } catch {
+          setSelectedActivitySpaceName(
+            'Unknown Space',
+          );
+        } finally {
+          setActivityDetailLoading(false);
+        }
+      },
+      [user],
+    );
+
+  const selectedActivitySource =
+    selectedActivity
+      ? accounts.find(
+          (account) =>
+            account.id
+              === selectedActivity.accountId,
+        )
+      : undefined;
+
+  const selectedActivityDestination =
+    selectedActivity
+      && selectedActivity.destinationAccountId
+      ? accounts.find(
+          (account) =>
+            account.id
+              === selectedActivity.destinationAccountId,
+        )
+      : undefined;
+
   const firstName =
     profile?.fullName
       ?.trim()
@@ -1009,16 +1170,16 @@ export function DashboardPage() {
             <div className="home-v110-activity-list">
               {recentTransactions.map(
                 (transaction) => (
-                  <Link
+                  <button
                     key={transaction.id}
-                    to={
-                      activeAccount
-                        ? `/transactions?accountId=${encodeURIComponent(
-                            activeAccount.id,
-                          )}`
-                        : '/transactions'
+                    type="button"
+                    className="home-v110-activity-row home-v1147-activity-button"
+                    aria-label={`Open details for ${homeActivityTitle(transaction)}`}
+                    onClick={() =>
+                      void openHomeActivityDetails(
+                        transaction,
+                      )
                     }
-                    className="home-v110-activity-row"
                   >
                     <span
                       className={
@@ -1037,14 +1198,15 @@ export function DashboardPage() {
 
                     <span className="home-v110-activity-copy">
                       <strong>
-                        {transactionLabel(
+                        {homeActivityTitle(
                           transaction,
                         )}
                       </strong>
 
                       <small>
-                        {transaction
-                          .transactionDate}
+                        {homeActivityMeta(
+                          transaction,
+                        )}
                       </small>
                     </span>
 
@@ -1070,7 +1232,7 @@ export function DashboardPage() {
                           || currency,
                       )}
                     </b>
-                  </Link>
+                  </button>
                 ),
               )}
             </div>
@@ -1129,6 +1291,161 @@ export function DashboardPage() {
           <strong>View</strong>
         </Link>
       </section>
+
+      {selectedActivity && (
+        <Modal
+          title="Money activity details"
+          onClose={() =>
+            setSelectedActivity(null)
+          }
+        >
+          <div className="home-v1147-activity-detail">
+            <div className="home-v1147-activity-detail-head">
+              <div>
+                <strong>
+                  {homeActivityTitle(
+                    selectedActivity,
+                  )}
+                </strong>
+
+                <small>
+                  {transactionLabel(
+                    selectedActivity,
+                  )}
+                </small>
+              </div>
+
+              <b
+                className={
+                  selectedActivity.type
+                }
+              >
+                {selectedActivity.type === 'expense'
+                  ? '-'
+                  : selectedActivity.type === 'income'
+                    ? '+'
+                    : ''}
+                {formatMoney(
+                  selectedActivity.amountMinor,
+                  selectedActivity.currency
+                    || selectedActivitySource?.currency
+                    || currency,
+                )}
+              </b>
+            </div>
+
+            <dl className="home-v1147-activity-detail-list">
+              <div>
+                <dt>Space</dt>
+                <dd>
+                  {activityDetailLoading
+                    ? 'Loading…'
+                    : selectedActivitySpaceName
+                      || 'Unknown Space'}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Account</dt>
+                <dd>
+                  {selectedActivitySource?.name
+                    || 'Unknown Account'}
+                  {selectedActivityDestination
+                    ? ` → ${selectedActivityDestination.name}`
+                    : ''}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Category</dt>
+                <dd>
+                  {selectedActivity.category
+                    || transactionLabel(selectedActivity)}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Date</dt>
+                <dd>
+                  {homeActivityDate(
+                    selectedActivity.transactionDate,
+                  )}
+                </dd>
+              </div>
+
+              {selectedActivity.counterparty && (
+                <div>
+                  <dt>
+                    {selectedActivity.type === 'income'
+                      ? 'From'
+                      : 'Paid to'}
+                  </dt>
+                  <dd>
+                    {selectedActivity.counterparty}
+                  </dd>
+                </div>
+              )}
+
+              {selectedActivity.note && (
+                <div>
+                  <dt>Note</dt>
+                  <dd>
+                    {selectedActivity.note}
+                  </dd>
+                </div>
+              )}
+            </dl>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() =>
+                  setSelectedActivity(null)
+                }
+              >
+                Close
+              </button>
+
+              {selectedActivity.type !== 'reversal' && (
+                <button
+                  type="button"
+                  className="button primary"
+                  onClick={() =>
+                    shareTransactionToWhatsApp({
+                      type:
+                        selectedActivity.type,
+                      amountMinor:
+                        selectedActivity.amountMinor,
+                      currency:
+                        selectedActivity.currency
+                        || selectedActivitySource?.currency
+                        || currency,
+                      transactionDate:
+                        selectedActivity.transactionDate,
+                      category:
+                        selectedActivity.category,
+                      counterparty:
+                        selectedActivity.counterparty,
+                      note:
+                        selectedActivity.note,
+                      spaceName:
+                        selectedActivitySpaceName
+                        || undefined,
+                      sourceAccountName:
+                        selectedActivitySource?.name,
+                      destinationAccountName:
+                        selectedActivityDestination?.name,
+                    })
+                  }
+                >
+                  Share to WhatsApp
+                </button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showMoneyActivity
         && profile
