@@ -369,10 +369,16 @@ export function SpaceDetailsPage() {
           )
         )
         || (
-          (
-            nextSpace.type === 'household'
-            || nextSpace.type === 'trip'
+          nextSpace.type === 'household'
+          && [
+            'budgets',
+            'bills',
+          ].includes(
+            requestedSection || '',
           )
+        )
+        || (
+          nextSpace.type === 'trip'
           && requestedSection === 'budgets'
         )
         || (
@@ -1007,6 +1013,7 @@ function SpaceOverview({
 
   const usesFullCommitmentModule =
     space.type === 'personal'
+    || space.type === 'household'
     || (
       space.type === 'sme'
       && space.ownerId === user?.uid
@@ -1459,7 +1466,8 @@ function SpaceOverview({
             </Suspense>
           )}
 
-        {space.type === 'personal'
+        {(space.type === 'personal'
+            || space.type === 'household')
           && section === 'bills'
           && (
             <Suspense

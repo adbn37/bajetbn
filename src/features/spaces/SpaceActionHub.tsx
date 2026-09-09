@@ -443,6 +443,7 @@ export function SpaceActionHub({
 
             {space.type === 'household' && <>
               <ShortcutButton label="Fund" primary onClick={() => setTool('fund')} />
+              <ShortcutLink to={`/spaces/${space.id}?section=bills`} label="Bills" />
               <ShortcutButton label="Expenses" onClick={() => setTool('expenses')} />
               <ShortcutButton label="To-Do" onClick={() => setTool('tasks')} />
               <ShortcutButton label="Shopping" onClick={() => setTool('shopping')} />

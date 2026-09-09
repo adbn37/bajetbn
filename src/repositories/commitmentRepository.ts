@@ -96,6 +96,7 @@ export async function createCommitment(input: {
 
 export async function updateCommitment(input: {
   commitmentId: string;
+  spaceId?: string;
   name: string;
   payee?: string;
   accountId?: string;

@@ -43,6 +43,7 @@ const ArchivedBudgetsPage = lazy(() => import('../features/budgets/ArchivedBudge
 const GoalsPage = lazy(() => import('../features/goals/GoalsPage').then((module) => ({ default: module.GoalsPage })));
 const ArchivedGoalsPage = lazy(() => import('../features/goals/ArchivedGoalsPage').then((module) => ({ default: module.ArchivedGoalsPage })));
 const CommitmentsPage = lazy(() => import('../features/commitments/CommitmentsPage').then((module) => ({ default: module.CommitmentsPage })));
+const PublicBillSharePage = lazy(() => import('../features/commitments/PublicBillSharePage').then((module) => ({ default: module.PublicBillSharePage })));
 const DebtPage = lazy(() => import('../features/debt/DebtPage').then((module) => ({ default: module.DebtPage })));
 const ArchivedCommitmentsPage = lazy(() => import('../features/commitments/ArchivedCommitmentsPage').then((module) => ({ default: module.ArchivedCommitmentsPage })));
 const ArchivedCategoriesPage = lazy(() => import('../features/categories/ArchivedCategoriesPage').then((module) => ({ default: module.ArchivedCategoriesPage })));
@@ -77,6 +78,7 @@ export default function App() {
                   <Route path="/verify-email" element={<VerifyEmailPage />} />
                 </Route>
                 <Route path="/onboarding" element={<OnboardingPage />} />
+                <Route path="/share/bill" element={<PublicBillSharePage />} />
                 <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
                   <Route index element={<DashboardPage />} />
                   <Route path="more" element={<MorePage />} />

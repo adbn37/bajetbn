@@ -3238,7 +3238,415 @@ export const createCommitment = onCall({ region }, async request=>{
   return db.runTransaction(async transaction=>{const[command,space,member,account,custom]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef),accountRef?transaction.get(accountRef):Promise.resolve(null),categoryRef?transaction.get(categoryRef):Promise.resolve(null)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});const ref=db.collection('commitments').doc();const now=FieldValue.serverTimestamp();const result={commitmentId:ref.id};transaction.create(ref,{displayId:displayId(type==='bill'?'BIL':'INS'),ownerId:uid,type,name,payee,spaceId,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,amountPaidMinor:0,sharedCycleDueDate:startDate,sharedAssignedMinor:0,sharedSettledMinor:0,currency:space.data()?.currency,frequency,startDate,nextDueDate:startDate,endDate,reminderDays,status:'active',note,archivedAt:null,stoppedAt:null,stoppedPreviousNextDueDate:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
-export const updateCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const name=stringValue(request.data?.name,'Commitment name',80);const payee=optionalString(request.data?.payee,120);const accountId=optionalString(request.data?.accountId,80)||null;const categoryId=stringValue(request.data?.categoryId,'Category ID',80);const amountMinor=positiveMoney(request.data?.amountMinor);const frequency=oneOf(request.data?.frequency,commitmentFrequencies,'frequency');const nextDueDate=localDate(request.data?.nextDueDate,'Next due date');const endDate=optionalLocalDate(request.data?.endDate,'End date');const reminderDays=integerBetween(request.data?.reminderDays,'Reminder days',0,60);const note=optionalString(request.data?.note,500);const ref=db.collection('commitments').doc(commitmentId);const snapshot=await ref.get();if(!snapshot.exists)throw new HttpsError('not-found','Commitment not found.');const existing=snapshot.data();if(existing?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(existing?.archivedAt)throw new HttpsError('failed-precondition','Archived commitments cannot be edited.');const totalAmountMinor=existing?.type==='instalment'?positiveMoney(request.data?.totalAmountMinor):null;if(totalAmountMinor&&totalAmountMinor<Number(existing?.amountPaidMinor||0))throw new HttpsError('failed-precondition','Total cannot be below the amount already paid.');const space=await db.collection('spaces').doc(String(existing?.spaceId)).get();const account=accountId?await db.collection('accounts').doc(accountId).get():null;if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const custom=categoryId.startsWith('custom-')?await db.collection('categories').doc(categoryId).get():null;const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});await ref.update({name,payee,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,frequency,nextDueDate,endDate,reminderDays,note,status:existing?.status==='completed'&&totalAmountMinor&&Number(existing?.amountPaidMinor||0)<totalAmountMinor?'active':existing?.status,updatedAt:FieldValue.serverTimestamp()});return{commitmentId};});
+export const updateCommitment = onCall(
+  { region },
+  async request => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const commitmentId =
+      stringValue(
+        request.data?.commitmentId,
+        'Commitment ID',
+      );
+
+    const requestedSpaceId =
+      optionalString(
+        request.data?.spaceId,
+        80,
+      );
+
+    const name =
+      stringValue(
+        request.data?.name,
+        'Commitment name',
+        80,
+      );
+
+    const payee =
+      optionalString(
+        request.data?.payee,
+        120,
+      );
+
+    const accountId =
+      optionalString(
+        request.data?.accountId,
+        80,
+      ) || null;
+
+    const categoryId =
+      stringValue(
+        request.data?.categoryId,
+        'Category ID',
+        80,
+      );
+
+    const amountMinor =
+      positiveMoney(
+        request.data?.amountMinor,
+      );
+
+    const frequency =
+      oneOf(
+        request.data?.frequency,
+        commitmentFrequencies,
+        'frequency',
+      );
+
+    const nextDueDate =
+      localDate(
+        request.data?.nextDueDate,
+        'Next due date',
+      );
+
+    const endDate =
+      optionalLocalDate(
+        request.data?.endDate,
+        'End date',
+      );
+
+    const reminderDays =
+      integerBetween(
+        request.data?.reminderDays,
+        'Reminder days',
+        0,
+        60,
+      );
+
+    const note =
+      optionalString(
+        request.data?.note,
+        500,
+      );
+
+    const ref =
+      db.collection(
+        'commitments',
+      ).doc(
+        commitmentId,
+      );
+
+    const snapshot =
+      await ref.get();
+
+    if (!snapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Commitment not found.',
+      );
+    }
+
+    const existing =
+      snapshot.data();
+
+    if (
+      existing?.ownerId !== uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'You do not own this commitment.',
+      );
+    }
+
+    if (existing?.archivedAt) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Archived commitments cannot be edited.',
+      );
+    }
+
+    const currentSpaceId =
+      String(
+        existing?.spaceId || '',
+      );
+
+    const targetSpaceId =
+      requestedSpaceId
+      || currentSpaceId;
+
+    const movingSpace =
+      targetSpaceId
+      !== currentSpaceId;
+
+    const totalAmountMinor =
+      existing?.type
+        === 'instalment'
+          ? positiveMoney(
+              request.data
+                ?.totalAmountMinor,
+            )
+          : null;
+
+    if (
+      totalAmountMinor
+      && totalAmountMinor
+        < Number(
+          existing?.amountPaidMinor
+          || 0,
+        )
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Total cannot be below the amount already paid.',
+      );
+    }
+
+    /*
+     * Once a bill has Shared Bill assignment history,
+     * its historical Space relationship must remain stable.
+     */
+    const assignmentHistory =
+      movingSpace
+        ? await db.collection(
+            'sharedBillAssignments',
+          )
+          .where(
+            'commitmentId',
+            '==',
+            commitmentId,
+          )
+          .limit(1)
+          .get()
+        : null;
+
+    if (
+      movingSpace
+      && (
+        (
+          assignmentHistory
+          && !assignmentHistory.empty
+        )
+        || Number(
+          existing
+            ?.sharedAssignedMinor
+          || 0,
+        ) > Number(
+          existing
+            ?.sharedSettledMinor
+          || 0,
+        )
+      )
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This bill has Shared Bill history. Keep it in its current Space or create a new bill in the destination Space.',
+      );
+    }
+
+    const targetSpaceRef =
+      db.collection(
+        'spaces',
+      ).doc(
+        targetSpaceId,
+      );
+
+    const targetMemberRef =
+      db.collection(
+        'spaceMembers',
+      ).doc(
+        `${targetSpaceId}_${uid}`,
+      );
+
+    const [
+      targetSpace,
+      targetMember,
+    ] =
+      await Promise.all([
+        targetSpaceRef.get(),
+        targetMemberRef.get(),
+      ]);
+
+    if (
+      !targetSpace.exists
+      || targetSpace.data()
+        ?.archivedAt
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The selected Space is unavailable.',
+      );
+    }
+
+    /*
+     * Moving is intentionally limited to the user's own Spaces.
+     * Editing without moving remains allowed in the current Space.
+     */
+    if (
+      movingSpace
+      && targetSpace.data()
+        ?.ownerId !== uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Move this bill only to a Space you own.',
+      );
+    }
+
+    if (
+      !targetMember.exists
+      || (
+        targetMember.data()?.status
+        && targetMember.data()
+          ?.status !== 'active'
+      )
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'You are not an active member of the selected Space.',
+      );
+    }
+
+    const targetCurrency =
+      String(
+        targetSpace.data()?.currency
+        || existing?.currency
+        || 'BND',
+      );
+
+    if (
+      movingSpace
+      && existing?.currency
+      && targetCurrency
+        !== existing.currency
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Move this bill only between Spaces using the same currency.',
+      );
+    }
+
+    const account =
+      accountId
+        ? await db.collection(
+            'accounts',
+          ).doc(
+            accountId,
+          ).get()
+        : null;
+
+    if (account) {
+      const accountData =
+        assertAccount(
+          account.data(),
+          uid,
+          'Account',
+        );
+
+      if (
+        accountData.currency
+        !== targetCurrency
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Account and Space currencies must match.',
+        );
+      }
+    }
+
+    const custom =
+      categoryId.startsWith(
+        'custom-',
+      )
+        ? await db.collection(
+            'categories',
+          ).doc(
+            categoryId,
+          ).get()
+        : null;
+
+    const scope:
+      Exclude<
+        CategoryScope,
+        'both'
+      > =
+      targetSpace.data()?.type
+        === 'sme'
+          ? 'business'
+          : 'personal';
+
+    const category =
+      categorySnapshotFromData({
+        categoryId,
+        requiredKind: 'expense',
+        selectedScope: scope,
+        uid,
+        customData:
+          custom?.data(),
+      });
+
+    const nextStatus =
+      existing?.status === 'completed'
+      && totalAmountMinor
+      && Number(
+        existing?.amountPaidMinor
+        || 0,
+      ) < totalAmountMinor
+        ? 'active'
+        : existing?.status;
+
+    await ref.update({
+      name,
+      payee,
+      spaceId:
+        targetSpaceId,
+
+      accountId,
+
+      currency:
+        targetCurrency,
+
+      categoryId:
+        category.id,
+
+      categoryName:
+        category.name,
+
+      categoryIcon:
+        category.icon,
+
+      categoryColor:
+        category.color,
+
+      amountMinor,
+      totalAmountMinor,
+      frequency,
+      nextDueDate,
+      endDate,
+      reminderDays,
+      note,
+      status:
+        nextStatus,
+
+      ...(movingSpace
+        ? {
+            sharedCycleDueDate:
+              nextDueDate,
+
+            sharedAssignedMinor:
+              0,
+
+            sharedSettledMinor:
+              0,
+          }
+        : {}),
+
+      updatedAt:
+        FieldValue
+          .serverTimestamp(),
+    });
+
+    return {
+      commitmentId,
+      spaceId:
+        targetSpaceId,
+      moved:
+        movingSpace,
+    };
+  },
+);
 
 export const archiveCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const ref=db.collection('commitments').doc(commitmentId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,i]=await Promise.all([transaction.get(commandRef),transaction.get(ref)]);if(c.exists)return c.data()?.result;if(!i.exists)throw new HttpsError('not-found','Commitment not found.');if(i.data()?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');const now=FieldValue.serverTimestamp();const result={commitmentId,archived:true};transaction.update(ref,{archivedAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'archive_commitment',idempotencyKey:key,result,createdAt:now});return result;});});
 

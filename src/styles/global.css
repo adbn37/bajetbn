@@ -10956,3 +10956,128 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+
+/* BajetBN v1.14.7 - Smart Share Links */
+.public-bill-share-page {
+  min-height: 100vh;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  background: var(--bg);
+}
+
+.public-bill-share-shell {
+  width: min(680px, 100%);
+  margin: 0 auto;
+}
+
+.public-bill-share-shell > .brand {
+  margin-bottom: 1.5rem;
+}
+
+.public-bill-share-card {
+  padding: clamp(1.25rem, 4vw, 2rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+}
+
+.public-bill-share-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.public-bill-share-heading h1 {
+  margin-bottom: 0;
+}
+
+.public-bill-status {
+  flex: 0 0 auto;
+  padding: .45rem .7rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 850;
+}
+
+.public-bill-status.paid {
+  color: var(--accent-2);
+  background: rgba(45, 212, 191, .12);
+  border: 1px solid rgba(45, 212, 191, .28);
+}
+
+.public-bill-status.due {
+  color: #fde68a;
+  background: rgba(251, 191, 36, .1);
+  border: 1px solid rgba(251, 191, 36, .24);
+}
+
+.public-bill-share-amount {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  background: var(--surface-2);
+  border-radius: 16px;
+}
+
+.public-bill-share-amount span,
+.public-bill-share-amount strong {
+  display: block;
+}
+
+.public-bill-share-amount span {
+  color: var(--muted);
+  font-size: .78rem;
+}
+
+.public-bill-share-amount strong {
+  margin-top: .35rem;
+  font-size: clamp(1.8rem, 6vw, 2.8rem);
+}
+
+.public-bill-share-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.public-bill-share-row span {
+  color: var(--muted);
+}
+
+.public-bill-share-note {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.public-bill-share-invite {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.public-bill-share-invite h2 {
+  margin-bottom: .4rem;
+}
+
+.public-bill-share-disclaimer {
+  display: block;
+  margin-top: 1.25rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+  .public-bill-share-heading {
+    flex-direction: column;
+  }
+
+  .public-bill-status {
+    align-self: flex-start;
+  }
+}

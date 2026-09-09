@@ -7,10 +7,7 @@ import { PaymentMethodField } from '../../components/PaymentMethodField';
 import { suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_TRANSACTION_CATEGORIES, categoryIconGlyph } from '../categories/defaultCategories';
-import {
-  listAccountsForOwnerSpace,
-  listPersonalAccounts,
-} from '../../repositories/accountRepository';
+import { listAccounts } from '../../repositories/accountRepository';
 import { listCustomCategories } from '../../repositories/categoryRepository';
 import {
   createCommitment,
@@ -28,6 +25,7 @@ import {
 } from '../../repositories/spaceRepository';
 import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, PaymentMethodCode, Space, TransactionCategory } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import { shareBillToWhatsApp } from '../../services/billShare';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
 type CommitmentLifecycleAction = 'stop' | 'delete';
@@ -56,6 +54,23 @@ export function CommitmentsPage({
     setError('');
 
     try {
+      const [
+        nextSpaces,
+        nextAccounts,
+        custom,
+      ] = await Promise.all([
+        listSpaces(user.uid),
+        listAccounts(user.uid),
+        listCustomCategories(user.uid),
+      ]);
+
+      const ownedSpaces =
+        nextSpaces.filter(
+          (nextSpace) =>
+            !nextSpace.archivedAt
+            && nextSpace.ownerId === user.uid,
+        );
+
       if (spaceIdOverride) {
         const targetSpace =
           await getSpace(
@@ -68,54 +83,46 @@ export function CommitmentsPage({
           );
         }
 
-        const [
-          nextItems,
-          nextAccounts,
-          custom,
-        ] = await Promise.all([
-          listCommitmentsForOwnerSpace(
+        const nextItems =
+          await listCommitmentsForOwnerSpace(
             user.uid,
             spaceIdOverride,
-          ),
-          targetSpace.type === 'personal'
-            ? listPersonalAccounts(
-                user.uid,
-              )
-            : listAccountsForOwnerSpace(
-                user.uid,
-                spaceIdOverride,
-              ),
-          listCustomCategories(
-            user.uid,
-          ),
-        ]);
+          );
 
         const paymentGroups =
           await Promise.all(
             nextItems.map(
-              (item) =>
+              (nextItem) =>
                 listCommitmentPaymentsForCommitment(
-                  item.id,
+                  nextItem.id,
                 ),
             ),
           );
 
-        setItems(nextItems);
-        setPayments(
-          paymentGroups.flat(),
-        );
+        const editableSpaces =
+          ownedSpaces.some(
+            (nextSpace) =>
+              nextSpace.id === targetSpace.id,
+          )
+            ? ownedSpaces
+            : [
+                ...ownedSpaces,
+                targetSpace,
+              ];
 
+        setItems(nextItems);
+        setPayments(paymentGroups.flat());
         setAccounts(nextAccounts);
-        setSpaces([targetSpace]);
+        setSpaces(editableSpaces);
 
         setCategories([
           ...DEFAULT_TRANSACTION_CATEGORIES.filter(
-            (item) =>
-              item.kind === 'expense',
+            (nextCategory) =>
+              nextCategory.kind === 'expense',
           ),
           ...custom.filter(
-            (item) =>
-              item.kind === 'expense',
+            (nextCategory) =>
+              nextCategory.kind === 'expense',
           ),
         ]);
 
@@ -125,36 +132,56 @@ export function CommitmentsPage({
       const [
         nextItems,
         nextPayments,
-        nextAccounts,
-        nextSpaces,
-        custom,
       ] = await Promise.all([
         listAllCommitments(user.uid),
         listCommitmentPayments(user.uid),
-        listPersonalAccounts(user.uid),
-        listSpaces(user.uid),
-        listCustomCategories(user.uid),
       ]);
 
       const personalSpace =
-        nextSpaces.find((item) => item.type === 'personal' && !item.archivedAt) || null;
-      const personalItems = personalSpace
-        ? nextItems.filter((item) => item.spaceId === personalSpace.id)
-        : [];
-      const personalItemIds = new Set(personalItems.map((item) => item.id));
+        nextSpaces.find(
+          (nextSpace) =>
+            nextSpace.type === 'personal'
+            && !nextSpace.archivedAt,
+        ) || null;
+
+      const personalItems =
+        personalSpace
+          ? nextItems.filter(
+              (nextItem) =>
+                nextItem.spaceId === personalSpace.id,
+            )
+          : [];
+
+      const personalItemIds =
+        new Set(
+          personalItems.map(
+            (nextItem) =>
+              nextItem.id,
+          ),
+        );
+
       setItems(personalItems);
-      setPayments(nextPayments.filter((item) => personalItemIds.has(item.commitmentId)));
-      setAccounts(nextAccounts.filter((item) => item.classification === 'personal'));
-      setSpaces(personalSpace ? [personalSpace] : []);
+
+      setPayments(
+        nextPayments.filter(
+          (nextPayment) =>
+            personalItemIds.has(
+              nextPayment.commitmentId,
+            ),
+        ),
+      );
+
+      setAccounts(nextAccounts);
+      setSpaces(ownedSpaces);
 
       setCategories([
         ...DEFAULT_TRANSACTION_CATEGORIES.filter(
-          (item) =>
-            item.kind === 'expense',
+          (nextCategory) =>
+            nextCategory.kind === 'expense',
         ),
         ...custom.filter(
-          (item) =>
-            item.kind === 'expense',
+          (nextCategory) =>
+            nextCategory.kind === 'expense',
         ),
       ]);
     } catch (nextError) {
@@ -191,6 +218,29 @@ export function CommitmentsPage({
   );
   const upcoming = active.filter((item) => dueState(item) === 'upcoming' || dueState(item) === 'due').length; const overdue = active.filter((item) => dueState(item) === 'overdue').length; const outstanding = active.reduce((sum, item) => sum + (item.type === 'instalment' && item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : item.status === 'active' ? item.amountMinor : 0), 0);
   const accountMap = useMemo(() => new Map(accounts.map((item) => [item.id, item])), [accounts]);
+
+  const accountsForCommitment = (
+    commitment: Commitment,
+  ) => {
+    const commitmentSpace =
+      spaces.find(
+        (nextSpace) =>
+          nextSpace.id === commitment.spaceId,
+      );
+
+    const businessAccount =
+      commitmentSpace?.type === 'sme';
+
+    return accounts.filter(
+      (account) =>
+        account.currency === commitment.currency
+        && (
+          businessAccount
+            ? account.classification === 'business'
+            : account.classification !== 'business'
+        ),
+    );
+  };
   function askLifecycle(item: Commitment, action: CommitmentLifecycleAction) {
     setError('');
     setLifecycleDialog(action === 'stop'
@@ -269,23 +319,568 @@ export function CommitmentsPage({
     />{error && <div className="notice error">{error}</div>}
     <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     {!typeOverride && <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>}
-    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} busyId={busyId} onPay={setPaying} onEdit={(item) => { setEditing(item); setShowForm(true); }} onStop={(item) => askLifecycle(item, 'stop')} onDelete={(item) => askLifecycle(item, 'delete')} />
+    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} busyId={busyId} onPay={setPaying} onEdit={(item) => { setEditing(item); setShowForm(true); }} onStop={(item) => askLifecycle(item, 'stop')} onDelete={(item) => askLifecycle(item, 'delete')} onShare={(item, payment) => shareBillToWhatsApp(item, payment)} />
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit bill or instalment' : 'Add bill or instalment'} onClose={() => setShowForm(false)}><CommitmentForm item={editing} accounts={accounts} spaces={spaces} categories={categories} lockedSpaceId={spaceIdOverride} typeOverride={typeOverride} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
-    {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accounts} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
+    {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accountsForCommitment(paying)} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
   </main>;
 }
 
-function CommitmentGrid({ items, payments, accountMap, busyId, inactive = false, onPay, onEdit, onStop, onDelete, onRestore }: { items: Commitment[]; payments: CommitmentPayment[]; accountMap: Map<string, Account>; busyId: string; inactive?: boolean; onPay?: (item: Commitment) => void; onEdit?: (item: Commitment) => void; onStop?: (item: Commitment) => void; onDelete?: (item: Commitment) => void; onRestore?: (item: Commitment) => void }) {
-  return <section className="planning-card-grid">{items.map((item) => { const state = inactive ? 'completed' : dueState(item); const remaining = item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0; const ratio = item.totalAmountMinor ? Math.min(100, Math.round(item.amountPaidMinor / item.totalAmountMinor * 100)) : item.status === 'completed' ? 100 : 0; const recent = payments.filter((payment) => payment.commitmentId === item.id).slice(0, 2); return <article className={`planning-card commitment-card state-${state} ${inactive ? 'archived' : ''}`} key={item.id}><div className="planning-card-head"><div><span className="eyebrow">{inactive ? 'Stopped' : dueLabels[state]}</span><h3>{item.name}</h3></div><span className="type-badge">{item.type === 'bill' ? 'Bill' : 'Instalment'}</span></div><div className="budget-amount-line"><span>{item.type === 'bill' ? 'Amount due each cycle' : 'Instalment amount per cycle'}</span><strong>{formatMoney(item.amountMinor, item.currency)}</strong><span>{frequencyLabels[item.frequency]}</span></div>{item.type === 'instalment' && <><div className="progress planning-progress"><span style={{ width: `${ratio}%` }} /></div><div className="planning-meta"><span>Paid {formatMoney(item.amountPaidMinor, item.currency)}</span><span>Left {formatMoney(remaining, item.currency)}</span></div></>}<div className="planning-meta"><span>{item.payee || item.categoryName}</span><span>{inactive ? 'Future dates stopped' : item.nextDueDate ? `Due ${item.nextDueDate}` : 'Finished'}</span></div><div className="planning-meta"><span>{accountMap.get(item.accountId || '')?.name || 'Choose an account when you pay'}</span><span>Remind me {item.reminderDays} day(s)</span></div>{recent.length > 0 && <div className="mini-history">{recent.map((payment) => <div key={payment.id}><span>{payment.paymentDate}</span><strong>{formatMoney(payment.amountMinor, payment.currency)}</strong><span>{payment.status === 'posted' ? 'Saved' : 'Undone'}</span></div>)}</div>}<div className="button-row">{inactive ? <button className="button secondary" disabled={busyId === item.id} onClick={() => onRestore?.(item)}>Restore</button> : <><button className="button primary" disabled={item.status === 'completed'} onClick={() => onPay?.(item)}>Add payment</button><button className="button secondary" onClick={() => onEdit?.(item)}>Edit</button><button className="text-button" disabled={busyId === item.id} onClick={() => onStop?.(item)}>Stop</button><button className="text-button danger" disabled={busyId === item.id} onClick={() => onDelete?.(item)}>Delete</button></>}</div></article>; })}</section>;
+function CommitmentGrid({ items, payments, accountMap, busyId, inactive = false, onPay, onEdit, onStop, onDelete, onRestore, onShare }: { items: Commitment[]; payments: CommitmentPayment[]; accountMap: Map<string, Account>; busyId: string; inactive?: boolean; onPay?: (item: Commitment) => void; onEdit?: (item: Commitment) => void; onStop?: (item: Commitment) => void; onDelete?: (item: Commitment) => void; onRestore?: (item: Commitment) => void; onShare?: (item: Commitment, payment?: CommitmentPayment) => void }) {
+  return <section className="planning-card-grid">{items.map((item) => { const state = inactive ? 'completed' : dueState(item); const remaining = item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0; const ratio = item.totalAmountMinor ? Math.min(100, Math.round(item.amountPaidMinor / item.totalAmountMinor * 100)) : item.status === 'completed' ? 100 : 0; const recent = payments.filter((payment) => payment.commitmentId === item.id).slice(0, 2); return <article className={`planning-card commitment-card state-${state} ${inactive ? 'archived' : ''}`} key={item.id}><div className="planning-card-head"><div><span className="eyebrow">{inactive ? 'Stopped' : dueLabels[state]}</span><h3>{item.name}</h3></div><span className="type-badge">{item.type === 'bill' ? 'Bill' : 'Instalment'}</span></div><div className="budget-amount-line"><span>{item.type === 'bill' ? 'Amount due each cycle' : 'Instalment amount per cycle'}</span><strong>{formatMoney(item.amountMinor, item.currency)}</strong><span>{frequencyLabels[item.frequency]}</span></div>{item.type === 'instalment' && <><div className="progress planning-progress"><span style={{ width: `${ratio}%` }} /></div><div className="planning-meta"><span>Paid {formatMoney(item.amountPaidMinor, item.currency)}</span><span>Left {formatMoney(remaining, item.currency)}</span></div></>}<div className="planning-meta"><span>{item.payee || item.categoryName}</span><span>{inactive ? 'Future dates stopped' : item.nextDueDate ? `Due ${item.nextDueDate}` : 'Finished'}</span></div><div className="planning-meta"><span>{accountMap.get(item.accountId || '')?.name || 'Choose an account when you pay'}</span><span>Remind me {item.reminderDays} day(s)</span></div>{recent.length > 0 && <div className="mini-history">{recent.map((payment) => <div key={payment.id}><span>{payment.paymentDate}</span><strong>{formatMoney(payment.amountMinor, payment.currency)}</strong><span>{payment.status === 'posted' ? 'Saved' : 'Undone'}</span></div>)}</div>}<div className="button-row">{inactive ? <button className="button secondary" disabled={busyId === item.id} onClick={() => onRestore?.(item)}>Restore</button> : <><button className="button primary" disabled={item.status === 'completed'} onClick={() => onPay?.(item)}>Add payment</button>{item.type === 'bill' && <button className="button secondary" title="Share to WhatsApp" onClick={() => onShare?.(item, recent.find((payment) => payment.status === 'posted'))}>Share</button>}<button className="button secondary" onClick={() => onEdit?.(item)}>Edit</button><button className="text-button" disabled={busyId === item.id} onClick={() => onStop?.(item)}>Stop</button><button className="text-button danger" disabled={busyId === item.id} onClick={() => onDelete?.(item)}>Delete</button></>}</div></article>; })}</section>;
 }
 
-function CommitmentForm({item,accounts,spaces,categories,lockedSpaceId,typeOverride,onSaved}:{item:Commitment|null;accounts:Account[];spaces:Space[];categories:TransactionCategory[];lockedSpaceId?:string;typeOverride?:CommitmentType;onSaved:()=>Promise<void>}){
-  const[type,setType]=useState<CommitmentType>(typeOverride||item?.type||'bill');const[name,setName]=useState(item?.name||'');const[payee,setPayee]=useState(item?.payee||'');const[spaceId,setSpaceId]=useState(item?.spaceId||spaces[0]?.id||'');const[accountId,setAccountId]=useState(item?.accountId||'');const[categoryId,setCategoryId]=useState(item?.categoryId||'expense-utilities');const[amount,setAmount]=useState(item?String(item.amountMinor/100):'');const[total,setTotal]=useState(item?.totalAmountMinor?String(item.totalAmountMinor/100):'');const[frequency,setFrequency]=useState<CommitmentFrequency>(item?.frequency||'monthly');const[dueDate,setDueDate]=useState(item?.nextDueDate||item?.startDate||today());const[endDate,setEndDate]=useState(item?.endDate||'');const[reminderDays,setReminderDays]=useState(String(item?.reminderDays??3));const[note,setNote]=useState(item?.note||'');const[busy,setBusy]=useState(false);const[error,setError]=useState('');
-  const selectedSpace=spaces.find(s=>s.id===spaceId);const scope=selectedSpace?.type==='sme'?'business':'personal';const scopedCategories=categories.filter(c=>c.scope==='both'||c.scope===scope);const scopedAccounts=accounts.filter(a=>a.currency===selectedSpace?.currency);
-  const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const amountMinor=toMinorUnits(amount);if(amountMinor<=0)throw new Error('Enter an amount greater than BND 0.00.');const totalAmountMinor=type==='instalment'?toMinorUnits(total):undefined;if(type==='instalment'&&(!totalAmountMinor||totalAmountMinor<amountMinor))throw new Error('The full instalment total must be the same as or more than one payment.');const base={name,payee:payee||undefined,accountId:accountId||undefined,categoryId,amountMinor,totalAmountMinor,frequency,nextDueDate:dueDate,endDate:endDate||undefined,reminderDays:Number(reminderDays),note};if(item)await updateCommitment({commitmentId:item.id,...base});else await createCommitment({type,spaceId,startDate:dueDate,...base});await onSaved();}catch(x){setError(getErrorMessage(x));}finally{setBusy(false);}};
-  return <form className="form-stack" onSubmit={submit}>{error&&<div className="notice error">{error}</div>}<div className="form-grid"><label>Type<select value={type} onChange={e=>setType(e.target.value as CommitmentType)} disabled={Boolean(item)||Boolean(typeOverride)}><option value="bill">Bill</option><option value="instalment">Instalment</option></select></label><label>Name<input value={name} onChange={e=>setName(e.target.value)} required/></label><label>Paid to<input value={payee} onChange={e=>setPayee(e.target.value)} placeholder="DST, landlord, supplier"/></label><label>Space<select value={spaceId} onChange={e=>{setSpaceId(e.target.value);setCategoryId('');setAccountId('');}} disabled={Boolean(item)||Boolean(lockedSpaceId)}>{spaces.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>Usual account<select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Choose when paying</option>{scopedAccounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Spending category<select value={categoryId} onChange={e=>setCategoryId(e.target.value)} required>{scopedCategories.map(c=><option key={c.id} value={c.id}>{categoryIconGlyph(c.icon)} {c.name}</option>)}</select></label>{type==='bill'?<label>Amount due each cycle (BND)<input value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal" required/><small>The amount you normally pay each time this bill is due.</small></label>:<><label>Full instalment total (BND)<input value={total} onChange={e=>setTotal(e.target.value)} inputMode="decimal" required/><small>The full amount you need to pay from start to finish.</small></label><label>Instalment amount per cycle (BND)<input value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal" required/><small>The amount you normally pay each time.</small></label></>}<label>How often<select value={frequency} onChange={e=>setFrequency(e.target.value as CommitmentFrequency)}><option value="once">One time</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option></select></label><label>Next due date<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} required/></label><label>End date<input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)}/></label><label>Remind me this many days early<input type="number" min="0" max="60" value={reminderDays} onChange={e=>setReminderDays(e.target.value)}/></label></div><label>Note<textarea value={note} onChange={e=>setNote(e.target.value)} rows={2}/></label><button className="button primary full" disabled={busy}>{busy?'Saving…':'Save bill or instalment'}</button></form>
+function CommitmentForm({
+  item,
+  accounts,
+  spaces,
+  categories,
+  lockedSpaceId,
+  typeOverride,
+  onSaved,
+}: {
+  item: Commitment | null;
+  accounts: Account[];
+  spaces: Space[];
+  categories: TransactionCategory[];
+  lockedSpaceId?: string;
+  typeOverride?: CommitmentType;
+  onSaved: () => Promise<void>;
+}) {
+  const initialSpaceId =
+    item?.spaceId
+    || lockedSpaceId
+    || spaces.find(
+      (nextSpace) =>
+        nextSpace.type === 'personal',
+    )?.id
+    || spaces[0]?.id
+    || '';
+
+  const [type, setType] =
+    useState<CommitmentType>(
+      typeOverride
+      || item?.type
+      || 'bill',
+    );
+
+  const [name, setName] =
+    useState(item?.name || '');
+
+  const [payee, setPayee] =
+    useState(item?.payee || '');
+
+  const [spaceId, setSpaceId] =
+    useState(initialSpaceId);
+
+  const [accountId, setAccountId] =
+    useState(item?.accountId || '');
+
+  const [categoryId, setCategoryId] =
+    useState(
+      item?.categoryId
+      || 'expense-utilities',
+    );
+
+  const [amount, setAmount] =
+    useState(
+      item
+        ? String(item.amountMinor / 100)
+        : '',
+    );
+
+  const [total, setTotal] =
+    useState(
+      item?.totalAmountMinor
+        ? String(item.totalAmountMinor / 100)
+        : '',
+    );
+
+  const [frequency, setFrequency] =
+    useState<CommitmentFrequency>(
+      item?.frequency || 'monthly',
+    );
+
+  const [dueDate, setDueDate] =
+    useState(
+      item?.nextDueDate
+      || item?.startDate
+      || today(),
+    );
+
+  const [endDate, setEndDate] =
+    useState(item?.endDate || '');
+
+  const [reminderDays, setReminderDays] =
+    useState(
+      String(
+        item?.reminderDays ?? 3,
+      ),
+    );
+
+  const [note, setNote] =
+    useState(item?.note || '');
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  /*
+   * New bill from a Space stays locked there.
+   * Existing bill can be moved to another owned Space.
+   */
+  const availableSpaces =
+    item
+      ? spaces
+      : lockedSpaceId
+        ? spaces.filter(
+            (nextSpace) =>
+              nextSpace.id
+              === lockedSpaceId,
+          )
+        : spaces.filter(
+            (nextSpace) =>
+              nextSpace.type
+              === 'personal',
+          );
+
+  const selectedSpace =
+    spaces.find(
+      (nextSpace) =>
+        nextSpace.id === spaceId,
+    );
+
+  const scope =
+    selectedSpace?.type === 'sme'
+      ? 'business'
+      : 'personal';
+
+  const scopedCategories =
+    categories.filter(
+      (category) =>
+        category.scope === 'both'
+        || category.scope === scope,
+    );
+
+  const scopedAccounts =
+    accounts.filter(
+      (account) =>
+        account.currency
+          === selectedSpace?.currency
+        && (
+          scope === 'business'
+            ? account.classification
+              === 'business'
+            : account.classification
+              !== 'business'
+        ),
+    );
+
+  const movingSpace =
+    Boolean(
+      item
+      && item.spaceId !== spaceId,
+    );
+
+  const submit = async (
+    event: FormEvent,
+  ) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+
+    try {
+      if (!spaceId) {
+        throw new Error(
+          'Choose a Space.',
+        );
+      }
+
+      const amountMinor =
+        toMinorUnits(amount);
+
+      if (amountMinor <= 0) {
+        throw new Error(
+          'Enter an amount greater than BND 0.00.',
+        );
+      }
+
+      const totalAmountMinor =
+        type === 'instalment'
+          ? toMinorUnits(total)
+          : undefined;
+
+      if (
+        type === 'instalment'
+        && (
+          !totalAmountMinor
+          || totalAmountMinor
+            < amountMinor
+        )
+      ) {
+        throw new Error(
+          'The full instalment total must be the same as or more than one payment.',
+        );
+      }
+
+      if (!categoryId) {
+        throw new Error(
+          'Choose a spending category.',
+        );
+      }
+
+      const base = {
+        spaceId,
+        name,
+        payee:
+          payee || undefined,
+        accountId:
+          accountId || undefined,
+        categoryId,
+        amountMinor,
+        totalAmountMinor,
+        frequency,
+        nextDueDate: dueDate,
+        endDate:
+          endDate || undefined,
+        reminderDays:
+          Number(reminderDays),
+        note,
+      };
+
+      if (item) {
+        await updateCommitment({
+          commitmentId: item.id,
+          ...base,
+        });
+      } else {
+        await createCommitment({
+          type,
+          startDate: dueDate,
+          ...base,
+        });
+      }
+
+      await onSaved();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(nextError),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="form-stack"
+      onSubmit={submit}
+    >
+      {error && (
+        <div className="notice error">
+          {error}
+        </div>
+      )}
+
+      <div className="form-grid">
+        <label>
+          Type
+          <select
+            value={type}
+            onChange={(event) =>
+              setType(
+                event.target.value
+                as CommitmentType,
+              )
+            }
+            disabled={
+              Boolean(item)
+              || Boolean(typeOverride)
+            }
+          >
+            <option value="bill">
+              Bill
+            </option>
+            <option value="instalment">
+              Instalment
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Name
+          <input
+            value={name}
+            onChange={(event) =>
+              setName(event.target.value)
+            }
+            required
+          />
+        </label>
+
+        <label>
+          Paid to
+          <input
+            value={payee}
+            onChange={(event) =>
+              setPayee(event.target.value)
+            }
+            placeholder="DST, landlord, supplier"
+          />
+        </label>
+
+        <label>
+          Space
+          <select
+            value={spaceId}
+            onChange={(event) => {
+              setSpaceId(
+                event.target.value,
+              );
+
+              /*
+               * Destination changed:
+               * require a fresh valid account/category.
+               */
+              setAccountId('');
+              setCategoryId('');
+            }}
+            disabled={
+              Boolean(lockedSpaceId)
+              && !item
+            }
+          >
+            {availableSpaces.map(
+              (nextSpace) => (
+                <option
+                  key={nextSpace.id}
+                  value={nextSpace.id}
+                >
+                  {nextSpace.name}
+                </option>
+              ),
+            )}
+          </select>
+
+          {movingSpace && (
+            <small>
+              Future bill cycles will use the new Space.
+              Existing posted transactions stay in their original Space.
+            </small>
+          )}
+        </label>
+
+        <label>
+          Usual account
+          <select
+            value={accountId}
+            onChange={(event) =>
+              setAccountId(
+                event.target.value,
+              )
+            }
+          >
+            <option value="">
+              Choose when paying
+            </option>
+
+            {scopedAccounts.map(
+              (account) => (
+                <option
+                  key={account.id}
+                  value={account.id}
+                >
+                  {account.name}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+
+        <label>
+          Spending category
+          <select
+            value={categoryId}
+            onChange={(event) =>
+              setCategoryId(
+                event.target.value,
+              )
+            }
+            required
+          >
+            <option
+              value=""
+              disabled
+            >
+              Choose category
+            </option>
+
+            {scopedCategories.map(
+              (category) => (
+                <option
+                  key={category.id}
+                  value={category.id}
+                >
+                  {categoryIconGlyph(
+                    category.icon,
+                  )}{' '}
+                  {category.name}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+
+        {type === 'bill'
+          ? (
+            <label>
+              Amount due each cycle (BND)
+              <input
+                value={amount}
+                onChange={(event) =>
+                  setAmount(
+                    event.target.value,
+                  )
+                }
+                inputMode="decimal"
+                required
+              />
+              <small>
+                The amount you normally pay each time this bill is due.
+              </small>
+            </label>
+          )
+          : (
+            <>
+              <label>
+                Full instalment total (BND)
+                <input
+                  value={total}
+                  onChange={(event) =>
+                    setTotal(
+                      event.target.value,
+                    )
+                  }
+                  inputMode="decimal"
+                  required
+                />
+              </label>
+
+              <label>
+                Instalment amount per cycle (BND)
+                <input
+                  value={amount}
+                  onChange={(event) =>
+                    setAmount(
+                      event.target.value,
+                    )
+                  }
+                  inputMode="decimal"
+                  required
+                />
+              </label>
+            </>
+          )}
+
+        <label>
+          How often
+          <select
+            value={frequency}
+            onChange={(event) =>
+              setFrequency(
+                event.target.value
+                as CommitmentFrequency,
+              )
+            }
+          >
+            <option value="once">
+              One time
+            </option>
+            <option value="weekly">
+              Weekly
+            </option>
+            <option value="monthly">
+              Monthly
+            </option>
+            <option value="quarterly">
+              Every 3 months
+            </option>
+            <option value="yearly">
+              Yearly
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Next due date
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(event) =>
+              setDueDate(
+                event.target.value,
+              )
+            }
+            required
+          />
+        </label>
+
+        <label>
+          End date
+          <input
+            type="date"
+            value={endDate}
+            onChange={(event) =>
+              setEndDate(
+                event.target.value,
+              )
+            }
+          />
+        </label>
+
+        <label>
+          Remind me this many days early
+          <input
+            type="number"
+            min="0"
+            max="60"
+            value={reminderDays}
+            onChange={(event) =>
+              setReminderDays(
+                event.target.value,
+              )
+            }
+          />
+        </label>
+      </div>
+
+      <label>
+        Note
+        <textarea
+          value={note}
+          onChange={(event) =>
+            setNote(
+              event.target.value,
+            )
+          }
+          rows={2}
+        />
+      </label>
+
+      <button
+        className="button primary full"
+        disabled={busy}
+      >
+        {busy
+          ? 'Saving…'
+          : 'Save bill or instalment'}
+      </button>
+    </form>
+  );
 }
+
 function PaymentForm({ item, accounts, onSaved }: { item: Commitment; accounts: Account[]; onSaved: () => Promise<void> }) {
   const [accountId, setAccountId] = useState(item.accountId || accounts[0]?.id || '');
   const available = accounts.filter((account) => account.currency === item.currency);
