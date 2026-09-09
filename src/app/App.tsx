@@ -36,6 +36,7 @@ const SmePosArchivedRecordsPage = lazy(() => import('../features/sme-pos/SmePosA
 const AccountsPage = lazy(() => import('../features/accounts/AccountsPage').then((module) => ({ default: module.AccountsPage })));
 const ClosedAccountsPage = lazy(() => import('../features/accounts/ClosedAccountsPage').then((module) => ({ default: module.ClosedAccountsPage })));
 const TransactionsPage = lazy(() => import('../features/transactions/TransactionsPage').then((module) => ({ default: module.TransactionsPage })));
+const PublicTransactionSharePage = lazy(() => import('../features/transactions/PublicTransactionSharePage').then((module) => ({ default: module.PublicTransactionSharePage })));
 const RecurringTransactionsPage = lazy(() => import('../features/recurring/RecurringTransactionsPage').then((module) => ({ default: module.RecurringTransactionsPage })));
 const StoppedRecurringTransactionsPage = lazy(() => import('../features/recurring/StoppedRecurringTransactionsPage').then((module) => ({ default: module.StoppedRecurringTransactionsPage })));
 const BudgetsPage = lazy(() => import('../features/budgets/BudgetsPage').then((module) => ({ default: module.BudgetsPage })));
@@ -79,6 +80,7 @@ export default function App() {
                 </Route>
                 <Route path="/onboarding" element={<OnboardingPage />} />
                 <Route path="/share/bill" element={<PublicBillSharePage />} />
+                <Route path="/share/transaction" element={<PublicTransactionSharePage />} />
                 <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
                   <Route index element={<DashboardPage />} />
                   <Route path="more" element={<MorePage />} />

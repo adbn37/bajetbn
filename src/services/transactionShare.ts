@@ -17,6 +17,23 @@ export interface TransactionShareSnapshot {
   destinationAccountName?: string;
 }
 
+export interface PublicTransactionSharePayload {
+  v: 1;
+  kind: 'transaction';
+  title: string;
+  type:
+    | 'income'
+    | 'expense'
+    | 'transfer'
+    | 'reversal';
+  amountMinor: number;
+  currency: string;
+  transactionDate: string;
+  category?: string;
+  spaceName?: string;
+  sharedAt: string;
+}
+
 const typeLabels = {
   income: 'Money in',
   expense: 'Money out',
@@ -30,6 +47,57 @@ function clean(
   return value?.trim() || '';
 }
 
+function encodeBase64Url(
+  value: string,
+): string {
+  const bytes =
+    new TextEncoder()
+      .encode(value);
+
+  let binary = '';
+
+  for (const byte of bytes) {
+    binary +=
+      String.fromCharCode(byte);
+  }
+
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function decodeBase64Url(
+  value: string,
+): string {
+  const normalized =
+    value
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+  const padded =
+    normalized
+    + '='.repeat(
+      (
+        4
+        - normalized.length % 4
+      ) % 4,
+    );
+
+  const binary =
+    atob(padded);
+
+  const bytes =
+    Uint8Array.from(
+      binary,
+      (character) =>
+        character.charCodeAt(0),
+    );
+
+  return new TextDecoder()
+    .decode(bytes);
+}
+
 function formatDate(
   value: string,
 ): string {
@@ -40,14 +108,9 @@ function formatDate(
     return value;
   }
 
-  const year =
-    Number(parts[0]);
-
-  const month =
-    Number(parts[1]);
-
-  const day =
-    Number(parts[2]);
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
 
   if (!year || !month || !day) {
     return value;
@@ -75,6 +138,184 @@ function formatDate(
   } catch {
     return value;
   }
+}
+
+export function transactionShareTypeLabel(
+  type: TransactionShareSnapshot['type'],
+): string {
+  return typeLabels[type];
+}
+
+export function createTransactionSharePayload(
+  snapshot: TransactionShareSnapshot,
+): PublicTransactionSharePayload {
+  /*
+   * Public-link snapshot intentionally excludes:
+   * Account names
+   * Notes
+   * Balances
+   * Receipts
+   * Internal IDs
+   */
+  const title =
+    clean(snapshot.counterparty)
+    || clean(snapshot.category)
+    || typeLabels[snapshot.type];
+
+  return {
+    v: 1,
+    kind: 'transaction',
+
+    title:
+      title.slice(0, 120),
+
+    type:
+      snapshot.type,
+
+    amountMinor:
+      Math.max(
+        0,
+        Math.round(
+          snapshot.amountMinor,
+        ),
+      ),
+
+    currency:
+      clean(snapshot.currency)
+        .slice(0, 8)
+      || 'BND',
+
+    transactionDate:
+      snapshot.transactionDate
+        .slice(0, 10),
+
+    category:
+      clean(snapshot.category)
+        .slice(0, 80)
+      || undefined,
+
+    spaceName:
+      clean(snapshot.spaceName)
+        .slice(0, 120)
+      || undefined,
+
+    sharedAt:
+      new Date().toISOString(),
+  };
+}
+
+export function encodeTransactionSharePayload(
+  payload: PublicTransactionSharePayload,
+): string {
+  return encodeBase64Url(
+    JSON.stringify(payload),
+  );
+}
+
+export function decodeTransactionSharePayload(
+  encoded: string,
+): PublicTransactionSharePayload | null {
+  try {
+    const parsed =
+      JSON.parse(
+        decodeBase64Url(
+          encoded,
+        ),
+      ) as Partial<PublicTransactionSharePayload>;
+
+    if (
+      parsed.v !== 1
+      || parsed.kind !== 'transaction'
+      || typeof parsed.title !== 'string'
+      || !parsed.title.trim()
+      || ![
+        'income',
+        'expense',
+        'transfer',
+        'reversal',
+      ].includes(
+        parsed.type || '',
+      )
+      || typeof parsed.amountMinor !== 'number'
+      || !Number.isFinite(
+        parsed.amountMinor,
+      )
+      || parsed.amountMinor < 0
+      || typeof parsed.currency !== 'string'
+      || typeof parsed.transactionDate !== 'string'
+      || typeof parsed.sharedAt !== 'string'
+    ) {
+      return null;
+    }
+
+    return {
+      v: 1,
+      kind: 'transaction',
+
+      title:
+        parsed.title
+          .trim()
+          .slice(0, 120),
+
+      type:
+        parsed.type as PublicTransactionSharePayload['type'],
+
+      amountMinor:
+        Math.max(
+          0,
+          Math.round(
+            parsed.amountMinor,
+          ),
+        ),
+
+      currency:
+        parsed.currency
+          .trim()
+          .slice(0, 8),
+
+      transactionDate:
+        parsed.transactionDate
+          .slice(0, 10),
+
+      category:
+        typeof parsed.category === 'string'
+          && parsed.category.trim()
+          ? parsed.category
+              .trim()
+              .slice(0, 80)
+          : undefined,
+
+      spaceName:
+        typeof parsed.spaceName === 'string'
+          && parsed.spaceName.trim()
+          ? parsed.spaceName
+              .trim()
+              .slice(0, 120)
+          : undefined,
+
+      sharedAt:
+        parsed.sharedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function buildTransactionShareUrl(
+  snapshot: TransactionShareSnapshot,
+): string {
+  const encoded =
+    encodeTransactionSharePayload(
+      createTransactionSharePayload(
+        snapshot,
+      ),
+    );
+
+  return (
+    window.location.origin
+    + '/share/transaction#'
+    + encoded
+  );
 }
 
 export function buildTransactionShareMessage(
@@ -158,6 +399,11 @@ export function buildTransactionShareMessage(
   }
 
   lines.push(
+    '',
+    'View details:',
+    buildTransactionShareUrl(
+      snapshot,
+    ),
     '',
     'Recorded in BajetBN',
   );
