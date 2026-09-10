@@ -11314,3 +11314,40 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
       );
   }
 }
+
+
+/* v1.14.7 Space navigation rail */
+.space-action-hub {
+  margin-top: 0;
+}
+
+.simplified-space-actions {
+  display: flex !important;
+  grid-template-columns: none !important;
+  gap: 0.45rem !important;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.simplified-space-actions > .button {
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 96px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .simplified-space-actions {
+    margin-inline: -0.15rem;
+    padding-inline: 0.15rem;
+  }
+
+  .simplified-space-actions > .button {
+    min-width: 88px;
+  }
+}

@@ -856,6 +856,19 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
+    {(activeTab === 'overview' || space.type === 'sme') && (
+      <SpaceActionHub
+        space={space}
+        members={members}
+        currentMember={currentMember || null}
+        supportsGroupFund={supportsGroupFund}
+        fundLabel={fundTabLabel}
+        smePosRole={smePosRole}
+        canViewSmeFinancials={canViewSmeFinancials}
+        onRefresh={load}
+      />
+    )}
+
     {activeTab === 'overview'
       && compactActionHome
       && !requestedSection
@@ -877,19 +890,6 @@ export function SpaceDetailsPage() {
           }
         />
       )}
-
-    {(activeTab === 'overview' || space.type === 'sme') && (
-      <SpaceActionHub
-        space={space}
-        members={members}
-        currentMember={currentMember || null}
-        supportsGroupFund={supportsGroupFund}
-        fundLabel={fundTabLabel}
-        smePosRole={smePosRole}
-        canViewSmeFinancials={canViewSmeFinancials}
-        onRefresh={load}
-      />
-    )}
 
     {showDetailedSpaceOverviews() && activeTab === 'overview' && space.type === 'trip' && (
       <details

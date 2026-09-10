@@ -128,6 +128,27 @@ check(
   'Existing Space quick actions remain available.',
 );
 
+const actionHubPosition =
+  page.indexOf('<SpaceActionHub');
+
+const homeOverviewPosition =
+  page.indexOf('<SpaceHomeOverview');
+
+check(
+  actionHubPosition >= 0
+    && homeOverviewPosition >= 0
+    && actionHubPosition < homeOverviewPosition,
+  'Space navigation appears above Space Home dashboard content.',
+);
+
+check(
+  css.includes('/* v1.14.7 Space navigation rail */')
+    && css.includes('.simplified-space-actions')
+    && css.includes('overflow-x: auto')
+    && css.includes('flex: 0 0 auto'),
+  'Space navigation is a horizontal scrollable rail.',
+);
+
 check(
   css.includes('/* v1.14.7 Space Home overview */')
     && css.includes('.space-home-v1147-activity-row')
