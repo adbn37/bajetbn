@@ -9,6 +9,7 @@ import { firebaseConfigured } from '../services/firebase';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { AppShell } from '../layouts/AppShell';
 import { SetupRequiredPage } from '../pages/SetupRequiredPage';
+import { SpaceDetailsPage } from '../features/spaces/SpaceDetailsPage';
 import { PlatformAdminRoute, ProtectedRoute } from './RouteGuards';
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
@@ -17,7 +18,7 @@ const VerifyEmailPage = lazy(() => import('../features/auth/VerifyEmailPage').th
 const OnboardingPage = lazy(() => import('../features/onboarding/OnboardingPage').then((module) => ({ default: module.OnboardingPage })));
 const SpacesPage = lazy(() => import('../features/spaces/SpacesPage').then((module) => ({ default: module.SpacesPage })));
 const ArchivedSpacesPage = lazy(() => import('../features/spaces/ArchivedSpacesPage').then((module) => ({ default: module.ArchivedSpacesPage })));
-const SpaceDetailsPage = lazy(() => import('../features/spaces/SpaceDetailsPage').then((module) => ({ default: module.SpaceDetailsPage })));
+
 const CollectionInventoryPage = lazy(() => import('../features/collection/CollectionInventoryPage').then((module) => ({ default: module.CollectionInventoryPage })));
 const CollectionOrganizationPage = lazy(() => import('../features/collection/CollectionOrganizationPage').then((module) => ({ default: module.CollectionOrganizationPage })));
 const CollectionAddItemPage = lazy(() => import('../features/collection/CollectionInventoryPage').then((module) => ({ default: module.CollectionAddItemPage })));
