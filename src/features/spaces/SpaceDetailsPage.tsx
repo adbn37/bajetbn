@@ -392,6 +392,10 @@ export function SpaceDetailsPage() {
           )
         );
 
+      /*
+       * Full overview datasets stay on-demand for compact
+       * Personal / Household / Trip / Business Space homes.
+       */
       const shouldLoadOverviewData =
         nextActiveTab === 'overview'
         && !fullEmbeddedSection
@@ -400,6 +404,121 @@ export function SpaceDetailsPage() {
           || Boolean(requestedSection)
           || detailedOverviewRequested
         );
+
+      /*
+       * v1.14.7 Space Home gets a separate lightweight path.
+       * It loads only the money context needed by the Home:
+       * accounts, transactions and commitments.
+       */
+      const shouldLoadCompactHomeData =
+        nextActiveTab === 'overview'
+        && nextCompactActionHome
+        && !requestedSection
+        && !detailedOverviewRequested;
+
+      if (
+        shouldLoadCompactHomeData
+        && canReadSmeFinancials
+      ) {
+        /*
+         * Space Home runtime intentionally avoids budgets,
+         * goals, shared-expense history and report datasets.
+         */
+        const homeAccountsPromise =
+          nextSpace.type === 'sme'
+            ? nextSpace.ownerId === user.uid
+              ? listAccountsForOwnerSpace(
+                  user.uid,
+                  spaceId,
+                )
+              : Promise.resolve([] as Account[])
+            : listPersonalAccounts(
+                user.uid,
+              );
+
+        let homeTransactionsPromise:
+          Promise<FinancialTransaction[]>;
+
+        let homeCommitmentsPromise:
+          Promise<Commitment[]>;
+
+        if (
+          nextSpace.type === 'sme'
+          && nextSpace.ownerId !== user.uid
+        ) {
+          homeTransactionsPromise =
+            listBusinessTransactionsForSpace(
+              spaceId,
+            );
+
+          homeCommitmentsPromise =
+            canManageSmeFinancials
+              ? listCommitmentsForSpace(
+                  spaceId,
+                )
+              : Promise.resolve([]);
+        } else {
+          homeTransactionsPromise =
+            listTransactionsForOwnerSpace(
+              user.uid,
+              spaceId,
+            );
+
+          homeCommitmentsPromise =
+            listCommitmentsForOwnerSpace(
+              user.uid,
+              spaceId,
+            );
+        }
+
+        const [
+          homeAccounts,
+          homeTransactions,
+          homeCommitments,
+        ] = await Promise.all([
+          homeAccountsPromise,
+          homeTransactionsPromise,
+          homeCommitmentsPromise,
+        ]);
+
+        /*
+         * Personal Space shows the user's Personal accounts.
+         * Shared non-Business Spaces show only the signed-in
+         * user's own accounts that this Space actually uses.
+         * Business account balances remain owner-only.
+         */
+        const homeRelatedAccountIds =
+          new Set(
+            [
+              ...homeTransactions.flatMap(
+                (item) => [
+                  item.accountId,
+                  item.destinationAccountId || '',
+                ],
+              ),
+              ...homeCommitments.map(
+                (item) =>
+                  item.accountId || '',
+              ),
+            ].filter(Boolean),
+          );
+
+        const homeVisibleAccounts =
+          nextSpace.type === 'personal'
+            ? homeAccounts
+            : nextSpace.type === 'sme'
+              ? homeAccounts
+              : homeAccounts.filter(
+                  (item) =>
+                    homeRelatedAccountIds.has(
+                      item.id,
+                    ),
+                );
+
+        setAccounts(homeVisibleAccounts);
+        setTransactions(homeTransactions);
+        setCommitments(homeCommitments);
+      }
 
       if (
         shouldLoadOverviewData
@@ -417,10 +536,11 @@ export function SpaceDetailsPage() {
                     spaceId,
                   )
                 : Promise.resolve([] as Account[])
-              : listAccountsForOwnerSpace(
-                  user.uid,
-                  spaceId,
-                );
+              : nextSpace.ownerId === user.uid
+                ? listPersonalAccounts(
+                    user.uid,
+                  )
+                : Promise.resolve([] as Account[]);
 
         const nextGoalsPromise =
           listGoalsForOwnerSpace(
@@ -498,7 +618,34 @@ export function SpaceDetailsPage() {
           nextCommitmentsPromise,
         ]);
 
-        setAccounts(nextAccounts);
+        const relatedAccountIds =
+          new Set(
+            [
+              ...nextTransactions.flatMap(
+                (item) => [
+                  item.accountId,
+                  item.destinationAccountId || '',
+                ],
+              ),
+              ...nextCommitments.map(
+                (item) =>
+                  item.accountId || '',
+              ),
+            ].filter(Boolean),
+          );
+
+        const visibleAccounts =
+          nextSpace.type !== 'personal'
+          && nextSpace.type !== 'sme'
+            ? nextAccounts.filter(
+                (item) =>
+                  relatedAccountIds.has(
+                    item.id,
+                  ),
+              )
+            : nextAccounts;
+
+        setAccounts(visibleAccounts);
         setGoals(nextGoals);
         setTransactions(nextTransactions);
         setBudgets(nextBudgets);
@@ -708,6 +855,28 @@ export function SpaceDetailsPage() {
         </div>
       </section>
     )}
+
+    {activeTab === 'overview'
+      && compactActionHome
+      && !requestedSection
+      && (
+        <SpaceHomeOverview
+          space={space}
+          accounts={accounts}
+          transactions={transactions}
+          commitments={commitments}
+          memberCount={activeMembers.length}
+          openSharedItemCount={
+            openSharedBills.length
+            + openSharedExpenses.length
+          }
+          canViewFinancials={canViewSmeFinancials}
+          showAccountBalances={
+            space.type !== 'sme'
+            || space.ownerId === user?.uid
+          }
+        />
+      )}
 
     {(activeTab === 'overview' || space.type === 'sme') && (
       <SpaceActionHub
@@ -956,6 +1125,468 @@ export function SpaceDetailsPage() {
       <PersonalSpaceSettings space={space} />
     </>}
   </main>;
+}
+
+
+function SpaceHomeOverview({
+  space,
+  accounts,
+  transactions,
+  commitments,
+  memberCount,
+  openSharedItemCount,
+  canViewFinancials,
+  showAccountBalances,
+}: {
+  space: Space;
+  accounts: Account[];
+  transactions: FinancialTransaction[];
+  commitments: Commitment[];
+  memberCount: number;
+  openSharedItemCount: number;
+  canViewFinancials: boolean;
+  showAccountBalances: boolean;
+}) {
+  const currentMonth =
+    localIsoDate(new Date()).slice(0, 7);
+
+  const postedRows =
+    transactions.filter(
+      (item) =>
+        item.status === 'posted'
+        && item.type !== 'reversal',
+    );
+
+  const currentMonthRows =
+    postedRows.filter(
+      (item) =>
+        item.transactionDate.startsWith(
+          currentMonth,
+        ),
+    );
+
+  const monthMoneyIn =
+    currentMonthRows
+      .filter(
+        (item) =>
+          item.type === 'income',
+      )
+      .reduce(
+        (sum, item) =>
+          sum + item.amountMinor,
+        0,
+      );
+
+  const monthMoneyOut =
+    currentMonthRows
+      .filter(
+        (item) =>
+          item.type === 'expense',
+      )
+      .reduce(
+        (sum, item) =>
+          sum + item.amountMinor,
+        0,
+      );
+
+  const monthNet =
+    monthMoneyIn - monthMoneyOut;
+
+  const recentRows =
+    [...postedRows]
+      .sort(
+        (a, b) => {
+          const dateCompare =
+            b.transactionDate.localeCompare(
+              a.transactionDate,
+            );
+
+          if (dateCompare !== 0) {
+            return dateCompare;
+          }
+
+          return (
+            (b.postedAt?.toMillis() || 0)
+            - (a.postedAt?.toMillis() || 0)
+          );
+        },
+      )
+      .slice(0, 5);
+
+  const openCommitments =
+    commitments
+      .filter(
+        (item) =>
+          item.status === 'active',
+      )
+      .sort(
+        (a, b) =>
+          (
+            a.nextDueDate
+            || a.endDate
+            || '9999-12-31'
+          ).localeCompare(
+            b.nextDueDate
+            || b.endDate
+            || '9999-12-31',
+          ),
+      );
+
+  const accountHeading =
+    space.type === 'personal'
+      ? 'Your accounts'
+      : space.type === 'sme'
+        ? 'Business accounts'
+        : space.type === 'trip'
+          ? 'Accounts used for this trip'
+          : 'Accounts used in this Space';
+
+  function transactionTitle(
+    item: FinancialTransaction,
+  ) {
+    return (
+      item.counterparty?.trim()
+      || item.note?.trim()
+      || item.category?.trim()
+      || (
+        item.type === 'income'
+          ? 'Money in'
+          : item.type === 'expense'
+            ? 'Money out'
+            : 'Transfer'
+      )
+    );
+  }
+
+  function transactionAmount(
+    item: FinancialTransaction,
+  ) {
+    const amount =
+      formatMoney(
+        item.amountMinor,
+        item.currency,
+      );
+
+    if (item.type === 'income') {
+      return '+' + amount;
+    }
+
+    if (item.type === 'expense') {
+      return '-' + amount;
+    }
+
+    return amount;
+  }
+
+  function netText() {
+    const amount =
+      formatMoney(
+        Math.abs(monthNet),
+        space.currency,
+      );
+
+    if (monthNet > 0) {
+      return '+' + amount;
+    }
+
+    if (monthNet < 0) {
+      return '-' + amount;
+    }
+
+    return amount;
+  }
+
+  if (!canViewFinancials) {
+    return (
+      <section
+        className="panel space-home-v1147"
+        data-space-home-overview
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Space home
+            </span>
+
+            <h2>{space.name}</h2>
+
+            <p className="muted">
+              Your operational tools are ready.
+              Financial summaries remain private
+              for your current role.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div
+      className="space-home-v1147"
+      data-space-home-overview
+    >
+      <section className="panel space-home-v1147-summary-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Space home
+            </span>
+
+            <h2>This month</h2>
+
+            <p className="muted">
+              Money activity belonging to {space.name}.
+            </p>
+          </div>
+        </div>
+
+        <div className="summary-grid space-home-v1147-summary">
+          <article className="summary-card featured">
+            <span>Money in</span>
+            <strong>
+              {formatMoney(
+                monthMoneyIn,
+                space.currency,
+              )}
+            </strong>
+            <small>This month</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Money out</span>
+            <strong>
+              {formatMoney(
+                monthMoneyOut,
+                space.currency,
+              )}
+            </strong>
+            <small>This month</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Net</span>
+            <strong>{netText()}</strong>
+            <small>Money in minus money out</small>
+          </article>
+
+          <article className="summary-card">
+            <span>
+              {space.type === 'personal'
+                ? 'Accounts'
+                : 'Members'}
+            </span>
+            <strong>
+              {space.type === 'personal'
+                ? accounts.length
+                : memberCount}
+            </strong>
+            <small>
+              {space.type === 'personal'
+                ? 'Active accounts'
+                : 'Active people'}
+            </small>
+          </article>
+        </div>
+      </section>
+
+      {showAccountBalances && (
+      <section className="panel space-home-v1147-section">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Accounts</span>
+            <h2>{accountHeading}</h2>
+            <p className="muted">
+              Only accounts available for this Space
+              are shown here.
+            </p>
+          </div>
+
+          <Link
+            className="button secondary compact"
+            to={
+              '/spaces/'
+              + space.id
+              + '?section=accounts'
+            }
+          >
+            View
+          </Link>
+        </div>
+
+        {accounts.length > 0 ? (
+          <div className="space-home-v1147-account-grid">
+            {accounts.slice(0, 4).map(
+              (account) => (
+                <article
+                  className="space-home-v1147-account"
+                  key={account.id}
+                >
+                  <div>
+                    <strong>{account.name}</strong>
+                    <small className="muted">
+                      {account.institution
+                        || (
+                          account.type === 'cash'
+                            ? 'Cash'
+                            : account.type.replace(
+                                /_/g,
+                                ' ',
+                              )
+                        )}
+                    </small>
+                  </div>
+
+                  <strong>
+                    {formatMoney(
+                      account.ledgerBalanceMinor,
+                      account.currency,
+                    )}
+                  </strong>
+                </article>
+              ),
+            )}
+          </div>
+        ) : (
+          <p className="muted space-home-v1147-empty">
+            No account is currently connected through
+            this Space's money activity.
+          </p>
+        )}
+      </section>
+      )}
+
+      <section className="panel space-home-v1147-section">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Recent</span>
+            <h2>Money activity</h2>
+            <p className="muted">
+              Latest records saved in {space.name}.
+            </p>
+          </div>
+
+          <Link
+            className="button secondary compact"
+            to={
+              '/spaces/'
+              + space.id
+              + '?section=money'
+            }
+          >
+            View all
+          </Link>
+        </div>
+
+        {recentRows.length > 0 ? (
+          <div className="space-home-v1147-activity">
+            {recentRows.map(
+              (item) => (
+                <Link
+                  key={item.id}
+                  className="space-home-v1147-activity-row"
+                  to={
+                    '/spaces/'
+                    + space.id
+                    + '?section=money'
+                  }
+                >
+                  <div>
+                    <strong>
+                      {transactionTitle(item)}
+                    </strong>
+
+                    <small className="muted">
+                      {displaySpaceDate(
+                        item.transactionDate,
+                      )}
+                      {' - '}
+                      {item.category
+                        || (
+                          item.type === 'income'
+                            ? 'Money in'
+                            : item.type === 'expense'
+                              ? 'Money out'
+                              : 'Transfer'
+                        )}
+                    </small>
+                  </div>
+
+                  <strong>
+                    {transactionAmount(item)}
+                  </strong>
+                </Link>
+              ),
+            )}
+          </div>
+        ) : (
+          <p className="muted space-home-v1147-empty">
+            No money activity has been recorded in this
+            Space yet.
+          </p>
+        )}
+      </section>
+
+      <section className="panel space-home-v1147-section">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Attention</span>
+            <h2>Needs attention</h2>
+            <p className="muted">
+              Open payments and shared items for this Space.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-home-v1147-attention-grid">
+          <Link
+            className="space-home-v1147-attention-card"
+            to={
+              '/spaces/'
+              + space.id
+              + '?section=bills'
+            }
+          >
+            <span>Bills / commitments</span>
+            <strong>
+              {openCommitments.length}
+            </strong>
+            <small className="muted">
+              Still active
+            </small>
+          </Link>
+
+          {space.type !== 'personal'
+            && openSharedItemCount > 0
+            && (
+            <article className="space-home-v1147-attention-card">
+              <span>Shared items</span>
+              <strong>
+                {openSharedItemCount}
+              </strong>
+              <small className="muted">
+                Still open
+              </small>
+            </article>
+          )}
+
+          {openCommitments[0]?.nextDueDate && (
+            <article className="space-home-v1147-attention-card">
+              <span>Next due</span>
+              <strong>
+                {displaySpaceDate(
+                  openCommitments[0].nextDueDate,
+                )}
+              </strong>
+              <small className="muted">
+                {openCommitments[0].name}
+              </small>
+            </article>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function SpaceOverview({

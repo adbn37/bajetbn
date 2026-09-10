@@ -11201,3 +11201,116 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+/* v1.14.7 Space Home overview */
+.space-home-v1147 {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.space-home-v1147-summary-panel,
+.space-home-v1147-section {
+  margin: 0;
+}
+
+.space-home-v1147-summary {
+  margin-top: 0.65rem;
+}
+
+.space-home-v1147-account-grid,
+.space-home-v1147-activity,
+.space-home-v1147-attention-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.space-home-v1147-account-grid {
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(160px, 1fr)
+    );
+}
+
+.space-home-v1147-account,
+.space-home-v1147-activity-row,
+.space-home-v1147-attention-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  color: inherit;
+  text-decoration: none;
+}
+
+.space-home-v1147-account,
+.space-home-v1147-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.space-home-v1147-account > div,
+.space-home-v1147-activity-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.space-home-v1147-account strong,
+.space-home-v1147-activity-row strong {
+  min-width: 0;
+}
+
+.space-home-v1147-activity-row:hover {
+  border-color: var(--border-strong);
+}
+
+.space-home-v1147-attention-grid {
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(130px, 1fr)
+    );
+}
+
+.space-home-v1147-attention-card {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.space-home-v1147-attention-card > strong {
+  font-size: 1.05rem;
+}
+
+.space-home-v1147-empty {
+  margin: 0.35rem 0 0;
+}
+
+@media (max-width: 640px) {
+  .space-home-v1147 {
+    gap: 0.6rem;
+  }
+
+  .space-home-v1147-account-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .space-home-v1147-account,
+  .space-home-v1147-activity-row {
+    padding: 0.65rem 0.7rem;
+  }
+
+  .space-home-v1147-summary {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
