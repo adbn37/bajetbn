@@ -11351,3 +11351,17 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     min-width: 88px;
   }
 }
+
+
+/* v1.14.7 Account balance privacy clarification */
+.space-home-v1147-account-balance {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 0.12rem;
+  text-align: right;
+}
+
+.space-home-v1147-account-balance small {
+  font-size: 0.68rem;
+  line-height: 1.2;
+}

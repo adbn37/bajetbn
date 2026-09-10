@@ -6,6 +6,12 @@ const page =
     'utf8',
   );
 
+const hub =
+  fs.readFileSync(
+    'src/features/spaces/SpaceActionHub.tsx',
+    'utf8',
+  );
+
 const css =
   fs.readFileSync(
     'src/styles/global.css',
@@ -107,7 +113,41 @@ check(
 check(
   page.includes('Accounts used in this Space')
     && page.includes('ledgerBalanceMinor'),
-  'Space Home shows relevant accounts and balances.',
+  'Space Home shows relevant owner accounts and balances.',
+);
+
+check(
+  page.includes(
+    "space.type === 'personal'\n            || space.ownerId === user?.uid",
+  )
+    && page.includes(
+      "nextSpace.type === 'personal'\n              || nextSpace.ownerId === user.uid",
+    )
+    && page.includes(
+      ': Promise.resolve([] as Account[]);',
+    ),
+  'Shared Space account cards and account loading are owner-only.',
+);
+
+check(
+  page.includes(
+    'Shared Spaces never inherit account visibility',
+  )
+    && page.includes(
+      'merely\n         * because a transaction uses that account',
+    ),
+  'Space account usage never implies account sharing.',
+);
+
+check(
+  page.includes('Account balance')
+    && page.includes(
+      'space-home-v1147-account-balance',
+    )
+    && page.includes(
+      'not the Space fund balance',
+    ),
+  'Account card distinguishes Account balance from Space fund balance.',
 );
 
 check(
@@ -147,6 +187,98 @@ check(
     && css.includes('overflow-x: auto')
     && css.includes('flex: 0 0 auto'),
   'Space navigation is a horizontal scrollable rail.',
+);
+
+const householdStart =
+  hub.indexOf(
+    "{space.type === 'household' && <>",
+  );
+
+const householdEnd =
+  hub.indexOf(
+    '</>}',
+    householdStart,
+  );
+
+const householdBlock =
+  householdStart >= 0
+    && householdEnd > householdStart
+      ? hub.slice(
+          householdStart,
+          householdEnd,
+        )
+      : '';
+
+const householdLabels = [
+  'label="Home"',
+  'label="Fund"',
+  'label="Bills"',
+  'label="Expenses"',
+  'label="To-Do"',
+  'label="Shopping"',
+  'label="More"',
+];
+
+let previousHouseholdLabel = -1;
+
+const householdOrderCorrect =
+  householdLabels.every(
+    (label) => {
+      const position =
+        householdBlock.indexOf(label);
+
+      const valid =
+        position > previousHouseholdLabel;
+
+      previousHouseholdLabel =
+        position;
+
+      return valid;
+    },
+  );
+
+check(
+  Boolean(householdBlock)
+    && householdOrderCorrect,
+  'Household navigation order is Home, Fund, Bills, Expenses, To-Do, Shopping, More.',
+);
+
+check(
+  hub.includes(
+    'const householdNavigationTarget',
+  )
+    && hub.includes(
+      "householdNavigationTarget === 'home'",
+    )
+    && hub.includes(
+      "householdNavigationTarget === 'fund'",
+    )
+    && hub.includes(
+      "householdNavigationTarget === 'bills'",
+    )
+    && hub.includes(
+      "householdNavigationTarget === 'expenses'",
+    )
+    && hub.includes(
+      "householdNavigationTarget === 'tasks'",
+    )
+    && hub.includes(
+      "householdNavigationTarget === 'shopping'",
+    )
+    && hub.includes(
+      "householdNavigationTarget === 'more'",
+    ),
+  'Household navigation highlight follows the current destination.',
+);
+
+check(
+  css.includes(
+    '.button.primary { color:#03211d; background:var(--accent);',
+  )
+    && css.includes(
+      '.button.primary:hover { background:var(--accent-2);',
+    ),
+  'Space active navigation inherits BajetBN theme accent tokens.',
 );
 
 check(

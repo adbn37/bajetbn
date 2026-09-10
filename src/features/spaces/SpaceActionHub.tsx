@@ -5,7 +5,10 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Link,
+  useSearchParams,
+} from 'react-router-dom';
 import { Modal } from '../../components/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
@@ -161,6 +164,7 @@ export function SpaceActionHub({
 }) {
   const { user, profile } = useAuth();
   const { online } = useOfflineSync();
+  const [searchParams] = useSearchParams();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [customCategories, setCustomCategories] = useState<TransactionCategory[]>([]);
@@ -338,6 +342,37 @@ export function SpaceActionHub({
 
   const simplifiedSpaceNavigation = true;
 
+  /*
+   * Space navigation state follows the actual destination.
+   *
+   * Styling deliberately continues through ShortcutLink /
+   * ShortcutButton "primary", which uses BajetBN's existing
+   * theme accent variables. No fixed navigation colour.
+   */
+  const activeSection =
+    searchParams.get('section');
+
+  const householdNavigationTarget =
+    space.type !== 'household'
+      ? null
+      : spaceMoreOpen
+        ? 'more'
+        : tool === 'fund'
+          ? 'fund'
+          : tool === 'expenses'
+            ? 'expenses'
+            : tool === 'tasks'
+              ? 'tasks'
+              : tool === 'shopping'
+                ? 'shopping'
+                : tool === 'bills'
+                  ? 'bills'
+                  : activeSection === 'bills'
+                    ? 'bills'
+                    : activeSection
+                      ? null
+                      : 'home';
+
   return (
     <>
       <section
@@ -442,12 +477,61 @@ export function SpaceActionHub({
             </>}
 
             {space.type === 'household' && <>
-              <ShortcutButton label="Fund" primary onClick={() => setTool('fund')} />
-              <ShortcutLink to={`/spaces/${space.id}?section=bills`} label="Bills" />
-              <ShortcutButton label="Expenses" onClick={() => setTool('expenses')} />
-              <ShortcutButton label="To-Do" onClick={() => setTool('tasks')} />
-              <ShortcutButton label="Shopping" onClick={() => setTool('shopping')} />
-              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+              <ShortcutLink
+                to={`/spaces/${space.id}`}
+                label="Home"
+                primary={
+                  householdNavigationTarget === 'home'
+                }
+              />
+
+              <ShortcutButton
+                label="Fund"
+                primary={
+                  householdNavigationTarget === 'fund'
+                }
+                onClick={() => setTool('fund')}
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=bills`}
+                label="Bills"
+                primary={
+                  householdNavigationTarget === 'bills'
+                }
+              />
+
+              <ShortcutButton
+                label="Expenses"
+                primary={
+                  householdNavigationTarget === 'expenses'
+                }
+                onClick={() => setTool('expenses')}
+              />
+
+              <ShortcutButton
+                label="To-Do"
+                primary={
+                  householdNavigationTarget === 'tasks'
+                }
+                onClick={() => setTool('tasks')}
+              />
+
+              <ShortcutButton
+                label="Shopping"
+                primary={
+                  householdNavigationTarget === 'shopping'
+                }
+                onClick={() => setTool('shopping')}
+              />
+
+              <ShortcutButton
+                label="More"
+                primary={
+                  householdNavigationTarget === 'more'
+                }
+                onClick={() => setSpaceMoreOpen(true)}
+              />
             </>}
 
             {space.type === 'personal' && <>

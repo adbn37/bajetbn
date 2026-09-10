@@ -432,9 +432,12 @@ export function SpaceDetailsPage() {
                   spaceId,
                 )
               : Promise.resolve([] as Account[])
-            : listPersonalAccounts(
-                user.uid,
-              );
+            : nextSpace.type === 'personal'
+              || nextSpace.ownerId === user.uid
+              ? listPersonalAccounts(
+                  user.uid,
+                )
+              : Promise.resolve([] as Account[]);
 
         let homeTransactionsPromise:
           Promise<FinancialTransaction[]>;
@@ -482,9 +485,12 @@ export function SpaceDetailsPage() {
         ]);
 
         /*
-         * Personal Space shows the user's Personal accounts.
-         * Shared non-Business Spaces show only the signed-in
-         * user's own accounts that this Space actually uses.
+         * Personal Space shows the signed-in user's accounts.
+         *
+         * Shared Spaces never inherit account visibility merely
+         * because a transaction uses that account. Only the Space
+         * owner can see their own related account cards here.
+         *
          * Business account balances remain owner-only.
          */
         const homeRelatedAccountIds =
@@ -885,7 +891,7 @@ export function SpaceDetailsPage() {
           }
           canViewFinancials={canViewSmeFinancials}
           showAccountBalances={
-            space.type !== 'sme'
+            space.type === 'personal'
             || space.ownerId === user?.uid
           }
         />
@@ -1397,8 +1403,9 @@ function SpaceHomeOverview({
             <span className="eyebrow">Accounts</span>
             <h2>{accountHeading}</h2>
             <p className="muted">
-              Only accounts available for this Space
-              are shown here.
+              Only your accounts used by this Space are shown.
+              Balances are full account balances,
+              not the Space fund balance.
             </p>
           </div>
 
@@ -1437,12 +1444,18 @@ function SpaceHomeOverview({
                     </small>
                   </div>
 
-                  <strong>
-                    {formatMoney(
-                      account.ledgerBalanceMinor,
-                      account.currency,
-                    )}
-                  </strong>
+                  <div className="space-home-v1147-account-balance">
+                    <small className="muted">
+                      Account balance
+                    </small>
+
+                    <strong>
+                      {formatMoney(
+                        account.ledgerBalanceMinor,
+                        account.currency,
+                      )}
+                    </strong>
+                  </div>
                 </article>
               ),
             )}
