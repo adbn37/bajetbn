@@ -244,7 +244,28 @@ export function orderedNavigation(
     NAVIGATION_ITEMS.map((item) => [item.id, item]),
   );
 
-  return CORE_NAVIGATION_ORDER
+  /*
+   * Desktop sidebar exposes every normal BajetBN page.
+   * Mobile keeps its separate five-slot navigation.
+   */
+  const desktopNavigationOrder: NavigationId[] = [
+    'overview',
+    'transactions',
+    'spaces',
+    'inbox',
+    'accounts',
+    'debt',
+    'budgets',
+    'bills',
+    'recurring',
+    'goals',
+    'calendar',
+    'reports',
+    'search',
+    'offline-sync',
+  ];
+
+  return desktopNavigationOrder
     .map((id) => byId.get(id))
     .filter((item): item is NavigationItem => Boolean(item));
 }

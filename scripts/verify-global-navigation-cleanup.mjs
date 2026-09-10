@@ -14,9 +14,90 @@ function check(condition, message) {
 for (const id of ['overview', 'spaces', 'transactions', 'accounts', 'budgets', 'bills', 'search']) {
   check(navigation.includes(`'${id}'`), `Navigation is missing ${id}.`);
 }
-check(navigation.includes('CORE_NAVIGATION_ORDER'), 'Core navigation order is missing.');
-check(navigation.includes("'overview'") && navigation.includes("'transactions'") && navigation.includes("'spaces'") && navigation.includes("'inbox'"), 'Home, Money, Spaces and Attention remain core.');
-check(navigation.includes('return [];'), 'Secondary desktop tools stay out of the main navigation.');
+const desktopOrder = [
+  'overview',
+  'transactions',
+  'spaces',
+  'inbox',
+  'accounts',
+  'debt',
+  'budgets',
+  'bills',
+  'recurring',
+  'goals',
+  'calendar',
+  'reports',
+  'search',
+  'offline-sync',
+];
+
+const orderedStart =
+  navigation.indexOf(
+    'export function orderedNavigation(',
+  );
+
+const orderedEnd =
+  navigation.indexOf(
+    'export function secondaryNavigation(',
+    orderedStart,
+  );
+
+const orderedBlock =
+  orderedStart >= 0
+    && orderedEnd > orderedStart
+      ? navigation.slice(
+          orderedStart,
+          orderedEnd,
+        )
+      : '';
+
+let previousDesktopItem = -1;
+
+const desktopOrderValid =
+  desktopOrder.every(
+    (id) => {
+      const position =
+        orderedBlock.indexOf(
+          `'${id}'`,
+        );
+
+      const valid =
+        position > previousDesktopItem;
+
+      previousDesktopItem =
+        position;
+
+      return valid;
+    },
+  );
+
+check(
+  desktopOrderValid,
+  'Desktop navigation exposes the complete money and planning toolset in the approved order.',
+);
+
+const mobileStart =
+  shell.indexOf(
+    '<nav className="mobile-bottom-nav"',
+  );
+
+const desktopShell =
+  mobileStart >= 0
+    ? shell.slice(
+        0,
+        mobileStart,
+      )
+    : shell;
+
+check(
+  !desktopShell.includes(
+    '<NavLink to="/more"',
+  )
+    && !desktopShell.includes(
+      '<span className="nav-label">More</span>',
+    ),
+  'Desktop More is removed while full navigation is visible directly.',
+);
 
 const start = shell.indexOf('<nav className="mobile-bottom-nav"');
 const end = shell.indexOf('</nav>', start);

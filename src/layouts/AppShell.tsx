@@ -17,7 +17,6 @@ import {
   loadPersonalisation,
   navigationIcon,
   orderedNavigation,
-  secondaryNavigation,
   type PersonalisationSettings,
 } from '../services/personalisation';
 
@@ -59,7 +58,6 @@ export function AppShell() {
   const [businessPickerLoading, setBusinessPickerLoading] = useState(false);
   const [businessPickerError, setBusinessPickerError] = useState('');
   const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
-  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [activityToast, setActivityToast] = useState<ActivityToast | null>(null);
   const { profile, user, logOut } = useAuth();
   const { pendingCount, needsAttentionCount, syncing } = useOfflineSync();
@@ -68,7 +66,6 @@ export function AppShell() {
 
 
   const visibleNavigation = useMemo(() => orderedNavigation(defaultPersonalisation()), []);
-  const secondaryTools = useMemo(() => secondaryNavigation(defaultPersonalisation()), []);
   const currentPlanLabel = planLabel(profile);
 
   useEffect(() => {
@@ -239,69 +236,6 @@ export function AppShell() {
             </NavLink>
           ))}
 
-          {secondaryTools.length > 0 && (
-            <div className="sidebar-more-tools">
-              <button
-                type="button"
-                className="sidebar-more-toggle"
-                aria-expanded={moreToolsOpen}
-                onClick={() => setMoreToolsOpen((value) => !value)}
-              >
-                <span className="nav-icon">•••</span>
-                <span className="nav-label">More tools</span>
-                <span className="sidebar-more-arrow" aria-hidden="true">
-                  {moreToolsOpen ? '⌃' : '⌄'}
-                </span>
-              </button>
-
-              {moreToolsOpen && (
-                <div className="sidebar-more-list">
-                  {secondaryTools.map((item) => (
-                    <NavLink
-                      key={`secondary-${item.path}`}
-                      to={item.path}
-                      end={item.path === '/'}
-                      onClick={() => setMobileOpen(false)}
-                    >
-                      <span className="nav-icon">
-                        {navigationIcon(
-                          personalisation.iconPack,
-                          item.id,
-                          item.icon,
-                        )}
-                      </span>
-                      <span className="nav-label">
-                        {item.label}
-                      </span>
-
-                      {item.path === '/offline-sync'
-                        && (
-                          pendingCount + needsAttentionCount > 0
-                          || syncing
-                        )
-                        && (
-                          <span
-                            className={`nav-count ${
-                              needsAttentionCount > 0
-                                ? 'attention'
-                                : ''
-                            }`}
-                          >
-                            {syncing
-                              ? '…'
-                              : pendingCount + needsAttentionCount}
-                          </span>
-                        )}
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <NavLink to="/more" onClick={() => setMobileOpen(false)}>
-            <span className="nav-icon">☷</span>
-            <span className="nav-label">More</span>
-          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <NavLink
