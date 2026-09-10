@@ -1,27 +1,35 @@
 import fs from 'node:fs';
 
+const read =
+  (path) =>
+    fs
+      .readFileSync(
+        path,
+        'utf8',
+      )
+      .replace(
+        /\r\n?/g,
+        '\n',
+      );
+
 const page =
-  fs.readFileSync(
+  read(
     'src/features/spaces/SpaceDetailsPage.tsx',
-    'utf8',
   );
 
 const hub =
-  fs.readFileSync(
+  read(
     'src/features/spaces/SpaceActionHub.tsx',
-    'utf8',
   );
 
 const css =
-  fs.readFileSync(
+  read(
     'src/styles/global.css',
-    'utf8',
   );
 
 const rules =
-  fs.readFileSync(
+  read(
     'firestore.rules',
-    'utf8',
   );
 
 const failures = [];
