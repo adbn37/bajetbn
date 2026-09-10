@@ -357,21 +357,30 @@ export function SpaceActionHub({
       ? null
       : spaceMoreOpen
         ? 'more'
-        : tool === 'fund'
+        : activeSection === 'fund'
           ? 'fund'
-          : tool === 'expenses'
-            ? 'expenses'
-            : tool === 'tasks'
-              ? 'tasks'
-              : tool === 'shopping'
-                ? 'shopping'
-                : tool === 'bills'
-                  ? 'bills'
-                  : activeSection === 'bills'
-                    ? 'bills'
-                    : activeSection
-                      ? null
-                      : 'home';
+          : activeSection === 'bills'
+            ? 'bills'
+            : activeSection === 'shared-expenses'
+              ? 'expenses'
+              : activeSection === 'todo'
+                ? 'tasks'
+                : activeSection === 'shopping'
+                  ? 'shopping'
+                  : activeSection === 'chat'
+                    ? 'chat'
+                    : [
+                        'budgets',
+                        'members',
+                        'activity',
+                        'settings',
+                      ].includes(
+                        activeSection || '',
+                      )
+                      ? 'more'
+                      : activeSection
+                        ? null
+                        : 'home';
 
   return (
     <>
@@ -485,12 +494,12 @@ export function SpaceActionHub({
                 }
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=fund`}
                 label="Fund"
                 primary={
                   householdNavigationTarget === 'fund'
                 }
-                onClick={() => setTool('fund')}
               />
 
               <ShortcutLink
@@ -501,28 +510,36 @@ export function SpaceActionHub({
                 }
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=shared-expenses`}
                 label="Expenses"
                 primary={
                   householdNavigationTarget === 'expenses'
                 }
-                onClick={() => setTool('expenses')}
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=todo`}
                 label="To-Do"
                 primary={
                   householdNavigationTarget === 'tasks'
                 }
-                onClick={() => setTool('tasks')}
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=shopping`}
                 label="Shopping"
                 primary={
                   householdNavigationTarget === 'shopping'
                 }
-                onClick={() => setTool('shopping')}
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=chat`}
+                label="Chat"
+                primary={
+                  householdNavigationTarget === 'chat'
+                }
               />
 
               <ShortcutButton
@@ -841,12 +858,30 @@ export function SpaceActionHub({
             >
               {simplifiedSpaceNavigation && <>
                 {space.type === 'household' && <>
-                  <ShortcutButton label="Bills" onClick={() => { setSpaceMoreOpen(false); setTool('bills'); }} />
-                  <ShortcutButton label="Settlements" onClick={() => { setSpaceMoreOpen(false); setTool('balances'); }} />
-                  <ShortcutLink to={`/spaces/${space.id}?section=budgets`} label="Budget" onClick={() => setSpaceMoreOpen(false)} />
-                  <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" onClick={() => setSpaceMoreOpen(false)} />
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=budgets`}
+                    label="Budget"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=members`}
+                    label="Members"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?section=activity`}
+                    label="Activity"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+
                   {currentMember?.role === 'owner' && (
-                    <ShortcutLink to={`/spaces/${space.id}?tab=settings`} label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                    <ShortcutLink
+                      to={`/spaces/${space.id}?section=settings`}
+                      label="Settings"
+                      onClick={() => setSpaceMoreOpen(false)}
+                    />
                   )}
                 </>}
 

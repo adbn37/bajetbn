@@ -216,6 +216,7 @@ const householdLabels = [
   'label="Expenses"',
   'label="To-Do"',
   'label="Shopping"',
+  'label="Chat"',
   'label="More"',
 ];
 
@@ -240,7 +241,7 @@ const householdOrderCorrect =
 check(
   Boolean(householdBlock)
     && householdOrderCorrect,
-  'Household navigation order is Home, Fund, Bills, Expenses, To-Do, Shopping, More.',
+  'Household navigation order is Home, Fund, Bills, Expenses, To-Do, Shopping, Chat, More.',
 );
 
 check(
@@ -266,9 +267,130 @@ check(
       "householdNavigationTarget === 'shopping'",
     )
     && hub.includes(
+      "householdNavigationTarget === 'chat'",
+    )
+    && hub.includes(
       "householdNavigationTarget === 'more'",
     ),
   'Household navigation highlight follows the current destination.',
+);
+
+const householdMainUsesRoutes =
+  householdBlock.includes('?section=fund')
+  && householdBlock.includes('?section=bills')
+  && householdBlock.includes('?section=shared-expenses')
+  && householdBlock.includes('?section=todo')
+  && householdBlock.includes('?section=shopping')
+  && householdBlock.includes('?section=chat')
+  && !householdBlock.includes("setTool('fund')")
+  && !householdBlock.includes("setTool('expenses')")
+  && !householdBlock.includes("setTool('tasks')")
+  && !householdBlock.includes("setTool('shopping')");
+
+check(
+  householdMainUsesRoutes,
+  'Household primary navigation routes to inline Space sections instead of tool modals.',
+);
+
+const moreAreaStart =
+  hub.indexOf(
+    '{spaceMoreOpen &&',
+  );
+
+const householdMoreStart =
+  hub.indexOf(
+    "{space.type === 'household' && <>",
+    moreAreaStart,
+  );
+
+const householdMoreEnd =
+  hub.indexOf(
+    '</>}',
+    householdMoreStart,
+  );
+
+const householdMoreBlock =
+  householdMoreStart >= 0
+    && householdMoreEnd > householdMoreStart
+      ? hub.slice(
+          householdMoreStart,
+          householdMoreEnd,
+        )
+      : '';
+
+check(
+  householdMoreBlock.includes('label="Budget"')
+    && householdMoreBlock.includes('label="Members"')
+    && householdMoreBlock.includes('label="Activity"')
+    && householdMoreBlock.includes('label="Settings"')
+    && !householdMoreBlock.includes('label="Bills"')
+    && !householdMoreBlock.includes('Settlements')
+    && !householdMoreBlock.includes('?tab='),
+  'Household More keeps secondary sections, removes Settlements, and avoids legacy tab navigation.',
+);
+
+check(
+  page.includes(
+    'data-household-inline-section',
+  )
+    && page.includes(
+      "householdInlineSection === 'fund'",
+    )
+    && page.includes(
+      "householdInlineSection === 'shared-expenses'",
+    )
+    && page.includes(
+      "householdInlineSection === 'todo'",
+    )
+    && page.includes(
+      "householdInlineSection === 'shopping'",
+    )
+    && page.includes(
+      "householdInlineSection === 'chat'",
+    )
+    && page.includes(
+      "householdInlineSection === 'bills'",
+    )
+    && page.includes(
+      "householdInlineSection === 'budgets'",
+    )
+    && page.includes(
+      "householdInlineSection === 'members'",
+    )
+    && page.includes(
+      "householdInlineSection === 'activity'",
+    )
+    && page.includes(
+      "householdInlineSection === 'settings'",
+    ),
+  'Household modules render inside the persistent Space shell.',
+);
+
+check(
+  page.includes(
+    'const lightweightHouseholdSection',
+  )
+    && page.includes(
+      '&& !lightweightHouseholdSection',
+    ),
+  'Household inline tools do not trigger the heavy overview bundle.',
+);
+
+check(
+  page.includes(
+    'householdInlineSection\n        ? null\n        : <SpaceOverview',
+  ),
+  'Household routed sections bypass the legacy SpaceOverview modal surface.',
+);
+
+check(
+  css.includes(
+    '/* v1.14.7 Household inline Space sections */',
+  )
+    && css.includes(
+      '.household-inline-section-v1147',
+    ),
+  'Household inline sections have responsive shell styling.',
 );
 
 check(

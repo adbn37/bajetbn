@@ -68,6 +68,7 @@ import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAuto
 import { SharedExpensesPanel } from './SharedExpensesPanel';
 import { SpaceFundPanel } from './SpaceFundPanel';
 import { SpaceActionHub } from './SpaceActionHub';
+import { SpaceWorkPanel } from './SpaceWorkPanel';
 import { HouseholdCommandCentre } from './HouseholdCommandCentre';
 import { TripCommandCentre } from './TripCommandCentre';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
@@ -396,12 +397,30 @@ export function SpaceDetailsPage() {
        * Full overview datasets stay on-demand for compact
        * Personal / Household / Trip / Business Space homes.
        */
+      const lightweightHouseholdSection =
+        nextSpace.type === 'household'
+        && [
+          'fund',
+          'shared-expenses',
+          'todo',
+          'shopping',
+          'chat',
+          'members',
+          'activity',
+          'settings',
+        ].includes(
+          requestedSection || '',
+        );
+
       const shouldLoadOverviewData =
         nextActiveTab === 'overview'
         && !fullEmbeddedSection
         && (
           !nextCompactActionHome
-          || Boolean(requestedSection)
+          || (
+            Boolean(requestedSection)
+            && !lightweightHouseholdSection
+          )
           || detailedOverviewRequested
         );
 
@@ -805,6 +824,33 @@ export function SpaceDetailsPage() {
     || space.type === 'household'
     || space.type === 'trip';
 
+  const canManageSharedSpace =
+    space.type === 'household'
+    && (
+      space.ownerId === user?.uid
+      || currentMember?.role === 'owner'
+      || currentMember?.role === 'admin'
+    );
+
+  const householdInlineSection =
+    space.type === 'household'
+    && [
+      'fund',
+      'bills',
+      'shared-expenses',
+      'todo',
+      'shopping',
+      'chat',
+      'budgets',
+      'members',
+      'activity',
+      'settings',
+    ].includes(
+      requestedSection || '',
+    )
+      ? requestedSection
+      : null;
+
   /*
    * Legacy detailed dashboards remain intentionally disabled.
    * Use an opaque boolean function instead of a literal false guard
@@ -874,6 +920,144 @@ export function SpaceDetailsPage() {
         onRefresh={load}
       />
     )}
+
+    {space.type === 'household'
+      && activeTab === 'overview'
+      && householdInlineSection
+      && (
+        <div
+          className="household-inline-section-v1147"
+          data-household-inline-section={
+            householdInlineSection
+          }
+        >
+          {householdInlineSection === 'fund' && (
+            <SpaceFundPanel
+              space={space}
+              members={members}
+              currentMember={currentMember || null}
+              canManage={canManageSharedSpace}
+            />
+          )}
+
+          {householdInlineSection === 'shared-expenses' && (
+            <SharedExpensesPanel
+              space={space}
+              members={members}
+              currentMember={currentMember || null}
+              canManage={canManageSharedSpace}
+              view="expenses"
+            />
+          )}
+
+          {(householdInlineSection === 'todo'
+              || householdInlineSection === 'shopping') && (
+            <SpaceWorkPanel
+              space={space}
+              members={members}
+              currentMember={currentMember || null}
+              initialView={
+                householdInlineSection === 'todo'
+                  ? 'tasks'
+                  : 'shopping'
+              }
+            />
+          )}
+
+          {householdInlineSection === 'chat' && (
+            <SpaceChatPanel
+              space={space}
+              members={members}
+              currentMember={currentMember || null}
+            />
+          )}
+
+          {householdInlineSection === 'bills' && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Bills...
+                </div>
+              }
+            >
+              <EmbeddedCommitmentsPage
+                embedded
+                spaceIdOverride={space.id}
+                typeOverride="bill"
+              />
+            </Suspense>
+          )}
+
+          {householdInlineSection === 'budgets' && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Budget...
+                </div>
+              }
+            >
+              <EmbeddedBudgetsPage
+                embedded
+                spaceIdOverride={space.id}
+              />
+            </Suspense>
+          )}
+
+          {householdInlineSection === 'members' && (
+            <CollaborationPage
+              embedded
+              spaceIdOverride={space.id}
+              activeTab="members"
+              onSpaceUpdated={load}
+            />
+          )}
+
+          {householdInlineSection === 'activity' && (
+            <CollaborationPage
+              embedded
+              spaceIdOverride={space.id}
+              activeTab="activity"
+              onSpaceUpdated={load}
+            />
+          )}
+
+          {householdInlineSection === 'settings' && (
+            <>
+              <CollaborationPage
+                embedded
+                spaceIdOverride={space.id}
+                activeTab="settings"
+                onSpaceUpdated={load}
+              />
+
+              {currentMember
+                && (currentMember.status || 'active') === 'active'
+                && (
+                  <SpaceReminderAutomationPanel
+                    space={space}
+                    currentMember={currentMember}
+                  />
+                )}
+
+              {currentMember?.role === 'owner' && (
+                <>
+                  <SpaceAvatarSettings
+                    space={space}
+                    onSaved={load}
+                  />
+
+                  <SpaceLifecyclePanel
+                    space={space}
+                    onFinished={() =>
+                      navigate('/spaces')
+                    }
+                  />
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
     {activeTab === 'overview'
       && compactActionHome
@@ -1059,7 +1243,10 @@ export function SpaceDetailsPage() {
       </nav>
     )}
 
-    {activeTab === 'overview' ? <SpaceOverview
+    {activeTab === 'overview' ? (
+      householdInlineSection
+        ? null
+        : <SpaceOverview
       space={space}
       moneyIn={moneyIn}
       moneyOut={moneyOut}
@@ -1075,7 +1262,8 @@ export function SpaceDetailsPage() {
       canViewFinancials={canViewSmeFinancials}
       smePosRole={smePosRole}
       onRefresh={load}
-    /> : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
+    />
+    ) : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
       {activeTab === 'chat' ? (
           <SpaceChatPanel
             space={space}

@@ -11365,3 +11365,22 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   font-size: 0.68rem;
   line-height: 1.2;
 }
+
+
+/* v1.14.7 Household inline Space sections */
+.household-inline-section-v1147 {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-top: 0.15rem;
+}
+
+.household-inline-section-v1147 > * {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .household-inline-section-v1147 {
+    gap: 0.6rem;
+  }
+}
