@@ -20041,3 +20041,478 @@ export const updateTransactionDetails = onCall({ region }, async (request) => {
     },
   );
 });
+
+
+// v1.14.7 authenticated Transaction Smart Share deep links
+
+function transactionShareTokenValue(
+  value: unknown,
+): string {
+  const token =
+    stringValue(
+      value,
+      'Share token',
+      128,
+    );
+
+  if (
+    !/^[a-zA-Z0-9_-]{32,128}$/.test(
+      token,
+    )
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Invalid transaction share token.',
+    );
+  }
+
+  return token;
+}
+
+function transactionShareTokenHash(
+  token: string,
+): string {
+  return createHash(
+    'sha256',
+  )
+    .update(
+      token,
+      'utf8',
+    )
+    .digest(
+      'hex',
+    );
+}
+
+async function canReadTransactionShareTarget(
+  uid: string,
+  transactionData: DocumentData,
+): Promise<boolean> {
+  /*
+   * Rule path 1:
+   * Transaction owner.
+   */
+  if (
+    String(
+      transactionData.ownerId
+      || '',
+    ) === uid
+  ) {
+    return true;
+  }
+
+  const spaceId =
+    String(
+      transactionData.spaceId
+      || '',
+    );
+
+  if (!spaceId) {
+    return false;
+  }
+
+  /*
+   * Rule path 2:
+   * Space owner.
+   */
+  const spaceSnapshot =
+    await db
+      .collection(
+        'spaces',
+      )
+      .doc(
+        spaceId,
+      )
+      .get();
+
+  if (
+    spaceSnapshot.exists
+    && String(
+      spaceSnapshot.data()?.ownerId
+      || '',
+    ) === uid
+  ) {
+    return true;
+  }
+
+  /*
+   * Rule path 3:
+   * Active SME POS owner / manager.
+   */
+  const posAccessSnapshot =
+    await db
+      .collection(
+        'smePosAccess',
+      )
+      .doc(
+        spaceId
+        + '_'
+        + uid,
+      )
+      .get();
+
+  if (
+    posAccessSnapshot.exists
+  ) {
+    const posAccess =
+      posAccessSnapshot.data()
+      || {};
+
+    if (
+      posAccess.status === 'active'
+      && (
+        posAccess.role === 'owner'
+        || posAccess.role === 'manager'
+      )
+    ) {
+      return true;
+    }
+  }
+
+  /*
+   * Rule path 4:
+   * Account ledger permission for this exact Space.
+   *
+   * This mirrors canViewAccountLedgerInSpace()
+   * from firestore.rules.
+   */
+  const accountId =
+    String(
+      transactionData.accountId
+      || '',
+    );
+
+  if (!accountId) {
+    return false;
+  }
+
+  const accessSnapshot =
+    await db
+      .collection(
+        'accountAccess',
+      )
+      .doc(
+        accountId
+        + '_'
+        + uid,
+      )
+      .get();
+
+  if (
+    !accessSnapshot.exists
+  ) {
+    return false;
+  }
+
+  const access =
+    accessSnapshot.data()
+    || {};
+
+  if (
+    Array.isArray(
+      access.ledgerSpaceIds,
+    )
+  ) {
+    return access
+      .ledgerSpaceIds
+      .map(
+        (
+          value: unknown,
+        ) =>
+          String(
+            value,
+          ),
+      )
+      .includes(
+        spaceId,
+      );
+  }
+
+  return (
+    access.canViewLedger
+    === true
+  );
+}
+
+export const createTransactionShareToken =
+  onCall(
+    {
+      region,
+    },
+    async (
+      request,
+    ) => {
+      const uid =
+        requireAuth(
+          request.auth?.uid,
+        );
+
+      const transactionId =
+        stringValue(
+          request.data?.transactionId,
+          'Transaction ID',
+          120,
+        );
+
+      const transactionSnapshot =
+        await db
+          .collection(
+            'transactions',
+          )
+          .doc(
+            transactionId,
+          )
+          .get();
+
+      if (
+        !transactionSnapshot.exists
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Transaction not found.',
+        );
+      }
+
+      const transactionData =
+        transactionSnapshot.data()
+        || {};
+
+      const allowed =
+        await canReadTransactionShareTarget(
+          uid,
+          transactionData,
+        );
+
+      if (!allowed) {
+        throw new HttpsError(
+          'permission-denied',
+          'You do not have access to share this transaction.',
+        );
+      }
+
+      /*
+       * Raw token goes only to the sender.
+       * Firestore stores only its SHA-256 hash.
+       */
+      const token =
+        randomBytes(
+          32,
+        )
+          .toString(
+            'base64url',
+          );
+
+      const tokenHash =
+        transactionShareTokenHash(
+          token,
+        );
+
+      await db
+        .collection(
+          'transactionShareLinks',
+        )
+        .doc(
+          tokenHash,
+        )
+        .set({
+          transactionId:
+            transactionSnapshot.id,
+
+          spaceId:
+            String(
+              transactionData.spaceId
+              || '',
+            ),
+
+          ownerId:
+            String(
+              transactionData.ownerId
+              || '',
+            ),
+
+          createdBy:
+            uid,
+
+          disabledAt:
+            null,
+
+          createdAt:
+            FieldValue.serverTimestamp(),
+        });
+
+      return {
+        token,
+      };
+    },
+  );
+
+export const resolveTransactionShareTarget =
+  onCall(
+    {
+      region,
+    },
+    async (
+      request,
+    ) => {
+      const uid =
+        requireAuth(
+          request.auth?.uid,
+        );
+
+      const token =
+        transactionShareTokenValue(
+          request.data?.token,
+        );
+
+      const tokenHash =
+        transactionShareTokenHash(
+          token,
+        );
+
+      const linkSnapshot =
+        await db
+          .collection(
+            'transactionShareLinks',
+          )
+          .doc(
+            tokenHash,
+          )
+          .get();
+
+      if (
+        !linkSnapshot.exists
+        || linkSnapshot.data()?.disabledAt
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Transaction share link not found.',
+        );
+      }
+
+      const linkData =
+        linkSnapshot.data()
+        || {};
+
+      const transactionId =
+        String(
+          linkData.transactionId
+          || '',
+        );
+
+      if (!transactionId) {
+        throw new HttpsError(
+          'not-found',
+          'Original transaction is not available.',
+        );
+      }
+
+      const transactionSnapshot =
+        await db
+          .collection(
+            'transactions',
+          )
+          .doc(
+            transactionId,
+          )
+          .get();
+
+      if (
+        !transactionSnapshot.exists
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'Original transaction is not available.',
+        );
+      }
+
+      const transactionData =
+        transactionSnapshot.data()
+        || {};
+
+      const allowed =
+        await canReadTransactionShareTarget(
+          uid,
+          transactionData,
+        );
+
+      if (!allowed) {
+        throw new HttpsError(
+          'permission-denied',
+          'This BajetBN account cannot access the original transaction.',
+        );
+      }
+
+      const spaceId =
+        String(
+          transactionData.spaceId
+          || '',
+        );
+
+      const spaceSnapshot =
+        spaceId
+          ? await db
+              .collection(
+                'spaces',
+              )
+              .doc(
+                spaceId,
+              )
+              .get()
+          : null;
+
+      const spaceType =
+        String(
+          spaceSnapshot
+            ?.data()
+            ?.type
+          || '',
+        );
+
+      const personalTarget =
+        !spaceId
+        || spaceType === 'personal';
+
+      let hasReceipt =
+        false;
+
+      /*
+       * Only the owner/personal route needs to know whether
+       * it should open the Receipt modal immediately.
+       */
+      if (
+        personalTarget
+      ) {
+        const attachmentSnapshot =
+          await db
+            .collection(
+              'transactionAttachments',
+            )
+            .where(
+              'transactionId',
+              '==',
+              transactionSnapshot.id,
+            )
+            .limit(
+              1,
+            )
+            .get();
+
+        hasReceipt =
+          !attachmentSnapshot.empty;
+      }
+
+      return {
+        destination:
+          personalTarget
+            ? 'transaction'
+            : 'space',
+
+        transactionId:
+          transactionSnapshot.id,
+
+        spaceId,
+
+        hasReceipt,
+      };
+    },
+  );

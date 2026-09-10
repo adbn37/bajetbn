@@ -1,5 +1,12 @@
 import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import {
   Link,
+  useNavigate,
 } from 'react-router-dom';
 
 import {
@@ -7,7 +14,12 @@ import {
 } from '../../components/Brand';
 
 import {
+  useAuth,
+} from '../../contexts/AuthContext';
+
+import {
   decodeTransactionSharePayload,
+  resolveTransactionShareTarget,
   transactionShareTypeLabel,
 } from '../../services/transactionShare';
 
@@ -21,15 +33,32 @@ function publicDate(
   const parts =
     value.split('-');
 
-  if (parts.length !== 3) {
+  if (
+    parts.length !== 3
+  ) {
     return value;
   }
 
-  const year = Number(parts[0]);
-  const month = Number(parts[1]);
-  const day = Number(parts[2]);
+  const year =
+    Number(
+      parts[0],
+    );
 
-  if (!year || !month || !day) {
+  const month =
+    Number(
+      parts[1],
+    );
+
+  const day =
+    Number(
+      parts[2],
+    );
+
+  if (
+    !year
+    || !month
+    || !day
+  ) {
     return value;
   }
 
@@ -58,20 +87,174 @@ function publicDate(
 }
 
 export function PublicTransactionSharePage() {
+  const {
+    user,
+    loading: authLoading,
+  } = useAuth();
+
+  const navigate =
+    useNavigate();
+
+  const [
+    resolving,
+    setResolving,
+  ] = useState(
+    false,
+  );
+
+  const [
+    accessMessage,
+    setAccessMessage,
+  ] = useState(
+    '',
+  );
+
   const encoded =
-    typeof window !== 'undefined'
-      ? window.location.hash
-          .replace(/^#/, '')
-      : '';
+    useMemo(
+      () =>
+        typeof window !== 'undefined'
+          ? window.location.hash
+              .replace(
+                /^#/,
+                '',
+              )
+          : '',
+      [],
+    );
 
   const payload =
-    encoded
-      ? decodeTransactionSharePayload(
-          encoded,
-        )
-      : null;
+    useMemo(
+      () =>
+        encoded
+          ? decodeTransactionSharePayload(
+              encoded,
+            )
+          : null,
+      [
+        encoded,
+      ],
+    );
 
-  if (!payload) {
+  const returnPath =
+    typeof window !== 'undefined'
+      ? (
+          window.location.pathname
+          + window.location.hash
+        )
+      : '/';
+
+  useEffect(
+    () => {
+      if (
+        authLoading
+        || !user
+        || !payload?.shareToken
+      ) {
+        return undefined;
+      }
+
+      let cancelled =
+        false;
+
+      setResolving(
+        true,
+      );
+
+      setAccessMessage(
+        '',
+      );
+
+      void resolveTransactionShareTarget(
+        payload.shareToken,
+      )
+        .then(
+          (
+            target,
+          ) => {
+            if (
+              cancelled
+            ) {
+              return;
+            }
+
+            if (
+              target.destination
+              === 'transaction'
+            ) {
+              const destination =
+                '/transactions?transactionId='
+                + encodeURIComponent(
+                    target.transactionId,
+                  )
+                + (
+                  target.hasReceipt
+                    ? '&receipt=1'
+                    : ''
+                );
+
+              navigate(
+                destination,
+                {
+                  replace: true,
+                },
+              );
+
+              return;
+            }
+
+            navigate(
+              '/spaces/'
+              + encodeURIComponent(
+                  target.spaceId,
+                )
+              + '?section=money',
+              {
+                replace: true,
+              },
+            );
+          },
+        )
+        .catch(
+          () => {
+            if (
+              cancelled
+            ) {
+              return;
+            }
+
+            setAccessMessage(
+              'You are signed in, but this BajetBN account does not have access to the original transaction or Space. You can still view the shared summary below.',
+            );
+          },
+        )
+        .finally(
+          () => {
+            if (
+              !cancelled
+            ) {
+              setResolving(
+                false,
+              );
+            }
+          },
+        );
+
+      return () => {
+        cancelled =
+          true;
+      };
+    },
+    [
+      authLoading,
+      navigate,
+      payload?.shareToken,
+      user?.uid,
+    ],
+  );
+
+  if (
+    !payload
+  ) {
     return (
       <main className="public-bill-share-page">
         <section className="public-bill-share-shell">
@@ -109,6 +292,19 @@ export function PublicTransactionSharePage() {
         <Brand />
 
         <div className="public-bill-share-card">
+          {resolving && (
+            <div className="notice success">
+              Signed in. Opening your original
+              BajetBN record…
+            </div>
+          )}
+
+          {accessMessage && (
+            <div className="notice warning">
+              {accessMessage}
+            </div>
+          )}
+
           <div className="public-bill-share-heading">
             <div>
               <span className="eyebrow">
@@ -185,36 +381,68 @@ export function PublicTransactionSharePage() {
           </div>
 
           <div className="public-bill-share-invite">
-            <span className="eyebrow">
-              Life, connected by money
-            </span>
+            {user ? (
+              <>
+                <span className="eyebrow">
+                  Signed in to BajetBN
+                </span>
 
-            <h2>
-              Keep your money organised with BajetBN
-            </h2>
+                <h2>
+                  Open your BajetBN
+                </h2>
 
-            <p>
-              Track personal, household and business
-              money in one place. Create an account
-              when you are ready to manage your own
-              money activity.
-            </p>
+                <p>
+                  When this BajetBN account has access
+                  to the original record, BajetBN opens
+                  the transaction, receipt or Space
+                  automatically.
+                </p>
 
-            <div className="button-row">
-              <Link
-                className="button primary"
-                to="/register?source=shared-transaction"
-              >
-                Create free account
-              </Link>
+                <div className="button-row">
+                  <Link
+                    className="button primary"
+                    to="/"
+                  >
+                    Open BajetBN
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="eyebrow">
+                  Life, connected by money
+                </span>
 
-              <Link
-                className="button secondary"
-                to="/login?source=shared-transaction"
-              >
-                Sign in
-              </Link>
-            </div>
+                <h2>
+                  Keep your money organised with BajetBN
+                </h2>
+
+                <p>
+                  Track personal, household and business
+                  money in one place.
+                </p>
+
+                <div className="button-row">
+                  <Link
+                    className="button primary"
+                    to="/register?source=shared-transaction"
+                  >
+                    Create free account
+                  </Link>
+
+                  <Link
+                    className="button secondary"
+                    to="/login"
+                    state={{
+                      from:
+                        returnPath,
+                    }}
+                  >
+                    Sign in
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
 
           <small className="public-bill-share-disclaimer">

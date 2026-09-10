@@ -127,12 +127,27 @@ check(
   'WhatsApp chooser uses a prepared BajetBN summary.',
 );
 
+const publicTransactionPayload =
+  share
+    .split(
+      'export interface PublicTransactionSharePayload',
+    )[1]
+    ?.split('}')[0]
+  || '';
+
 check(
-  !share.includes('ownerId')
-    && !share.includes('spaceId')
-    && !share.includes('accountId')
-    && !share.includes('transactionId'),
-  'WhatsApp payload exposes no internal record IDs.',
+  !publicTransactionPayload.includes('ownerId')
+    && !publicTransactionPayload.includes('spaceId')
+    && !publicTransactionPayload.includes('accountId')
+    && !publicTransactionPayload.includes('transactionId'),
+  'Public WhatsApp link payload exposes no internal record IDs.',
+);
+
+check(
+  share.includes(
+    'transactionId?: string',
+  ),
+  'Private runtime can request an authenticated Smart Share token.',
 );
 
 check(

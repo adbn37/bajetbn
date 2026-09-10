@@ -203,6 +203,22 @@ export function TransactionsPage() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current_month');
   const [spaceFilter, setSpaceFilter] = useState('all');
   const initialAccountFilter = searchParams.get('accountId');
+
+  const requestedTransactionId =
+    searchParams.get(
+      'transactionId',
+    );
+
+  const requestedReceipt =
+    searchParams.get(
+      'receipt',
+    ) === '1';
+
+  const deepLinkOpenedRef =
+    useRef(
+      '',
+    );
+
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[] | null>(
     initialAccountFilter ? [initialAccountFilter] : null,
   );
@@ -248,6 +264,67 @@ export function TransactionsPage() {
   };
 
   useEffect(() => { void load(); }, [user, lastCompletedAt]);
+
+  useEffect(
+    () => {
+      if (
+        loading
+        || !requestedTransactionId
+      ) {
+        return;
+      }
+
+      const deepLinkKey =
+        requestedTransactionId
+        + ':'
+        + (
+          requestedReceipt
+            ? 'receipt'
+            : 'details'
+        );
+
+      if (
+        deepLinkOpenedRef.current
+        === deepLinkKey
+      ) {
+        return;
+      }
+
+      const target =
+        transactions.find(
+          (item) =>
+            item.id
+            === requestedTransactionId,
+        );
+
+      if (!target) {
+        return;
+      }
+
+      deepLinkOpenedRef.current =
+        deepLinkKey;
+
+      if (
+        requestedReceipt
+      ) {
+        setReceiptTransaction(
+          target,
+        );
+
+        return;
+      }
+
+      setSelectedTransaction(
+        target,
+      );
+    },
+    [
+      loading,
+      requestedReceipt,
+      requestedTransactionId,
+      transactions,
+    ],
+  );
 
   const allCategories = useMemo(
     () => [...DEFAULT_TRANSACTION_CATEGORIES, ...customCategories.filter((item) => !item.archivedAt)],
@@ -911,8 +988,10 @@ export function MoneyActivityModal({
 
   function currentShareSnapshot(
     nextAmountMinor: number,
+    transactionId?: string,
   ): TransactionShareSnapshot {
     return {
+      transactionId,
       type,
       amountMinor: nextAmountMinor,
       currency:
@@ -1091,6 +1170,7 @@ export function MoneyActivityModal({
           snapshot:
             currentShareSnapshot(
               nextAmountMinor,
+              outcome.transactionId,
             ),
         });
         return;
@@ -1110,6 +1190,7 @@ export function MoneyActivityModal({
           snapshot:
             currentShareSnapshot(
               nextAmountMinor,
+              outcome.transactionId,
             ),
         });
         return;
@@ -1707,6 +1788,8 @@ function TransactionDetails({ item, source, destination, space, category, online
           className="button secondary"
           onClick={() =>
             shareTransactionToWhatsApp({
+              transactionId:
+                item.id,
               type: item.type,
               amountMinor:
                 item.amountMinor,

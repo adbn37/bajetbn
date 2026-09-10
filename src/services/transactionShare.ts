@@ -1,11 +1,31 @@
-import { formatMoney } from '../utils/money';
+import {
+  httpsCallable,
+} from 'firebase/functions';
+
+import {
+  requireFirebase,
+} from './firebase';
+
+import {
+  formatMoney,
+} from '../utils/money';
 
 export interface TransactionShareSnapshot {
+  /*
+   * Private runtime reference.
+   *
+   * This ID is used only to ask the authenticated backend
+   * for an opaque Smart Share token. It is never placed
+   * inside the public share snapshot.
+   */
+  transactionId?: string;
+
   type:
     | 'income'
     | 'expense'
     | 'transfer'
     | 'reversal';
+
   amountMinor: number;
   currency: string;
   transactionDate: string;
@@ -21,17 +41,39 @@ export interface PublicTransactionSharePayload {
   v: 1;
   kind: 'transaction';
   title: string;
+
   type:
     | 'income'
     | 'expense'
     | 'transfer'
     | 'reversal';
+
   amountMinor: number;
   currency: string;
   transactionDate: string;
   category?: string;
   spaceName?: string;
+
+  /*
+   * Random opaque Smart Share token.
+   *
+   * This is NOT a transaction, Space, Account or user ID.
+   * It never grants access by itself. The backend checks
+   * the signed-in user's permissions before resolving it.
+   */
+  shareToken?: string;
+
   sharedAt: string;
+}
+
+export interface ResolvedTransactionShareTarget {
+  destination:
+    | 'transaction'
+    | 'space';
+
+  transactionId: string;
+  spaceId: string;
+  hasReceipt: boolean;
 }
 
 const typeLabels = {
@@ -45,6 +87,14 @@ function clean(
   value?: string,
 ): string {
   return value?.trim() || '';
+}
+
+function validShareToken(
+  value: string,
+): boolean {
+  return /^[a-zA-Z0-9_-]{32,128}$/.test(
+    value,
+  );
 }
 
 function encodeBase64Url(
@@ -108,9 +158,14 @@ function formatDate(
     return value;
   }
 
-  const year = Number(parts[0]);
-  const month = Number(parts[1]);
-  const day = Number(parts[2]);
+  const year =
+    Number(parts[0]);
+
+  const month =
+    Number(parts[1]);
+
+  const day =
+    Number(parts[2]);
 
   if (!year || !month || !day) {
     return value;
@@ -146,16 +201,139 @@ export function transactionShareTypeLabel(
   return typeLabels[type];
 }
 
+async function requestTransactionShareToken(
+  transactionId?: string,
+): Promise<string> {
+  const id =
+    clean(
+      transactionId,
+    );
+
+  if (!id) {
+    return '';
+  }
+
+  try {
+    const {
+      functions,
+    } = requireFirebase();
+
+    const call =
+      httpsCallable(
+        functions,
+        'createTransactionShareToken',
+      );
+
+    const result =
+      await call({
+        transactionId:
+          id,
+      });
+
+    const token =
+      String(
+        (
+          result.data as {
+            token?: string;
+          }
+        )?.token
+        || '',
+      );
+
+    return validShareToken(
+      token,
+    )
+      ? token
+      : '';
+  } catch {
+    /*
+     * Public sharing must continue working even when the
+     * authenticated deep-link service is unavailable.
+     */
+    return '';
+  }
+}
+
+export async function resolveTransactionShareTarget(
+  shareToken: string,
+): Promise<ResolvedTransactionShareTarget> {
+  if (
+    !validShareToken(
+      shareToken,
+    )
+  ) {
+    throw new Error(
+      'This private BajetBN link is not valid.',
+    );
+  }
+
+  const {
+    functions,
+  } = requireFirebase();
+
+  const call =
+    httpsCallable(
+      functions,
+      'resolveTransactionShareTarget',
+    );
+
+  const result =
+    await call({
+      token:
+        shareToken,
+    });
+
+  const data =
+    (
+      result.data
+      || {}
+    ) as Partial<ResolvedTransactionShareTarget>;
+
+  if (
+    (
+      data.destination !== 'transaction'
+      && data.destination !== 'space'
+    )
+    || typeof data.transactionId !== 'string'
+    || !data.transactionId
+    || typeof data.spaceId !== 'string'
+    || typeof data.hasReceipt !== 'boolean'
+  ) {
+    throw new Error(
+      'BajetBN could not resolve the original transaction.',
+    );
+  }
+
+  return {
+    destination:
+      data.destination,
+
+    transactionId:
+      data.transactionId,
+
+    spaceId:
+      data.spaceId,
+
+    hasReceipt:
+      data.hasReceipt,
+  };
+}
+
 export function createTransactionSharePayload(
   snapshot: TransactionShareSnapshot,
+  shareToken = '',
 ): PublicTransactionSharePayload {
   /*
-   * Public-link snapshot intentionally excludes:
+   * Public snapshot intentionally excludes:
+   *
+   * Transaction ID
+   * Space ID
+   * Account IDs
    * Account names
-   * Notes
+   * User / owner IDs
    * Balances
    * Receipts
-   * Internal IDs
+   * Private notes
    */
   const title =
     clean(snapshot.counterparty)
@@ -167,7 +345,10 @@ export function createTransactionSharePayload(
     kind: 'transaction',
 
     title:
-      title.slice(0, 120),
+      title.slice(
+        0,
+        120,
+      ),
 
     type:
       snapshot.type,
@@ -182,25 +363,45 @@ export function createTransactionSharePayload(
 
     currency:
       clean(snapshot.currency)
-        .slice(0, 8)
+        .slice(
+          0,
+          8,
+        )
       || 'BND',
 
     transactionDate:
       snapshot.transactionDate
-        .slice(0, 10),
+        .slice(
+          0,
+          10,
+        ),
 
     category:
       clean(snapshot.category)
-        .slice(0, 80)
+        .slice(
+          0,
+          80,
+        )
       || undefined,
 
     spaceName:
       clean(snapshot.spaceName)
-        .slice(0, 120)
+        .slice(
+          0,
+          120,
+        )
       || undefined,
 
+    shareToken:
+      validShareToken(
+        shareToken,
+      )
+        ? shareToken
+        : undefined,
+
     sharedAt:
-      new Date().toISOString(),
+      new Date()
+        .toISOString(),
   };
 }
 
@@ -208,7 +409,9 @@ export function encodeTransactionSharePayload(
   payload: PublicTransactionSharePayload,
 ): string {
   return encodeBase64Url(
-    JSON.stringify(payload),
+    JSON.stringify(
+      payload,
+    ),
   );
 }
 
@@ -234,7 +437,8 @@ export function decodeTransactionSharePayload(
         'transfer',
         'reversal',
       ].includes(
-        parsed.type || '',
+        parsed.type
+        || '',
       )
       || typeof parsed.amountMinor !== 'number'
       || !Number.isFinite(
@@ -248,6 +452,14 @@ export function decodeTransactionSharePayload(
       return null;
     }
 
+    const shareToken =
+      typeof parsed.shareToken === 'string'
+      && validShareToken(
+        parsed.shareToken,
+      )
+        ? parsed.shareToken
+        : undefined;
+
     return {
       v: 1,
       kind: 'transaction',
@@ -255,10 +467,13 @@ export function decodeTransactionSharePayload(
       title:
         parsed.title
           .trim()
-          .slice(0, 120),
+          .slice(
+            0,
+            120,
+          ),
 
       type:
-        parsed.type as PublicTransactionSharePayload['type'],
+        (parsed.type as PublicTransactionSharePayload['type']),
 
       amountMinor:
         Math.max(
@@ -271,27 +486,41 @@ export function decodeTransactionSharePayload(
       currency:
         parsed.currency
           .trim()
-          .slice(0, 8),
+          .slice(
+            0,
+            8,
+          ),
 
       transactionDate:
         parsed.transactionDate
-          .slice(0, 10),
+          .slice(
+            0,
+            10,
+          ),
 
       category:
         typeof parsed.category === 'string'
-          && parsed.category.trim()
+        && parsed.category.trim()
           ? parsed.category
               .trim()
-              .slice(0, 80)
+              .slice(
+                0,
+                80,
+              )
           : undefined,
 
       spaceName:
         typeof parsed.spaceName === 'string'
-          && parsed.spaceName.trim()
+        && parsed.spaceName.trim()
           ? parsed.spaceName
               .trim()
-              .slice(0, 120)
+              .slice(
+                0,
+                120,
+              )
           : undefined,
+
+      shareToken,
 
       sharedAt:
         parsed.sharedAt,
@@ -301,16 +530,27 @@ export function decodeTransactionSharePayload(
   }
 }
 
-export function buildTransactionShareUrl(
+export async function buildTransactionShareUrl(
   snapshot: TransactionShareSnapshot,
-): string {
+): Promise<string> {
+  const shareToken =
+    await requestTransactionShareToken(
+      snapshot.transactionId,
+    );
+
   const encoded =
     encodeTransactionSharePayload(
       createTransactionSharePayload(
         snapshot,
+        shareToken,
       ),
     );
 
+  /*
+   * The snapshot/token are stored in the URL fragment.
+   * The fragment is not part of the HTTP request sent
+   * to the web server.
+   */
   return (
     window.location.origin
     + '/share/transaction#'
@@ -318,14 +558,19 @@ export function buildTransactionShareUrl(
   );
 }
 
-export function buildTransactionShareMessage(
+export async function buildTransactionShareMessage(
   snapshot: TransactionShareSnapshot,
-): string {
+): Promise<string> {
   const title =
     clean(snapshot.counterparty)
     || clean(snapshot.note)
     || clean(snapshot.category)
     || typeLabels[snapshot.type];
+
+  const shareUrl =
+    await buildTransactionShareUrl(
+      snapshot,
+    );
 
   const lines: string[] = [
     'BajetBN Money Activity',
@@ -333,107 +578,162 @@ export function buildTransactionShareMessage(
     title,
   ];
 
-  if (clean(snapshot.spaceName)) {
+  if (
+    clean(
+      snapshot.spaceName,
+    )
+  ) {
     lines.push(
       'Space: '
-        + clean(snapshot.spaceName),
+      + clean(
+        snapshot.spaceName,
+      ),
     );
   }
 
   lines.push(
     typeLabels[snapshot.type]
-      + ': '
-      + formatMoney(
-        snapshot.amountMinor,
-        snapshot.currency || 'BND',
-      ),
+    + ': '
+    + formatMoney(
+      snapshot.amountMinor,
+      snapshot.currency
+      || 'BND',
+    ),
   );
 
-  if (clean(snapshot.category)) {
+  if (
+    clean(
+      snapshot.category,
+    )
+  ) {
     lines.push(
       'Category: '
-        + clean(snapshot.category),
+      + clean(
+        snapshot.category,
+      ),
     );
   }
 
-  if (snapshot.type === 'transfer') {
-    if (clean(snapshot.sourceAccountName)) {
+  if (
+    snapshot.type === 'transfer'
+  ) {
+    if (
+      clean(
+        snapshot.sourceAccountName,
+      )
+    ) {
       lines.push(
         'From: '
-          + clean(snapshot.sourceAccountName),
+        + clean(
+          snapshot.sourceAccountName,
+        ),
       );
     }
 
-    if (clean(snapshot.destinationAccountName)) {
+    if (
+      clean(
+        snapshot.destinationAccountName,
+      )
+    ) {
       lines.push(
         'To: '
-          + clean(snapshot.destinationAccountName),
+        + clean(
+          snapshot.destinationAccountName,
+        ),
       );
     }
   } else if (
-    clean(snapshot.sourceAccountName)
+    clean(
+      snapshot.sourceAccountName,
+    )
   ) {
     lines.push(
       'Account: '
-        + clean(snapshot.sourceAccountName),
+      + clean(
+        snapshot.sourceAccountName,
+      ),
     );
   }
 
   lines.push(
     'Date: '
-      + formatDate(
-        snapshot.transactionDate,
-      ),
+    + formatDate(
+      snapshot.transactionDate,
+    ),
   );
 
   const note =
-    clean(snapshot.note);
+    clean(
+      snapshot.note,
+    );
 
   if (
     note
     && note !== title
   ) {
     lines.push(
-      'Note: ' + note,
+      'Note: '
+      + note,
     );
   }
 
   lines.push(
     '',
     'View details:',
-    buildTransactionShareUrl(
-      snapshot,
-    ),
+    shareUrl,
     '',
     'Recorded in BajetBN',
   );
 
-  return lines.join('\n');
+  return lines.join(
+    '\n',
+  );
 }
 
-export function shareTransactionToWhatsApp(
+export async function shareTransactionToWhatsApp(
   snapshot: TransactionShareSnapshot,
-) {
-  const target =
-    'https://wa.me/?text='
-      + encodeURIComponent(
-        buildTransactionShareMessage(
-          snapshot,
-        ),
-      );
-
+): Promise<void> {
+  /*
+   * Open the new tab immediately while the browser still
+   * considers this a direct user action. We then resolve
+   * the Smart Share token and navigate that tab to WhatsApp.
+   */
   const popup =
     window.open(
-      target,
+      '',
       '_blank',
     );
 
-  if (popup) {
-    popup.opener = null;
-    return;
-  }
+  try {
+    const message =
+      await buildTransactionShareMessage(
+        snapshot,
+      );
 
-  window.location.assign(
-    target,
-  );
+    const target =
+      'https://wa.me/?text='
+      + encodeURIComponent(
+        message,
+      );
+
+    if (popup) {
+      popup.opener =
+        null;
+
+      popup.location.href =
+        target;
+
+      return;
+    }
+
+    window.location.assign(
+      target,
+    );
+  } catch (error) {
+    if (popup) {
+      popup.close();
+    }
+
+    throw error;
+  }
 }

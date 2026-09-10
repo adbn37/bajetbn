@@ -1413,6 +1413,8 @@ export function DashboardPage() {
                   className="button primary"
                   onClick={() =>
                     shareTransactionToWhatsApp({
+                      transactionId:
+                        selectedActivity.id,
                       type:
                         selectedActivity.type,
                       amountMinor:
