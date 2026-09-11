@@ -156,16 +156,28 @@ check(
 
 check(
   marketplacePos.includes(
-    "type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'bookings' | 'sales' | 'reports' | 'balance';",
+    "type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'sales' | 'payouts' | 'reports' | 'balance';",
   )
     && marketplacePos.includes(
       'Shared register',
     )
     && marketplacePos.includes(
-      'Seller money waiting',
+      'Seller payable',
     )
     && marketplacePos.includes(
       'My balance',
+    )
+    && marketplacePos.includes(
+      "payouts: 'Payouts'",
+    )
+    && marketplacePos.includes(
+      'Pending seller payouts',
+    )
+    && marketplacePos.includes(
+      'Payout history',
+    )
+    && !marketplacePos.includes(
+      "bookings: 'Bookings'",
     ),
   'Phase 8: Marketplace Consignment POS retained.',
 );

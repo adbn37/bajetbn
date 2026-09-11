@@ -35,6 +35,10 @@ interface AttentionSnapshot {
   sellerPayouts: number;
   payoutWaitingMinor: number;
   marketplace: boolean;
+  todaySalesMinor: number;
+  todayCommissionMinor: number;
+  activeListings: number;
+  sellerCount: number;
 }
 
 const emptySnapshot: AttentionSnapshot = {
@@ -44,6 +48,10 @@ const emptySnapshot: AttentionSnapshot = {
   sellerPayouts: 0,
   payoutWaitingMinor: 0,
   marketplace: false,
+  todaySalesMinor: 0,
+  todayCommissionMinor: 0,
+  activeListings: 0,
+  sellerCount: 0,
 };
 
 const openBookingStatuses = new Set<SmePosReservation['status']>([
@@ -152,7 +160,11 @@ export function SmeOperationalAttentionPanel({
       ] = await Promise.allSettled([
         getSmePosStaffWorkspace(space.id),
         getMarketplacePosWorkspace(space.id),
-        listSmePosReservations(space.id),
+        industry === 'marketplace'
+          ? Promise.resolve(
+              [] as SmePosReservation[],
+            )
+          : listSmePosReservations(space.id),
       ]);
 
       if (cancelled) return;
@@ -174,9 +186,15 @@ export function SmeOperationalAttentionPanel({
           ? reservationsResult.value
           : [];
 
-      const openBookings = reservations.filter((item) =>
-        openBookingStatuses.has(item.status),
-      );
+      const openBookings =
+        marketplace
+          ? []
+          : reservations.filter(
+              (item) =>
+                openBookingStatuses.has(
+                  item.status,
+                ),
+            );
 
       const today = localDate();
 
@@ -191,19 +209,70 @@ export function SmeOperationalAttentionPanel({
           )
         : [];
 
-      const payoutWaitingMinor = sellersWaiting.reduce(
-        (sum, item) =>
-          sum + Math.max(0, item.balanceMinor),
-        0,
-      );
+      const payoutWaitingMinor =
+        sellersWaiting.reduce(
+          (sum, item) =>
+            sum + Math.max(
+              0,
+              item.balanceMinor,
+            ),
+          0,
+        );
+
+      const marketplaceSalesToday =
+        marketplace
+          ? marketplaceResult.value.sales.filter(
+              (item) =>
+                item.saleDate === today
+                && item.status !== 'voided'
+                && item.status !== 'refunded',
+            )
+          : [];
+
+      const todaySalesMinor =
+        marketplaceSalesToday.reduce(
+          (sum, item) =>
+            sum + Math.max(
+              0,
+              item.totalMinor
+              - item.returnedMinor,
+            ),
+          0,
+        );
+
+      const todayCommissionMinor =
+        marketplaceSalesToday.reduce(
+          (sum, item) =>
+            sum + Math.max(
+              0,
+              Number(
+                item.marketplaceCommissionMinor
+                ?? item.profitMinor
+                ?? 0,
+              ),
+            ),
+          0,
+        );
 
       setSnapshot({
         lowStock,
-        openBookings: openBookings.length,
+        openBookings:
+          openBookings.length,
         overdueBookings,
-        sellerPayouts: sellersWaiting.length,
+        sellerPayouts:
+          sellersWaiting.length,
         payoutWaitingMinor,
         marketplace,
+        todaySalesMinor,
+        todayCommissionMinor,
+        activeListings:
+          marketplace
+            ? marketplaceResult.value.listings.length
+            : 0,
+        sellerCount:
+          marketplace
+            ? marketplaceResult.value.sellers.length
+            : 0,
       });
 
       const inventoryRejected =
@@ -216,7 +285,10 @@ export function SmeOperationalAttentionPanel({
           'Inventory attention could not be refreshed. Open POS to review the latest stock.',
         );
       }
-      else if (reservationsResult.status === 'rejected') {
+      else if (
+        !marketplace
+        && reservationsResult.status === 'rejected'
+      ) {
         setWarning(
           'Booking attention could not be refreshed. Open POS to review current bookings.',
         );
@@ -244,7 +316,12 @@ export function SmeOperationalAttentionPanel({
    * do not occupy homepage space when there is nothing
    * requiring the Owner/Manager's attention.
    */
-  if (!loading && !warning && attentionTotal === 0) {
+  if (
+    !loading
+    && !warning
+    && attentionTotal === 0
+    && !snapshot.marketplace
+  ) {
     return null;
   }
 
@@ -267,20 +344,99 @@ export function SmeOperationalAttentionPanel({
         }}
       >
         <div>
-          <span className="eyebrow">POS attention</span>
+          <span className="eyebrow">
+            {snapshot.marketplace
+              ? 'Marketplace overview'
+              : 'POS attention'}
+          </span>
           <small className="muted">
-            Only items that need action
+            {snapshot.marketplace
+              ? 'Sales, seller money and stock at a glance'
+              : 'Only items that need action'}
           </small>
         </div>
 
         <span className="type-badge">
-          {loading ? 'Checking...' : `${attentionTotal} open`}
+          {loading
+            ? 'Checking...'
+            : snapshot.marketplace
+              ? `${snapshot.sellerCount} sellers`
+              : `${attentionTotal} open`}
         </span>
       </div>
 
       {warning && (
         <div className="notice warning compact-notice">
           {warning}
+        </div>
+      )}
+
+      {snapshot.marketplace && !loading && (
+        <div
+          className="summary-grid sme-pos-report-grid"
+          style={{
+            marginBottom:
+              attentionTotal > 0
+                ? '0.65rem'
+                : 0,
+          }}
+        >
+          <article className="summary-card featured">
+            <span>Sales today</span>
+            <strong>
+              {formatMoney(
+                snapshot.todaySalesMinor,
+                space.currency,
+              )}
+            </strong>
+            <small>Marketplace sales today</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Seller payable</span>
+            <strong>
+              {formatMoney(
+                snapshot.payoutWaitingMinor,
+                space.currency,
+              )}
+            </strong>
+            <small>
+              {snapshot.sellerPayouts}
+              {' '}
+              seller(s) awaiting payout
+            </small>
+          </article>
+
+          <article className="summary-card">
+            <span>Shop commission</span>
+            <strong>
+              {formatMoney(
+                snapshot.todayCommissionMinor,
+                space.currency,
+              )}
+            </strong>
+            <small>Commission today</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Active listings</span>
+            <strong>
+              {snapshot.activeListings}
+            </strong>
+            <small>
+              {snapshot.lowStock}
+              {' '}
+              at or below stock alert
+            </small>
+          </article>
+
+          <article className="summary-card">
+            <span>Sellers</span>
+            <strong>
+              {snapshot.sellerCount}
+            </strong>
+            <small>Active seller profiles</small>
+          </article>
         </div>
       )}
 
@@ -295,14 +451,14 @@ export function SmeOperationalAttentionPanel({
           {snapshot.lowStock > 0 && (
             <Link
               className="button secondary compact"
-              to={`/spaces/${space.id}/pos`}
-              title="Open inventory"
+              to={`/spaces/${space.id}/pos?tab=listings`}
+              title="Open listings"
             >
               <span>Low stock</span>
               <span className="type-badge">
                 {snapshot.lowStock}
               </span>
-              <small>Open inventory</small>
+              <small>Open listings</small>
             </Link>
           )}
 
@@ -328,7 +484,7 @@ export function SmeOperationalAttentionPanel({
             && snapshot.sellerPayouts > 0 && (
               <Link
                 className="button secondary compact"
-                to={`/spaces/${space.id}/pos`}
+                to={`/spaces/${space.id}/pos?tab=payouts`}
                 title={`Seller payouts waiting: ${formatMoney(
                   snapshot.payoutWaitingMinor,
                   space.currency,

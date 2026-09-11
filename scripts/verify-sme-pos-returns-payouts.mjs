@@ -62,7 +62,7 @@ for (const token of [
   'Pay seller',
   'Paid From',
   'Confirm seller payout',
-  'Recent seller payouts',
+  'Payout history',
   'Seller owes shop',
   'Split payouts can use up to four sources.',
 ]) need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', token);

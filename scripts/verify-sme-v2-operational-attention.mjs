@@ -36,7 +36,7 @@ for (const token of [
   'Open bookings',
   'Low stock',
   'POS attention',
-  'Open inventory',
+  'Open listings',
   'Open seller payouts',
   'Open bookings',
   'to={`/spaces/${space.id}/pos`}',

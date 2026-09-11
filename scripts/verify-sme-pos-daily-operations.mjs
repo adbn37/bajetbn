@@ -78,13 +78,9 @@ for (const file of [
   'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
 ]) {
   for (const text of [
-    "'bookings'",
     '+ Quick Add',
     'Quick Add · this sale only',
     'SmePosPaymentSplitEditor',
-    'Reserve / take deposit',
-    'SmePosReservationsPanel',
-    'listSmePosReservations',
     'paymentDraftTotalMinor(paymentRows)',
     'paymentDraftsToInput(paymentRows)',
     'reservedQuantity',
@@ -92,16 +88,43 @@ for (const file of [
   ]) need(file, text);
 }
 
+for (const text of [
+  "'bookings'",
+  'Reserve / take deposit',
+  'SmePosReservationsPanel',
+  'listSmePosReservations',
+]) {
+  need(
+    'src/features/sme-pos/StandardPosWorkspace.tsx',
+    text,
+    `Standard POS booking capability ${text}`,
+  );
+}
+
+for (const text of [
+  "'bookings'",
+  'Reserve / take deposit',
+  'SmePosReservationsPanel',
+  'SmePosCreateReservationModal',
+  'listSmePosReservations',
+]) {
+  reject(
+    'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
+    text,
+    `Marketplace booking UI removed ${text}`,
+  );
+}
+
+need(
+  'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
+  "payouts: 'Payouts'",
+  'Marketplace dedicated Payouts module',
+);
+
 need(
   'src/features/sme-pos/StandardPosWorkspace.tsx',
   'initialDiscountMinor={discountMinor}',
   'Standard POS booking keeps its cart discount',
-);
-
-need(
-  'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
-  'initialDiscountMinor={0}',
-  'Marketplace booking does not reuse checkout line discounts',
 );
 
 need(
@@ -118,10 +141,7 @@ need(
 need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', "sellerId: item.sellerId", 'Marketplace Quick Add seller attribution');
 need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', "The selected seller's default commission is applied automatically.", 'Marketplace Quick Add default commission guidance');
 need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', "defaultValue={mySeller?.id || sellers[0]?.id || ''}", 'Cashier/Seller Quick Add seller default');
-need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', 'sourceMode="marketplace_consignment"', 'Marketplace reservation mode');
-reject('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', 'sourceMode="marketplace"', 'invalid Marketplace reservation mode');
 need('src/features/sme-pos/StandardPosWorkspace.tsx', 'Quick Add items are sale-only and cannot be reserved.', 'Standard Quick Add booking safety');
-need('src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx', 'Quick Add items are sale-only and cannot be reserved.', 'Marketplace Quick Add booking safety');
 
 for (const text of [
   'interface SmePosPaymentRequestRow',

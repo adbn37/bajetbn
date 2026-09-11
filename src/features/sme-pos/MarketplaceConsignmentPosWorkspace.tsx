@@ -9,7 +9,6 @@ import { SmePosBarcodeLabelDialog } from '../../components/SmePosBarcodeLabelDia
 import { SmePosBarcodeReturnScanner } from '../../components/SmePosBarcodeReturnScanner';
 import { SmePosItemPhoto, SmePosItemPhotoField } from '../../components/SmePosItemPhoto';
 import { SmePosPaymentSplitEditor, createSmePosPaymentDraft, paymentDraftTotalMinor, paymentDraftsToInput, type SmePosPaymentDraft } from '../../components/SmePosPaymentSplitEditor';
-import { SmePosCreateReservationModal, SmePosReservationsPanel } from '../../components/SmePosReservations';
 import {
   checkoutMarketplacePos,
   deleteMarketplaceSeller,
@@ -19,7 +18,6 @@ import {
   getMarketplacePosWorkspace,
   listSmePosAccess,
   listSmePosPaymentAccounts,
-  listSmePosReservations,
   receiveMarketplaceListingStock,
   registerExistingMarketplaceListing,
   recordMarketplaceSellerPayout,
@@ -41,7 +39,6 @@ import type {
   SmePosListingCondition,
   SmePosPaymentAccount,
   SmePosPayout,
-  SmePosReservation,
   SmePosRole,
   SmePosSale,
   SmePosSeller,
@@ -60,7 +57,7 @@ interface Props {
   onChanged: () => Promise<void> | void;
 }
 
-type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'bookings' | 'sales' | 'reports' | 'balance';
+type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'sales' | 'payouts' | 'reports' | 'balance';
 type ConfirmPayload =
   | { kind: 'seller'; id: string }
   | { kind: 'listing'; id: string; action?: 'archive' | 'delete'  }
@@ -115,10 +112,10 @@ const conditionLabels: Record<SmePosListingCondition, string> = {
 const tabLabels: Record<MarketplaceTab, string> = {
   register: 'Register',
   sellers: 'Sellers',
-  listings: 'Inventory',
+  listings: 'Listings',
   customers: 'Customers',
-  bookings: 'Bookings',
   sales: 'Sales',
+  payouts: 'Payouts',
   reports: 'Reports',
   balance: 'My balance',
 };
@@ -192,13 +189,53 @@ function sellerReportWindow(
 
 function tabsForRole(role: SmePosRole, hasSellerProfile: boolean): MarketplaceTab[] {
   let tabs: MarketplaceTab[] = [];
-  if (role === 'owner' || role === 'manager') tabs = ['register', 'sellers', 'listings', 'customers', 'bookings', 'sales', 'reports'];
-  else if (role === 'cashier') tabs = ['register', 'listings', 'customers', 'bookings', 'sales'];
-  else if (role === 'stock_staff') tabs = ['listings'];
-  else if (role === 'seller') tabs = [];
-  else if (role === 'viewer') tabs = ['listings', 'customers'];
-  if (hasSellerProfile && !tabs.includes('balance')) tabs.push('balance');
-  if (hasSellerProfile && !tabs.includes('reports')) tabs.push('reports');
+
+  if (role === 'owner' || role === 'manager') {
+    tabs = [
+      'register',
+      'sellers',
+      'listings',
+      'customers',
+      'sales',
+      'payouts',
+      'reports',
+    ];
+  }
+  else if (role === 'cashier') {
+    tabs = [
+      'register',
+      'listings',
+      'customers',
+      'sales',
+    ];
+  }
+  else if (role === 'stock_staff') {
+    tabs = ['listings'];
+  }
+  else if (role === 'seller') {
+    tabs = [];
+  }
+  else if (role === 'viewer') {
+    tabs = [
+      'listings',
+      'customers',
+    ];
+  }
+
+  if (
+    hasSellerProfile
+    && !tabs.includes('balance')
+  ) {
+    tabs.push('balance');
+  }
+
+  if (
+    hasSellerProfile
+    && !tabs.includes('reports')
+  ) {
+    tabs.push('reports');
+  }
+
   return tabs;
 }
 
@@ -232,7 +269,7 @@ function marketplaceLineDiscountMinor(
 function sellerBalanceLabel(balanceMinor: number) {
   if (balanceMinor < 0) return 'Seller owes shop';
   if (balanceMinor === 0) return 'Settled';
-  return 'Waiting payout';
+  return 'Amount payable';
 }
 
 function ledgerKindLabel(entry: SmePosSellerLedgerEntry) {
@@ -313,14 +350,23 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
       ? requestedTab
       : initialTab(role),
   );
-  const primaryTabOrder: MarketplaceTab[] = ['register', 'listings', 'sellers', 'sales', 'balance'];
-  const primaryTabs = primaryTabOrder.filter((item) => availableTabs.includes(item));
-  const moreTabs = availableTabs.filter((item) => !primaryTabs.includes(item));
+  const primaryTabOrder: MarketplaceTab[] =
+    role === 'seller'
+      ? ['balance', 'reports']
+      : role === 'stock_staff'
+        || role === 'viewer'
+        ? ['listings']
+        : ['register', 'sales'];
+
+  const primaryTabs =
+    primaryTabOrder.filter(
+      (item) =>
+        availableTabs.includes(item),
+    );
   const [sellers, setSellers] = useState<SmePosSeller[]>([]);
   const [listings, setListings] = useState<SmePosListing[]>([]);
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
   const [sales, setSales] = useState<SmePosSale[]>([]);
-  const [reservations, setReservations] = useState<SmePosReservation[]>([]);
   const [payouts, setPayouts] = useState<SmePosPayout[]>([]);
   const [mySellerLedger, setMySellerLedger] = useState<SmePosSellerLedgerEntry[]>([]);
   const [mySellerPayouts, setMySellerPayouts] = useState<SmePosPayout[]>([]);
@@ -365,7 +411,6 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
   const [lineDiscounts, setLineDiscounts] =
     useState<Record<string, string>>({});
   const [quickAddForm, setQuickAddForm] = useState(false);
-  const [bookingForm, setBookingForm] = useState(false);
   const [customerId, setCustomerId] = useState('');
   const [paymentRows, setPaymentRows] = useState<SmePosPaymentDraft[]>([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
   const [saleDate, setSaleDate] = useState(today());
@@ -432,8 +477,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
       setMySellerPayouts(workspace.mySellerPayouts);
       setPaymentAccounts(accounts);
       setSellerAccess(access.filter((item) => item.status === 'active'));
-      if (canCheckout) setReservations(await listSmePosReservations(space.id));
-      else setReservations([]);
+
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -633,8 +677,62 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
   const todayGross = activeSales.filter((item) => item.saleDate === today()).reduce((sum, item) => sum + item.totalMinor - item.returnedMinor, 0);
   const monthGross = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + item.totalMinor - item.returnedMinor, 0);
   const monthCommission = activeSales.filter((item) => item.saleDate.startsWith(monthPrefix)).reduce((sum, item) => sum + (item.marketplaceCommissionMinor || item.profitMinor), 0);
-  const sellerMoneyWaiting = sellers.reduce((sum, item) => sum + item.balanceMinor, 0);
-  const lowStock = listings.filter((item) => Math.max(0, item.quantityOnHand - (item.reservedQuantity || 0)) <= item.lowStockLevel).length;
+  const sellerMoneyWaiting =
+    sellers.reduce(
+      (sum, item) =>
+        sum + Math.max(
+          0,
+          item.balanceMinor,
+        ),
+      0,
+    );
+
+  const sellersAwaitingPayout =
+    sellers.filter(
+      (item) =>
+        item.balanceMinor > 0,
+    ).length;
+
+  const totalSellerPaidOutMinor =
+    sellers.reduce(
+      (sum, item) =>
+        sum + Math.max(
+          0,
+          item.paidOutMinor || 0,
+        ),
+      0,
+    );
+
+  const totalMarketplaceCommissionMinor =
+    sellers.reduce(
+      (sum, item) =>
+        sum + Math.max(
+          0,
+          item.commissionEarnedMinor || 0,
+        ),
+      0,
+    );
+
+  const sellerHasProtectedHistory =
+    (seller: SmePosSeller) =>
+      listings.some(
+        (listing) =>
+          listing.sellerId === seller.id,
+      )
+      || seller.soldQuantity > 0
+      || seller.grossSalesMinor > 0
+      || seller.commissionEarnedMinor > 0
+      || seller.paidOutMinor > 0;
+
+  const lowStock =
+    listings.filter(
+      (item) =>
+        Math.max(
+          0,
+          item.quantityOnHand
+          - (item.reservedQuantity || 0),
+        ) <= item.lowStockLevel,
+    ).length;
 
   const sellerReportDateWindow = sellerReportWindow(
     sellerReportRange,
@@ -1570,7 +1668,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
       const sellerName = payoutForm.seller.name;
       const currency = payoutForm.seller.currency;
       setPayoutForm(null);
-      setSuccess(`Payout recorded for ${sellerName}. Remaining seller wallet: ${formatMoney(result.data.balanceAfterMinor, currency)}.`);
+      setSuccess(`Payout recorded for ${sellerName}. Remaining amount payable: ${formatMoney(result.data.balanceAfterMinor, currency)}.`);
       await load(); await onChanged();
     } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
   }
@@ -1627,31 +1725,20 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
       ))}
     </div>
 
-    {(moreTabs.length > 0 || role === 'owner' || role === 'manager') && (
-      <details className="marketplace-pos-more" data-marketplace-pos-more>
+    {(role === 'owner' || role === 'manager') && (
+      <details
+        className="marketplace-pos-more"
+        data-marketplace-pos-more
+      >
         <summary>More</summary>
+
         <div className="button-row">
-          {moreTabs.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className="button secondary small"
-              onClick={() => {
-                setTab(item);
-                setError('');
-                setSuccess('');
-                setSearch('');
-              }}
-            >
-              {tabLabels[item]}
-            </button>
-          ))}
-          {(role === 'owner' || role === 'manager') && (
-            <Link className="button secondary small" to={`/spaces/${space.id}/pos/archived`}>Archived</Link>
-          )}
-          {role === 'owner' && (
-            <Link className="button secondary small" to={`/spaces/${space.id}/pos/settings`}>Settings</Link>
-          )}
+          <Link
+            className="button secondary small"
+            to={`/spaces/${space.id}/pos/archived`}
+          >
+            Archived
+          </Link>
         </div>
       </details>
     )}
@@ -1659,21 +1746,281 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
         <div className="panel-heading"><div><h3>Sellers</h3><p>Manage seller stock, commission and payouts.</p></div><button className="button primary" type="button" aria-label="Add seller profile" onClick={() => openSellerForm('new')}>Add seller</button></div>
+
+        <div className="summary-grid sme-pos-report-grid">
+          <article className="summary-card">
+            <span>Sellers</span>
+            <strong>{sellers.length}</strong>
+            <small>Active seller profiles</small>
+          </article>
+
+          <article className="summary-card featured">
+            <span>Awaiting payout</span>
+            <strong>{sellersAwaitingPayout}</strong>
+            <small>Sellers with money payable</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Total payable</span>
+            <strong>
+              {formatMoney(
+                sellerMoneyWaiting,
+                settings.currency,
+              )}
+            </strong>
+            <small>Outstanding seller money</small>
+          </article>
+
+          <article className="summary-card">
+            <span>Shop commission</span>
+            <strong>
+              {formatMoney(
+                totalMarketplaceCommissionMinor,
+                settings.currency,
+              )}
+            </strong>
+            <small>Commission earned to date</small>
+          </article>
+        </div>
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card marketplace-seller-profile-card" key={seller.id} style={sellerStyleFor(seller.id)}>
           <div><span className="type-badge marketplace-seller-badge">{seller.id === mySeller?.id ? `You · ${roleLabel(role)} + Seller` : 'Seller'}</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || 'No contact details'}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
-          <div className="marketplace-balance-row"><span>Seller wallet · {sellerBalanceLabel(seller.balanceMinor)}</span><strong>{formatMoney(Math.abs(seller.balanceMinor), seller.currency)}</strong></div>
+          <div className="marketplace-balance-row"><span>{sellerBalanceLabel(seller.balanceMinor)}</span><strong>{formatMoney(Math.abs(seller.balanceMinor), seller.currency)}</strong></div>
           <small>{seller.soldQuantity} item(s) sold · Shop commission {formatMoney(seller.commissionEarnedMinor, seller.currency)} · Paid out {formatMoney(seller.paidOutMinor, seller.currency)}</small>
-          <div className="button-row">{seller.id === mySeller?.id && <button className="button secondary small" type="button" onClick={openMyInventory}>My inventory</button>}{seller.id === mySeller?.id && <button className="button primary small" type="button" onClick={() => openManualListingForm(seller.id)}>Add stock</button>}<button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button>{canManagePayouts && seller.balanceMinor > 0 && <button className="button primary small" type="button" onClick={() => openPayoutForm(seller)}>Pay seller</button>}{canDeleteSellers && <button className="button ghost danger small" type="button" onClick={() => setConfirm({ payload: { kind: 'seller', id: seller.id }, title: 'Delete this seller?', description: 'The seller profile will be removed from active and archived seller lists.', note: seller.balanceMinor !== 0 ? 'Settle the seller balance before deletion. Active listings will be removed from the register and historical sales, commission and payouts will stay preserved.' : 'Active listings will be removed from the register. Historical sales, commission and payouts stay preserved.', confirmLabel: 'Delete seller' })}>Delete</button>}</div>
+          <div className="button-row">{seller.id === mySeller?.id && <button className="button secondary small" type="button" onClick={openMyInventory}>My inventory</button>}{seller.id === mySeller?.id && <button className="button primary small" type="button" onClick={() => openManualListingForm(seller.id)}>Add stock</button>}<button className="button secondary small" type="button" onClick={() => openSellerForm(seller)}>Edit</button>{canManagePayouts && seller.balanceMinor > 0 && <button className="button primary small" type="button" onClick={() => openPayoutForm(seller)}>Pay seller</button>}{canDeleteSellers && (
+            <button
+              className="button ghost danger small"
+              type="button"
+              disabled={seller.balanceMinor !== 0}
+              title={
+                seller.balanceMinor !== 0
+                  ? 'Settle the seller amount payable before removing this seller.'
+                  : sellerHasProtectedHistory(seller)
+                    ? 'Historical records will be preserved.'
+                    : 'This seller has no protected history.'
+              }
+              onClick={() =>
+                setConfirm({
+                  payload: {
+                    kind: 'seller',
+                    id: seller.id,
+                  },
+                  title:
+                    sellerHasProtectedHistory(seller)
+                      ? 'Remove this seller?'
+                      : 'Delete this seller permanently?',
+                  description:
+                    sellerHasProtectedHistory(seller)
+                      ? 'The seller will be removed from active use. Historical sales, commission, payouts and listing records will be preserved.'
+                      : 'This seller has no protected history and can be deleted permanently.',
+                  note:
+                    sellerHasProtectedHistory(seller)
+                      ? 'BajetBN keeps the historical records required for reports and audit.'
+                      : 'This cannot be undone.',
+                  confirmLabel:
+                    sellerHasProtectedHistory(seller)
+                      ? 'Remove seller'
+                      : 'Delete permanently',
+                  tone: 'danger',
+                })
+              }
+            >
+              {seller.balanceMinor !== 0
+                ? 'Settle first'
+                : sellerHasProtectedHistory(seller)
+                  ? 'Remove'
+                  : 'Delete'}
+            </button>
+          )}</div>
         </article>)}</div>
         {!sellers.length && <div className="empty-inline">No sellers yet. Add a seller before creating a listing.</div>}
       </section>}
+
+      {tab === 'payouts' && canManagePayouts && (
+        <div className="sme-pos-sales-section">
+          <div className="summary-grid sme-pos-report-grid">
+            <article className="summary-card featured">
+              <span>Total payable</span>
+              <strong>
+                {formatMoney(
+                  sellerMoneyWaiting,
+                  settings.currency,
+                )}
+              </strong>
+              <small>Across active sellers</small>
+            </article>
+
+            <article className="summary-card">
+              <span>Awaiting payout</span>
+              <strong>{sellersAwaitingPayout}</strong>
+              <small>Sellers with an outstanding amount</small>
+            </article>
+
+            <article className="summary-card">
+              <span>Paid out</span>
+              <strong>
+                {formatMoney(
+                  totalSellerPaidOutMinor,
+                  settings.currency,
+                )}
+              </strong>
+              <small>Total recorded seller payouts</small>
+            </article>
+
+            <article className="summary-card">
+              <span>Shop commission</span>
+              <strong>
+                {formatMoney(
+                  totalMarketplaceCommissionMinor,
+                  settings.currency,
+                )}
+              </strong>
+              <small>Commission earned to date</small>
+            </article>
+          </div>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Pending seller payouts</h3>
+                <p>
+                  Pay the full amount or enter a smaller
+                  amount for a partial payout.
+                </p>
+              </div>
+            </div>
+
+            <div className="sme-pos-sales-list">
+              {sellers
+                .filter(
+                  (seller) =>
+                    seller.balanceMinor > 0,
+                )
+                .map((seller) => (
+                  <div
+                    className="marketplace-ledger-row"
+                    key={seller.id}
+                  >
+                    <div>
+                      <strong>{seller.name}</strong>
+                      <small>Amount payable</small>
+                    </div>
+
+                    <strong>
+                      {formatMoney(
+                        seller.balanceMinor,
+                        seller.currency,
+                      )}
+                    </strong>
+
+                    <button
+                      className="button primary small"
+                      type="button"
+                      onClick={() =>
+                        openPayoutForm(seller)
+                      }
+                    >
+                      Pay seller
+                    </button>
+                  </div>
+                ))}
+            </div>
+
+            {!sellersAwaitingPayout && (
+              <div className="empty-inline">
+                No seller payouts are waiting.
+              </div>
+            )}
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Payout history</h3>
+                <p>
+                  Split payouts can use up to four sources.
+                </p>
+                <p>
+                  Recorded seller payouts with date,
+                  payment source, reference and processor.
+                </p>
+              </div>
+            </div>
+
+            <div className="sme-pos-sales-list">
+              {payouts.map((payout) => (
+                <div
+                  className="marketplace-ledger-row"
+                  key={payout.id}
+                >
+                  <div>
+                    <strong>
+                      {payout.sellerName}
+                    </strong>
+
+                    <small>
+                      {payout.payoutDate}
+                    </small>
+
+                    <small>
+                      {payout.payments?.length
+                        ? payout.payments
+                            .map(
+                              (payment) =>
+                                `${space.name} — ${payment.accountName}: ${formatMoney(
+                                  payment.amountMinor,
+                                  payout.currency,
+                                )}`,
+                            )
+                            .join(' · ')
+                        : payout.paymentSourceLabel
+                          || `${space.name} — ${payout.paymentAccountName}`}
+                    </small>
+
+                    {payout.reference && (
+                      <small>
+                        Ref {payout.reference}
+                      </small>
+                    )}
+
+                    {payout.createdByName && (
+                      <small>
+                        Processed by {payout.createdByName}
+                      </small>
+                    )}
+                  </div>
+
+                  <strong>
+                    -{formatMoney(
+                      payout.amountMinor,
+                      payout.currency,
+                    )}
+                  </strong>
+
+                  <small>
+                    Balance {formatMoney(
+                      payout.balanceAfterMinor,
+                      payout.currency,
+                    )}
+                  </small>
+                </div>
+              ))}
+            </div>
+
+            {!payouts.length && (
+              <div className="empty-inline">
+                No seller payouts recorded yet.
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {tab === 'listings' && <section className="panel sme-pos-module-panel">
         <div className="panel-heading"><div><h3>{mySeller && !canViewAllSellerInventory ? 'My inventory' : 'Seller listings and stock'}</h3><p>{mySeller && !canViewAllSellerInventory ? 'Manage your own seller stock here. All shop stock remains available from the register according to your staff role.' : 'Seller, price, stock and commission stay linked to each listing.'}</p></div><div className="button-row">{canManageStock && <button className="button secondary" type="button" disabled={!inventoryListings.some((item) => item.barcode)} onClick={() => setLabelItems(inventoryListings)}>Print barcode labels</button>}{canManageListings && <button className="button primary" type="button" onClick={() => openListingForm('new')} disabled={!sellers.length}>Add listing</button>}{role === 'cashier' && <button className="button primary" type="button" onClick={() => openManualListingForm(null)} disabled={!sellers.length}>+ Register seller stock</button>}{mySeller && sellerInventoryEnabled && <button className="button primary" type="button" onClick={() => openManualListingForm(mySeller.id)}>+ Add my stock</button>}</div></div>
         {(mySeller || canViewAllSellerInventory) && <div className="marketplace-inventory-filter">
           <label>
-            Inventory view
+            Listings view
             <select value={inventoryScope} onChange={(event) => setInventoryScope(event.target.value)}>
               <option value="all">All stock</option>
               {mySeller && <option value="mine">My stock · {mySeller.name}</option>}
@@ -2224,22 +2571,6 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
           </div>
           <div className="sme-pos-totals"><span>Subtotal <strong>{formatMoney(subtotalMinor, settings.currency)}</strong></span><span>Discount <strong>-{formatMoney(discountMinor, settings.currency)}</strong></span><span className="total">Customer pays <strong>{formatMoney(totalMinor, settings.currency)}</strong></span></div>
           <div className="pos-checkout-actions">
-            {cartLines.length > 0 && (
-              <button
-                className="button secondary"
-                type="button"
-                disabled={
-                  busy
-                  || quickItems.length > 0
-                  || !customerId
-                  || discountMinor > 0
-                }
-                onClick={() => setBookingForm(true)}
-              >
-                Reserve / take deposit
-              </button>
-            )}
-
             <button
               className="button primary pos-complete-sale"
               type="submit"
@@ -2263,14 +2594,9 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
                       )}
             </button>
           </div>
-          {quickItems.length > 0 && <small>Quick Add items are sale-only and cannot be reserved. Remove them to create a booking.</small>}
-          {discountMinor > 0 && <small>Per-item bundle discounts are checkout-only. Remove them before creating a booking.</small>}
-          {cartLines.length > 0 && !customerId && <small>Choose a saved customer to reserve this cart.</small>}
         </section>
         </div>}
       </form>}
-
-      {tab === 'bookings' && canCheckout && <SmePosReservationsPanel space={space} settings={settings} role={role} reservations={reservations} paymentAccounts={paymentAccounts} onRefresh={async () => { await load(); await onChanged(); }} />}
 
 
       {tab === 'balance' && mySeller && <div className="sme-pos-sales-section">
@@ -2428,7 +2754,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
 
         <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Available for payout</span><strong>{formatMoney(Math.max(0, mySeller.balanceMinor), settings.currency)}</strong><small>{sellerBalanceLabel(mySeller.balanceMinor)} · updated by sales, returns and payouts</small></article><article className="summary-card"><span>My gross sales</span><strong>{formatMoney(mySeller.grossSalesMinor || 0, settings.currency)}</strong><small>{mySeller.soldQuantity || 0} item(s) sold</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(mySeller.commissionEarnedMinor || 0, settings.currency)}</strong><small>Commission kept by the shop from your sales</small></article><article className="summary-card"><span>Paid out</span><strong>{formatMoney(mySeller.paidOutMinor || 0, settings.currency)}</strong><small>Total seller payouts recorded</small></article></div>
         <section className="panel"><div className="panel-heading"><div><h3>My sales</h3><p>Only your seller share is shown here, even when your main staff role is {roleLabel(role)}.</p></div></div><div className="sme-pos-sales-list">{mySellerSales.slice(0, 20).map((sale) => <div className="marketplace-ledger-row" key={sale.id}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.itemCount} item(s)</small></div><strong>{formatMoney(sale.totalMinor - sale.returnedMinor, sale.currency)}</strong><small>You earn {formatMoney(sale.sellerEarningsMinor || 0, sale.currency)}</small></div>)}</div>{!mySellerSales.length && <div className="empty-inline">No seller sales yet.</div>}</section>
-        <section className="panel"><div className="panel-heading"><div><h3>Seller wallet activity</h3><p>Sales increase your wallet. Returns and payouts reduce it.</p></div></div><div className="sme-pos-sales-list">{mySellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || 'Wallet activity'}</strong><small>{ledgerKindLabel(entry)} · {entry.note || entry.sellerName}</small></div><strong>{entry.amountMinor >= 0 ? '+' : '-'}{formatMoney(Math.abs(entry.amountMinor), entry.currency)}</strong><small>Wallet {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!mySellerLedger.length && <div className="empty-inline">No seller wallet activity yet.</div>}</section>
+        <section className="panel"><div className="panel-heading"><div><h3>Seller balance activity</h3><p>Sales increase the seller balance. Returns and payouts reduce it.</p></div></div><div className="sme-pos-sales-list">{mySellerLedger.map((entry) => <div className="marketplace-ledger-row" key={entry.id}><div><strong>{entry.receiptNumber || 'Wallet activity'}</strong><small>{ledgerKindLabel(entry)} · {entry.note || entry.sellerName}</small></div><strong>{entry.amountMinor >= 0 ? '+' : '-'}{formatMoney(Math.abs(entry.amountMinor), entry.currency)}</strong><small>Balance {formatMoney(entry.balanceAfterMinor, entry.currency)}</small></div>)}</div>{!mySellerLedger.length && <div className="empty-inline">No seller wallet activity yet.</div>}</section>
         <section className="panel"><div className="panel-heading"><div><h3>My payouts</h3><p>You can see where each payout came from, but not the business account balance.</p></div></div><div className="sme-pos-sales-list">{mySellerPayouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.payoutDate}</strong><small>{payout.payments?.length ? payout.payments.map((payment) => `${space.name} — ${payment.accountName}: ${formatMoney(payment.amountMinor, payout.currency)}`).join(' · ') : (payout.paymentSourceLabel || `${space.name} — ${payout.paymentAccountName}`)}</small>{payout.reference && <small>Ref {payout.reference}</small>}{payout.createdByName && <small>Processed by {payout.createdByName}</small>}</div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Wallet {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!mySellerPayouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>
       </div>}
 
@@ -2566,16 +2892,14 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
         </section>
       </div>}
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
-        {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller money waiting</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
+        {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller payable</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
         {canManageReturns && <SmePosBarcodeReturnScanner itemLabel="listing" items={listings} sales={sales.filter((sale) => sale.status !== 'voided')} getSaleItemId={(item) => item.listingId || item.productId} onSelectSale={openReturnForm} />}
         <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My register sales' : role === 'seller' || (mySeller && !['owner', 'manager'].includes(role)) ? 'My Sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? 'Only the part of each sale belonging to your seller profile is shown.' : 'Open a sale to view its receipt or record a return where permitted.'}</p></div></div><div className="sme-pos-sales-list">{(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || (mySeller ? 'Seller sale' : 'Walk-in customer')} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
-        {canViewReports && <section className="panel"><div className="panel-heading"><div><h3>Recent seller payouts</h3><p>Each payout records exactly which Business cash/bank account the money came from. Split payouts can use up to four sources.</p></div></div><div className="sme-pos-sales-list">{payouts.map((payout) => <div className="marketplace-ledger-row" key={payout.id}><div><strong>{payout.sellerName}</strong><small>{payout.payoutDate}</small><small>{payout.payments?.length ? payout.payments.map((payment) => `${space.name} — ${payment.accountName}: ${formatMoney(payment.amountMinor, payout.currency)}`).join(' · ') : (payout.paymentSourceLabel || `${space.name} — ${payout.paymentAccountName}`)}</small>{payout.reference && <small>Ref {payout.reference}</small>}{payout.createdByName && <small>Processed by {payout.createdByName}</small>}</div><strong>-{formatMoney(payout.amountMinor, payout.currency)}</strong><small>Seller wallet {formatMoney(payout.balanceAfterMinor, payout.currency)}</small></div>)}</div>{!payouts.length && <div className="empty-inline">No seller payouts recorded yet.</div>}</section>}
+
       </div>}
     </>}
 
-    {quickAddForm && <Modal title="Quick Add · this sale only" onClose={() => setQuickAddForm(false)}><form className="form-stack" onSubmit={addQuickItem}><div className="notice">Use this for a one-off sale. It is not saved in Inventory. The selected seller's default commission is applied automatically.</div><label>Seller<select name="sellerId" defaultValue={mySeller?.id || sellers[0]?.id || ''} required><option value="">Choose seller</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label><div className="form-grid"><label>Item name<input name="name" maxLength={100} required autoFocus /></label><label>Condition<select name="condition" defaultValue="new">{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Selling price (BND)<input name="price" inputMode="decimal" required /></label><label>Quantity<input name="quantity" type="number" min="1" max="9999" defaultValue="1" required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setQuickAddForm(false)}>Cancel</button><button className="button primary" type="submit">Add to sale</button></div></form></Modal>}
-
-    {bookingForm && <SmePosCreateReservationModal space={space} settings={settings} sourceMode="marketplace_consignment" items={cartLines.map(({ listing, quantity }) => ({ itemId: listing.id, name: `${listing.name} · ${listing.sellerName}`, quantity, lineTotalMinor: listing.sellingPriceMinor * quantity }))} customers={customers} paymentAccounts={paymentAccounts} initialCustomerId={customerId} initialDiscountMinor={0} onClose={() => setBookingForm(false)} onSaved={async () => { setCart({}); setLineDiscounts({}); setCustomerId(''); setPaymentRows([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]); setSuccess('Booking created and stock reserved.'); await load(); await onChanged(); }} />}
+    {quickAddForm && <Modal title="Quick Add · this sale only" onClose={() => setQuickAddForm(false)}><form className="form-stack" onSubmit={addQuickItem}><div className="notice">Use this for a one-off sale. It is not saved in Listings. The selected seller's default commission is applied automatically.</div><label>Seller<select name="sellerId" defaultValue={mySeller?.id || sellers[0]?.id || ''} required><option value="">Choose seller</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label><div className="form-grid"><label>Item name<input name="name" maxLength={100} required autoFocus /></label><label>Condition<select name="condition" defaultValue="new">{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Selling price (BND)<input name="price" inputMode="decimal" required /></label><label>Quantity<input name="quantity" type="number" min="1" max="9999" defaultValue="1" required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setQuickAddForm(false)}>Cancel</button><button className="button primary" type="submit">Add to sale</button></div></form></Modal>}
 
     {manualListingForm && <Modal title={manualListingSellerId === mySeller?.id ? 'Add stock · My inventory' : 'Register existing seller stock'} onClose={() => { if (!busy) closeManualListingForm(); }}>
       <form key={`${manualListingSelectedSellerId}:${manualListingPrefill?.id || 'new'}:${manualListingExistingMatch ? 'existing' : 'copy'}`} className="form-stack" onSubmit={registerExistingListing}>
@@ -2868,7 +3192,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
     {payoutForm && <Modal title={`Pay seller · ${payoutForm.seller.name}`} onClose={() => !busy && setPayoutForm(null)}>
       <form className="form-stack" onSubmit={submitPayout}>
         <div className="notice">Seller Wallet available: {formatMoney(Math.max(0, payoutForm.seller.balanceMinor), payoutForm.seller.currency)}. Paid From is mandatory. BajetBN records each source as Money Out and keeps permanent seller payout history.</div>
-        <label>Payout amount (BND)<input inputMode="decimal" value={payoutForm.amount} onChange={(event) => { const amount = event.target.value; setPayoutForm((current) => { if (!current) return current; let minor = 0; try { minor = toMinorUnits(amount || '0'); } catch { minor = 0; } return { ...current, amount, paymentRows: current.paymentRows.length === 1 ? [{ ...current.paymentRows[0], amount: (minor / 100).toFixed(2) }] : current.paymentRows }; }); }} required /></label>
+        <label>Payout amount ({settings.currency})<input inputMode="decimal" value={payoutForm.amount} onChange={(event) => { const amount = event.target.value; setPayoutForm((current) => { if (!current) return current; let minor = 0; try { minor = toMinorUnits(amount || '0'); } catch { minor = 0; } return { ...current, amount, paymentRows: current.paymentRows.length === 1 ? [{ ...current.paymentRows[0], amount: (minor / 100).toFixed(2) }] : current.paymentRows }; }); }} required /><small>Full amount is prefilled. Enter a smaller amount for a partial payout.</small></label>
         <div><span className="eyebrow">Paid From</span><SmePosPaymentSplitEditor accounts={paymentAccounts.map((account) => ({ ...account, name: `${space.name} — ${account.name}` }))} currency={settings.currency} totalMinor={(() => { try { return toMinorUnits(payoutForm.amount || '0'); } catch { return 0; } })()} rows={payoutForm.paymentRows} onChange={(paymentRows) => setPayoutForm((current) => current ? { ...current, paymentRows } : current)} disabled={busy} label="Paid From" accountLabel="Paid from" /></div>
         <div className="form-grid"><label>Payout date<input type="date" value={payoutForm.payoutDate} onChange={(event) => setPayoutForm((current) => current ? { ...current, payoutDate: event.target.value } : current)} required /></label><label>Reference<input value={payoutForm.reference} onChange={(event) => setPayoutForm((current) => current ? { ...current, reference: event.target.value } : current)} maxLength={120} placeholder="Transfer/reference no. (optional)" /></label></div>
         <label>Note<textarea rows={3} value={payoutForm.note} onChange={(event) => setPayoutForm((current) => current ? { ...current, note: event.target.value } : current)} maxLength={500} placeholder="Optional note" /></label>

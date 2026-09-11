@@ -426,15 +426,47 @@ export function SpaceActionHub({
             style={shortcutGridStyle}
           >
             {space.type === 'sme' && businessIndustry === 'marketplace' && <>
-              <ShortcutLink to={`/spaces/${space.id}/pos`} label="POS" primary />
-              <ShortcutLink to={`/spaces/${space.id}/pos?tab=listings`} label="Inventory" />
-              {(smePosRole === 'owner' || smePosRole === 'manager') && (
-                <ShortcutLink to={`/spaces/${space.id}/pos?tab=sellers`} label="Sellers" />
+              <ShortcutLink
+                to={`/spaces/${space.id}/pos`}
+                label="POS"
+                primary
+              />
+
+              {smePosRole !== 'seller' && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}/pos?tab=listings`}
+                  label="Listings"
+                />
               )}
-              {canViewSmeFinancials && (
-                <ShortcutLink to={`/spaces/${space.id}?section=accounts`} label="Money" />
+
+              {(smePosRole === 'owner'
+                || smePosRole === 'manager') && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}/pos?tab=sellers`}
+                  label="Sellers"
+                />
               )}
-              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+
+              {(smePosRole === 'owner'
+                || smePosRole === 'manager') && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}/pos?tab=payouts`}
+                  label="Payouts"
+                />
+              )}
+
+              {(smePosRole === 'owner'
+                || smePosRole === 'manager') && (
+                <ShortcutButton
+                  label="Purchases"
+                  onClick={() => setTool('shopping')}
+                />
+              )}
+
+              <ShortcutButton
+                label="More"
+                onClick={() => setSpaceMoreOpen(true)}
+              />
             </>}
 
             {space.type === 'sme' && businessIndustry === 'retail' && <>
