@@ -331,8 +331,45 @@ export function CollaborationPage({
         <div className="member-list">{members.map((member) => <article className={`member-row status-${member.status || 'active'}`} key={member.id}>
           <span className="avatar">{memberDisplayLabel(member).charAt(0).toUpperCase()}</span>
           <div><strong>{memberDisplayLabel(member)}</strong><small>{memberDetailLabel(member)}</small></div>
-          <span className="type-badge">{selectedSpace?.type === 'sme' && member.role !== 'owner' && posAccessByUid.get(member.uid)?.role ? smePosRoleLabel[posAccessByUid.get(member.uid)!.role] : roleLabel[member.role] || member.role}</span>
-          <div className="permission-chips member-access-summary"><span>{selectedSpace?.type === 'sme' && member.role !== 'owner' && posAccessByUid.get(member.uid)?.role ? smePosRoleDescription[posAccessByUid.get(member.uid)!.role as Exclude<SmePosRole, 'owner'>] : member.role === 'owner' ? 'Full control of this Space.' : roleDescription[member.role as Exclude<SpaceRole, 'owner' | 'member'>] || 'Shared Space access.'}</span></div>
+          <div className="button-row member-role-badges">
+            <span className="type-badge">
+              Space: {roleLabel[member.role] || member.role}
+            </span>
+
+            {selectedSpace?.type === 'sme'
+              && member.role !== 'owner'
+              && posAccessByUid.get(member.uid)?.role
+              && (
+                <span className="type-badge">
+                  POS: {smePosRoleLabel[posAccessByUid.get(member.uid)!.role]}
+                </span>
+              )}
+          </div>
+
+          <div className="permission-chips member-access-summary">
+            <span>
+              Space access: {member.role === 'owner'
+                ? 'Full control of this Space.'
+                : roleDescription[
+                    member.role as Exclude<SpaceRole, 'owner' | 'member'>
+                  ]
+                  || 'Shared Space access.'}
+            </span>
+
+            {selectedSpace?.type === 'sme'
+              && member.role !== 'owner'
+              && posAccessByUid.get(member.uid)?.role
+              && (
+                <span>
+                  POS access: {
+                    smePosRoleDescription[
+                      posAccessByUid.get(member.uid)!
+                        .role as Exclude<SmePosRole, 'owner'>
+                    ]
+                  }
+                </span>
+              )}
+          </div>
           {canManage && member.role !== 'owner' && <div className="button-row">
             <button className="text-button" onClick={() => setEditingMember(member)}>Manage</button>
             {isOwner && (member.status || 'active') === 'active' && <button className="text-button" onClick={() => setConfirmDialog({

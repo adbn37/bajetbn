@@ -429,7 +429,6 @@ export function SpaceActionHub({
               <ShortcutLink
                 to={`/spaces/${space.id}/pos`}
                 label="POS"
-                primary
               />
 
               {smePosRole !== 'seller' && (
@@ -458,7 +457,7 @@ export function SpaceActionHub({
               {(smePosRole === 'owner'
                 || smePosRole === 'manager') && (
                 <ShortcutButton
-                  label="Purchases"
+                  label="Purchase List"
                   onClick={() => setTool('shopping')}
                 />
               )}
@@ -932,8 +931,8 @@ export function SpaceActionHub({
                   ) : (
                     <ShortcutLink to={`/spaces/${space.id}/business`} label={businessAdminLabel} onClick={() => setSpaceMoreOpen(false)} />
                   )}
-                  {salesFocusedBusiness && (
-                    <ShortcutButton label="Purchases" onClick={() => { setSpaceMoreOpen(false); setTool('shopping'); }} />
+                  {businessIndustry === 'retail' && (
+                    <ShortcutButton label="Purchase List" onClick={() => { setSpaceMoreOpen(false); setTool('shopping'); }} />
                   )}
                   {businessIndustry === 'marketplace' ? (
                     <ShortcutLink to={`/spaces/${space.id}/pos?tab=reports`} label="Reports" onClick={() => setSpaceMoreOpen(false)} />
@@ -942,7 +941,7 @@ export function SpaceActionHub({
                   ) : null}
                   <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" onClick={() => setSpaceMoreOpen(false)} />
                   {(smePosRole === 'owner' || currentMember?.role === 'owner') && (
-                    <ShortcutLink to={`/spaces/${space.id}/business/setup`} label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                    <ShortcutLink to={`/spaces/${space.id}/business/setup`} label="Business Setup" onClick={() => setSpaceMoreOpen(false)} />
                   )}
                 </>}
 

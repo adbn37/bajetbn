@@ -363,6 +363,21 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
       (item) =>
         availableTabs.includes(item),
     );
+
+  const managementTabOrder: MarketplaceTab[] = [
+    'listings',
+    'sellers',
+    'payouts',
+    'customers',
+    'reports',
+  ];
+
+  const managementTabs =
+    managementTabOrder.filter(
+      (item) =>
+        availableTabs.includes(item),
+    );
+
   const [sellers, setSellers] = useState<SmePosSeller[]>([]);
   const [listings, setListings] = useState<SmePosListing[]>([]);
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
@@ -712,6 +727,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
         ),
       0,
     );
+
+  const hasRecordedSalesWithoutCommission =
+    sellers.some(
+      (item) =>
+        item.soldQuantity > 0,
+    )
+    && totalMarketplaceCommissionMinor === 0;
 
   const sellerHasProtectedHistory =
     (seller: SmePosSeller) =>
@@ -1683,13 +1705,47 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
   return <section className="sme-standard-pos-workspace marketplace-pos-workspace">
     <div className="pos-workspace-heading">
       <div>
-        <h2>{role === 'cashier' ? 'Register' : role === 'seller' ? 'Seller area' : 'Multi-Seller POS'}</h2>
-        <p>{role === 'seller' ? 'Your stock, sales, earnings and payouts.' : 'Sell shop and seller items.'}</p>
+        <h2>
+          {tab === 'listings'
+            ? 'Marketplace — Listings'
+            : tab === 'sellers'
+              ? 'Marketplace — Sellers'
+              : tab === 'payouts'
+                ? 'Marketplace — Payouts'
+                : tab === 'customers'
+                  ? 'Marketplace — Customers'
+                  : tab === 'reports' && canViewReports
+                    ? 'Marketplace — Reports'
+                    : role === 'cashier'
+                      ? 'Register'
+                      : role === 'seller'
+                        ? 'Seller area'
+                        : 'Multi-Seller POS'}
+        </h2>
+
+        <p>
+          {tab === 'listings'
+            ? 'Manage seller listings, stock, barcodes and item details.'
+            : tab === 'sellers'
+              ? 'Manage sellers, commission and outstanding balances.'
+              : tab === 'payouts'
+                ? 'Settle seller balances and review payout history.'
+                : tab === 'customers'
+                  ? 'Manage customers used for receipts and repeat visits.'
+                  : tab === 'reports' && canViewReports
+                    ? 'Review Marketplace sales, commission, seller earnings and payouts.'
+                    : role === 'seller'
+                      ? 'Your stock, sales, earnings and payouts.'
+                      : 'Sell shop and seller items.'}
+        </p>
       </div>
 
-      {false && (role === 'owner' || role === 'manager') && (
-        <Link className="button secondary" to={`/spaces/${space.id}/pos/archived`}>
-          Archived Records
+      {(role === 'owner' || role === 'manager') && (
+        <Link
+          className="button secondary"
+          to={`/spaces/${space.id}/pos/archived`}
+        >
+          Archived
         </Link>
       )}
     </div>
@@ -1698,50 +1754,79 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
     {error && <div className="notice error">{error}</div>}
     {success && <div className="notice success">{success}</div>}
 
-    <div className="sme-pos-workspace-tabs" role="tablist" aria-label="Consignment POS">
-      {primaryTabs.map((item) => (
-        <button
-          key={item}
-          type="button"
-          className={tab === item ? 'active' : ''}
-          onClick={() => {
-            if (item === 'listings' && mySeller && !canViewAllSellerInventory) setInventoryScope('mine');
-            setTab(item);
-            setError('');
-            setSuccess('');
-            setSearch('');
-          }}
-        >
-          {item === 'balance' && mySeller
-            ? 'My Seller Profile'
-            : item === 'sales' && role === 'cashier'
-              ? 'My register sales'
-              : item === 'sales' && role === 'seller'
-                ? 'My sales'
-                : item === 'reports' && mySeller && !canViewReports
-                  ? 'My Reports'
-                  : tabLabels[item]}
-        </button>
-      ))}
-    </div>
-
-    {(role === 'owner' || role === 'manager') && (
-      <details
-        className="marketplace-pos-more"
-        data-marketplace-pos-more
+    {primaryTabs.includes(tab) && (
+      <div
+        className="sme-pos-workspace-tabs"
+        role="tablist"
+        aria-label="Marketplace POS"
       >
-        <summary>More</summary>
+        {primaryTabs.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={tab === item ? 'active' : ''}
+            onClick={() => {
+              if (
+                item === 'listings'
+                && mySeller
+                && !canViewAllSellerInventory
+              ) {
+                setInventoryScope('mine');
+              }
 
-        <div className="button-row">
-          <Link
-            className="button secondary small"
-            to={`/spaces/${space.id}/pos/archived`}
+              setTab(item);
+              setError('');
+              setSuccess('');
+              setSearch('');
+            }}
           >
-            Archived
-          </Link>
-        </div>
-      </details>
+            {item === 'balance' && mySeller
+              ? 'My Seller Profile'
+              : item === 'sales' && role === 'cashier'
+                ? 'My register sales'
+                : item === 'sales' && role === 'seller'
+                  ? 'My sales'
+                  : item === 'reports' && mySeller && !canViewReports
+                    ? 'My Reports'
+                    : tabLabels[item]}
+          </button>
+        ))}
+      </div>
     )}
+
+    {!primaryTabs.includes(tab)
+      && managementTabs.length > 0
+      && (
+        <div
+          className="sme-pos-workspace-tabs"
+          role="tablist"
+          aria-label="Marketplace management"
+        >
+          {managementTabs.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={tab === item ? 'active' : ''}
+              onClick={() => {
+                if (
+                  item === 'listings'
+                  && mySeller
+                  && !canViewAllSellerInventory
+                ) {
+                  setInventoryScope('mine');
+                }
+
+                setTab(item);
+                setError('');
+                setSuccess('');
+                setSearch('');
+              }}
+            >
+              {tabLabels[item]}
+            </button>
+          ))}
+        </div>
+      )}
 
     {loading ? <div className="loading-panel">Loading records...</div> : <>
       {tab === 'sellers' && canManageSellers && <section className="panel sme-pos-module-panel">
@@ -1782,6 +1867,15 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
             <small>Commission earned to date</small>
           </article>
         </div>
+
+        {hasRecordedSalesWithoutCommission && (
+          <div className="notice warning compact-notice">
+            No shop commission has been recorded for existing seller sales.
+            Review seller or listing commission settings if this shop should
+            earn commission. If zero commission is intentional, no action is needed.
+          </div>
+        )}
+
         <div className="marketplace-seller-grid">{sellers.map((seller) => <article className="sme-pos-product-card marketplace-seller-profile-card" key={seller.id} style={sellerStyleFor(seller.id)}>
           <div><span className="type-badge marketplace-seller-badge">{seller.id === mySeller?.id ? `You · ${roleLabel(role)} + Seller` : 'Seller'}</span><h3>{seller.name}</h3><small>{seller.email || seller.phone || 'No contact details'}</small></div>
           <p>{commissionCopy(seller.defaultCommissionType, seller.defaultCommissionRateBps, seller.defaultCommissionMinor, seller.currency)}</p>
@@ -2823,7 +2917,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
           <article className="summary-card">
             <span>Shop commission</span>
             <strong>{formatMoney(sellerReportCommissionMinor, settings.currency)}</strong>
-            <small>Net commission after returns</small>
+            <small>Commission earned during the selected period after returns</small>
           </article>
 
           <article className="summary-card">
@@ -2835,13 +2929,13 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
           <article className="summary-card">
             <span>Payouts</span>
             <strong>{formatMoney(sellerReportPayoutMinor, settings.currency)}</strong>
-            <small>{sellerReportPayoutRows.length} payout record(s)</small>
+            <small>{sellerReportPayoutRows.length} payout record(s) made during the selected period</small>
           </article>
 
           <article className="summary-card">
             <span>Current seller balance</span>
             <strong>{formatMoney(sellerReportBalanceMinor, settings.currency)}</strong>
-            <small>Current outstanding seller balance</small>
+            <small>Current outstanding balance — not limited to the selected period</small>
           </article>
         </div>
 

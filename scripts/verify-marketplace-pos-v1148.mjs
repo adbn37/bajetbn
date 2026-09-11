@@ -52,7 +52,7 @@ check(
   && nav.includes('label="Listings"')
   && nav.includes('label="Sellers"')
   && nav.includes('label="Payouts"')
-  && nav.includes('label="Purchases"')
+  && nav.includes('label="Purchase List"')
   && nav.includes('label="More"'),
   'Marketplace Space navigation is correct.',
 );

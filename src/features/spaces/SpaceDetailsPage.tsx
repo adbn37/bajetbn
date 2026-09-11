@@ -921,6 +921,13 @@ export function SpaceDetailsPage() {
       />
     )}
 
+    {activeTab === 'overview' && space.type === 'sme' && (
+      <SmeOperationalAttentionPanel
+        space={space}
+        role={smePosRole}
+      />
+    )}
+
     {space.type === 'household'
       && activeTab === 'overview'
       && householdInlineSection
@@ -1226,12 +1233,6 @@ export function SpaceDetailsPage() {
       </details>
     )}
 
-    {activeTab === 'overview' && space.type === 'sme' && (
-      <SmeOperationalAttentionPanel
-        space={space}
-        role={smePosRole}
-      />
-    )}
     {activeTab === 'overview' && space.type === 'collection' && (
       <CollectionCommandCentre space={space} />
     )}
