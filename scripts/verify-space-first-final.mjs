@@ -156,7 +156,7 @@ check(
 
 check(
   marketplacePos.includes(
-    "type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'sales' | 'payouts' | 'reports' | 'balance';",
+    "export type MarketplaceManagementTab =",
   )
     && marketplacePos.includes(
       'Shared register',

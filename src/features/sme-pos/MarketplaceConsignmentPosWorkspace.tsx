@@ -49,15 +49,30 @@ import type {
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
+export type MarketplaceManagementTab =
+  | 'listings'
+  | 'sellers'
+  | 'payouts'
+  | 'customers'
+  | 'reports';
+
 interface Props {
   space: Space;
   settings: SmePosSettings;
   inventoryProfile: MarketplaceInventoryProfile;
   role: SmePosRole;
   onChanged: () => Promise<void> | void;
+  embeddedManagementTab?: MarketplaceManagementTab | null;
+  onManagementTabChange?: (
+    tab: MarketplaceManagementTab,
+  ) => void;
 }
 
-type MarketplaceTab = 'register' | 'sellers' | 'listings' | 'customers' | 'sales' | 'payouts' | 'reports' | 'balance';
+type MarketplaceTab =
+  | 'register'
+  | 'sales'
+  | 'balance'
+  | MarketplaceManagementTab;
 type ConfirmPayload =
   | { kind: 'seller'; id: string }
   | { kind: 'listing'; id: string; action?: 'archive' | 'delete'  }
@@ -338,15 +353,30 @@ function roleLabel(role: SmePosRole) {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
-export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryProfile, role, onChanged }: Props) {
+export function MarketplaceConsignmentPosWorkspace({
+  space,
+  settings,
+  inventoryProfile,
+  role,
+  onChanged,
+  embeddedManagementTab = null,
+  onManagementTabChange,
+}: Props) {
   const [searchParams] = useSearchParams();
   const [mySeller, setMySeller] = useState<SmePosSeller | null>(null);
   const [mySellerListings, setMySellerListings] = useState<SmePosListing[]>([]);
   const [mySellerSales, setMySellerSales] = useState<SmePosSale[]>([]);
   const availableTabs = useMemo(() => tabsForRole(role, Boolean(mySeller)), [role, mySeller]);
-  const requestedTab = searchParams.get('tab') as MarketplaceTab | null;
+  const requestedTab: MarketplaceTab | null =
+    embeddedManagementTab
+    ?? (searchParams.get('tab') as MarketplaceTab | null);
+
   const [tab, setTab] = useState<MarketplaceTab>(() =>
-    requestedTab && tabsForRole(role, false).includes(requestedTab)
+    requestedTab
+      && tabsForRole(
+        role,
+        false,
+      ).includes(requestedTab)
       ? requestedTab
       : initialTab(role),
   );
@@ -364,7 +394,7 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
         availableTabs.includes(item),
     );
 
-  const managementTabOrder: MarketplaceTab[] = [
+  const managementTabOrder: MarketplaceManagementTab[] = [
     'listings',
     'sellers',
     'payouts',
@@ -501,6 +531,23 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
   }
 
   useEffect(() => { void load(); }, [space.id, role]);
+
+  useEffect(() => {
+    if (
+      embeddedManagementTab
+      && availableTabs.includes(
+        embeddedManagementTab,
+      )
+    ) {
+      setTab(
+        embeddedManagementTab,
+      );
+    }
+  }, [
+    availableTabs,
+    embeddedManagementTab,
+  ]);
+
   useEffect(() => {
     if (!availableTabs.includes(tab)) setTab(initialTab(role));
   }, [availableTabs, role, tab]);
@@ -1809,6 +1856,11 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
                 }
 
                 setTab(item);
+
+                onManagementTabChange?.(
+                  item,
+                );
+
                 setError('');
                 setSuccess('');
                 setSearch('');

@@ -75,6 +75,7 @@ import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCus
 import { CollectionCommandCentre } from './CollectionCommandCentre';
 import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
+import { MarketplaceSpaceManagementSection } from './MarketplaceSpaceManagementSection';
 import { SpaceAvatar } from './SpaceAvatar';
 import { SpaceAvatarSettings } from './SpaceAvatarSettings';
 
@@ -851,6 +852,20 @@ export function SpaceDetailsPage() {
       ? requestedSection
       : null;
 
+  const marketplaceInlineSection =
+    space.type === 'sme'
+    && [
+      'marketplace-listings',
+      'marketplace-sellers',
+      'marketplace-payouts',
+      'marketplace-customers',
+      'marketplace-reports',
+    ].includes(
+      requestedSection || '',
+    )
+      ? requestedSection
+      : null;
+
   /*
    * Legacy detailed dashboards remain intentionally disabled.
    * Use an opaque boolean function instead of a literal false guard
@@ -921,12 +936,29 @@ export function SpaceDetailsPage() {
       />
     )}
 
-    {activeTab === 'overview' && space.type === 'sme' && (
-      <SmeOperationalAttentionPanel
-        space={space}
-        role={smePosRole}
-      />
-    )}
+    {activeTab === 'overview'
+      && space.type === 'sme'
+      && !marketplaceInlineSection
+      && (
+        <SmeOperationalAttentionPanel
+          space={space}
+          role={smePosRole}
+        />
+      )}
+
+    {activeTab === 'overview'
+      && space.type === 'sme'
+      && marketplaceInlineSection
+      && (
+        <MarketplaceSpaceManagementSection
+          space={space}
+          role={smePosRole}
+          section={
+            marketplaceInlineSection
+          }
+          onChanged={load}
+        />
+      )}
 
     {space.type === 'household'
       && activeTab === 'overview'
@@ -1246,6 +1278,7 @@ export function SpaceDetailsPage() {
 
     {activeTab === 'overview' ? (
       householdInlineSection
+      || marketplaceInlineSection
         ? null
         : <SpaceOverview
       space={space}

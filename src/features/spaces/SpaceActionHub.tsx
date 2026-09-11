@@ -438,24 +438,33 @@ export function SpaceActionHub({
 
               {smePosRole !== 'seller' && (
                 <ShortcutLink
-                  to={`/spaces/${space.id}/pos?tab=listings`}
+                  to={`/spaces/${space.id}?section=marketplace-listings`}
                   label="Listings"
+                  primary={
+                    activeSection === 'marketplace-listings'
+                  }
                 />
               )}
 
               {(smePosRole === 'owner'
                 || smePosRole === 'manager') && (
                 <ShortcutLink
-                  to={`/spaces/${space.id}/pos?tab=sellers`}
+                  to={`/spaces/${space.id}?section=marketplace-sellers`}
                   label="Sellers"
+                  primary={
+                    activeSection === 'marketplace-sellers'
+                  }
                 />
               )}
 
               {(smePosRole === 'owner'
                 || smePosRole === 'manager') && (
                 <ShortcutLink
-                  to={`/spaces/${space.id}/pos?tab=payouts`}
+                  to={`/spaces/${space.id}?section=marketplace-payouts`}
                   label="Payouts"
+                  primary={
+                    activeSection === 'marketplace-payouts'
+                  }
                 />
               )}
 
@@ -469,6 +478,14 @@ export function SpaceActionHub({
 
               <ShortcutButton
                 label="More"
+                primary={
+                  [
+                    'marketplace-customers',
+                    'marketplace-reports',
+                  ].includes(
+                    activeSection || '',
+                  )
+                }
                 onClick={() => setSpaceMoreOpen(true)}
               />
             </>}
@@ -932,7 +949,7 @@ export function SpaceActionHub({
 
                 {space.type === 'sme' && <>
                   {businessIndustry === 'marketplace' ? (
-                    <ShortcutLink to={`/spaces/${space.id}/pos?tab=customers`} label="Customers" onClick={() => setSpaceMoreOpen(false)} />
+                    <ShortcutLink to={`/spaces/${space.id}?section=marketplace-customers`} label="Customers" onClick={() => setSpaceMoreOpen(false)} />
                   ) : (
                     <ShortcutLink to={`/spaces/${space.id}/business`} label={businessAdminLabel} onClick={() => setSpaceMoreOpen(false)} />
                   )}
@@ -940,7 +957,7 @@ export function SpaceActionHub({
                     <ShortcutButton label="Purchase List" onClick={() => { setSpaceMoreOpen(false); setTool('shopping'); }} />
                   )}
                   {businessIndustry === 'marketplace' ? (
-                    <ShortcutLink to={`/spaces/${space.id}/pos?tab=reports`} label="Reports" onClick={() => setSpaceMoreOpen(false)} />
+                    <ShortcutLink to={`/spaces/${space.id}?section=marketplace-reports`} label="Reports" onClick={() => setSpaceMoreOpen(false)} />
                   ) : canViewSmeFinancials ? (
                     <ShortcutLink to={`/spaces/${space.id}?section=reports`} label="Reports" onClick={() => setSpaceMoreOpen(false)} />
                   ) : null}
