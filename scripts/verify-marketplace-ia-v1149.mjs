@@ -123,10 +123,10 @@ check(
 );
 
 check(
-  marketplace.includes(
+  page.includes(
     '/pos/archived',
   )
-  && marketplace.includes(
+  && page.includes(
     'Archived',
   )
   && !marketplace.includes(

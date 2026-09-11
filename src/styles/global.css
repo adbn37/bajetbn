@@ -11384,3 +11384,175 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     gap: 0.6rem;
   }
 }
+
+
+/* v1.14.10 Marketplace mobile polish */
+
+.sme-pos-operational-attention
+.marketplace-space-summary-grid {
+  grid-template-columns:
+    repeat(
+      5,
+      minmax(0, 1fr)
+    );
+}
+
+.marketplace-pos-workspace
+.sme-pos-product-grid {
+  align-items: start;
+}
+
+.marketplace-pos-workspace
+.marketplace-inventory-card {
+  align-self: start;
+}
+
+@media (max-width: 1050px) {
+  .sme-pos-operational-attention
+  .marketplace-space-summary-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (max-width: 680px) {
+
+  .simplified-space-actions[
+    data-business-industry='marketplace'
+  ] {
+    display: grid !important;
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      ) !important;
+    gap: 0.4rem !important;
+    width: 100%;
+    margin-inline: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .simplified-space-actions[
+    data-business-industry='marketplace'
+  ] > .button {
+    width: 100% !important;
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 0.35rem;
+    font-size: 0.67rem;
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .sme-pos-operational-attention
+  .marketplace-space-summary-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      ) !important;
+    gap: 0.5rem;
+  }
+
+  .sme-pos-operational-attention
+  .marketplace-space-summary-grid
+  > .summary-card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .sme-pos-operational-attention
+  .marketplace-space-summary-grid
+  > .summary-card {
+    min-height: 0;
+    padding: 0.7rem;
+  }
+
+  .sme-pos-operational-attention
+  .marketplace-space-summary-grid
+  > .summary-card strong {
+    font-size: 1.05rem;
+  }
+
+  .sme-pos-page,
+  .space-details-page {
+    padding-bottom:
+      calc(
+        8.5rem
+        + env(safe-area-inset-bottom)
+      ) !important;
+    scroll-padding-bottom:
+      calc(
+        8.5rem
+        + env(safe-area-inset-bottom)
+      );
+  }
+
+  .sme-pos-page
+  .pos-page-actions {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        auto-fit,
+        minmax(88px, 1fr)
+      );
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .sme-pos-page
+  .pos-page-actions
+  .button {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding-inline: 0.4rem;
+    font-size: 0.7rem;
+  }
+
+  .sme-pos-page {
+    gap: 0.7rem;
+  }
+
+  .marketplace-pos-workspace {
+    gap: 0.7rem;
+  }
+
+  .marketplace-pos-workspace
+  .sme-pos-checkout-products
+  > .panel-heading {
+    gap: 0.65rem;
+  }
+
+  .marketplace-pos-workspace
+  .sme-pos-checkout-products
+  > .panel-heading
+  .button-row {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .marketplace-pos-workspace
+  .sme-pos-checkout-products
+  > .panel-heading
+  .button-row
+  .button {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 0.4rem;
+    font-size: 0.69rem;
+    line-height: 1.2;
+    white-space: normal;
+  }
+}

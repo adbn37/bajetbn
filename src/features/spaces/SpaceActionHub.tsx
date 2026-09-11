@@ -423,6 +423,11 @@ export function SpaceActionHub({
             className="space-action-buttons simplified-space-actions"
             data-simplified-space-navigation
             data-space-launcher={space.type}
+            data-business-industry={
+              space.type === 'sme'
+                ? businessIndustry
+                : undefined
+            }
             style={shortcutGridStyle}
           >
             {space.type === 'sme' && businessIndustry === 'marketplace' && <>

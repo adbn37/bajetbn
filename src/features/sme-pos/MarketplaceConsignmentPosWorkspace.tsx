@@ -1,5 +1,5 @@
 import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
 import { Modal } from '../../components/Modal';
@@ -1740,14 +1740,6 @@ export function MarketplaceConsignmentPosWorkspace({ space, settings, inventoryP
         </p>
       </div>
 
-      {(role === 'owner' || role === 'manager') && (
-        <Link
-          className="button secondary"
-          to={`/spaces/${space.id}/pos/archived`}
-        >
-          Archived
-        </Link>
-      )}
     </div>
 
     {settings.status !== 'active' && <div className="notice warning">The POS is {settings.status === 'paused' ? 'paused' : 'still in setup'}. Records can be prepared, but checkout is blocked.</div>}

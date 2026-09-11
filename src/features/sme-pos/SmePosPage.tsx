@@ -146,6 +146,16 @@ export function SmePosPage() {
 
   const headerActions = <div className="button-row pos-page-actions">
     {isOwner && <Link className="button secondary" to={`/spaces/${space.id}/pos/settings`}>POS Settings</Link>}
+    {settings.mode === 'marketplace_consignment'
+      && (role === 'owner' || role === 'manager')
+      && (
+        <Link
+          className="button secondary"
+          to={`/spaces/${space.id}/pos/archived`}
+        >
+          Archived
+        </Link>
+      )}
     <Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>
   </div>;
 

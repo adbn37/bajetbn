@@ -373,7 +373,7 @@ export function SmeOperationalAttentionPanel({
 
       {snapshot.marketplace && !loading && (
         <div
-          className="summary-grid sme-pos-report-grid"
+          className="summary-grid sme-pos-report-grid marketplace-space-summary-grid"
           style={{
             marginBottom:
               attentionTotal > 0
