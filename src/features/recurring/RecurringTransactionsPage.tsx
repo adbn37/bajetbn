@@ -52,20 +52,475 @@ const statusLabels: Record<RecurringTransactionStatus, string> = {
 };
 
 function todayInTimezone(timezone: string) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const parts = new Intl.DateTimeFormat(
+    'en-CA-u-ca-gregory-nu-latn',
+    {
+      timeZone: timezone,
+      calendar: 'gregory',
+      numberingSystem: 'latn',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    },
+  ).formatToParts(new Date());
+
+  const values =
+    Object.fromEntries(
+      parts.map(
+        (part) => [
+          part.type,
+          part.value,
+        ],
+      ),
+    );
+
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function readableDate(value?: string | null) {
-  if (!value) return 'No next date';
-  const [year, month, day] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-BN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day));
+function readableDate(
+  value?: string | null,
+) {
+  if (!value) {
+    return 'No next date';
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] =
+    value
+      .split('-')
+      .map(Number);
+
+  return new Intl.DateTimeFormat(
+    'en-BN-u-ca-gregory-nu-latn',
+    {
+      calendar: 'gregory',
+      numberingSystem: 'latn',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    },
+  ).format(
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day,
+        12,
+      ),
+    ),
+  );
+}
+
+const GREGORIAN_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+function daysInGregorianMonth(
+  year: number,
+  month: number,
+) {
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      0,
+    ),
+  ).getUTCDate();
+}
+
+function parseIsoDate(
+  value?: string | null,
+) {
+  if (
+    !value
+    || !/^\d{4}-\d{2}-\d{2}$/.test(
+      value,
+    )
+  ) {
+    return null;
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] =
+    value
+      .split('-')
+      .map(Number);
+
+  if (
+    year < 1
+    || month < 1
+    || month > 12
+    || day < 1
+    || day
+      > daysInGregorianMonth(
+        year,
+        month,
+      )
+  ) {
+    return null;
+  }
+
+  return {
+    year,
+    month,
+    day,
+  };
+}
+
+function isoDate(
+  year: number,
+  month: number,
+  day: number,
+) {
+  return [
+    String(year).padStart(
+      4,
+      '0',
+    ),
+    String(month).padStart(
+      2,
+      '0',
+    ),
+    String(day).padStart(
+      2,
+      '0',
+    ),
+  ].join('-');
+}
+
+function GregorianDateField({
+  label,
+  value,
+  min,
+  optional = false,
+  helpText,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  min: string;
+  optional?: boolean;
+  helpText?: string;
+  onChange: (value: string) => void;
+}) {
+  const minimum =
+    parseIsoDate(min);
+
+  const current =
+    parseIsoDate(value);
+
+  const base =
+    current
+    || minimum
+    || {
+      year: 2000,
+      month: 1,
+      day: 1,
+    };
+
+  if (
+    optional
+    && !current
+  ) {
+    return (
+      <fieldset className="gregorian-date-field">
+        <legend>{label}</legend>
+
+        <button
+          type="button"
+          className="button secondary gregorian-date-empty-action"
+          onClick={() =>
+            onChange(
+              min
+              || isoDate(
+                base.year,
+                base.month,
+                base.day,
+              ),
+            )
+          }
+        >
+          + Set end date
+        </button>
+
+        <small className="gregorian-date-help">
+          {helpText || 'Optional'}
+        </small>
+
+        <small className="gregorian-date-calendar-note">
+          Gregorian calendar
+        </small>
+      </fieldset>
+    );
+  }
+
+  const selectedYear =
+    base.year;
+
+  const selectedMonth =
+    base.month;
+
+  const selectedDay =
+    Math.min(
+      base.day,
+      daysInGregorianMonth(
+        base.year,
+        base.month,
+      ),
+    );
+
+  const firstYear =
+    Math.min(
+      selectedYear,
+      minimum?.year
+        || selectedYear,
+    );
+
+  const lastYear =
+    Math.max(
+      selectedYear,
+      (minimum?.year
+        || selectedYear)
+        + 20,
+    );
+
+  const years =
+    Array.from(
+      {
+        length:
+          lastYear
+          - firstYear
+          + 1,
+      },
+      (
+        _,
+        index,
+      ) =>
+        firstYear
+        + index,
+    );
+
+  const days =
+    Array.from(
+      {
+        length:
+          daysInGregorianMonth(
+            selectedYear,
+            selectedMonth,
+          ),
+      },
+      (
+        _,
+        index,
+      ) =>
+        index + 1,
+    );
+
+  function update(
+    next: {
+      year?: number;
+      month?: number;
+      day?: number;
+    },
+  ) {
+    const year =
+      next.year
+      ?? selectedYear;
+
+    const month =
+      next.month
+      ?? selectedMonth;
+
+    const day =
+      Math.min(
+        next.day
+          ?? selectedDay,
+        daysInGregorianMonth(
+          year,
+          month,
+        ),
+      );
+
+    const candidate =
+      isoDate(
+        year,
+        month,
+        day,
+      );
+
+    if (
+      min
+      && candidate < min
+    ) {
+      onChange(min);
+      return;
+    }
+
+    onChange(candidate);
+  }
+
+  return (
+    <fieldset className="gregorian-date-field">
+      <legend>{label}</legend>
+
+      <div className="gregorian-date-selects">
+        <select
+          aria-label={`${label} day`}
+          value={selectedDay}
+          onChange={(event) =>
+            update({
+              day:
+                Number(
+                  event.target.value,
+                ),
+            })
+          }
+        >
+          {days.map(
+            (day) => {
+              const disabled =
+                Boolean(
+                  minimum
+                  && selectedYear
+                    === minimum.year
+                  && selectedMonth
+                    === minimum.month
+                  && day
+                    < minimum.day,
+                );
+
+              return (
+                <option
+                  key={day}
+                  value={day}
+                  disabled={disabled}
+                >
+                  {day}
+                </option>
+              );
+            },
+          )}
+        </select>
+
+        <select
+          aria-label={`${label} month`}
+          value={selectedMonth}
+          onChange={(event) =>
+            update({
+              month:
+                Number(
+                  event.target.value,
+                ),
+            })
+          }
+        >
+          {GREGORIAN_MONTHS.map(
+            (
+              monthLabel,
+              index,
+            ) => {
+              const month =
+                index + 1;
+
+              const disabled =
+                Boolean(
+                  minimum
+                  && selectedYear
+                    === minimum.year
+                  && month
+                    < minimum.month,
+                );
+
+              return (
+                <option
+                  key={monthLabel}
+                  value={month}
+                  disabled={disabled}
+                >
+                  {monthLabel}
+                </option>
+              );
+            },
+          )}
+        </select>
+
+        <select
+          aria-label={`${label} year`}
+          value={selectedYear}
+          onChange={(event) =>
+            update({
+              year:
+                Number(
+                  event.target.value,
+                ),
+            })
+          }
+        >
+          {years.map(
+            (year) => (
+              <option
+                key={year}
+                value={year}
+                disabled={
+                  Boolean(
+                    minimum
+                    && year
+                      < minimum.year,
+                  )
+                }
+              >
+                {year}
+              </option>
+            ),
+          )}
+        </select>
+      </div>
+
+      <small className="gregorian-date-preview">
+        {readableDate(value)}
+      </small>
+
+      <small className="gregorian-date-calendar-note">
+        Gregorian calendar
+      </small>
+
+      {helpText && (
+        <small className="gregorian-date-help">
+          {helpText}
+        </small>
+      )}
+
+      {optional && (
+        <button
+          type="button"
+          className="text-button gregorian-date-clear"
+          onClick={() =>
+            onChange('')
+          }
+        >
+          No end date
+        </button>
+      )}
+    </fieldset>
+  );
 }
 
 function spaceScope(space?: Space): Exclude<CategoryScope, 'both'> {
@@ -152,6 +607,7 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
       if (!spaceId || !accountId) throw new Error('Choose an Account.');
       if (!selectedCategory) throw new Error('Choose a category.');
       if (!nextRunDate) throw new Error('Choose the next date.');
+      if (nextRunDate < todayInTimezone(timezone)) throw new Error('The next date cannot be before today.');
       if (endDate && endDate < nextRunDate) throw new Error('The end date must be on or after the next date.');
       const values: TemplateFormValues = {
         templateId: template?.id,
@@ -199,8 +655,21 @@ function RecurringTemplateForm({ template, accounts, spaces, categories, timezon
         <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} maxLength={120} placeholder="Optional" /></label>
         <PaymentMethodField value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
         <label>Repeats<select value={frequency} onChange={(event) => setFrequency(event.target.value as RecurringTransactionFrequency)}><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="quarterly">Every 3 months</option><option value="yearly">Every year</option></select></label>
-        <label>Next date<input required type="date" min={todayInTimezone(timezone)} value={nextRunDate} onChange={(event) => setNextRunDate(event.target.value)} /></label>
-        <label>End date<input type="date" min={nextRunDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} /><small>Leave blank to keep repeating.</small></label>
+        <GregorianDateField
+          label="Next date"
+          value={nextRunDate}
+          min={todayInTimezone(timezone)}
+          onChange={setNextRunDate}
+        />
+
+        <GregorianDateField
+          label="End date"
+          value={endDate}
+          min={nextRunDate}
+          optional
+          helpText="Leave blank to keep repeating."
+          onChange={setEndDate}
+        />
         <label className="span-2">Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Optional details" /></label>
       </div>
       <div className="info-banner"><strong>Automatic and duplicate-safe</strong><span>BajetBN posts one transaction on each due date. Repeated scheduler runs cannot create the same occurrence twice.</span></div>
@@ -222,14 +691,25 @@ function ResumeModal({ template, timezone, onClose, onResume }: {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true); setError('');
-    try { await onResume(date); }
+    try {
+      if (date < todayInTimezone(timezone)) {
+        throw new Error('The next date cannot be before today.');
+      }
+
+      await onResume(date);
+    }
     catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusy(false); }
   };
   return <Modal title={`Resume ${template.name}`} onClose={onClose}><form onSubmit={submit} className="recurring-form">
     {error && <div className="notice error">{error}</div>}
     <p>Choose the next date. BajetBN will not create missed transactions from while this was paused.</p>
-    <label>Next date<input required type="date" min={todayInTimezone(timezone)} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+    <GregorianDateField
+      label="Next date"
+      value={date}
+      min={todayInTimezone(timezone)}
+      onChange={setDate}
+    />
     <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Resuming…' : 'Resume recurring money'}</button></div>
   </form></Modal>;
 }
