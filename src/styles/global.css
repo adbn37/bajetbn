@@ -11556,3 +11556,83 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     white-space: normal;
   }
 }
+
+
+/* HOTFIX: iOS Gregorian recurring date controls */
+
+.gregorian-date-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: .4rem;
+}
+
+.gregorian-date-field legend {
+  padding: 0;
+  color: #cdd8e1;
+  font-size: .8rem;
+  font-weight: 750;
+}
+
+.gregorian-date-selects {
+  display: grid;
+  grid-template-columns:
+    minmax(0, .72fr)
+    minmax(0, 1fr)
+    minmax(0, .9fr);
+  gap: .45rem;
+}
+
+.gregorian-date-selects select {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.gregorian-date-preview {
+  color: var(--text);
+  font-size: .76rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.gregorian-date-calendar-note,
+.gregorian-date-help {
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.gregorian-date-calendar-note {
+  margin-top: -.15rem;
+}
+
+.gregorian-date-empty-action {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+}
+
+.gregorian-date-clear {
+  width: max-content;
+  min-height: 32px;
+  padding: .2rem 0;
+  color: var(--muted);
+}
+
+:root[data-theme='light']
+.gregorian-date-field legend {
+  color: #30454d;
+}
+
+@media (max-width: 420px) {
+  .gregorian-date-selects {
+    gap: .35rem;
+  }
+
+  .gregorian-date-selects select {
+    padding-inline: .55rem;
+  }
+}
