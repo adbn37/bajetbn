@@ -9,6 +9,7 @@ import { SmePosBarcodeLabelDialog } from '../../components/SmePosBarcodeLabelDia
 import { SmePosBarcodeReturnScanner } from '../../components/SmePosBarcodeReturnScanner';
 import { SmePosItemPhoto, SmePosItemPhotoField } from '../../components/SmePosItemPhoto';
 import { SmePosPaymentSplitEditor, createSmePosPaymentDraft, paymentDraftTotalMinor, paymentDraftsToInput, type SmePosPaymentDraft } from '../../components/SmePosPaymentSplitEditor';
+import { SmePosCreateReservationModal, SmePosReservationsPanel } from '../../components/SmePosReservations';
 import {
   checkoutMarketplacePos,
   deleteMarketplaceSeller,
@@ -18,6 +19,7 @@ import {
   getMarketplacePosWorkspace,
   listSmePosAccess,
   listSmePosPaymentAccounts,
+  listSmePosReservations,
   receiveMarketplaceListingStock,
   registerExistingMarketplaceListing,
   recordMarketplaceSellerPayout,
@@ -39,6 +41,7 @@ import type {
   SmePosListingCondition,
   SmePosPaymentAccount,
   SmePosPayout,
+  SmePosReservation,
   SmePosRole,
   SmePosSale,
   SmePosSeller,
@@ -70,6 +73,7 @@ interface Props {
 
 type MarketplaceTab =
   | 'register'
+  | 'bookings'
   | 'sales'
   | 'balance'
   | MarketplaceManagementTab;
@@ -126,6 +130,7 @@ const conditionLabels: Record<SmePosListingCondition, string> = {
 
 const tabLabels: Record<MarketplaceTab, string> = {
   register: 'Register',
+  bookings: 'Bookings',
   sellers: 'Sellers',
   listings: 'Listings',
   customers: 'Customers',
@@ -211,6 +216,7 @@ function tabsForRole(role: SmePosRole, hasSellerProfile: boolean): MarketplaceTa
       'sellers',
       'listings',
       'customers',
+      'bookings',
       'sales',
       'payouts',
       'reports',
@@ -221,6 +227,7 @@ function tabsForRole(role: SmePosRole, hasSellerProfile: boolean): MarketplaceTa
       'register',
       'listings',
       'customers',
+      'bookings',
       'sales',
     ];
   }
@@ -386,7 +393,7 @@ export function MarketplaceConsignmentPosWorkspace({
       : role === 'stock_staff'
         || role === 'viewer'
         ? ['listings']
-        : ['register', 'sales'];
+        : ['register', 'bookings', 'sales'];
 
   const primaryTabs =
     primaryTabOrder.filter(
@@ -412,6 +419,7 @@ export function MarketplaceConsignmentPosWorkspace({
   const [listings, setListings] = useState<SmePosListing[]>([]);
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
   const [sales, setSales] = useState<SmePosSale[]>([]);
+  const [reservations, setReservations] = useState<SmePosReservation[]>([]);
   const [payouts, setPayouts] = useState<SmePosPayout[]>([]);
   const [mySellerLedger, setMySellerLedger] = useState<SmePosSellerLedgerEntry[]>([]);
   const [mySellerPayouts, setMySellerPayouts] = useState<SmePosPayout[]>([]);
@@ -456,6 +464,7 @@ export function MarketplaceConsignmentPosWorkspace({
   const [lineDiscounts, setLineDiscounts] =
     useState<Record<string, string>>({});
   const [quickAddForm, setQuickAddForm] = useState(false);
+  const [bookingForm, setBookingForm] = useState(false);
   const [customerId, setCustomerId] = useState('');
   const [paymentRows, setPaymentRows] = useState<SmePosPaymentDraft[]>([createSmePosPaymentDraft(settings.defaultPaymentAccountId || '', 0)]);
   const [saleDate, setSaleDate] = useState(today());
@@ -522,6 +531,13 @@ export function MarketplaceConsignmentPosWorkspace({
       setMySellerPayouts(workspace.mySellerPayouts);
       setPaymentAccounts(accounts);
       setSellerAccess(access.filter((item) => item.status === 'active'));
+      if (canCheckout) {
+        setReservations(
+          await listSmePosReservations(space.id),
+        );
+      } else {
+        setReservations([]);
+      }
 
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -2709,6 +2725,24 @@ export function MarketplaceConsignmentPosWorkspace({
           </div>
           <div className="sme-pos-totals"><span>Subtotal <strong>{formatMoney(subtotalMinor, settings.currency)}</strong></span><span>Discount <strong>-{formatMoney(discountMinor, settings.currency)}</strong></span><span className="total">Customer pays <strong>{formatMoney(totalMinor, settings.currency)}</strong></span></div>
           <div className="pos-checkout-actions">
+            {cartLines.length > 0 && (
+              <button
+                className="button secondary"
+                type="button"
+                disabled={
+                  busy
+                  || quickItems.length > 0
+                  || !customerId
+                  || discountMinor > 0
+                  || invalidLineDiscount
+                }
+                onClick={() =>
+                  setBookingForm(true)
+                }
+              >
+                Reserve / take deposit
+              </button>
+            )}
             <button
               className="button primary pos-complete-sale"
               type="submit"
@@ -2732,10 +2766,39 @@ export function MarketplaceConsignmentPosWorkspace({
                       )}
             </button>
           </div>
+          {quickItems.length > 0 && (
+            <small>
+              Quick Add items are sale-only and cannot be reserved. Remove them to create a booking.
+            </small>
+          )}
+          {cartLines.length > 0 && !customerId && (
+            <small>
+              Choose a saved customer to reserve this cart.
+            </small>
+          )}
+          {cartLines.length > 0 && discountMinor > 0 && (
+            <small>
+              Remove item discounts before creating a booking.
+            </small>
+          )}
         </section>
         </div>}
       </form>}
 
+
+      {tab === 'bookings' && canCheckout && (
+        <SmePosReservationsPanel
+          space={space}
+          settings={settings}
+          role={role}
+          reservations={reservations}
+          paymentAccounts={paymentAccounts}
+          onRefresh={async () => {
+            await load();
+            await onChanged();
+          }}
+        />
+      )}
 
       {tab === 'balance' && mySeller && <div className="sme-pos-sales-section">
         <section className="panel marketplace-seller-wallet-panel">
@@ -3038,6 +3101,53 @@ export function MarketplaceConsignmentPosWorkspace({
     </>}
 
     {quickAddForm && <Modal title="Quick Add · this sale only" onClose={() => setQuickAddForm(false)}><form className="form-stack" onSubmit={addQuickItem}><div className="notice">Use this for a one-off sale. It is not saved in Listings. The selected seller's default commission is applied automatically.</div><label>Seller<select name="sellerId" defaultValue={mySeller?.id || sellers[0]?.id || ''} required><option value="">Choose seller</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</select></label><div className="form-grid"><label>Item name<input name="name" maxLength={100} required autoFocus /></label><label>Condition<select name="condition" defaultValue="new">{Object.entries(conditionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Selling price (BND)<input name="price" inputMode="decimal" required /></label><label>Quantity<input name="quantity" type="number" min="1" max="9999" defaultValue="1" required /></label></div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setQuickAddForm(false)}>Cancel</button><button className="button primary" type="submit">Add to sale</button></div></form></Modal>}
+
+    {bookingForm && (
+      <SmePosCreateReservationModal
+        space={space}
+        settings={settings}
+        sourceMode="marketplace_consignment"
+        items={cartLines.map(
+          ({ listing, quantity }) => ({
+            itemId: listing.id,
+            name:
+              listing.name
+              + ' · '
+              + listing.sellerName,
+            quantity,
+            lineTotalMinor:
+              listing.sellingPriceMinor
+              * quantity,
+          }),
+        )}
+        customers={customers}
+        paymentAccounts={paymentAccounts}
+        initialCustomerId={customerId}
+        initialDiscountMinor={0}
+        onClose={() =>
+          setBookingForm(false)
+        }
+        onSaved={async () => {
+          setCart({});
+          setQuickItems([]);
+          setLineDiscounts({});
+          setCartOpen(false);
+          setCustomerId('');
+          setPaymentRows([
+            createSmePosPaymentDraft(
+              settings.defaultPaymentAccountId
+              || '',
+              0,
+            ),
+          ]);
+          setSuccess(
+            'Booking created and stock reserved.',
+          );
+          await load();
+          await onChanged();
+        }}
+      />
+    )}
 
     {manualListingForm && <Modal title={manualListingSellerId === mySeller?.id ? 'Add stock · My inventory' : 'Register existing seller stock'} onClose={() => { if (!busy) closeManualListingForm(); }}>
       <form key={`${manualListingSelectedSellerId}:${manualListingPrefill?.id || 'new'}:${manualListingExistingMatch ? 'existing' : 'copy'}`} className="form-stack" onSubmit={registerExistingListing}>
