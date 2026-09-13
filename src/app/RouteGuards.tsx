@@ -9,8 +9,37 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   const passwordUser = user.providerData.some((item) => item.providerId === 'password');
-  if (passwordUser && !user.emailVerified) return <Navigate to="/verify-email" replace />;
-  if (!profile?.onboardingCompleted) return <Navigate to="/onboarding" replace />;
+  const returnPath =
+    `${location.pathname}${location.search}`;
+
+  if (
+    passwordUser
+    && !user.emailVerified
+  ) {
+    return (
+      <Navigate
+        to="/verify-email"
+        replace
+        state={{
+          from:
+            returnPath,
+        }}
+      />
+    );
+  }
+
+  if (!profile?.onboardingCompleted) {
+    return (
+      <Navigate
+        to="/onboarding"
+        replace
+        state={{
+          from:
+            returnPath,
+        }}
+      />
+    );
+  }
   return children;
 }
 

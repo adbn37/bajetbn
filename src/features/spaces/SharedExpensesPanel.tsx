@@ -4,6 +4,9 @@ import { Modal } from '../../components/Modal';
 import { PaymentMethodField } from '../../components/PaymentMethodField';
 import { paymentMethodLabel } from '../../config/bruneiMoneyOptions';
 import {
+  createSpaceInvitation,
+} from '../../repositories/collaborationRepository';
+import {
   createSharedExpense,
   getSharedExpenseProofUrl,
   listSharedExpensePayments,
@@ -92,6 +95,12 @@ export function SharedExpensesPanel({
   const [shares, setShares] = useState<SharedExpenseShare[]>([]);
   const [payments, setPayments] = useState<SharedExpensePayment[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+
+  const [
+    inviteOpen,
+    setInviteOpen,
+  ] = useState(false);
+
   const [paying, setPaying] = useState<{ toUid: string; amountMinor: number; expenseId?: string; title: string } | null>(null);
   const [undoDialog, setUndoDialog] = useState<ActionConfirmState<SharedExpensePayment> | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
@@ -158,7 +167,22 @@ export function SharedExpensesPanel({
 
   if (view === 'balances') {
     return <section className="panel shared-expense-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Member balances</span><h2>{space.type === 'trip' ? 'Settle Up' : 'Settlements'}</h2></div></div>
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Member balances</span>
+          <h2>{space.type === 'trip' ? 'Settle Up' : 'Settlements'}</h2>
+        </div>
+
+        {canManage && (
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() => setInviteOpen(true)}
+          >
+            Invite participant
+          </button>
+        )}
+      </div>
       {error && <div className="notice error">{error}</div>}
       <div className="info-banner"><strong>One simple amount per pair</strong><span>BajetBN combines open shares between the same two people. These payments do not change bank account balances.</span></div>
       <div className="who-owes-list">
@@ -192,6 +216,19 @@ export function SharedExpensesPanel({
       </div>
       {undoDialog && <ActionConfirmModal state={undoDialog} busy={undoBusy} error={error} onClose={() => { setUndoDialog(null); setError(''); }} onConfirm={() => void runUndoPayment()} />}
       {paying && <Modal title={paying.title} onClose={() => setPaying(null)}><SharedExpensePaymentForm space={space} payment={paying} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
+
+      {inviteOpen && (
+        <Modal
+          title="Invite to Settlements"
+          onClose={() => setInviteOpen(false)}
+        >
+          <SharedExpenseInviteForm
+            space={space}
+            destination="balances"
+            onDone={() => setInviteOpen(false)}
+          />
+        </Modal>
+      )}
     </section>;
   }
 
@@ -202,7 +239,38 @@ export function SharedExpensesPanel({
       <article className="summary-card"><span>Still to pay</span><strong>{formatMoney(monthLeft, space.currency)}</strong><small>Open member shares</small></article>
     </section>}
     <section className="panel shared-expense-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Group spending</span><h2>Shared expenses</h2></div>{canManage || ['owner', 'admin', 'contributor'].includes(currentMember?.role || '') ? <button className="button primary" onClick={() => setCreateOpen(true)}>Add shared expense</button> : undefined}</div>
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Group spending</span>
+          <h2>Shared expenses</h2>
+        </div>
+
+        <div className="button-row">
+          {canManage && (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => setInviteOpen(true)}
+            >
+              Invite participant
+            </button>
+          )}
+
+          {canManage
+            || ['owner', 'admin', 'contributor'].includes(
+              currentMember?.role || '',
+            )
+            ? (
+              <button
+                className="button primary"
+                onClick={() => setCreateOpen(true)}
+              >
+                Add shared expense
+              </button>
+            )
+            : undefined}
+        </div>
+      </div>
       {error && <div className="notice error">{error}</div>}
       <div className="info-banner"><strong>Record who paid and split the amount</strong><span>Choose equal shares, different amounts, or percentages. Member repayments are kept separate from bank account balances.</span></div>
       <div className="shared-expense-grid">
@@ -226,8 +294,263 @@ export function SharedExpensesPanel({
       </div>
       {createOpen && <Modal title="Add shared expense" onClose={() => setCreateOpen(false)}><SharedExpenseForm space={space} members={activeMembers} onSaved={async () => { setCreateOpen(false); await load(); }} /></Modal>}
       {paying && <Modal title={paying.title} onClose={() => setPaying(null)}><SharedExpensePaymentForm space={space} payment={paying} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
+
+      {inviteOpen && (
+        <Modal
+          title="Invite to Shared Expenses"
+          onClose={() => setInviteOpen(false)}
+        >
+          <SharedExpenseInviteForm
+            space={space}
+            destination="expenses"
+            onDone={() => setInviteOpen(false)}
+          />
+        </Modal>
+      )}
     </section>
   </>;
+}
+
+function SharedExpenseInviteForm({
+  space,
+  destination,
+  onDone,
+}: {
+  space: Space;
+  destination: 'expenses' | 'balances';
+  onDone: () => void;
+}) {
+  const [whatsappNumber, setWhatsappNumber] =
+    useState('');
+
+  const [email, setEmail] =
+    useState('');
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const submit = async (
+    delivery: 'copy' | 'whatsapp',
+  ) => {
+    if (busy) {
+      return;
+    }
+
+    const whatsappWindow =
+      delivery === 'whatsapp'
+        ? window.open(
+            'about:blank',
+            '_blank',
+          )
+        : null;
+
+    if (whatsappWindow) {
+      whatsappWindow.opener =
+        null;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const result =
+        await createSpaceInvitation({
+          spaceId:
+            space.id,
+          email:
+            email.trim() || null,
+          role:
+            'payer',
+          canUseAccounts:
+            false,
+          canViewBalances:
+            false,
+          canViewLedger:
+            false,
+          posRole:
+            null,
+        });
+
+      const nextPath =
+        '/spaces/'
+        + space.id
+        + (
+          destination === 'balances'
+            ? '?tab=balances'
+            : '?tab=expenses'
+        );
+
+      const inviteUrl =
+        window.location.origin
+        + '/join?token='
+        + encodeURIComponent(
+            result.data.token,
+          )
+        + '&next='
+        + encodeURIComponent(
+            nextPath,
+          );
+
+      if (delivery === 'copy') {
+        await navigator.clipboard.writeText(
+          inviteUrl,
+        );
+
+        onDone();
+        return;
+      }
+
+      const digits =
+        whatsappNumber.replace(
+          /D/g,
+          '',
+        );
+
+      const message =
+        destination === 'balances'
+          ? (
+              'Join '
+              + space.name
+              + ' in BajetBN to view and settle shared expenses: '
+              + inviteUrl
+            )
+          : (
+              'Join '
+              + space.name
+              + ' in BajetBN for shared expenses: '
+              + inviteUrl
+            );
+
+      const href =
+        'https://wa.me/'
+        + digits
+        + '?text='
+        + encodeURIComponent(
+            message,
+          );
+
+      if (whatsappWindow) {
+        whatsappWindow.location.href =
+          href;
+      } else {
+        window.open(
+          href,
+          '_blank',
+          'noopener,noreferrer',
+        );
+      }
+
+      onDone();
+    } catch (nextError) {
+      whatsappWindow?.close();
+
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="form-stack"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit('whatsapp');
+      }}
+      data-shared-expense-invite
+    >
+      {error && (
+        <div className="notice error">
+          {error}
+        </div>
+      )}
+
+      <div className="info-banner">
+        <strong>Invite first, then split expenses</strong>
+        <span>
+          The secure link adds the person to this Space
+          only after they accept. After joining, BajetBN
+          returns them directly to {
+            destination === 'balances'
+              ? 'Settlements'
+              : 'Shared Expenses'
+          }.
+        </span>
+      </div>
+
+      <label>
+        WhatsApp number
+        <span className="optional-label">
+          Optional
+        </span>
+
+        <input
+          value={whatsappNumber}
+          onChange={(event) =>
+            setWhatsappNumber(
+              event.target.value,
+            )
+          }
+          inputMode="tel"
+          placeholder="6738XXXXXX"
+        />
+
+        <small>
+          Leave blank to choose the WhatsApp contact yourself.
+        </small>
+      </label>
+
+      <label>
+        Email address
+        <span className="optional-label">
+          Optional security lock
+        </span>
+
+        <input
+          type="email"
+          value={email}
+          onChange={(event) =>
+            setEmail(
+              event.target.value,
+            )
+          }
+          placeholder="person@example.com"
+        />
+
+        <small>
+          If entered, only that email can accept this invite.
+        </small>
+      </label>
+
+      <div className="modal-actions">
+        <button
+          className="button secondary"
+          type="button"
+          disabled={busy}
+          onClick={() => void submit('copy')}
+        >
+          Copy invite link
+        </button>
+
+        <button
+          className="button primary"
+          type="submit"
+          disabled={busy}
+        >
+          {busy
+            ? 'Creating invite…'
+            : 'Send via WhatsApp'}
+        </button>
+      </div>
+    </form>
+  );
 }
 
 function SharedExpenseForm({ space, members, onSaved }: { space: Space; members: SpaceMember[]; onSaved: () => Promise<void> }) {

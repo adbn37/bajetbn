@@ -1968,6 +1968,26 @@ function SpaceOverview({
     setOverviewSearchParams,
   ] = useSearchParams();
   const requestedSection = overviewSearchParams.get('section');
+
+  const requestedTransactionId =
+    overviewSearchParams.get(
+      'transactionId',
+    );
+
+  const requestedReceipt =
+    overviewSearchParams.get(
+      'receipt',
+    ) === '1';
+
+  const requestedTransaction =
+    requestedTransactionId
+      ? transactions.find(
+          (item) =>
+            item.id
+            === requestedTransactionId,
+        ) || null
+      : null;
+
   const requestedOverviewSection =
     requestedSection
     && [
@@ -2003,6 +2023,9 @@ function SpaceOverview({
       );
 
     next.delete('section');
+    next.delete('transactionId');
+    next.delete('receipt');
+
     setSection(null);
 
     setOverviewSearchParams(
@@ -2010,6 +2033,27 @@ function SpaceOverview({
       { replace: true },
     );
   }
+
+  function closeRequestedTransaction() {
+    const next =
+      new URLSearchParams(
+        overviewSearchParams,
+      );
+
+    next.delete(
+      'transactionId',
+    );
+
+    next.delete(
+      'receipt',
+    );
+
+    setOverviewSearchParams(
+      next,
+      { replace: true },
+    );
+  }
+
   const today = localIsoDate(new Date());
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 8)}01`);
   const [customTo, setCustomTo] = useState(today);
@@ -2520,8 +2564,32 @@ function SpaceOverview({
             <div><span>Money out</span><strong>{formatMoney(moneyOut, space.currency)}</strong></div>
             <div><span>Net</span><strong>{formatMoney(moneyIn - moneyOut, space.currency)}</strong></div>
           </div>
+          {requestedTransactionId
+            && !requestedTransaction
+            && (
+              <div className="notice warning">
+                This shared money activity is no longer available
+                in this Space or your current role cannot open it.
+              </div>
+            )}
+
           <div className="space-scoped-list">
-            {moneyRows.length ? moneyRows.map((item) => <article key={item.id} className="space-scoped-row">
+            {moneyRows.length ? moneyRows.map((item) => <article
+              key={item.id}
+              className={
+                'space-scoped-row'
+                + (
+                  requestedTransactionId === item.id
+                    ? ' shared-link-target'
+                    : ''
+                )
+              }
+              data-shared-transaction-target={
+                requestedTransactionId === item.id
+                  ? 'true'
+                  : undefined
+              }
+            >
               <div>
                 <strong>{item.counterparty || item.category || (item.type === 'transfer' ? 'Transfer' : 'Money activity')}</strong>
                 <small>{displaySpaceDate(item.transactionDate)} · {accountName(item.accountId)}{item.destinationAccountId ? ` → ${accountName(item.destinationAccountId)}` : ''}</small>
@@ -2678,6 +2746,16 @@ function SpaceOverview({
       </div>
     </Modal>}
 
+    {requestedTransaction && (
+      <SpaceMoneyActivityDeepLinkModal
+        item={requestedTransaction}
+        space={space}
+        accounts={accounts}
+        receiptOnly={requestedReceipt}
+        onClose={closeRequestedTransaction}
+      />
+    )}
+
     {personalMoneyType && (
       <MoneyActivityModal
         accounts={accounts}
@@ -2711,6 +2789,158 @@ function SpaceOverview({
       />
     )}
   </>;
+}
+
+function SpaceMoneyActivityDeepLinkModal({
+  item,
+  space,
+  accounts,
+  receiptOnly,
+  onClose,
+}: {
+  item: FinancialTransaction;
+  space: Space;
+  accounts: Account[];
+  receiptOnly: boolean;
+  onClose: () => void;
+}) {
+  const source =
+    accounts.find(
+      (account) =>
+        account.id === item.accountId,
+    );
+
+  const destination =
+    item.destinationAccountId
+      ? accounts.find(
+          (account) =>
+            account.id
+            === item.destinationAccountId,
+        )
+      : undefined;
+
+  const transactionPath =
+    '/transactions?transactionId='
+    + encodeURIComponent(
+        item.id,
+      )
+    + (
+      receiptOnly
+        ? '&receipt=1'
+        : ''
+    );
+
+  return (
+    <Modal
+      title={
+        receiptOnly
+          ? 'Shared receipt'
+          : 'Shared money activity'
+      }
+      onClose={onClose}
+    >
+      <div
+        className="transaction-detail-hero"
+        data-space-shared-transaction-modal
+      >
+        <span className="type-badge">
+          {item.category
+            || (
+              item.type === 'income'
+                ? 'Money in'
+                : item.type === 'expense'
+                  ? 'Money out'
+                  : item.type === 'transfer'
+                    ? 'Transfer'
+                    : 'Undo'
+            )}
+        </span>
+
+        <strong>
+          {item.type === 'income'
+            ? '+'
+            : item.type === 'expense'
+              ? '-'
+              : ''}
+          {formatMoney(
+            item.amountMinor,
+            item.currency,
+          )}
+        </strong>
+
+        <span className={'status-badge ' + item.status}>
+          {item.status === 'reversed'
+            ? 'Reversed'
+            : 'Posted'}
+        </span>
+      </div>
+
+      <dl className="detail-list">
+        <div>
+          <dt>Space</dt>
+          <dd>{space.name}</dd>
+        </div>
+
+        <div>
+          <dt>Date</dt>
+          <dd>{displaySpaceDate(item.transactionDate)}</dd>
+        </div>
+
+        <div>
+          <dt>Account</dt>
+          <dd>
+            {source?.name || 'Account'}
+            {destination
+              ? ' → ' + destination.name
+              : ''}
+          </dd>
+        </div>
+
+        <div>
+          <dt>
+            {item.type === 'income'
+              ? 'Money from'
+              : 'Paid to'}
+          </dt>
+          <dd>{item.counterparty || '—'}</dd>
+        </div>
+
+        <div>
+          <dt>Note</dt>
+          <dd>{item.note || '—'}</dd>
+        </div>
+      </dl>
+
+      {receiptOnly && (
+        <div className="info-banner">
+          <strong>Receipt available</strong>
+          <span>
+            Open the original Money Activity to view
+            the attached receipt or document securely.
+          </span>
+        </div>
+      )}
+
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="button secondary"
+          onClick={onClose}
+        >
+          Close
+        </button>
+
+        <Link
+          className="button primary"
+          to={transactionPath}
+        >
+          {receiptOnly
+            ? 'Open receipt'
+            : 'Open full activity'}
+        </Link>
+      </div>
+    </Modal>
+  );
 }
 
 function CustomSpaceModuleSettings({

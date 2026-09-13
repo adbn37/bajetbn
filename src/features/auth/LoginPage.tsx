@@ -12,8 +12,37 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   if (user) {
-    if (!user.emailVerified && user.providerData.some((item) => item.providerId === 'password')) return <Navigate to="/verify-email" replace />;
-    return <Navigate to={profile?.onboardingCompleted ? (location.state?.from || '/') : '/onboarding'} replace />;
+    if (
+      !user.emailVerified
+      && user.providerData.some(
+        (item) =>
+          item.providerId === 'password',
+      )
+    ) {
+      return (
+        <Navigate
+          to="/verify-email"
+          replace
+          state={
+            location.state?.from
+              ? {
+                  from:
+                    location.state.from,
+                }
+              : undefined
+          }
+        />
+      );
+    }
+    return <Navigate
+      to={profile?.onboardingCompleted ? (location.state?.from || '/') : '/onboarding'}
+      replace
+      state={
+        !profile?.onboardingCompleted && location.state?.from
+          ? { from: location.state.from }
+          : undefined
+      }
+    />;
   }
 
   const submit = async (event: FormEvent) => {
@@ -45,7 +74,22 @@ export function LoginPage() {
         <label>Password<input type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <button className="button primary full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
       </form>
-      <p className="auth-switch">New to BajetBN? <Link to="/register">Create an account</Link></p>
+      <p className="auth-switch">
+        New to BajetBN?{' '}
+        <Link
+          to="/register"
+          state={
+            location.state?.from
+              ? {
+                  from:
+                    location.state.from,
+                }
+              : undefined
+          }
+        >
+          Create an account
+        </Link>
+      </p>
     </div>
   );
 }

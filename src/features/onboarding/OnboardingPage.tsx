@@ -4,6 +4,7 @@ import {
 } from 'react';
 import {
   Navigate,
+  useLocation,
   useNavigate,
 } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
@@ -24,6 +25,13 @@ export function OnboardingPage() {
 
   const preferences = usePreferences();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const returnTo =
+    typeof location.state?.from === 'string'
+    && location.state.from.startsWith('/')
+      ? location.state.from
+      : '';
 
   const [step, setStep] =
     useState<OnboardingStep>(1);
@@ -54,7 +62,12 @@ export function OnboardingPage() {
   }
 
   if (profile?.onboardingCompleted) {
-    return <Navigate to="/" replace />;
+    return (
+      <Navigate
+        to={returnTo || '/'}
+        replace
+      />
+    );
   }
 
   const finishSetup = async () => {
@@ -83,7 +96,8 @@ export function OnboardingPage() {
       await refreshProfile();
 
       navigate(
-        '/?welcome=1',
+        returnTo
+          || '/?welcome=1',
         { replace: true },
       );
     } catch (nextError) {

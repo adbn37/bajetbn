@@ -202,12 +202,24 @@ export function PublicTransactionSharePage() {
               return;
             }
 
-            navigate(
+            const destination =
               '/spaces/'
               + encodeURIComponent(
                   target.spaceId,
                 )
-              + '?section=money',
+              + '?section=money'
+              + '&transactionId='
+              + encodeURIComponent(
+                  target.transactionId,
+                )
+              + (
+                target.hasReceipt
+                  ? '&receipt=1'
+                  : ''
+              );
+
+            navigate(
+              destination,
               {
                 replace: true,
               },

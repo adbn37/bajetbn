@@ -4,6 +4,7 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
@@ -23,6 +24,10 @@ import {
   uploadDebtPaymentProof,
 } from '../../repositories/debtRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
+import {
+  listSharedExpenses,
+  listSharedExpenseShares,
+} from '../../repositories/sharedExpenseRepository';
 import type {
   DebtDirection,
   DebtInterestType,
@@ -30,6 +35,8 @@ import type {
   DebtSchedule,
   DebtPayment,
   Account,
+  SharedExpense,
+  SharedExpenseShare,
   Space,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
@@ -47,12 +54,242 @@ function moneyToMinor(value: string) {
   return Math.round(parsed * 100);
 }
 
+interface SpaceSettlementSummary {
+  spaceId: string;
+  spaceName: string;
+  currency: string;
+  oweMinor: number;
+  owedMinor: number;
+}
+
+function spaceSettlementTotals(
+  uid: string,
+  expenses: SharedExpense[],
+  shares: SharedExpenseShare[],
+) {
+  const expenseMap =
+    new Map(
+      expenses.map(
+        (item) => [
+          item.id,
+          item,
+        ],
+      ),
+    );
+
+  const direct =
+    new Map<
+      string,
+      {
+        fromUid: string;
+        toUid: string;
+        amountMinor: number;
+      }
+    >();
+
+  shares.forEach(
+    (share) => {
+      if (share.amountLeftMinor <= 0) {
+        return;
+      }
+
+      const expense =
+        expenseMap.get(
+          share.expenseId,
+        );
+
+      if (
+        !expense
+        || expense.paidFromGroupFund
+        || expense.paidFromTripMoney
+        || share.memberUid === expense.paidByUid
+      ) {
+        return;
+      }
+
+      const key =
+        share.memberUid
+        + '::'
+        + expense.paidByUid;
+
+      const current =
+        direct.get(key)
+        || {
+          fromUid: share.memberUid,
+          toUid: expense.paidByUid,
+          amountMinor: 0,
+        };
+
+      current.amountMinor +=
+        share.amountLeftMinor;
+
+      direct.set(
+        key,
+        current,
+      );
+    },
+  );
+
+  let oweMinor = 0;
+  let owedMinor = 0;
+
+  const seen =
+    new Set<string>();
+
+  direct.forEach(
+    (row) => {
+      const pairKey =
+        [
+          row.fromUid,
+          row.toUid,
+        ]
+          .sort()
+          .join('::');
+
+      if (seen.has(pairKey)) {
+        return;
+      }
+
+      seen.add(pairKey);
+
+      const forward =
+        direct.get(
+          row.fromUid
+          + '::'
+          + row.toUid,
+        );
+
+      const backward =
+        direct.get(
+          row.toUid
+          + '::'
+          + row.fromUid,
+        );
+
+      const difference =
+        (forward?.amountMinor || 0)
+        - (backward?.amountMinor || 0);
+
+      if (
+        difference > 0
+        && forward
+      ) {
+        if (forward.fromUid === uid) {
+          oweMinor += difference;
+        }
+
+        if (forward.toUid === uid) {
+          owedMinor += difference;
+        }
+      }
+
+      if (
+        difference < 0
+        && backward
+      ) {
+        const amount =
+          Math.abs(
+            difference,
+          );
+
+        if (backward.fromUid === uid) {
+          oweMinor += amount;
+        }
+
+        if (backward.toUid === uid) {
+          owedMinor += amount;
+        }
+      }
+    },
+  );
+
+  return {
+    oweMinor,
+    owedMinor,
+  };
+}
+
+async function loadSpaceSettlements(
+  uid: string,
+  spaces: Space[],
+): Promise<SpaceSettlementSummary[]> {
+  const rows =
+    await Promise.all(
+      spaces
+        .filter(
+          (space) =>
+            space.type !== 'personal',
+        )
+        .map(
+          async (space) => {
+            try {
+              const [
+                expenses,
+                shares,
+              ] = await Promise.all([
+                listSharedExpenses(
+                  space.id,
+                ),
+                listSharedExpenseShares(
+                  space.id,
+                ),
+              ]);
+
+              const totals =
+                spaceSettlementTotals(
+                  uid,
+                  expenses,
+                  shares,
+                );
+
+              if (
+                totals.oweMinor <= 0
+                && totals.owedMinor <= 0
+              ) {
+                return null;
+              }
+
+              return {
+                spaceId:
+                  space.id,
+                spaceName:
+                  space.name,
+                currency:
+                  space.currency,
+                ...totals,
+              };
+            } catch {
+              /*
+               * Some Business roles intentionally cannot
+               * read financial settlement data.
+               * Debt must continue loading without exposing it.
+               */
+              return null;
+            }
+          },
+        ),
+    );
+
+  return rows.filter(
+    (
+      row,
+    ): row is SpaceSettlementSummary =>
+      Boolean(row),
+  );
+}
+
 export function DebtPage() {
   const { user } = useAuth();
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
+
+  const [
+    spaceSettlements,
+    setSpaceSettlements,
+  ] = useState<SpaceSettlementSummary[]>([]);
+
   const [direction, setDirection] = useState<DebtDirection>('owe');
   const [statusFilter, setStatusFilter] = useState<
     'active' | 'settled' | 'archived'
@@ -84,10 +321,25 @@ export function DebtPage() {
         listSpaces(user.uid),
       ]);
 
+      const activeSpaces =
+        nextSpaces.filter(
+          (space) =>
+            !space.archivedAt,
+        );
+
+      const nextSpaceSettlements =
+        await loadSpaceSettlements(
+          user.uid,
+          activeSpaces,
+        );
+
       setDebts(nextDebts);
       setPayments(nextPayments);
       setAccounts(nextAccounts);
-      setSpaces(nextSpaces.filter((space) => !space.archivedAt));
+      setSpaces(activeSpaces);
+      setSpaceSettlements(
+        nextSpaceSettlements,
+      );
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
@@ -116,6 +368,20 @@ export function DebtPage() {
   const totalOwed = debts
     .filter((item) => item.direction === 'owed' && item.status === 'active')
     .reduce((sum, item) => sum + item.balanceMinor, 0);
+
+  const sharedSpaceOwe =
+    spaceSettlements.reduce(
+      (sum, item) =>
+        sum + item.oweMinor,
+      0,
+    );
+
+  const sharedSpaceOwed =
+    spaceSettlements.reduce(
+      (sum, item) =>
+        sum + item.owedMinor,
+      0,
+    );
 
   async function runArchive(item: DebtRecord) {
     setBusyId(item.id);
@@ -182,6 +448,109 @@ export function DebtPage() {
           <strong>{formatMoney(totalOwed - totalOwe, 'BND')}</strong>
           <small>Owed to you minus what you owe</small>
         </article>
+      </section>
+
+      <section
+        className="panel debt-space-settlements"
+        data-debt-space-settlements
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Shared Spaces
+            </span>
+
+            <h2>Space settlements</h2>
+
+            <p className="muted">
+              Shared Expense repayments are shown here
+              for visibility, but remain separate from
+              your personal Debt records and bank balances.
+            </p>
+          </div>
+        </div>
+
+        <div className="summary-grid">
+          <article className="summary-card">
+            <span>I owe in Spaces</span>
+            <strong>
+              {formatMoney(
+                sharedSpaceOwe,
+                'BND',
+              )}
+            </strong>
+          </article>
+
+          <article className="summary-card">
+            <span>Owed to me in Spaces</span>
+            <strong>
+              {formatMoney(
+                sharedSpaceOwed,
+                'BND',
+              )}
+            </strong>
+          </article>
+        </div>
+
+        {spaceSettlements.length === 0 ? (
+          <p className="muted">
+            No open Shared Expense settlements.
+          </p>
+        ) : (
+          <div className="space-scoped-list">
+            {spaceSettlements.map(
+              (item) => (
+                <article
+                  className="space-scoped-row"
+                  key={item.spaceId}
+                >
+                  <div>
+                    <strong>
+                      {item.spaceName}
+                    </strong>
+
+                    <small>
+                      Shared Expense settlement
+                    </small>
+                  </div>
+
+                  <div className="space-scoped-amount">
+                    {item.oweMinor > 0 && (
+                      <strong>
+                        You owe{' '}
+                        {formatMoney(
+                          item.oweMinor,
+                          item.currency,
+                        )}
+                      </strong>
+                    )}
+
+                    {item.owedMinor > 0 && (
+                      <small>
+                        Owed to you{' '}
+                        {formatMoney(
+                          item.owedMinor,
+                          item.currency,
+                        )}
+                      </small>
+                    )}
+
+                    <Link
+                      className="text-button"
+                      to={
+                        '/spaces/'
+                        + item.spaceId
+                        + '?tab=balances'
+                      }
+                    >
+                      Open Settlements
+                    </Link>
+                  </div>
+                </article>
+              ),
+            )}
+          </div>
+        )}
       </section>
 
       <div className="debt-tabs">

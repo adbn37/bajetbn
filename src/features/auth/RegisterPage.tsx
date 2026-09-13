@@ -1,18 +1,46 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getErrorMessage } from '../../utils/errors';
 
 export function RegisterPage() {
   const { user, registerWithEmail, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const returnTo =
+    typeof location.state?.from === 'string'
+    && location.state.from.startsWith('/')
+      ? location.state.from
+      : '';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to={user.emailVerified ? '/onboarding' : '/verify-email'} replace />;
+  if (user) {
+    return (
+      <Navigate
+        to={
+          user.emailVerified
+            ? '/onboarding'
+            : '/verify-email'
+        }
+        replace
+        state={
+          returnTo
+            ? { from: returnTo }
+            : undefined
+        }
+      />
+    );
+  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -21,7 +49,16 @@ export function RegisterPage() {
     setBusy(true); setError('');
     try {
       await registerWithEmail(email, password);
-      navigate('/verify-email', { replace: true });
+      navigate(
+        '/verify-email',
+        {
+          replace: true,
+          state:
+            returnTo
+              ? { from: returnTo }
+              : undefined,
+        },
+      );
     } catch (nextError) { setError(getErrorMessage(nextError)); }
     finally { setBusy(false); }
   };
@@ -48,7 +85,19 @@ export function RegisterPage() {
         <button className="button primary full" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
       </form>
       <p className="auth-policy-note">A new registration after account deletion starts fresh. Previous Spaces, balances and memberships are not restored.</p>
-      <p className="auth-switch">Already registered? <Link to="/login">Sign in</Link></p>
+      <p className="auth-switch">
+        Already registered?{' '}
+        <Link
+          to="/login"
+          state={
+            returnTo
+              ? { from: returnTo }
+              : undefined
+          }
+        >
+          Sign in
+        </Link>
+      </p>
     </div>
   );
 }
