@@ -1541,6 +1541,7 @@ export const postTransaction = onCall({ region }, async (request) => {
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
 
   const commandRef = db.collection('financialCommands').doc(commandId(uid, key));
+  const approvalRef = db.collection('financialApprovalRequests').doc();
   const spaceRef = db.collection('spaces').doc(spaceId);
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${uid}`);
   const accountRef = db.collection('accounts').doc(accountId);
@@ -1617,6 +1618,112 @@ export const postTransaction = onCall({ region }, async (request) => {
 
     const transactionRef = db.collection('transactions').doc();
     const now = FieldValue.serverTimestamp();
+
+    const approvalRequired =
+      spaceSnapshot.data()?.type === 'sme'
+      && financialOwnerId !== uid
+      && (type === 'expense' || type === 'transfer');
+
+    if (approvalRequired) {
+      const action =
+        type === 'transfer'
+          ? 'account_transfer'
+          : 'manual_expense';
+
+      transaction.create(approvalRef, {
+        displayId: displayId('APR'),
+        ownerId: financialOwnerId,
+        requestedBy: uid,
+        requestedByName:
+          memberSnapshot.data()?.displayName
+          || memberSnapshot.data()?.email
+          || 'Business member',
+        spaceId,
+        spaceName:
+          String(
+            spaceSnapshot.data()?.name
+            || 'Business',
+          ),
+        action,
+        transactionType: type,
+        accountId,
+        accountName:
+          String(
+            accountSnapshot.data()?.name
+            || 'Business account',
+          ),
+        destinationAccountId:
+          destinationAccountId || null,
+        destinationAccountName:
+          destinationSnapshot
+            ? String(
+                destinationSnapshot.data()?.name
+                || 'Business account',
+              )
+            : null,
+        amountMinor,
+        currency: account.currency,
+        transactionDate,
+        category: category.name,
+        categoryId: category.id,
+        categoryIcon: category.icon,
+        categoryColor: category.color,
+        categoryScope: category.scope,
+        categoryIsSystem: category.isSystem,
+        counterparty,
+        note,
+        labels,
+        paymentMethod,
+        paymentMethodLabel,
+        status: 'pending',
+        transactionId: null,
+        ledgerEntryIds: [],
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      createNotification(transaction, {
+        uid: financialOwnerId,
+        spaceId,
+        type: 'financial_approval_requested',
+        title: 'Money activity needs approval',
+        message:
+          (memberSnapshot.data()?.displayName
+            || memberSnapshot.data()?.email
+            || 'A Business member')
+          + ' requested '
+          + (type === 'transfer'
+            ? 'an account transfer'
+            : 'a Business expense')
+          + ' of '
+          + (amountMinor / 100).toFixed(2)
+          + ' '
+          + account.currency
+          + '.',
+        targetPath: '/transactions?approvals=1',
+        actionLabel: 'Review request',
+        now,
+      });
+
+      const result = {
+        status: 'pending_approval',
+        approvalId: approvalRef.id,
+      };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'request_financial_approval',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    }
+
     const ledgerEntryIds: string[] = [];
 
     if (type === 'income' || type === 'expense') {
@@ -1701,7 +1808,11 @@ export const postTransaction = onCall({ region }, async (request) => {
       updatedAt: now,
     });
 
-    const result = { transactionId: transactionRef.id, ledgerEntryIds };
+    const result = {
+      status: 'posted',
+      transactionId: transactionRef.id,
+      ledgerEntryIds,
+    };
     transaction.create(commandRef, {
       uid,
       kind: 'post_transaction',
@@ -1712,6 +1823,801 @@ export const postTransaction = onCall({ region }, async (request) => {
     return result;
   });
 });
+
+export const getFinancialApprovalRequests = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const [
+      ownedSnapshot,
+      requestedSnapshot,
+    ] = await Promise.all([
+      db.collection(
+        'financialApprovalRequests',
+      )
+        .where(
+          'ownerId',
+          '==',
+          uid,
+        )
+        .get(),
+
+      db.collection(
+        'financialApprovalRequests',
+      )
+        .where(
+          'requestedBy',
+          '==',
+          uid,
+        )
+        .get(),
+    ]);
+
+    const byId =
+      new Map<string, DocumentData>();
+
+    [
+      ...ownedSnapshot.docs,
+      ...requestedSnapshot.docs,
+    ].forEach((item) => {
+      byId.set(
+        item.id,
+        {
+          id: item.id,
+          ...item.data(),
+        },
+      );
+    });
+
+    const approvals =
+      [...byId.values()]
+        .sort(
+          (a, b) =>
+            Number(
+              b.createdAt?.toMillis?.()
+              || 0,
+            )
+            - Number(
+              a.createdAt?.toMillis?.()
+              || 0,
+            ),
+        );
+
+    return { approvals };
+  },
+);
+
+export const reviewFinancialApprovalRequest = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const approvalId =
+      stringValue(
+        request.data?.approvalId,
+        'Approval ID',
+        100,
+      );
+
+    const decision =
+      oneOf(
+        request.data?.decision,
+        [
+          'approved',
+          'rejected',
+        ] as const,
+        'approval decision',
+      );
+
+    const reviewNote =
+      optionalString(
+        request.data?.note,
+        500,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const approvalRef =
+      db.collection(
+        'financialApprovalRequests',
+      ).doc(
+        approvalId,
+      );
+
+    const approvalPre =
+      await approvalRef.get();
+
+    if (!approvalPre.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Approval request was not found.',
+      );
+    }
+
+    const approvalPreData =
+      approvalPre.data()
+      || {};
+
+    if (
+      String(
+        approvalPreData.ownerId
+        || '',
+      ) !== uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the Account Owner can approve or reject this request.',
+      );
+    }
+
+    const requestedBy =
+      stringValue(
+        approvalPreData.requestedBy,
+        'Requester',
+        160,
+      );
+
+    const accountId =
+      stringValue(
+        approvalPreData.accountId,
+        'Account',
+        100,
+      );
+
+    const destinationAccountId =
+      optionalString(
+        approvalPreData.destinationAccountId,
+        100,
+      )
+      || '';
+
+    const spaceId =
+      stringValue(
+        approvalPreData.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const transactionType =
+      oneOf(
+        approvalPreData.transactionType,
+        [
+          'expense',
+          'transfer',
+        ] as const,
+        'transaction type',
+      );
+
+    const accountRef =
+      db.collection(
+        'accounts',
+      ).doc(
+        accountId,
+      );
+
+    const destinationRef =
+      destinationAccountId
+        ? db.collection(
+            'accounts',
+          ).doc(
+            destinationAccountId,
+          )
+        : null;
+
+    const spaceRef =
+      db.collection(
+        'spaces',
+      ).doc(
+        spaceId,
+      );
+
+    const memberRef =
+      db.collection(
+        'spaceMembers',
+      ).doc(
+        spaceId
+        + '_'
+        + requestedBy,
+      );
+
+    const sourceAccessRef =
+      db.collection(
+        'accountAccess',
+      ).doc(
+        accountAccessDocumentId(
+          accountId,
+          requestedBy,
+        ),
+      );
+
+    const destinationAccessRef =
+      destinationAccountId
+        ? db.collection(
+            'accountAccess',
+          ).doc(
+            accountAccessDocumentId(
+              destinationAccountId,
+              requestedBy,
+            ),
+          )
+        : null;
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const transactionRef =
+      db.collection(
+        'transactions',
+      ).doc();
+
+    const budgetCandidateRefs =
+      transactionType === 'expense'
+        ? (
+            await db.collection(
+              'budgets',
+            )
+              .where(
+                'ownerId',
+                '==',
+                uid,
+              )
+              .where(
+                'spaceId',
+                '==',
+                spaceId,
+              )
+              .get()
+          ).docs.map(
+            (item) => item.ref,
+          )
+        : [];
+
+    return db.runTransaction(
+      async (transaction) => {
+        const commandSnapshot =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (commandSnapshot.exists) {
+          return commandSnapshot.data()?.result;
+        }
+
+        const approvalSnapshot =
+          await transaction.get(
+            approvalRef,
+          );
+
+        if (!approvalSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Approval request was not found.',
+          );
+        }
+
+        const approval =
+          approvalSnapshot.data()
+          || {};
+
+        if (
+          String(
+            approval.ownerId
+            || '',
+          ) !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Only the Account Owner can review this request.',
+          );
+        }
+
+        if (approval.status !== 'pending') {
+          throw new HttpsError(
+            'failed-precondition',
+            'This approval request has already been reviewed.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        if (decision === 'rejected') {
+          transaction.update(
+            approvalRef,
+            {
+              status: 'rejected',
+              reviewNote,
+              reviewedBy: uid,
+              reviewedAt: now,
+              updatedAt: now,
+            },
+          );
+
+          createNotification(
+            transaction,
+            {
+              uid: requestedBy,
+              spaceId,
+              type: 'financial_approval_rejected',
+              title: 'Money activity rejected',
+              message:
+                'The Account Owner rejected your requested money activity.',
+              targetPath: '/transactions?approvals=1',
+              actionLabel: 'View request',
+              now,
+            },
+          );
+
+          const result = {
+            approvalId,
+            status: 'rejected',
+          };
+
+          transaction.create(
+            commandRef,
+            {
+              uid,
+              kind: 'review_financial_approval',
+              idempotencyKey: key,
+              result,
+              createdAt: now,
+            },
+          );
+
+          return result;
+        }
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+          accountSnapshot,
+          destinationSnapshot,
+          sourceAccessSnapshot,
+          destinationAccessSnapshot,
+          budgetSnapshots,
+        ] = await Promise.all([
+          transaction.get(spaceRef),
+          transaction.get(memberRef),
+          transaction.get(accountRef),
+          destinationRef
+            ? transaction.get(destinationRef)
+            : Promise.resolve(null),
+          transaction.get(sourceAccessRef),
+          destinationAccessRef
+            ? transaction.get(destinationAccessRef)
+            : Promise.resolve(null),
+          Promise.all(
+            budgetCandidateRefs.map(
+              (ref) => transaction.get(ref),
+            ),
+          ),
+        ]);
+
+        if (
+          !spaceSnapshot.exists
+          || spaceSnapshot.data()?.archivedAt
+          || spaceSnapshot.data()?.type !== 'sme'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The Business Space is unavailable.',
+          );
+        }
+
+        if (
+          !memberSnapshot.exists
+          || [
+            'suspended',
+            'removed',
+          ].includes(
+            String(
+              memberSnapshot.data()?.status
+              || '',
+            ),
+          )
+          || memberSnapshot.data()?.canUseAccounts !== true
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The requester no longer has active account-use permission.',
+          );
+        }
+
+        if (
+          !sourceAccessSnapshot.exists
+          || !accessSpaceIds(
+            sourceAccessSnapshot.data(),
+            'usableSpaceIds',
+          ).includes(spaceId)
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The requester no longer has access to the source account.',
+          );
+        }
+
+        const account =
+          assertAccount(
+            accountSnapshot.data(),
+            uid,
+            'Account',
+          );
+
+        if (
+          accountSnapshot.data()?.classification !== 'business'
+          || !accountLinkedToBusinessSpace(
+            accountSnapshot.data() || {},
+            spaceId,
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The source account is no longer linked to this Business Space.',
+          );
+        }
+
+        const destination =
+          destinationSnapshot
+            ? assertAccount(
+                destinationSnapshot.data(),
+                uid,
+                'Destination account',
+              )
+            : null;
+
+        if (transactionType === 'transfer') {
+          if (
+            !destinationRef
+            || !destination
+            || !destinationAccessSnapshot?.exists
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The transfer destination is unavailable.',
+            );
+          }
+
+          if (
+            !accessSpaceIds(
+              destinationAccessSnapshot.data(),
+              'usableSpaceIds',
+            ).includes(spaceId)
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The requester no longer has access to the destination account.',
+            );
+          }
+
+          if (
+            destinationSnapshot?.data()?.classification !== 'business'
+            || !accountLinkedToBusinessSpace(
+              destinationSnapshot?.data() || {},
+              spaceId,
+            )
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The destination account is no longer linked to this Business Space.',
+            );
+          }
+
+          if (destination.ownerId !== account.ownerId) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Business transfers must stay between accounts owned by the same Account Owner.',
+            );
+          }
+
+          if (destination.currency !== account.currency) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Transfer accounts must use the same currency.',
+            );
+          }
+        }
+
+        const amountMinor =
+          positiveMoney(
+            approval.amountMinor,
+          );
+
+        const transactionDate =
+          localDate(
+            approval.transactionDate,
+          );
+
+        const categoryId =
+          stringValue(
+            approval.categoryId,
+            'Category ID',
+            100,
+          );
+
+        const labels =
+          transactionLabels(
+            approval.labels,
+          );
+
+        const {
+          paymentMethod,
+          paymentMethodLabel,
+        } = paymentMethodValues(
+          approval,
+        );
+
+        const budgetIds =
+          transactionType === 'expense'
+            ? matchingBudgetIds(
+                budgetSnapshots,
+                {
+                  spaceId,
+                  categoryId,
+                  transactionDate,
+                },
+              )
+            : [];
+
+        const ledgerEntryIds: string[] = [];
+
+        if (transactionType === 'expense') {
+          const delta =
+            accountEffect(
+              account.type,
+              'out',
+              amountMinor,
+            );
+
+          updateAccountBalance(
+            transaction,
+            accountRef,
+            account,
+            delta,
+          );
+
+          ledgerEntryIds.push(
+            createLedgerEntry(
+              transaction,
+              {
+                accountId,
+                ownerId: uid,
+                spaceId,
+                transactionId: transactionRef.id,
+                entryType: 'expense',
+                amountMinor: delta,
+                currency: account.currency,
+                idempotencyKey: key,
+                now,
+              },
+            ),
+          );
+        } else {
+          if (!destinationRef || !destination) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Transfer destination is unavailable.',
+            );
+          }
+
+          const sourceDelta =
+            accountEffect(
+              account.type,
+              'out',
+              amountMinor,
+            );
+
+          const destinationDelta =
+            accountEffect(
+              destination.type,
+              'in',
+              amountMinor,
+            );
+
+          updateAccountBalance(
+            transaction,
+            accountRef,
+            account,
+            sourceDelta,
+          );
+
+          updateAccountBalance(
+            transaction,
+            destinationRef,
+            destination,
+            destinationDelta,
+          );
+
+          ledgerEntryIds.push(
+            createLedgerEntry(
+              transaction,
+              {
+                accountId,
+                ownerId: uid,
+                spaceId,
+                transactionId: transactionRef.id,
+                entryType: 'transfer_out',
+                amountMinor: sourceDelta,
+                currency: account.currency,
+                idempotencyKey: key,
+                counterAccountId: destinationAccountId,
+                now,
+              },
+            ),
+          );
+
+          ledgerEntryIds.push(
+            createLedgerEntry(
+              transaction,
+              {
+                accountId: destinationAccountId,
+                ownerId: uid,
+                spaceId,
+                transactionId: transactionRef.id,
+                entryType: 'transfer_in',
+                amountMinor: destinationDelta,
+                currency: account.currency,
+                idempotencyKey: key,
+                counterAccountId: accountId,
+                now,
+              },
+            ),
+          );
+        }
+
+        if (budgetIds.length) {
+          updateBudgetsSpent(
+            transaction,
+            budgetSnapshots,
+            budgetIds,
+            amountMinor,
+          );
+        }
+
+        transaction.create(
+          transactionRef,
+          {
+            displayId: displayId('TXN'),
+            ownerId: uid,
+            createdBy: requestedBy,
+            approvedBy: uid,
+            financialApprovalId: approvalId,
+            type: transactionType,
+            status: 'posted',
+            spaceId,
+            accountId,
+            destinationAccountId:
+              destinationAccountId || null,
+            amountMinor,
+            currency: account.currency,
+            category:
+              String(
+                approval.category
+                || (
+                  transactionType === 'transfer'
+                    ? 'Transfer'
+                    : 'Expense'
+                ),
+              ),
+            categoryId,
+            categoryIcon:
+              String(
+                approval.categoryIcon
+                || 'circle',
+              ),
+            categoryColor:
+              String(
+                approval.categoryColor
+                || 'blue',
+              ),
+            categoryScope:
+              approval.categoryScope
+              || 'business',
+            categoryIsSystem:
+              approval.categoryIsSystem === true,
+            counterparty:
+              optionalString(
+                approval.counterparty,
+                120,
+              ),
+            note:
+              optionalString(
+                approval.note,
+                500,
+              ),
+            labels,
+            paymentMethod,
+            paymentMethodLabel,
+            transactionDate,
+            reversalOf: null,
+            reversedBy: null,
+            budgetIds,
+            commitmentId: null,
+            commitmentPaymentId: null,
+            createdAt: now,
+            postedAt: now,
+            updatedAt: now,
+          },
+        );
+
+        transaction.update(
+          approvalRef,
+          {
+            status: 'approved',
+            transactionId: transactionRef.id,
+            ledgerEntryIds,
+            reviewNote,
+            reviewedBy: uid,
+            reviewedAt: now,
+            updatedAt: now,
+          },
+        );
+
+        createNotification(
+          transaction,
+          {
+            uid: requestedBy,
+            spaceId,
+            type: 'financial_approval_approved',
+            title: 'Money activity approved',
+            message:
+              'The Account Owner approved your '
+              + (
+                transactionType === 'transfer'
+                  ? 'transfer'
+                  : 'expense'
+              )
+              + ' of '
+              + (amountMinor / 100).toFixed(2)
+              + ' '
+              + account.currency
+              + '.',
+            targetPath: '/transactions?approvals=1',
+            actionLabel: 'View approval',
+            now,
+          },
+        );
+
+        const result = {
+          approvalId,
+          status: 'approved',
+          transactionId: transactionRef.id,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind: 'review_financial_approval',
+            idempotencyKey: key,
+            result,
+            createdAt: now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
 
 export const createBusinessInvoice = onCall(
   { region },

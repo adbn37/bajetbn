@@ -28,9 +28,11 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import {
   getTransactionAttachmentUrl,
   listAllTransactionAttachments,
+  listFinancialApprovalRequests,
   listTransactionAttachments,
   listTransactions,
   postTransaction,
+  reviewFinancialApprovalRequest,
   removeTransactionAttachment,
   reverseTransaction,
   updateTransactionDetails,
@@ -42,6 +44,7 @@ import type {
   Account,
   CategoryKind,
   CategoryScope,
+  FinancialApprovalRequest,
   FinancialTransaction,
   PaymentMethodCode,
   Space,
@@ -53,6 +56,18 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 
 const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
 const statusLabels = { posted: 'Saved', reversed: 'Undone' } as const;
+
+const financialApprovalActionLabels: Record<
+  FinancialApprovalRequest['action'],
+  string
+> = {
+  manual_expense: 'Business expense',
+  account_transfer: 'Account transfer',
+  bill_payment: 'Bill payment',
+  instalment_payment: 'Instalment payment',
+  marketplace_seller_payout: 'Seller payout',
+  pos_refund_or_sensitive_money_out: 'Sensitive POS money out',
+};
 
 type PrimaryType = 'income' | 'expense' | 'transfer';
 type TypeFilter = 'all' | PrimaryType;
@@ -186,6 +201,11 @@ export function TransactionsPage() {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [customCategories, setCustomCategories] = useState<TransactionCategory[]>([]);
   const [transactionAttachmentCounts, setTransactionAttachmentCounts] = useState<Record<string, number>>({});
+  const [approvalRequests, setApprovalRequests] = useState<FinancialApprovalRequest[]>([]);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalError, setApprovalError] = useState('');
+  const [approvalBusyId, setApprovalBusyId] = useState('');
+  const [showApprovalCentre, setShowApprovalCentre] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -212,6 +232,11 @@ export function TransactionsPage() {
   const requestedReceipt =
     searchParams.get(
       'receipt',
+    ) === '1';
+
+  const requestedApprovals =
+    searchParams.get(
+      'approvals',
     ) === '1';
 
   const deepLinkOpenedRef =
@@ -264,6 +289,86 @@ export function TransactionsPage() {
   };
 
   useEffect(() => { void load(); }, [user, lastCompletedAt]);
+
+  const loadApprovals = async () => {
+    if (!user) {
+      setApprovalRequests([]);
+      return;
+    }
+
+    setApprovalLoading(true);
+    setApprovalError('');
+
+    try {
+      const nextApprovals =
+        await listFinancialApprovalRequests();
+
+      setApprovalRequests(
+        nextApprovals,
+      );
+    } catch (nextError) {
+      setApprovalError(
+        getErrorMessage(nextError),
+      );
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadApprovals();
+  }, [user, lastCompletedAt]);
+
+  useEffect(() => {
+    if (requestedApprovals) {
+      setShowApprovalCentre(true);
+    }
+  }, [requestedApprovals]);
+
+  const reviewApproval = async (
+    approval: FinancialApprovalRequest,
+    decision: 'approved' | 'rejected',
+  ) => {
+    if (
+      !user
+      || approvalBusyId
+      || approval.status !== 'pending'
+      || approval.ownerId !== user.uid
+    ) {
+      return;
+    }
+
+    setApprovalBusyId(
+      approval.id,
+    );
+
+    setApprovalError('');
+
+    try {
+      await reviewFinancialApprovalRequest({
+        approvalId: approval.id,
+        decision,
+      });
+
+      setFeedback(
+        decision === 'approved'
+          ? 'Money activity approved and posted safely.'
+          : 'Money activity request rejected. No balance or ledger changes were made.',
+      );
+
+      await loadApprovals();
+
+      if (decision === 'approved') {
+        await load();
+      }
+    } catch (nextError) {
+      setApprovalError(
+        getErrorMessage(nextError),
+      );
+    } finally {
+      setApprovalBusyId('');
+    }
+  };
 
   useEffect(
     () => {
@@ -325,6 +430,13 @@ export function TransactionsPage() {
       transactions,
     ],
   );
+
+  const pendingOwnedApprovalCount =
+    approvalRequests.filter(
+      (item) =>
+        item.status === 'pending'
+        && item.ownerId === user?.uid,
+    ).length;
 
   const allCategories = useMemo(
     () => [...DEFAULT_TRANSACTION_CATEGORIES, ...customCategories.filter((item) => !item.archivedAt)],
@@ -589,6 +701,18 @@ export function TransactionsPage() {
         description="Record money in, money out, and money moved between accounts."
         action={<div className="header-actions">
           <Link className="button secondary" to="/recurring">Recurring money</Link>
+          {approvalRequests.length > 0 && (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => setShowApprovalCentre(true)}
+            >
+              Approvals
+              {pendingOwnedApprovalCount > 0
+                ? ` (${pendingOwnedApprovalCount})`
+                : ''}
+            </button>
+          )}
           <button className="button secondary" onClick={() => setShowCategoryManager(true)}>Edit categories</button>
           <button className="button primary" onClick={() => setShowForm(true)} disabled={!accounts.length || !spaces.length}>+ Add money activity</button>
         </div>}
@@ -805,6 +929,193 @@ export function TransactionsPage() {
             if (refresh) await load();
           }}
         />
+      )}
+
+      {showApprovalCentre && user && (
+        <Modal
+          title="Financial approvals"
+          onClose={() => {
+            if (!approvalBusyId) {
+              setShowApprovalCentre(false);
+            }
+          }}
+        >
+          <div className="form-stack">
+            <div className="info-banner">
+              <strong>Account Owner approval</strong>
+              <span>
+                Pending requests do not change balances, ledgers or budgets until the Account Owner approves them.
+              </span>
+            </div>
+
+            {approvalError && (
+              <div className="notice error">
+                {approvalError}
+              </div>
+            )}
+
+            {approvalLoading && (
+              <div className="loading-panel">
+                Loading approvals…
+              </div>
+            )}
+
+            {!approvalLoading
+              && approvalRequests.length === 0
+              && (
+                <div className="notice">
+                  No financial approval requests yet.
+                </div>
+              )}
+
+            {!approvalLoading
+              && approvalRequests.map((approval) => {
+                const isOwner =
+                  approval.ownerId === user.uid;
+
+                const canReview =
+                  isOwner
+                  && approval.status === 'pending';
+
+                const statusText =
+                  approval.status === 'pending'
+                    ? 'Pending approval'
+                    : approval.status === 'approved'
+                      ? 'Approved'
+                      : approval.status === 'rejected'
+                        ? 'Rejected'
+                        : 'Cancelled';
+
+                return (
+                  <section
+                    className="panel"
+                    key={approval.id}
+                  >
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">
+                          {approval.spaceName || 'Business'}
+                        </span>
+
+                        <h2>
+                          {financialApprovalActionLabels[approval.action]}
+                        </h2>
+                      </div>
+
+                      <span
+                        className={`status-badge ${approval.status}`}
+                      >
+                        {statusText}
+                      </span>
+                    </div>
+
+                    <div className="form-stack compact">
+                      <div>
+                        <small>Amount</small>
+                        <strong>
+                          {formatMoney(
+                            approval.amountMinor,
+                            approval.currency,
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small>Requested by</small>
+                        <strong>
+                          {approval.requestedByName || 'Business member'}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small>Account</small>
+                        <strong>
+                          {approval.accountName || 'Business account'}
+                          {approval.destinationAccountName
+                            ? ` → ${approval.destinationAccountName}`
+                            : ''}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small>Date</small>
+                        <strong>
+                          {approval.transactionDate}
+                        </strong>
+                      </div>
+
+                      {approval.counterparty && (
+                        <div>
+                          <small>Payee / counterparty</small>
+                          <strong>{approval.counterparty}</strong>
+                        </div>
+                      )}
+
+                      {approval.note && (
+                        <div>
+                          <small>Note</small>
+                          <span>{approval.note}</span>
+                        </div>
+                      )}
+
+                      {!isOwner && approval.status === 'pending' && (
+                        <div className="notice warning compact-notice">
+                          Waiting for the Account Owner.
+                        </div>
+                      )}
+                    </div>
+
+                    {canReview && (
+                      <div className="modal-actions">
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={approvalBusyId === approval.id}
+                          onClick={() =>
+                            void reviewApproval(
+                              approval,
+                              'rejected',
+                            )
+                          }
+                        >
+                          {approvalBusyId === approval.id
+                            ? 'Reviewing…'
+                            : 'Reject'}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="button primary"
+                          disabled={approvalBusyId === approval.id}
+                          onClick={() =>
+                            void reviewApproval(
+                              approval,
+                              'approved',
+                            )
+                          }
+                        >
+                          {approvalBusyId === approval.id
+                            ? 'Reviewing…'
+                            : 'Approve & post'}
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={Boolean(approvalBusyId)}
+                onClick={() => setShowApprovalCentre(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {showCategoryManager && <CategoryManager
@@ -1161,6 +1472,20 @@ export function MoneyActivityModal({
           return;
         }
         await onComplete('Saved on this device. BajetBN will sync it when internet returns.', false);
+        return;
+      }
+
+      if (outcome.mode === 'pending_approval') {
+        const attachmentMessage =
+          pendingFiles.length > 0
+            ? ' The selected attachments were not uploaded because no financial transaction exists until approval.'
+            : '';
+
+        await onComplete(
+          'Sent to the Account Owner for approval. No balance or ledger changes have been made yet.'
+          + attachmentMessage,
+          true,
+        );
         return;
       }
 

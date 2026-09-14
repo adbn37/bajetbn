@@ -661,6 +661,58 @@ export interface BusinessInvoicePayment {
 
 export type FinancialTransactionType = 'income' | 'expense' | 'transfer' | 'reversal';
 export type FinancialTransactionStatus = 'posted' | 'reversed';
+
+export type FinancialApprovalAction =
+  | 'manual_expense'
+  | 'account_transfer'
+  | 'bill_payment'
+  | 'instalment_payment'
+  | 'marketplace_seller_payout'
+  | 'pos_refund_or_sensitive_money_out';
+
+export type FinancialApprovalStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled';
+
+export interface FinancialApprovalRequest {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  requestedBy: string;
+  requestedByName?: string;
+  spaceId: string;
+  spaceName?: string;
+  action: FinancialApprovalAction;
+  transactionType: 'expense' | 'transfer';
+  accountId: string;
+  accountName?: string;
+  destinationAccountId?: string | null;
+  destinationAccountName?: string | null;
+  amountMinor: number;
+  currency: string;
+  transactionDate: string;
+  category: string;
+  categoryId: string;
+  categoryIcon?: string;
+  categoryColor?: string;
+  categoryScope?: CategoryScope;
+  categoryIsSystem?: boolean;
+  counterparty?: string;
+  note?: string;
+  labels?: string[];
+  paymentMethod?: PaymentMethodCode | null;
+  paymentMethodLabel?: string | null;
+  status: FinancialApprovalStatus;
+  transactionId?: string | null;
+  ledgerEntryIds?: string[];
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  createdAt?: Timestamp;
+  reviewedAt?: Timestamp | null;
+  updatedAt?: Timestamp;
+}
 export type RecurringTransactionType = 'income' | 'expense';
 export type RecurringTransactionFrequency = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type RecurringTransactionStatus = 'active' | 'paused' | 'needs_attention' | 'stopped' | 'completed';
@@ -716,6 +768,8 @@ export interface FinancialTransaction {
   spaceWorkItemId?: string | null;
   sharedBillAssignmentId?: string | null;
   sharedBillPaymentId?: string | null;
+  financialApprovalId?: string | null;
+  approvedBy?: string | null;
   paymentProofPath?: string | null;
   recurringTemplateId?: string | null;
   recurringRunId?: string | null;

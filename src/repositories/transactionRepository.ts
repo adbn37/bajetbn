@@ -11,14 +11,21 @@ import {
   type OfflineFinancialCommand,
   type OfflineTransactionPayload,
 } from '../services/offlineQueue';
-import type { CategoryScope, FinancialTransaction, PaymentMethodCode, TransactionAttachment } from '../types/models';
+import type {
+  CategoryScope,
+  FinancialApprovalRequest,
+  FinancialTransaction,
+  PaymentMethodCode,
+  TransactionAttachment,
+} from '../types/models';
 import { getErrorMessage } from '../utils/errors';
 
 export type TransactionInput = OfflineTransactionPayload;
 
 export interface PostTransactionOutcome {
-  mode: 'posted' | 'queued';
+  mode: 'posted' | 'queued' | 'pending_approval';
   transactionId?: string;
+  approvalId?: string;
   queueId?: string;
 }
 
@@ -53,11 +60,23 @@ function isRetryableConnectionError(error: unknown): boolean {
     || message.includes('network error');
 }
 
-async function invokePostTransaction(input: TransactionInput, key: string): Promise<{ transactionId?: string }> {
+async function invokePostTransaction(
+  input: TransactionInput,
+  key: string,
+): Promise<{
+  status?: 'posted' | 'pending_approval';
+  transactionId?: string;
+  approvalId?: string;
+}> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'postTransaction');
   const result = await call({ ...input, idempotencyKey: key });
-  return (result.data || {}) as { transactionId?: string };
+
+  return (result.data || {}) as {
+    status?: 'posted' | 'pending_approval';
+    transactionId?: string;
+    approvalId?: string;
+  };
 }
 
 export async function listTransactions(uid: string): Promise<FinancialTransaction[]> {
@@ -189,6 +208,54 @@ export async function listBusinessTransactionsForSpace(
     });
 }
 
+export async function listFinancialApprovalRequests(): Promise<FinancialApprovalRequest[]> {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'getFinancialApprovalRequests',
+  );
+
+  const result = await call({});
+
+  return (
+    (
+      result.data as {
+        approvals?: FinancialApprovalRequest[];
+      }
+    )?.approvals
+    || []
+  );
+}
+
+export async function reviewFinancialApprovalRequest(input: {
+  approvalId: string;
+  decision: 'approved' | 'rejected';
+  note?: string;
+}): Promise<{
+  approvalId: string;
+  status: 'approved' | 'rejected';
+  transactionId?: string;
+}> {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'reviewFinancialApprovalRequest',
+  );
+
+  const result = await call({
+    ...input,
+    idempotencyKey: idempotencyKey(),
+  });
+
+  return result.data as {
+    approvalId: string;
+    status: 'approved' | 'rejected';
+    transactionId?: string;
+  };
+}
+
 export async function postTransaction(input: {
   type: 'income' | 'expense' | 'transfer';
   accountId: string;
@@ -220,7 +287,18 @@ export async function postTransaction(input: {
 
   try {
     const result = await invokePostTransaction(input, key);
-    return { mode: 'posted', transactionId: result.transactionId };
+
+    if (result.status === 'pending_approval') {
+      return {
+        mode: 'pending_approval',
+        approvalId: result.approvalId,
+      };
+    }
+
+    return {
+      mode: 'posted',
+      transactionId: result.transactionId,
+    };
   } catch (error) {
     if (!isRetryableConnectionError(error)) throw error;
     const queued = await addOfflineTransactionCommand({ uid, idempotencyKey: key, payload: input });
