@@ -15,6 +15,10 @@ function today() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Brunei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
+function bookingReference(value: string) {
+  return `Booking #${value.replace(/^RSV-/, '')}`;
+}
+
 export interface SmePosReservationDraftItem {
   itemId: string;
   name: string;
@@ -191,7 +195,7 @@ export function SmePosReservationsPanel({ space, settings, role, reservations, p
     {success && <div className="notice success">{success}</div>}
     <div className="sme-pos-booking-list">
       {reservations.map((reservation) => <article className="sme-pos-booking-card" key={reservation.id}>
-        <div className="panel-heading compact"><div><strong>{reservation.reservationNumber}</strong><small>{reservation.customerName} · {reservation.itemCount} item(s){reservation.dueDate ? ` · Hold until ${reservation.dueDate}` : ''}</small></div><span className="status-badge posted">{reservation.status.replace('_', ' ')}</span></div>
+        <div className="panel-heading compact"><div><strong>{bookingReference(reservation.reservationNumber)}</strong><small>{reservation.customerName} · {reservation.itemCount} item(s){reservation.dueDate ? ` · Hold until ${reservation.dueDate}` : ''}</small></div><span className="status-badge posted">{reservation.status.replace('_', ' ')}</span></div>
         <div className="sme-pos-booking-items">{reservation.items.map((item) => <div key={item.itemId}><span>{item.quantity} × {item.productName}</span><strong>{formatMoney(item.lineTotalMinor, reservation.currency)}</strong></div>)}</div>
         <div className="sme-pos-booking-money"><span>Total <strong>{formatMoney(reservation.totalMinor, reservation.currency)}</strong></span><span>Deposit <strong>{formatMoney(reservation.depositMinor, reservation.currency)}</strong></span><span>Remaining <strong>{formatMoney(reservation.remainingMinor, reservation.currency)}</strong></span></div>
         <small>Created by {reservation.createdByName || 'staff'} on {reservation.reservationDate}</small>
@@ -200,7 +204,7 @@ export function SmePosReservationsPanel({ space, settings, role, reservations, p
     </div>
     {!reservations.length && <div className="empty-inline">No active bookings.</div>}
 
-    {action && <Modal title={action.kind === 'deposit' ? `Add deposit · ${action.reservation.reservationNumber}` : action.kind === 'complete' ? `Complete booking · ${action.reservation.reservationNumber}` : `Cancel booking · ${action.reservation.reservationNumber}`} onClose={() => !busy && setAction(null)}>
+    {action && <Modal title={action.kind === 'deposit' ? `Add deposit · ${bookingReference(action.reservation.reservationNumber)}` : action.kind === 'complete' ? `Complete booking · ${bookingReference(action.reservation.reservationNumber)}` : `Cancel booking · ${bookingReference(action.reservation.reservationNumber)}`} onClose={() => !busy && setAction(null)}>
       <form className="form-stack" onSubmit={submit}>
         {action.kind === 'cancel' ? <div className="notice warning">Reserved stock will be released. Any deposit already collected will be refunded automatically to the original payment account(s).</div> : <div className="notice">Remaining balance: <strong>{formatMoney(action.reservation.remainingMinor, action.reservation.currency)}</strong></div>}
         {action.kind !== 'cancel' && action.reservation.remainingMinor > 0 && <SmePosPaymentSplitEditor accounts={paymentAccounts} currency={action.reservation.currency} totalMinor={action.kind === 'complete' ? action.reservation.remainingMinor : paymentDraftTotalMinor(rows)} rows={rows} onChange={setRows} disabled={busy} label={action.kind === 'complete' ? 'Final payment' : 'Additional deposit'} />}
