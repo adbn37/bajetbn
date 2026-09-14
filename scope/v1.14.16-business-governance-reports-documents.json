@@ -1,0 +1,175 @@
+﻿{
+  "version": "1.14.16",
+  "title": "Business Governance, Reports & Private Documents",
+  "status": "planned",
+  "baseline": "v1.14.15",
+  "principles": [
+    "Normal POS sales must remain immediate and must not require owner approval.",
+    "Sensitive shared-account money-out actions by a non-account-owner require approval before any financial posting.",
+    "Pending approvals must not change account balances, ledgers, budgets, bills, instalments, reports, seller balances or financial status.",
+    "Incoming customer payments such as normal POS sales and invoice receipts do not require approval by default.",
+    "Confidential payslip and seller payout documents must never be visible to unrelated Space members."
+  ],
+  "accountGovernance": {
+    "status": "planned",
+    "requirements": [
+      "Shared Business accounts can be assigned to selected Space members.",
+      "Support account access levels: Owner, Manager, User and Viewer.",
+      "Keep granular permissions for account use, balance visibility and ledger/activity visibility.",
+      "Shared accounts appear in global Accounts and Money views when the signed-in user has permission.",
+      "Account ownership can be transferred safely to another eligible BajetBN user.",
+      "Ownership transfer must preserve historical transactions and ledger integrity.",
+      "Account owner retains final control over sensitive account actions."
+    ]
+  },
+  "financialApprovals": {
+    "status": "planned",
+    "defaultApprovalActionsForNonOwner": [
+      "manual_expense",
+      "account_transfer",
+      "bill_payment",
+      "instalment_payment",
+      "marketplace_seller_payout",
+      "pos_refund_or_sensitive_money_out"
+    ],
+    "normallyNoApproval": [
+      "normal_pos_sale",
+      "pos_split_payment",
+      "pos_booking_deposit",
+      "pos_booking_completion",
+      "invoice_customer_payment",
+      "normal_business_income"
+    ],
+    "requirements": [
+      "Approval rules are action-based rather than blanket account locking.",
+      "Account owner can approve or reject.",
+      "Maintain pending, approved, rejected and cancelled audit history.",
+      "Notify requester when approved or rejected.",
+      "Allow approval policy to be configurable where suitable."
+    ]
+  },
+  "reportAccess": {
+    "status": "planned",
+    "requirements": [
+      "Owner can grant full report access to selected Business Space members independently of their POS role.",
+      "A cashier, viewer or other selected member can receive full-report permission without receiving unrelated management permissions.",
+      "Report access must be enforced by backend permissions as well as UI."
+    ]
+  },
+  "advancedReports": {
+    "status": "planned",
+    "appliesTo": [
+      "Business Space",
+      "Standard POS",
+      "Marketplace POS"
+    ],
+    "filters": [
+      "date period",
+      "custom date range",
+      "payment account",
+      "payment method",
+      "cashier or staff",
+      "customer",
+      "walk-in customer",
+      "seller",
+      "product or item",
+      "category",
+      "receipt number",
+      "sale status",
+      "search"
+    ],
+    "summaries": [
+      "gross sales",
+      "discounts",
+      "returns and refunds",
+      "net sales",
+      "transaction count",
+      "items sold",
+      "average sale",
+      "estimated profit",
+      "sales by account",
+      "sales by payment method",
+      "Marketplace commission",
+      "seller earnings",
+      "seller payouts",
+      "seller outstanding balances"
+    ],
+    "requirements": [
+      "Split payments must be allocated to their actual payment accounts without double-counting.",
+      "Support CSV export.",
+      "Support printable reports."
+    ]
+  },
+  "spaceCommitments": {
+    "status": "planned",
+    "requirements": [
+      "Instalments assigned to a Space must be visible inside that Space.",
+      "Bills view shows bills only.",
+      "Instalments view shows instalments only.",
+      "Show total, paid, remaining, next due date and payment history where applicable."
+    ]
+  },
+  "invoices": {
+    "status": "planned",
+    "requirements": [
+      "Keep Business Invoices.",
+      "Review owner-only restrictions and support selected authorised users where appropriate.",
+      "Creating and issuing invoices follows Business permissions.",
+      "Incoming invoice payment normally posts without owner approval.",
+      "Sensitive cancellation or financial correction remains restricted and audited."
+    ]
+  },
+  "payslips": {
+    "status": "planned",
+    "requirements": [
+      "Replace the user-facing full Payroll concept with Payslips and Salary Documents.",
+      "Preserve existing historical payroll and ledger records.",
+      "Support monthly payslip generation for Business Space employees.",
+      "Support salary, allowance, overtime, bonus, deductions, net pay, payment date, payment method, reference and notes.",
+      "Generate a permanent payslip document or PDF.",
+      "Generate a private BajetBN payslip link.",
+      "Allow WhatsApp sharing using the employee phone number.",
+      "Employee can view only their own payslips.",
+      "Business Owner can view all payslips.",
+      "Only explicitly authorised Managers can view all payslips.",
+      "Other staff must never see another employee payslip.",
+      "Provide My Payslips inside the relevant Business Space and a private global document view.",
+      "Issued documents must keep history; corrections should be reissued rather than silently replacing history."
+    ]
+  },
+  "marketplacePayoutDocuments": {
+    "status": "planned",
+    "requirements": [
+      "Generate a settlement or payout statement whenever a Marketplace seller payout is finalised.",
+      "Generate a document or PDF and private BajetBN link.",
+      "Allow WhatsApp sharing using the seller phone number.",
+      "Linked seller can view only their own payout statements.",
+      "Business Owner can view all seller payout statements.",
+      "Only explicitly authorised Managers can view all payout statements.",
+      "Other sellers and unrelated staff must not see another seller payout statement.",
+      "Statement includes payout amount, payment account, payment method, reference, balance after payout and relevant adjustments.",
+      "Where available, show the sales or earnings covered by the payout."
+    ]
+  },
+  "privateDocuments": {
+    "status": "planned",
+    "requirements": [
+      "Use dedicated permission-protected document storage rather than ordinary Space-wide attachment visibility.",
+      "Do not expose raw Firebase storage links as the primary shared link.",
+      "BajetBN document routes must validate the signed-in viewer.",
+      "Owner and authorised manager access must be audited.",
+      "Employee or seller access must be identity-linked.",
+      "Support issued, shared, viewed, reissued and cancelled document history."
+    ]
+  },
+  "releaseSafety": {
+    "requirements": [
+      "Develop only on feature/v1.14.16-business-governance-reports-documents.",
+      "Do not modify production during feature development.",
+      "Build and verify every slice before staging.",
+      "Test account approval behaviour with owner and non-owner users.",
+      "Test confidential document isolation with at least two different staff or seller accounts.",
+      "Promote only after staging acceptance."
+    ]
+  }
+}
