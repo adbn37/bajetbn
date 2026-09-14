@@ -714,6 +714,14 @@ export interface FinancialApprovalRequest {
     paymentMethod?: PaymentMethodCode | null;
     paymentMethodLabel?: string | null;
   }>;
+  saleId?: string | null;
+  receiptNumber?: string | null;
+  sourceMode?: SmePosMode | null;
+  returnDate?: string | null;
+  returnItems?: Array<{
+    itemId: string;
+    quantity: number;
+  }>;
   status: FinancialApprovalStatus;
   transactionId?: string | null;
   ledgerEntryIds?: string[];

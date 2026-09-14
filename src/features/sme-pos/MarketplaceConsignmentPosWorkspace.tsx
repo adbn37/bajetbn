@@ -1546,7 +1546,19 @@ export function MarketplaceConsignmentPosWorkspace({
         reason: returnForm.reason,
       });
       setReturnForm(null);
-      setSuccess(`Return recorded. ${formatMoney(result.data.refundMinor, returnForm.sale.currency)} was refunded and seller balances were adjusted.`);
+
+      if (result.data.status === 'pending_approval') {
+        setSuccess(
+          `Return request sent to the Account Owner for approval. `
+          + `${formatMoney(result.data.refundMinor, returnForm.sale.currency)} is pending. `
+          + 'No refund, stock or seller-balance changes were made yet.',
+        );
+        return;
+      }
+
+      setSuccess(
+        `Return recorded. ${formatMoney(result.data.refundMinor, returnForm.sale.currency)} was refunded and seller balances were adjusted.`,
+      );
       await load();
       await onChanged();
     } catch (nextError) {

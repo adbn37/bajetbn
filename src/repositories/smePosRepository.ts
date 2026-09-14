@@ -854,10 +854,34 @@ export async function returnSmePosSale(input: {
   items: Array<{ itemId: string; quantity: number }>;
   returnDate: string;
   reason?: string;
-}): Promise<{ data: { returnId: string; saleId: string; refundMinor: number; transactionId: string } }> {
+}): Promise<{
+  data: {
+    status: 'posted' | 'pending_approval';
+    approvalId?: string;
+    returnId?: string;
+    saleId: string;
+    refundMinor: number;
+    transactionId?: string;
+    transactionIds?: string[];
+  };
+}> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'returnSmePosSale');
-  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { returnId: string; saleId: string; refundMinor: number; transactionId: string } }>;
+
+  return call({
+    ...input,
+    idempotencyKey: crypto.randomUUID(),
+  }) as Promise<{
+    data: {
+      status: 'posted' | 'pending_approval';
+      approvalId?: string;
+      returnId?: string;
+      saleId: string;
+      refundMinor: number;
+      transactionId?: string;
+      transactionIds?: string[];
+    };
+  }>;
 }
 
 export async function voidSmePosSale(input: {

@@ -2651,6 +2651,1492 @@ async function reviewMarketplaceSellerPayoutApproval(input: {
   });
 }
 
+async function reviewPosReturnApproval(input: {
+  uid: string;
+  approvalId: string;
+  decision: 'approved' | 'rejected';
+  reviewNote: string;
+  key: string;
+}) {
+  const approvalRef =
+    db.collection('financialApprovalRequests')
+      .doc(input.approvalId);
+
+  const commandRef =
+    db.collection('financialCommands')
+      .doc(commandId(input.uid, input.key));
+
+  return db.runTransaction(async (transaction) => {
+    const [
+      commandSnapshot,
+      approvalSnapshot,
+    ] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(approvalRef),
+    ]);
+
+    if (commandSnapshot.exists) {
+      return commandSnapshot.data()?.result;
+    }
+
+    if (!approvalSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'POS return approval was not found.',
+      );
+    }
+
+    const approval =
+      approvalSnapshot.data() || {};
+
+    if (
+      String(approval.ownerId || '')
+      !== input.uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the Account Owner can review this POS return.',
+      );
+    }
+
+    if (
+      approval.action
+      !== 'pos_refund_or_sensitive_money_out'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This approval request is not a POS return.',
+      );
+    }
+
+    if (
+      approval.status
+      !== 'pending'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This POS return has already been reviewed.',
+      );
+    }
+
+    const requestedBy =
+      stringValue(
+        approval.requestedBy,
+        'Requester',
+        160,
+      );
+
+    const spaceId =
+      stringValue(
+        approval.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const saleId =
+      stringValue(
+        approval.saleId,
+        'POS sale',
+        100,
+      );
+
+    const requestedItems =
+      parseSmePosReturnItems(
+        approval.returnItems,
+      );
+
+    const returnDate =
+      localDate(
+        approval.returnDate
+        || approval.transactionDate,
+        'Return date',
+      );
+
+    const reason =
+      optionalString(
+        approval.note,
+        500,
+      );
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    if (
+      input.decision
+      === 'rejected'
+    ) {
+      transaction.update(
+        approvalRef,
+        {
+          status: 'rejected',
+          reviewNote: input.reviewNote,
+          reviewedBy: input.uid,
+          reviewedAt: now,
+          updatedAt: now,
+        },
+      );
+
+      createNotification(
+        transaction,
+        {
+          uid: requestedBy,
+          spaceId,
+          type: 'financial_approval_rejected',
+          title: 'POS return rejected',
+          message:
+            'The Account Owner rejected your POS return request.',
+          targetPath: '/transactions?approvals=1',
+          actionLabel: 'View request',
+          now,
+        },
+      );
+
+      const result = {
+        approvalId: input.approvalId,
+        status: 'rejected',
+      };
+
+      transaction.create(
+        commandRef,
+        {
+          uid: input.uid,
+          kind: 'review_pos_return_approval',
+          idempotencyKey: input.key,
+          result,
+          createdAt: now,
+        },
+      );
+
+      return result;
+    }
+
+    const spaceRef =
+      db.collection('spaces').doc(spaceId);
+
+    const memberRef =
+      db.collection('spaceMembers')
+        .doc(`${spaceId}_${requestedBy}`);
+
+    const settingsRef =
+      db.collection('smePosSettings').doc(spaceId);
+
+    const accessRef =
+      db.collection('smePosAccess')
+        .doc(`${spaceId}_${requestedBy}`);
+
+    const saleRef =
+      db.collection('smePosSales').doc(saleId);
+
+    const [
+      spaceSnapshot,
+      memberSnapshot,
+      settingsSnapshot,
+      accessSnapshot,
+      saleSnapshot,
+    ] = await Promise.all([
+      transaction.get(spaceRef),
+      transaction.get(memberRef),
+      transaction.get(settingsRef),
+      transaction.get(accessRef),
+      transaction.get(saleRef),
+    ]);
+
+    if (
+      !spaceSnapshot.exists
+      || spaceSnapshot.data()?.archivedAt
+      || spaceSnapshot.data()?.type !== 'sme'
+      || String(spaceSnapshot.data()?.ownerId || '') !== input.uid
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The Business Space is unavailable or ownership has changed.',
+      );
+    }
+
+    if (!settingsSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The POS settings are unavailable.',
+      );
+    }
+
+    const settings =
+      settingsSnapshot.data() || {};
+
+    if (
+      String(settings.ownerId || '')
+      !== input.uid
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The POS owner no longer matches the Account Owner.',
+      );
+    }
+
+    if (
+      !memberSnapshot.exists
+      || ['suspended', 'removed'].includes(
+        String(memberSnapshot.data()?.status || ''),
+      )
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The requester is no longer an active Business member.',
+      );
+    }
+
+    if (
+      !accessSnapshot.exists
+      || accessSnapshot.data()?.status !== 'active'
+      || accessSnapshot.data()?.role !== 'manager'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The requester is no longer an active POS Manager.',
+      );
+    }
+
+    if (!saleSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'The POS sale is unavailable.',
+      );
+    }
+
+    const sale =
+      saleSnapshot.data() || {};
+
+    if (
+      sale.spaceId !== spaceId
+      || sale.ownerId !== input.uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'This sale belongs to another Business.',
+      );
+    }
+
+    const sourceMode =
+      oneOf(
+        sale.sourceMode,
+        smePosModes,
+        'POS sale mode',
+      );
+
+    if (
+      approval.sourceMode
+      && approval.sourceMode !== sourceMode
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The sale type no longer matches this return request.',
+      );
+    }
+
+    if (
+      sale.status === 'refunded'
+      || sale.returnStatus === 'full'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This sale has already been fully refunded.',
+      );
+    }
+
+    const items =
+      Array.isArray(sale.items)
+        ? sale.items.map(
+            (item: unknown) => ({
+              ...((item || {}) as DocumentData),
+            }),
+          )
+        : [];
+
+    if (!items.length) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This sale has no returnable items.',
+      );
+    }
+
+    const lineIds =
+      items.map(
+        (item) =>
+          String(
+            sourceMode === 'marketplace_consignment'
+              ? item.listingId || item.productId || ''
+              : item.productId || '',
+          ),
+      );
+
+    const lineIndexes =
+      new Map(
+        lineIds.map(
+          (id, index) => [id, index],
+        ),
+      );
+
+    requestedItems.forEach((requested) => {
+      if (!lineIndexes.has(requested.itemId)) {
+        throw new HttpsError(
+          'invalid-argument',
+          'One selected item is no longer part of this sale.',
+        );
+      }
+    });
+
+    const realRequested =
+      requestedItems.filter(
+        (requested) =>
+          !items[
+            lineIndexes.get(requested.itemId)!
+          ]?.quickAdd,
+      );
+
+    const itemRefs =
+      realRequested.map(
+        (requested) =>
+          sourceMode === 'marketplace_consignment'
+            ? db.collection('smePosListings')
+                .doc(requested.itemId)
+            : db.collection('smePosProducts')
+                .doc(requested.itemId),
+      );
+
+    const sellerIds =
+      sourceMode === 'marketplace_consignment'
+        ? [
+            ...new Set(
+              requestedItems
+                .map(
+                  (requested) =>
+                    String(
+                      items[
+                        lineIndexes.get(requested.itemId)!
+                      ]?.sellerId || '',
+                    ),
+                )
+                .filter(Boolean),
+            ),
+          ]
+        : [];
+
+    const sellerRefs =
+      sellerIds.map(
+        (sellerId) =>
+          db.collection('smePosSellers')
+            .doc(sellerId),
+      );
+
+    const customerRef =
+      sale.customerId
+        ? db.collection('smePosCustomers')
+            .doc(String(sale.customerId))
+        : null;
+
+    const [
+      itemSnapshots,
+      sellerSnapshots,
+      customerSnapshot,
+    ] = await Promise.all([
+      Promise.all(
+        itemRefs.map(
+          (ref) => transaction.get(ref),
+        ),
+      ),
+      Promise.all(
+        sellerRefs.map(
+          (ref) => transaction.get(ref),
+        ),
+      ),
+      customerRef
+        ? transaction.get(customerRef)
+        : Promise.resolve(null),
+    ]);
+
+    const itemSnapshotById =
+      new Map(
+        itemSnapshots.map(
+          (snapshot) => [snapshot.id, snapshot],
+        ),
+      );
+
+    const sellerById =
+      new Map(
+        sellerSnapshots.map(
+          (snapshot) => [snapshot.id, snapshot],
+        ),
+      );
+
+    const netLineTotals =
+      smePosNetLineTotals(
+        items,
+        nonNegativeMoney(
+          sale.discountMinor || 0,
+        ),
+      );
+
+    let refundMinor = 0;
+    let costReversedMinor = 0;
+    let commissionReversedMinor = 0;
+    let sellerEarningReversedMinor = 0;
+    let returnedItemCount = 0;
+
+    const sellerAdjustments =
+      new Map<
+        string,
+        {
+          gross: number;
+          commission: number;
+          earnings: number;
+          quantity: number;
+          name: string;
+          uid: string | null;
+        }
+      >();
+
+    const returnItems: DocumentData[] = [];
+
+    const itemUpdates:
+      Array<{
+        ref: DocumentReference;
+        data: DocumentData;
+      }> = [];
+
+    requestedItems.forEach((requested) => {
+      const lineIndex =
+        lineIndexes.get(requested.itemId)!;
+
+      const line =
+        items[lineIndex];
+
+      const totalQuantity =
+        integerBetween(
+          line.quantity,
+          'Sold quantity',
+          1,
+          9_999,
+        );
+
+      const previousReturned =
+        integerBetween(
+          line.returnedQuantity || 0,
+          'Returned quantity',
+          0,
+          totalQuantity,
+        );
+
+      if (
+        requested.quantity
+        > totalQuantity - previousReturned
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          `${line.productName || 'This item'} only has ${totalQuantity - previousReturned} returnable.`,
+        );
+      }
+
+      const nextReturned =
+        previousReturned + requested.quantity;
+
+      const lineNetMinor =
+        netLineTotals[lineIndex];
+
+      const previousRefundMinor =
+        cumulativeShare(
+          lineNetMinor,
+          totalQuantity,
+          previousReturned,
+        );
+
+      const nextRefundMinor =
+        cumulativeShare(
+          lineNetMinor,
+          totalQuantity,
+          nextReturned,
+        );
+
+      const lineRefundMinor =
+        nextRefundMinor - previousRefundMinor;
+
+      if (lineRefundMinor <= 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The selected return amount is invalid.',
+        );
+      }
+
+      const quickAdd =
+        line.quickAdd === true;
+
+      const itemSnapshot =
+        quickAdd
+          ? null
+          : itemSnapshotById.get(
+              requested.itemId,
+            );
+
+      if (
+        !quickAdd
+        && (
+          !itemSnapshot?.exists
+          || itemSnapshot.data()?.spaceId !== spaceId
+          || itemSnapshot.data()?.ownerId !== input.uid
+        )
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'A returned inventory item is unavailable.',
+        );
+      }
+
+      let lineCommissionReversedMinor = 0;
+      let lineSellerEarningReversedMinor = 0;
+
+      if (
+        sourceMode
+        === 'marketplace_consignment'
+      ) {
+        const totalCommissionMinor =
+          nonNegativeMoney(
+            line.commissionMinor || 0,
+          );
+
+        const previousCommission =
+          cumulativeShare(
+            totalCommissionMinor,
+            totalQuantity,
+            previousReturned,
+          );
+
+        const nextCommission =
+          cumulativeShare(
+            totalCommissionMinor,
+            totalQuantity,
+            nextReturned,
+          );
+
+        lineCommissionReversedMinor =
+          nextCommission - previousCommission;
+
+        lineSellerEarningReversedMinor =
+          lineRefundMinor
+          - lineCommissionReversedMinor;
+
+        const sellerId =
+          stringValue(
+            line.sellerId,
+            'Seller ID',
+            80,
+          );
+
+        const sellerSnapshot =
+          sellerById.get(sellerId);
+
+        if (
+          !sellerSnapshot?.exists
+          || sellerSnapshot.data()?.spaceId !== spaceId
+          || sellerSnapshot.data()?.ownerId !== input.uid
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The seller balance record is unavailable.',
+          );
+        }
+
+        const current =
+          sellerAdjustments.get(sellerId)
+          || {
+            gross: 0,
+            commission: 0,
+            earnings: 0,
+            quantity: 0,
+            name:
+              String(
+                sellerSnapshot.data()?.name
+                || line.sellerName
+                || 'Seller',
+              ),
+            uid:
+              sellerSnapshot.data()?.linkedUid
+              || line.sellerUid
+              || null,
+          };
+
+        current.gross += lineRefundMinor;
+        current.commission +=
+          lineCommissionReversedMinor;
+        current.earnings +=
+          lineSellerEarningReversedMinor;
+        current.quantity +=
+          requested.quantity;
+
+        sellerAdjustments.set(
+          sellerId,
+          current,
+        );
+
+        if (itemSnapshot) {
+          itemUpdates.push({
+            ref: itemSnapshot.ref,
+            data: {
+              quantityOnHand:
+                Number(
+                  itemSnapshot.data()?.quantityOnHand || 0,
+                )
+                + requested.quantity,
+              soldQuantity:
+                Math.max(
+                  0,
+                  Number(
+                    itemSnapshot.data()?.soldQuantity || 0,
+                  )
+                  - requested.quantity,
+                ),
+              grossSalesMinor:
+                Math.max(
+                  0,
+                  Number(
+                    itemSnapshot.data()?.grossSalesMinor || 0,
+                  )
+                  - lineRefundMinor,
+                ),
+              commissionEarnedMinor:
+                Math.max(
+                  0,
+                  Number(
+                    itemSnapshot.data()?.commissionEarnedMinor || 0,
+                  )
+                  - lineCommissionReversedMinor,
+                ),
+              sellerEarningsMinor:
+                Math.max(
+                  0,
+                  Number(
+                    itemSnapshot.data()?.sellerEarningsMinor || 0,
+                  )
+                  - lineSellerEarningReversedMinor,
+                ),
+              updatedAt: now,
+            },
+          });
+        }
+      } else {
+        const lineCostMinor =
+          nonNegativeMoney(
+            line.lineCostMinor || 0,
+          );
+
+        const previousCost =
+          cumulativeShare(
+            lineCostMinor,
+            totalQuantity,
+            previousReturned,
+          );
+
+        const nextCost =
+          cumulativeShare(
+            lineCostMinor,
+            totalQuantity,
+            nextReturned,
+          );
+
+        const lineCostReversedMinor =
+          nextCost - previousCost;
+
+        costReversedMinor +=
+          lineCostReversedMinor;
+
+        if (itemSnapshot) {
+          const lineGrossMinor =
+            nonNegativeMoney(
+              line.lineTotalMinor || 0,
+            );
+
+          const previousGross =
+            cumulativeShare(
+              lineGrossMinor,
+              totalQuantity,
+              previousReturned,
+            );
+
+          const nextGross =
+            cumulativeShare(
+              lineGrossMinor,
+              totalQuantity,
+              nextReturned,
+            );
+
+          const lineGrossReversedMinor =
+            nextGross - previousGross;
+
+          const product =
+            itemSnapshot.data() || {};
+
+          itemUpdates.push({
+            ref: itemSnapshot.ref,
+            data: {
+              quantityOnHand:
+                product.trackStock === false
+                  ? 0
+                  : Number(
+                      product.quantityOnHand || 0,
+                    )
+                    + requested.quantity,
+              soldQuantity:
+                Math.max(
+                  0,
+                  Number(
+                    product.soldQuantity || 0,
+                  )
+                  - requested.quantity,
+                ),
+              salesRevenueMinor:
+                Math.max(
+                  0,
+                  Number(
+                    product.salesRevenueMinor || 0,
+                  )
+                  - lineGrossReversedMinor,
+                ),
+              updatedAt: now,
+            },
+          });
+        }
+      }
+
+      items[lineIndex] = {
+        ...line,
+        returnedQuantity:
+          nextReturned,
+        returnedMinor:
+          nextRefundMinor,
+        commissionReturnedMinor:
+          nonNegativeMoney(
+            line.commissionReturnedMinor || 0,
+          )
+          + lineCommissionReversedMinor,
+        sellerEarningReturnedMinor:
+          nonNegativeMoney(
+            line.sellerEarningReturnedMinor || 0,
+          )
+          + lineSellerEarningReversedMinor,
+      };
+
+      refundMinor += lineRefundMinor;
+      commissionReversedMinor +=
+        lineCommissionReversedMinor;
+      sellerEarningReversedMinor +=
+        lineSellerEarningReversedMinor;
+      returnedItemCount +=
+        requested.quantity;
+
+      returnItems.push({
+        productId:
+          String(
+            line.productId || requested.itemId,
+          ),
+        listingId:
+          sourceMode === 'marketplace_consignment'
+            ? (
+                line.listingId
+                  ? String(line.listingId)
+                  : null
+              )
+            : null,
+        productName:
+          String(
+            line.productName || 'Item',
+          ),
+        sellerId:
+          sourceMode === 'marketplace_consignment'
+            ? String(line.sellerId || '')
+            : null,
+        sellerName:
+          sourceMode === 'marketplace_consignment'
+            ? String(line.sellerName || '')
+            : null,
+        quantity:
+          requested.quantity,
+        refundMinor:
+          lineRefundMinor,
+        commissionReversedMinor:
+          lineCommissionReversedMinor,
+        sellerEarningReversedMinor:
+          lineSellerEarningReversedMinor,
+        quickAdd,
+      });
+    });
+
+    const currentReturnedMinor =
+      nonNegativeMoney(
+        sale.returnedMinor || 0,
+      );
+
+    const nextReturnedMinor =
+      currentReturnedMinor + refundMinor;
+
+    if (
+      nextReturnedMinor
+      > nonNegativeMoney(
+          sale.totalMinor || 0,
+        )
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The return would exceed the original sale total.',
+      );
+    }
+
+    const fullyReturned =
+      items.every(
+        (line) =>
+          Number(line.returnedQuantity || 0)
+          >= Number(line.quantity || 0),
+      );
+
+    const originalPayments: DocumentData[] =
+      Array.isArray(sale.payments)
+      && sale.payments.length
+        ? sale.payments.map(
+            (row: unknown) => ({
+              ...((row || {}) as DocumentData),
+            }),
+          )
+        : [{
+            accountId:
+              stringValue(
+                sale.paymentAccountId,
+                'Original payment account',
+                80,
+              ),
+            accountName:
+              String(
+                sale.paymentAccountName
+                || 'Business account',
+              ),
+            paymentMethod:
+              sale.paymentMethod || null,
+            paymentMethodLabel:
+              sale.paymentMethodLabel || null,
+            amountMinor:
+              nonNegativeMoney(
+                sale.totalMinor || 0,
+              ),
+            returnedMinor:
+              currentReturnedMinor,
+            transactionId:
+              String(
+                sale.transactionId || '',
+              ),
+            ledgerEntryId:
+              String(
+                sale.ledgerEntryId || '',
+              ),
+          }];
+
+    let refundRemaining =
+      refundMinor;
+
+    const allocations =
+      new Map<number, number>();
+
+    originalPayments.forEach(
+      (row, index) => {
+        if (refundRemaining <= 0) return;
+
+        const capacity =
+          Math.max(
+            0,
+            nonNegativeMoney(
+              row.amountMinor || 0,
+            )
+            - nonNegativeMoney(
+                row.returnedMinor || 0,
+              ),
+          );
+
+        const amount =
+          Math.min(
+            capacity,
+            refundRemaining,
+          );
+
+        if (amount > 0) {
+          allocations.set(
+            index,
+            amount,
+          );
+
+          refundRemaining -=
+            amount;
+        }
+      },
+    );
+
+    if (refundRemaining !== 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original split payments no longer have enough refundable balance.',
+      );
+    }
+
+    const refundRows:
+      SmePosPaymentRequestRow[] =
+      [...allocations.entries()]
+        .map(
+          ([index, amountMinor]) => ({
+            accountId:
+              stringValue(
+                originalPayments[index].accountId,
+                'Original payment account',
+                80,
+              ),
+            paymentMethod:
+              originalPayments[index].paymentMethod
+                ? oneOf(
+                    originalPayments[index].paymentMethod,
+                    paymentMethodCodes,
+                    'Payment method',
+                  )
+                : null,
+            paymentMethodLabel:
+              optionalString(
+                originalPayments[index].paymentMethodLabel,
+                80,
+              ) || null,
+            amountMinor,
+          }),
+        );
+
+    if (!refundRows.length) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The refund payment source is unavailable.',
+      );
+    }
+
+    /*
+     * Snapshot protection:
+     * Owner must approve the same amount/currency/payment allocation
+     * that the Manager originally requested.
+     */
+    const approvedAmountMinor =
+      positiveMoney(
+        approval.amountMinor,
+      );
+
+    if (
+      refundMinor
+      !== approvedAmountMinor
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The sale changed after this return was requested. Reject this request and submit a new return.',
+      );
+    }
+
+    const approvedRefundRows =
+      parseSmePosPaymentRows(
+        {
+          payments:
+            approval.payments,
+        },
+        approvedAmountMinor,
+      );
+
+    const refundSourcesMatch =
+      approvedRefundRows.length
+        === refundRows.length
+      && refundRows.every(
+        (row, index) => {
+          const approved =
+            approvedRefundRows[index];
+
+          return (
+            approved.accountId === row.accountId
+            && approved.amountMinor === row.amountMinor
+            && approved.paymentMethod === row.paymentMethod
+            && approved.paymentMethodLabel
+              === row.paymentMethodLabel
+          );
+        },
+      );
+
+    if (!refundSourcesMatch) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The original payment allocation changed after this return was requested. Reject this request and submit a new return.',
+      );
+    }
+
+    const approvalCurrency =
+      stringValue(
+        approval.currency,
+        'Approval currency',
+        12,
+      );
+
+    const currentCurrency =
+      String(
+        sale.currency
+        || settings.currency
+        || '',
+      );
+
+    if (
+      approvalCurrency
+      !== currentCurrency
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The sale currency changed after this return was requested.',
+      );
+    }
+
+    const returnRef =
+      db.collection('smePosReturns')
+        .doc();
+
+    const refundPayments =
+      await postSmePosPayments({
+        transaction,
+        rows: refundRows,
+        settings,
+        spaceId,
+        uid: requestedBy,
+        idempotencyKey:
+          `${input.key}:refund`,
+        now,
+        transactionDate:
+          returnDate,
+        direction: 'out',
+        entryType:
+          sourceMode === 'marketplace_consignment'
+            ? 'marketplace_pos_refund'
+            : 'sme_pos_refund',
+        counterparty:
+          sale.customerName
+          || 'POS customer',
+        note:
+          reason
+          || `Refund for POS receipt ${sale.receiptNumber || saleId}`,
+        categoryId:
+          'expense-other',
+        extra: {
+          posSaleId: saleId,
+          posReturnId: returnRef.id,
+          financialApprovalId:
+            input.approvalId,
+          approvedBy:
+            input.uid,
+        },
+      });
+
+    if (!refundPayments.length) {
+      throw new HttpsError(
+        'internal',
+        'POS return did not create a refund transaction.',
+      );
+    }
+
+    itemUpdates.forEach(
+      (update) => {
+        transaction.update(
+          update.ref,
+          update.data,
+        );
+      },
+    );
+
+    const updatedPayments =
+      originalPayments.map(
+        (row, index) => ({
+          ...row,
+          returnedMinor:
+            nonNegativeMoney(
+              row.returnedMinor || 0,
+            )
+            + (allocations.get(index) || 0),
+        }),
+      );
+
+    sellerAdjustments.forEach(
+      (adjustment, sellerId) => {
+        const sellerSnapshot =
+          sellerById.get(sellerId)!;
+
+        const currentBalance =
+          signedMoney(
+            sellerSnapshot.data()?.balanceMinor || 0,
+            'Seller balance',
+          );
+
+        const nextBalance =
+          currentBalance
+          - adjustment.earnings;
+
+        transaction.update(
+          sellerSnapshot.ref,
+          {
+            grossSalesMinor:
+              Math.max(
+                0,
+                Number(
+                  sellerSnapshot.data()?.grossSalesMinor || 0,
+                )
+                - adjustment.gross,
+              ),
+            commissionEarnedMinor:
+              Math.max(
+                0,
+                Number(
+                  sellerSnapshot.data()?.commissionEarnedMinor || 0,
+                )
+                - adjustment.commission,
+              ),
+            balanceMinor:
+              nextBalance,
+            soldQuantity:
+              Math.max(
+                0,
+                Number(
+                  sellerSnapshot.data()?.soldQuantity || 0,
+                )
+                - adjustment.quantity,
+              ),
+            updatedAt: now,
+          },
+        );
+
+        const ledgerRef =
+          db.collection('smePosSellerLedger')
+            .doc();
+
+        transaction.create(
+          ledgerRef,
+          {
+            displayId:
+              displayId('SLG'),
+            spaceId,
+            ownerId:
+              input.uid,
+            sellerId,
+            sellerName:
+              adjustment.name,
+            sellerUid:
+              adjustment.uid,
+            kind:
+              'return_adjustment',
+            amountMinor:
+              -adjustment.earnings,
+            balanceAfterMinor:
+              nextBalance,
+            currency:
+              String(
+                sale.currency
+                || settings.currency,
+              ),
+            saleId,
+            receiptNumber:
+              sale.receiptNumber || null,
+            payoutId: null,
+            returnId:
+              returnRef.id,
+            financialApprovalId:
+              input.approvalId,
+            note:
+              `Return adjustment for ${adjustment.quantity} item(s)`,
+            createdAt: now,
+          },
+        );
+      },
+    );
+
+    if (
+      customerRef
+      && customerSnapshot?.exists
+      && customerSnapshot.data()?.spaceId
+        === spaceId
+    ) {
+      transaction.update(
+        customerRef,
+        {
+          totalSpentMinor:
+            Math.max(
+              0,
+              Number(
+                customerSnapshot.data()?.totalSpentMinor || 0,
+              )
+              - refundMinor,
+            ),
+          updatedAt: now,
+        },
+      );
+    }
+
+    const remainingProfitMinor =
+      sourceMode === 'marketplace_consignment'
+        ? Math.max(
+            0,
+            nonNegativeMoney(
+              sale.marketplaceCommissionMinor
+              || sale.profitMinor
+              || 0,
+            )
+            - commissionReversedMinor,
+          )
+        : Math.max(
+            0,
+            nonNegativeMoney(
+              sale.profitMinor || 0,
+            )
+            - (
+              refundMinor
+              - costReversedMinor
+            ),
+          );
+
+    const remainingSellerEarningsMinor =
+      sourceMode === 'marketplace_consignment'
+        ? Math.max(
+            0,
+            nonNegativeMoney(
+              sale.sellerEarningsMinor
+              || sale.costMinor
+              || 0,
+            )
+            - sellerEarningReversedMinor,
+          )
+        : nonNegativeMoney(
+            sale.costMinor || 0,
+          )
+          - costReversedMinor;
+
+    transaction.update(
+      saleRef,
+      {
+        items,
+        payments:
+          updatedPayments,
+        status:
+          fullyReturned
+            ? 'refunded'
+            : 'partially_returned',
+        returnStatus:
+          fullyReturned
+            ? 'full'
+            : 'partial',
+        returnedMinor:
+          nextReturnedMinor,
+        returnIds:
+          FieldValue.arrayUnion(
+            returnRef.id,
+          ),
+        lastReturnDate:
+          returnDate,
+        costMinor:
+          Math.max(
+            0,
+            remainingSellerEarningsMinor,
+          ),
+        profitMinor:
+          remainingProfitMinor,
+        marketplaceCommissionMinor:
+          sourceMode === 'marketplace_consignment'
+            ? remainingProfitMinor
+            : sale.marketplaceCommissionMinor
+              || null,
+        sellerEarningsMinor:
+          sourceMode === 'marketplace_consignment'
+            ? Math.max(
+                0,
+                remainingSellerEarningsMinor,
+              )
+            : sale.sellerEarningsMinor
+              || null,
+        updatedAt: now,
+      },
+    );
+
+    const firstRefund =
+      refundPayments[0];
+
+    transaction.create(
+      returnRef,
+      {
+        displayId:
+          displayId('RET'),
+        spaceId,
+        ownerId:
+          input.uid,
+        saleId,
+        receiptNumber:
+          String(
+            sale.receiptNumber || saleId,
+          ),
+        sourceMode,
+        status:
+          'posted',
+        items:
+          returnItems,
+        itemCount:
+          returnedItemCount,
+        refundMinor,
+        commissionReversedMinor,
+        sellerEarningReversedMinor,
+        paymentAccountId:
+          firstRefund.accountId,
+        paymentAccountName:
+          firstRefund.accountName,
+        currency:
+          String(
+            sale.currency
+            || settings.currency,
+          ),
+        returnDate,
+        reason,
+        financialApprovalId:
+          input.approvalId,
+        approvedBy:
+          input.uid,
+        transactionId:
+          firstRefund.transactionId,
+        ledgerEntryId:
+          firstRefund.ledgerEntryId,
+        payments:
+          refundPayments,
+        transactionIds:
+          refundPayments.map(
+            (row) => row.transactionId,
+          ),
+        ledgerEntryIds:
+          refundPayments.map(
+            (row) => row.ledgerEntryId,
+          ),
+        createdBy:
+          requestedBy,
+        createdAt:
+          now,
+      },
+    );
+
+    transaction.update(
+      approvalRef,
+      {
+        status: 'approved',
+        returnId:
+          returnRef.id,
+        transactionId:
+          firstRefund.transactionId,
+        transactionIds:
+          refundPayments.map(
+            (row) => row.transactionId,
+          ),
+        ledgerEntryIds:
+          refundPayments.map(
+            (row) => row.ledgerEntryId,
+          ),
+        reviewNote:
+          input.reviewNote,
+        reviewedBy:
+          input.uid,
+        reviewedAt:
+          now,
+        updatedAt:
+          now,
+      },
+    );
+
+    createNotification(
+      transaction,
+      {
+        uid: requestedBy,
+        spaceId,
+        type:
+          'financial_approval_approved',
+        title:
+          'POS return approved',
+        message:
+          'The Account Owner approved the '
+          + (refundMinor / 100).toFixed(2)
+          + ' '
+          + String(
+              sale.currency
+              || settings.currency
+              || 'BND',
+            )
+          + ' return for receipt '
+          + String(
+              sale.receiptNumber
+              || saleId,
+            )
+          + '.',
+        targetPath:
+          '/transactions?approvals=1',
+        actionLabel:
+          'View approval',
+        now,
+      },
+    );
+
+    createActivity(
+      transaction,
+      {
+        spaceId,
+        actorUid:
+          input.uid,
+        actorName:
+          'Account Owner',
+        action:
+          sourceMode === 'marketplace_consignment'
+            ? 'marketplace_pos_return_approved'
+            : 'pos_return_approved',
+        targetType:
+          'sme_pos_return',
+        targetId:
+          returnRef.id,
+        summary:
+          `Approved return of ${returnedItemCount} item(s) from ${sale.receiptNumber || saleId} and refunded ${refundMinor / 100} ${sale.currency || settings.currency || 'BND'}.`,
+        now,
+      },
+    );
+
+    const result = {
+      approvalId:
+        input.approvalId,
+      status: 'approved',
+      returnId:
+        returnRef.id,
+      saleId,
+      refundMinor,
+      transactionId:
+        firstRefund.transactionId,
+      transactionIds:
+        refundPayments.map(
+          (row) => row.transactionId,
+        ),
+    };
+
+    transaction.create(
+      commandRef,
+      {
+        uid:
+          input.uid,
+        kind:
+          'review_pos_return_approval',
+        idempotencyKey:
+          input.key,
+        result,
+        createdAt:
+          now,
+      },
+    );
+
+    return result;
+  });
+}
+
 export const reviewFinancialApprovalRequest = onCall(
   { region },
   async (request) => {
@@ -2727,6 +4213,19 @@ export const reviewFinancialApprovalRequest = onCall(
       === 'marketplace_seller_payout'
     ) {
       return reviewMarketplaceSellerPayoutApproval({
+        uid,
+        approvalId,
+        decision,
+        reviewNote,
+        key,
+      });
+    }
+
+    if (
+      approvalPreData.action
+      === 'pos_refund_or_sensitive_money_out'
+    ) {
+      return reviewPosReturnApproval({
         uid,
         approvalId,
         decision,
@@ -9857,6 +11356,7 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
   const saleRef = db.collection('smePosSales').doc(saleId);
   const returnRef = db.collection('smePosReturns').doc();
+  const approvalRef = db.collection('financialApprovalRequests').doc();
 
   return db.runTransaction(async (transaction) => {
     const [command, saleSnapshot] = await Promise.all([transaction.get(commandRef), transaction.get(saleRef)]);
@@ -9873,6 +11373,216 @@ export const returnSmePosSale = onCall({ region }, async (request) => {
     requestedItems.forEach((requested) => {
       if (!lineIndexes.has(requested.itemId)) throw new HttpsError('invalid-argument', 'One selected item is not part of this sale.');
     });
+
+    if (context.role === 'manager') {
+      const netLineTotals = smePosNetLineTotals(
+        items,
+        nonNegativeMoney(sale.discountMinor || 0),
+      );
+
+      let refundMinor = 0;
+      let returnedItemCount = 0;
+
+      requestedItems.forEach((requested) => {
+        const lineIndex = lineIndexes.get(requested.itemId)!;
+        const line = items[lineIndex];
+        const totalQuantity = integerBetween(line.quantity, 'Sold quantity', 1, 9_999);
+        const previousReturned = integerBetween(line.returnedQuantity || 0, 'Returned quantity', 0, totalQuantity);
+
+        if (requested.quantity > totalQuantity - previousReturned) {
+          throw new HttpsError(
+            'failed-precondition',
+            `${line.productName || 'This item'} only has ${totalQuantity - previousReturned} returnable.`,
+          );
+        }
+
+        const nextReturned = previousReturned + requested.quantity;
+        const lineNetMinor = netLineTotals[lineIndex];
+        const previousRefundMinor = cumulativeShare(lineNetMinor, totalQuantity, previousReturned);
+        const nextRefundMinor = cumulativeShare(lineNetMinor, totalQuantity, nextReturned);
+        const lineRefundMinor = nextRefundMinor - previousRefundMinor;
+
+        if (lineRefundMinor <= 0) {
+          throw new HttpsError('failed-precondition', 'The selected return amount is invalid.');
+        }
+
+        refundMinor += lineRefundMinor;
+        returnedItemCount += requested.quantity;
+      });
+
+      const currentReturnedMinor = nonNegativeMoney(sale.returnedMinor || 0);
+
+      if (currentReturnedMinor + refundMinor > nonNegativeMoney(sale.totalMinor || 0)) {
+        throw new HttpsError('failed-precondition', 'The return would exceed the original sale total.');
+      }
+
+      const originalPayments: DocumentData[] =
+        Array.isArray(sale.payments) && sale.payments.length
+          ? sale.payments.map((row: unknown) => ({ ...((row || {}) as DocumentData) }))
+          : [{
+              accountId: stringValue(sale.paymentAccountId, 'Original payment account', 80),
+              accountName: String(sale.paymentAccountName || 'Business account'),
+              paymentMethod: sale.paymentMethod || null,
+              paymentMethodLabel: sale.paymentMethodLabel || null,
+              amountMinor: nonNegativeMoney(sale.totalMinor || 0),
+              returnedMinor: currentReturnedMinor,
+              transactionId: String(sale.transactionId || ''),
+              ledgerEntryId: String(sale.ledgerEntryId || ''),
+            }];
+
+      let refundRemaining = refundMinor;
+      const allocations = new Map<number, number>();
+
+      originalPayments.forEach((row, index) => {
+        if (refundRemaining <= 0) return;
+
+        const capacity = Math.max(
+          0,
+          nonNegativeMoney(row.amountMinor || 0)
+            - nonNegativeMoney(row.returnedMinor || 0),
+        );
+
+        const amount = Math.min(capacity, refundRemaining);
+
+        if (amount > 0) {
+          allocations.set(index, amount);
+          refundRemaining -= amount;
+        }
+      });
+
+      if (refundRemaining !== 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Original split payments do not have enough refundable balance.',
+        );
+      }
+
+      const allocationEntries = [...allocations.entries()];
+
+      const refundRows: SmePosPaymentRequestRow[] = allocationEntries.map(
+        ([index, amountMinor]) => ({
+          accountId: stringValue(originalPayments[index].accountId, 'Original payment account', 80),
+          paymentMethod: originalPayments[index].paymentMethod
+            ? oneOf(originalPayments[index].paymentMethod, paymentMethodCodes, 'Payment method')
+            : null,
+          paymentMethodLabel: optionalString(originalPayments[index].paymentMethodLabel, 80) || null,
+          amountMinor,
+        }),
+      );
+
+      const firstAllocationIndex = allocationEntries[0]?.[0];
+      const firstRefund = refundRows[0];
+
+      if (firstAllocationIndex == null || !firstRefund) {
+        throw new HttpsError('failed-precondition', 'The refund payment source is unavailable.');
+      }
+
+      const category = systemCategories.get('expense-other');
+
+      if (!category) {
+        throw new HttpsError('internal', 'POS refund category is unavailable.');
+      }
+
+      const now = FieldValue.serverTimestamp();
+      const spaceName = String(context.space.name || context.settings.shopName || 'Business');
+
+      transaction.create(approvalRef, {
+        displayId: displayId('APR'),
+        ownerId: String(context.settings.ownerId),
+        requestedBy: uid,
+        requestedByName:
+          context.member.displayName
+          || context.member.email
+          || 'POS Manager',
+        spaceId,
+        spaceName,
+        action: 'pos_refund_or_sensitive_money_out',
+        transactionType: 'expense',
+        accountId: firstRefund.accountId,
+        accountName: String(
+          originalPayments[firstAllocationIndex]?.accountName
+          || 'Business account',
+        ),
+        destinationAccountId: null,
+        destinationAccountName: null,
+        amountMinor: refundMinor,
+        currency: String(sale.currency || context.settings.currency || 'BND'),
+        transactionDate: returnDate,
+        category: category.name,
+        categoryId: category.id,
+        categoryIcon: category.icon,
+        categoryColor: category.color,
+        categoryScope: 'business',
+        categoryIsSystem: true,
+        counterparty: String(sale.customerName || 'POS customer'),
+        note: reason,
+        labels: [],
+        paymentMethod: firstRefund.paymentMethod,
+        paymentMethodLabel: firstRefund.paymentMethodLabel,
+        payments: refundRows,
+        saleId,
+        receiptNumber: String(sale.receiptNumber || saleId),
+        sourceMode,
+        returnDate,
+        returnItems: requestedItems,
+        status: 'pending',
+        transactionId: null,
+        ledgerEntryIds: [],
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      createNotification(transaction, {
+        uid: String(context.settings.ownerId),
+        spaceId,
+        type: 'financial_approval_requested',
+        title: 'POS return needs approval',
+        message:
+          (context.member.displayName || context.member.email || 'A POS Manager')
+          + ' requested a refund of '
+          + (refundMinor / 100).toFixed(2)
+          + ' '
+          + String(sale.currency || context.settings.currency || 'BND')
+          + ' for receipt '
+          + String(sale.receiptNumber || saleId)
+          + '.',
+        targetPath: '/transactions?approvals=1',
+        actionLabel: 'Review return',
+        now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName: context.member.displayName || context.member.email,
+        action: 'pos_return_requested',
+        targetType: 'financial_approval',
+        targetId: approvalRef.id,
+        summary:
+          `Requested return of ${returnedItemCount} item(s) from ${sale.receiptNumber || saleId} for ${(refundMinor / 100).toFixed(2)} ${sale.currency || context.settings.currency || 'BND'}.`,
+        now,
+      });
+
+      const result = {
+        status: 'pending_approval',
+        approvalId: approvalRef.id,
+        saleId,
+        refundMinor,
+      };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'request_pos_return_approval',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    }
 
     const realRequested = requestedItems.filter((requested) => !items[lineIndexes.get(requested.itemId)!]?.quickAdd);
     const itemRefs = realRequested.map((requested) => sourceMode === 'marketplace_consignment'
