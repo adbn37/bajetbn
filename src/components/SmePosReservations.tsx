@@ -195,7 +195,7 @@ export function SmePosReservationsPanel({ space, settings, role, reservations, p
     {success && <div className="notice success">{success}</div>}
     <div className="sme-pos-booking-list">
       {reservations.map((reservation) => <article className="sme-pos-booking-card" key={reservation.id}>
-        <div className="panel-heading compact"><div><strong>{bookingReference(reservation.reservationNumber)}</strong><small>{reservation.customerName} · {reservation.itemCount} item(s){reservation.dueDate ? ` · Hold until ${reservation.dueDate}` : ''}</small></div><span className="status-badge posted">{reservation.status.replace('_', ' ')}</span></div>
+        <div className="panel-heading compact"><div><strong>{bookingReference(reservation.reservationNumber)}</strong>{' '}<small>{reservation.customerName}{' · '}{reservation.itemCount} item(s){reservation.dueDate ? ` · Hold until ${reservation.dueDate}` : ''}</small></div><span className="status-badge posted">{reservation.status.replace('_', ' ')}</span></div>
         <div className="sme-pos-booking-items">{reservation.items.map((item) => <div key={item.itemId}><span>{item.quantity} × {item.productName}</span><strong>{formatMoney(item.lineTotalMinor, reservation.currency)}</strong></div>)}</div>
         <div className="sme-pos-booking-money"><span>Total <strong>{formatMoney(reservation.totalMinor, reservation.currency)}</strong></span><span>Deposit <strong>{formatMoney(reservation.depositMinor, reservation.currency)}</strong></span><span>Remaining <strong>{formatMoney(reservation.remainingMinor, reservation.currency)}</strong></span></div>
         <small>Created by {reservation.createdByName || 'staff'} on {reservation.reservationDate}</small>
