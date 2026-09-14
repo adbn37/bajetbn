@@ -1891,6 +1891,766 @@ export const getFinancialApprovalRequests = onCall(
   },
 );
 
+async function reviewMarketplaceSellerPayoutApproval(input: {
+  uid: string;
+  approvalId: string;
+  decision: 'approved' | 'rejected';
+  reviewNote: string;
+  key: string;
+}) {
+  const approvalRef =
+    db.collection('financialApprovalRequests')
+      .doc(input.approvalId);
+
+  const commandRef =
+    db.collection('financialCommands')
+      .doc(commandId(input.uid, input.key));
+
+  return db.runTransaction(async (transaction) => {
+    const [
+      commandSnapshot,
+      approvalSnapshot,
+    ] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(approvalRef),
+    ]);
+
+    if (commandSnapshot.exists) {
+      return commandSnapshot.data()?.result;
+    }
+
+    if (!approvalSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Approval request was not found.',
+      );
+    }
+
+    const approval =
+      approvalSnapshot.data() || {};
+
+    if (
+      String(approval.ownerId || '')
+      !== input.uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the Account Owner can review this seller payout.',
+      );
+    }
+
+    if (
+      approval.action
+      !== 'marketplace_seller_payout'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This approval request is not a seller payout.',
+      );
+    }
+
+    if (
+      approval.status
+      !== 'pending'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This seller payout has already been reviewed.',
+      );
+    }
+
+    const requestedBy =
+      stringValue(
+        approval.requestedBy,
+        'Requester',
+        160,
+      );
+
+    const requestedByName =
+      optionalString(
+        approval.requestedByName,
+        180,
+      )
+      || 'POS Manager';
+
+    const spaceId =
+      stringValue(
+        approval.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const sellerId =
+      stringValue(
+        approval.sellerId,
+        'Seller',
+        100,
+      );
+
+    const amountMinor =
+      positiveMoney(
+        approval.amountMinor,
+      );
+
+    const payoutDate =
+      localDate(
+        approval.payoutDate
+        || approval.transactionDate,
+        'Payout date',
+      );
+
+    const reference =
+      optionalString(
+        approval.reference,
+        120,
+      );
+
+    const note =
+      optionalString(
+        approval.note,
+        500,
+      );
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    /*
+     * Rejection is deliberately completed before
+     * any financial account / seller mutation.
+     */
+    if (
+      input.decision
+      === 'rejected'
+    ) {
+      transaction.update(
+        approvalRef,
+        {
+          status: 'rejected',
+          reviewNote: input.reviewNote,
+          reviewedBy: input.uid,
+          reviewedAt: now,
+          updatedAt: now,
+        },
+      );
+
+      createNotification(
+        transaction,
+        {
+          uid: requestedBy,
+          spaceId,
+          type:
+            'financial_approval_rejected',
+          title:
+            'Seller payout rejected',
+          message:
+            'The Account Owner rejected your seller payout request.',
+          targetPath:
+            '/transactions?approvals=1',
+          actionLabel:
+            'View request',
+          now,
+        },
+      );
+
+      const result = {
+        approvalId:
+          input.approvalId,
+        status:
+          'rejected',
+      };
+
+      transaction.create(
+        commandRef,
+        {
+          uid: input.uid,
+          kind:
+            'review_marketplace_seller_payout',
+          idempotencyKey:
+            input.key,
+          result,
+          createdAt: now,
+        },
+      );
+
+      return result;
+    }
+
+    const paymentRows =
+      parseSmePosPaymentRows(
+        {
+          payments:
+            approval.payments,
+        },
+        amountMinor,
+      );
+
+    const paymentAccountIds =
+      [
+        ...new Set(
+          paymentRows.map(
+            (row) =>
+              row.accountId,
+          ),
+        ),
+      ];
+
+    const spaceRef =
+      db.collection('spaces')
+        .doc(spaceId);
+
+    const memberRef =
+      db.collection('spaceMembers')
+        .doc(
+          `${spaceId}_${requestedBy}`,
+        );
+
+    const settingsRef =
+      db.collection('smePosSettings')
+        .doc(spaceId);
+
+    const accessRef =
+      db.collection('smePosAccess')
+        .doc(
+          `${spaceId}_${requestedBy}`,
+        );
+
+    const sellerRef =
+      db.collection('smePosSellers')
+        .doc(sellerId);
+
+    const paymentAccountRefs =
+      paymentAccountIds.map(
+        (accountId) =>
+          db.collection('accounts')
+            .doc(accountId),
+      );
+
+    const [
+      spaceSnapshot,
+      memberSnapshot,
+      settingsSnapshot,
+      accessSnapshot,
+      sellerSnapshot,
+      paymentAccountSnapshots,
+    ] = await Promise.all([
+      transaction.get(spaceRef),
+      transaction.get(memberRef),
+      transaction.get(settingsRef),
+      transaction.get(accessRef),
+      transaction.get(sellerRef),
+      Promise.all(
+        paymentAccountRefs.map(
+          (ref) =>
+            transaction.get(ref),
+        ),
+      ),
+    ]);
+
+    if (
+      !spaceSnapshot.exists
+      || spaceSnapshot.data()?.archivedAt
+      || spaceSnapshot.data()?.type
+        !== 'sme'
+      || String(
+        spaceSnapshot.data()?.ownerId
+        || '',
+      ) !== input.uid
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The Business Space is unavailable or ownership has changed.',
+      );
+    }
+
+    if (
+      !settingsSnapshot.exists
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The POS settings are unavailable.',
+      );
+    }
+
+    const settings =
+      settingsSnapshot.data()
+      || {};
+
+    if (
+      String(
+        settings.ownerId
+        || '',
+      ) !== input.uid
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The POS owner no longer matches the Account Owner.',
+      );
+    }
+
+    if (
+      settings.mode
+      !== 'marketplace_consignment'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This Business is no longer using Marketplace Consignment POS.',
+      );
+    }
+
+    if (
+      !memberSnapshot.exists
+      || [
+        'suspended',
+        'removed',
+      ].includes(
+        String(
+          memberSnapshot.data()?.status
+          || '',
+        ),
+      )
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The requester is no longer an active Business member.',
+      );
+    }
+
+    if (
+      !accessSnapshot.exists
+      || accessSnapshot.data()?.status
+        !== 'active'
+      || accessSnapshot.data()?.role
+        !== 'manager'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The requester is no longer an active POS Manager.',
+      );
+    }
+
+    if (
+      !sellerSnapshot.exists
+      || sellerSnapshot.data()?.spaceId
+        !== spaceId
+      || sellerSnapshot.data()?.ownerId
+        !== input.uid
+      || sellerSnapshot.data()?.archivedAt
+      || sellerSnapshot.data()?.deletedAt
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The seller is no longer available for payout.',
+      );
+    }
+
+    if (
+      sellerSnapshot.data()?.currency
+      !== settings.currency
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Seller balance and POS currencies no longer match.',
+      );
+    }
+
+    /*
+     * Revalidate every split-payment source at approval time.
+     * It must still be an Owner-owned Business account that
+     * remains enabled for this POS.
+     */
+    paymentAccountSnapshots.forEach(
+      (snapshot) => {
+        const account =
+          assertAccount(
+            snapshot.data(),
+            input.uid,
+            'Payment account',
+          );
+
+        if (
+          snapshot.data()?.classification
+          !== 'business'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Seller payout requires Business accounts.',
+          );
+        }
+
+        requireSmePosPaymentAccountForSpace(
+          settings,
+          snapshot.data() || {},
+          snapshot.id,
+          spaceId,
+        );
+
+        if (
+          account.currency
+          !== settings.currency
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'A payout account currency no longer matches the POS currency.',
+          );
+        }
+      },
+    );
+
+    const currentBalance =
+      signedMoney(
+        sellerSnapshot.data()?.balanceMinor
+        || 0,
+        'Seller balance',
+      );
+
+    if (
+      currentBalance <= 0
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This seller no longer has a positive balance available for payout.',
+      );
+    }
+
+    if (
+      amountMinor
+      > currentBalance
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The seller balance changed and is now lower than this payout request.',
+      );
+    }
+
+    const payoutRef =
+      db.collection('smePosPayouts')
+        .doc();
+
+    const sellerLedgerRef =
+      db.collection('smePosSellerLedger')
+        .doc();
+
+    const sellerName =
+      String(
+        sellerSnapshot.data()?.name
+        || approval.sellerName
+        || 'Marketplace seller',
+      );
+
+    const spaceName =
+      String(
+        spaceSnapshot.data()?.name
+        || settings.shopName
+        || approval.spaceName
+        || 'SME',
+      );
+
+    const nextBalance =
+      currentBalance
+      - amountMinor;
+
+    const payoutNote =
+      [
+        reference
+          ? `Ref ${reference}`
+          : '',
+        note,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+      || `Seller payout ${payoutRef.id}`;
+
+    /*
+     * From this point, all financial changes occur inside
+     * this same Firestore transaction.
+     */
+    const postedPayments =
+      await postSmePosPayments({
+        transaction,
+        rows: paymentRows,
+        settings,
+        spaceId,
+        uid: requestedBy,
+        idempotencyKey:
+          `${input.key}:payout`,
+        now,
+        transactionDate:
+          payoutDate,
+        direction: 'out',
+        entryType:
+          'marketplace_seller_payout',
+        counterparty:
+          sellerName,
+        note:
+          payoutNote,
+        categoryId:
+          'expense-supplier',
+        extra: {
+          posPayoutId:
+            payoutRef.id,
+          posSettlementType:
+            'seller_payout',
+          financialApprovalId:
+            input.approvalId,
+          approvedBy:
+            input.uid,
+        },
+      });
+
+    if (
+      !postedPayments.length
+    ) {
+      throw new HttpsError(
+        'internal',
+        'Seller payout did not create a payment transaction.',
+      );
+    }
+
+    const firstPayment =
+      postedPayments[0];
+
+    const sourceLabels =
+      postedPayments.map(
+        (payment) =>
+          `${spaceName} — ${payment.accountName}`,
+      );
+
+    transaction.update(
+      sellerRef,
+      {
+        balanceMinor:
+          nextBalance,
+        paidOutMinor:
+          Number(
+            sellerSnapshot.data()?.paidOutMinor
+            || 0,
+          )
+          + amountMinor,
+        updatedAt:
+          now,
+      },
+    );
+
+    transaction.create(
+      payoutRef,
+      {
+        displayId:
+          displayId('PAY'),
+        spaceId,
+        spaceName,
+        ownerId:
+          input.uid,
+        sellerId,
+        sellerName,
+        sellerUid:
+          sellerSnapshot.data()?.linkedUid
+          || null,
+        status:
+          'posted',
+        amountMinor,
+        balanceAfterMinor:
+          nextBalance,
+        currency:
+          settings.currency,
+        paymentAccountId:
+          firstPayment.accountId,
+        paymentAccountName:
+          firstPayment.accountName,
+        paymentMethod:
+          firstPayment.paymentMethod,
+        paymentMethodLabel:
+          firstPayment.paymentMethodLabel,
+        paymentSourceLabel:
+          sourceLabels[0],
+        paymentSourceLabels:
+          sourceLabels,
+        payments:
+          postedPayments,
+        payoutDate,
+        reference,
+        note,
+        financialApprovalId:
+          input.approvalId,
+        approvedBy:
+          input.uid,
+        transactionId:
+          firstPayment.transactionId,
+        ledgerEntryId:
+          firstPayment.ledgerEntryId,
+        transactionIds:
+          postedPayments.map(
+            (payment) =>
+              payment.transactionId,
+          ),
+        ledgerEntryIds:
+          postedPayments.map(
+            (payment) =>
+              payment.ledgerEntryId,
+          ),
+        createdBy:
+          requestedBy,
+        createdByName:
+          requestedByName,
+        createdAt:
+          now,
+      },
+    );
+
+    transaction.create(
+      sellerLedgerRef,
+      {
+        displayId:
+          displayId('SLG'),
+        spaceId,
+        ownerId:
+          input.uid,
+        sellerId,
+        sellerName,
+        sellerUid:
+          sellerSnapshot.data()?.linkedUid
+          || null,
+        kind:
+          'payout',
+        amountMinor:
+          -amountMinor,
+        balanceAfterMinor:
+          nextBalance,
+        currency:
+          settings.currency,
+        saleId:
+          null,
+        receiptNumber:
+          null,
+        payoutId:
+          payoutRef.id,
+        financialApprovalId:
+          input.approvalId,
+        note:
+          `${reference ? `Ref ${reference} · ` : ''}`
+          + `Paid from ${sourceLabels.join(' + ')}`
+          + `${note ? ` · ${note}` : ''}`,
+        createdAt:
+          now,
+      },
+    );
+
+    transaction.update(
+      approvalRef,
+      {
+        status:
+          'approved',
+        payoutId:
+          payoutRef.id,
+        transactionId:
+          firstPayment.transactionId,
+        transactionIds:
+          postedPayments.map(
+            (payment) =>
+              payment.transactionId,
+          ),
+        ledgerEntryIds:
+          postedPayments.map(
+            (payment) =>
+              payment.ledgerEntryId,
+          ),
+        reviewNote:
+          input.reviewNote,
+        reviewedBy:
+          input.uid,
+        reviewedAt:
+          now,
+        updatedAt:
+          now,
+      },
+    );
+
+    createNotification(
+      transaction,
+      {
+        uid:
+          requestedBy,
+        spaceId,
+        type:
+          'financial_approval_approved',
+        title:
+          'Seller payout approved',
+        message:
+          'The Account Owner approved the '
+          + (amountMinor / 100).toFixed(2)
+          + ' '
+          + String(
+            settings.currency
+            || 'BND',
+          )
+          + ' payout to '
+          + sellerName
+          + '.',
+        targetPath:
+          '/transactions?approvals=1',
+        actionLabel:
+          'View approval',
+        now,
+      },
+    );
+
+    createActivity(
+      transaction,
+      {
+        spaceId,
+        actorUid:
+          input.uid,
+        actorName:
+          'Account Owner',
+        action:
+          'marketplace_seller_payout_approved',
+        targetType:
+          'sme_pos_payout',
+        targetId:
+          payoutRef.id,
+        summary:
+          `Approved ${(amountMinor / 100).toFixed(2)} ${settings.currency || 'BND'} payout to ${sellerName}.`,
+        now,
+      },
+    );
+
+    const result = {
+      approvalId:
+        input.approvalId,
+      status:
+        'approved',
+      payoutId:
+        payoutRef.id,
+      sellerId,
+      transactionId:
+        firstPayment.transactionId,
+      transactionIds:
+        postedPayments.map(
+          (payment) =>
+            payment.transactionId,
+        ),
+      balanceAfterMinor:
+        nextBalance,
+    };
+
+    transaction.create(
+      commandRef,
+      {
+        uid:
+          input.uid,
+        kind:
+          'review_marketplace_seller_payout',
+        idempotencyKey:
+          input.key,
+        result,
+        createdAt:
+          now,
+      },
+    );
+
+    return result;
+  });
+}
+
 export const reviewFinancialApprovalRequest = onCall(
   { region },
   async (request) => {
@@ -1960,6 +2720,19 @@ export const reviewFinancialApprovalRequest = onCall(
         'permission-denied',
         'Only the Account Owner can approve or reject this request.',
       );
+    }
+
+    if (
+      approvalPreData.action
+      === 'marketplace_seller_payout'
+    ) {
+      return reviewMarketplaceSellerPayoutApproval({
+        uid,
+        approvalId,
+        decision,
+        reviewNote,
+        key,
+      });
     }
 
     const requestedBy =
@@ -9312,75 +10085,435 @@ export const recordMarketplaceSellerPayout = onCall({ region, cpu: 'gcf_gen1', c
   const reference = optionalString(request.data?.reference, 120);
   const note = optionalString(request.data?.note, 500);
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
-  const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
+
+  const context = await requireSmePosActor(
+    spaceId,
+    uid,
+    ['owner', 'manager'],
+  );
+
   requireMarketplaceSettings(context);
-  const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
-  const sellerRef = db.collection('smePosSellers').doc(sellerId);
-  const payoutRef = db.collection('smePosPayouts').doc();
+
+  const commandRef =
+    db.collection('smePosCommands')
+      .doc(commandId(uid, key));
+
+  const sellerRef =
+    db.collection('smePosSellers')
+      .doc(sellerId);
+
+  const payoutRef =
+    db.collection('smePosPayouts')
+      .doc();
+
+  const approvalRef =
+    db.collection('financialApprovalRequests')
+      .doc();
+
+  const paymentAccountIds =
+    [...new Set(
+      paymentRows.map(
+        (row) => row.accountId,
+      ),
+    )];
+
+  const paymentAccountRefs =
+    paymentAccountIds.map(
+      (accountId) =>
+        db.collection('accounts')
+          .doc(accountId),
+    );
 
   return db.runTransaction(async (transaction) => {
-    const [command, sellerSnapshot] = await Promise.all([
-      transaction.get(commandRef), transaction.get(sellerRef),
+    const [
+      command,
+      sellerSnapshot,
+      paymentAccountSnapshots,
+    ] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(sellerRef),
+      Promise.all(
+        paymentAccountRefs.map(
+          (ref) => transaction.get(ref),
+        ),
+      ),
     ]);
-    if (command.exists) return command.data()?.result;
-    if (!sellerSnapshot.exists || sellerSnapshot.data()?.spaceId !== spaceId || sellerSnapshot.data()?.ownerId !== context.settings.ownerId) {
-      throw new HttpsError('not-found', 'Seller not found.');
-    }
-    const currentBalance = signedMoney(sellerSnapshot.data()?.balanceMinor || 0, 'Seller balance');
-    if (currentBalance <= 0) throw new HttpsError('failed-precondition', 'This seller has no positive balance available for payout.');
-    if (amountMinor > currentBalance) throw new HttpsError('failed-precondition', `The maximum payout is ${(currentBalance / 100).toFixed(2)} ${sellerSnapshot.data()?.currency || 'BND'}.`);
-    if (sellerSnapshot.data()?.currency !== context.settings.currency) throw new HttpsError('failed-precondition', 'Seller balance and POS currencies must match.');
 
-    const now = FieldValue.serverTimestamp();
-    const nextBalance = currentBalance - amountMinor;
-    const sellerName = String(sellerSnapshot.data()?.name || 'Marketplace seller');
-    const spaceName = String(context.space.name || context.settings.shopName || 'SME');
-    const payoutNote = [reference ? `Ref ${reference}` : '', note].filter(Boolean).join(' · ') || `Seller payout ${payoutRef.id}`;
-    const postedPayments = await postSmePosPayments({
-      transaction, rows: paymentRows, settings: context.settings, spaceId, uid, idempotencyKey: `${key}:payout`, now,
-      transactionDate: payoutDate, direction: 'out', entryType: 'marketplace_seller_payout',
-      counterparty: sellerName, note: payoutNote, categoryId: 'expense-supplier',
-      extra: { posPayoutId: payoutRef.id, posSettlementType: 'seller_payout' },
+    if (command.exists) {
+      return command.data()?.result;
+    }
+
+    if (
+      !sellerSnapshot.exists
+      || sellerSnapshot.data()?.spaceId !== spaceId
+      || sellerSnapshot.data()?.ownerId !== context.settings.ownerId
+    ) {
+      throw new HttpsError(
+        'not-found',
+        'Seller not found.',
+      );
+    }
+
+    const accountNameById =
+      new Map<string, string>();
+
+    paymentAccountSnapshots.forEach((snapshot) => {
+      const account =
+        assertAccount(
+          snapshot.data(),
+          String(context.settings.ownerId),
+          'Payment account',
+        );
+
+      if (snapshot.data()?.classification !== 'business') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Choose a business account for seller payouts.',
+        );
+      }
+
+      requireSmePosPaymentAccountForSpace(
+        context.settings,
+        snapshot.data() || {},
+        snapshot.id,
+        spaceId,
+      );
+
+      if (account.currency !== context.settings.currency) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Payment account and POS currency must match.',
+        );
+      }
+
+      accountNameById.set(
+        snapshot.id,
+        String(
+          snapshot.data()?.name
+          || 'Business account',
+        ),
+      );
     });
-    const firstPayment = postedPayments[0];
-    const sourceLabels = postedPayments.map((payment) => `${spaceName} — ${payment.accountName}`);
+
+    const currentBalance =
+      signedMoney(
+        sellerSnapshot.data()?.balanceMinor || 0,
+        'Seller balance',
+      );
+
+    if (currentBalance <= 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This seller has no positive balance available for payout.',
+      );
+    }
+
+    if (amountMinor > currentBalance) {
+      throw new HttpsError(
+        'failed-precondition',
+        `The maximum payout is ${(currentBalance / 100).toFixed(2)} ${sellerSnapshot.data()?.currency || 'BND'}.`,
+      );
+    }
+
+    if (
+      sellerSnapshot.data()?.currency
+      !== context.settings.currency
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Seller balance and POS currencies must match.',
+      );
+    }
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    const sellerName =
+      String(
+        sellerSnapshot.data()?.name
+        || 'Marketplace seller',
+      );
+
+    const spaceName =
+      String(
+        context.space.name
+        || context.settings.shopName
+        || 'SME',
+      );
+
+    const payoutCategory =
+      systemCategories.get('expense-supplier');
+
+    if (!payoutCategory) {
+      throw new HttpsError(
+        'internal',
+        'Seller payout category is unavailable.',
+      );
+    }
+
+    if (context.role === 'manager') {
+      const firstPayment = paymentRows[0];
+
+      const accountName =
+        paymentRows.length === 1
+          ? accountNameById.get(firstPayment.accountId)
+            || 'Business account'
+          : `${paymentRows.length} POS payment accounts`;
+
+      transaction.create(approvalRef, {
+        displayId: displayId('APR'),
+        ownerId: String(context.settings.ownerId),
+        requestedBy: uid,
+        requestedByName:
+          context.member.displayName
+          || context.member.email
+          || 'POS Manager',
+        spaceId,
+        spaceName,
+        action: 'marketplace_seller_payout',
+        transactionType: 'expense',
+        accountId: firstPayment.accountId,
+        accountName,
+        destinationAccountId: null,
+        destinationAccountName: null,
+        amountMinor,
+        currency: String(context.settings.currency || 'BND'),
+        transactionDate: payoutDate,
+        category: payoutCategory.name,
+        categoryId: payoutCategory.id,
+        categoryIcon: payoutCategory.icon,
+        categoryColor: payoutCategory.color,
+        categoryScope: 'business',
+        categoryIsSystem: true,
+        counterparty: sellerName,
+        note,
+        labels: [],
+        paymentMethod: firstPayment.paymentMethod,
+        paymentMethodLabel: firstPayment.paymentMethodLabel,
+        sellerId,
+        sellerName,
+        payoutDate,
+        reference,
+        payments: paymentRows,
+        status: 'pending',
+        transactionId: null,
+        ledgerEntryIds: [],
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      createNotification(transaction, {
+        uid: String(context.settings.ownerId),
+        spaceId,
+        type: 'financial_approval_requested',
+        title: 'Seller payout needs approval',
+        message:
+          (context.member.displayName
+            || context.member.email
+            || 'A POS Manager')
+          + ' requested a seller payout of '
+          + (amountMinor / 100).toFixed(2)
+          + ' '
+          + String(context.settings.currency || 'BND')
+          + ' to '
+          + sellerName
+          + '.',
+        targetPath: '/transactions?approvals=1',
+        actionLabel: 'Review payout',
+        now,
+      });
+
+      const result = {
+        status: 'pending_approval',
+        approvalId: approvalRef.id,
+        sellerId,
+        balanceAfterMinor: currentBalance,
+      };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'request_marketplace_seller_payout_approval',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          context.member.displayName
+          || context.member.email,
+        action: 'marketplace_seller_payout_requested',
+        targetType: 'financial_approval',
+        targetId: approvalRef.id,
+        summary:
+          `Requested ${(amountMinor / 100).toFixed(2)} ${context.settings.currency || 'BND'} payout to ${sellerName}.`,
+        now,
+      });
+
+      return result;
+    }
+
+    const nextBalance =
+      currentBalance - amountMinor;
+
+    const payoutNote =
+      [
+        reference ? `Ref ${reference}` : '',
+        note,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+      || `Seller payout ${payoutRef.id}`;
+
+    const postedPayments =
+      await postSmePosPayments({
+        transaction,
+        rows: paymentRows,
+        settings: context.settings,
+        spaceId,
+        uid,
+        idempotencyKey: `${key}:payout`,
+        now,
+        transactionDate: payoutDate,
+        direction: 'out',
+        entryType: 'marketplace_seller_payout',
+        counterparty: sellerName,
+        note: payoutNote,
+        categoryId: 'expense-supplier',
+        extra: {
+          posPayoutId: payoutRef.id,
+          posSettlementType: 'seller_payout',
+        },
+      });
+
+    const firstPayment =
+      postedPayments[0];
+
+    const sourceLabels =
+      postedPayments.map(
+        (payment) =>
+          `${spaceName} — ${payment.accountName}`,
+      );
 
     transaction.update(sellerRef, {
       balanceMinor: nextBalance,
-      paidOutMinor: Number(sellerSnapshot.data()?.paidOutMinor || 0) + amountMinor,
+      paidOutMinor:
+        Number(
+          sellerSnapshot.data()?.paidOutMinor
+          || 0,
+        )
+        + amountMinor,
       updatedAt: now,
     });
+
     transaction.create(payoutRef, {
-      displayId: displayId('PAY'), spaceId, spaceName, ownerId: context.settings.ownerId, sellerId,
-      sellerName, sellerUid: sellerSnapshot.data()?.linkedUid || null,
-      status: 'posted', amountMinor, balanceAfterMinor: nextBalance, currency: context.settings.currency,
-      paymentAccountId: firstPayment.accountId, paymentAccountName: firstPayment.accountName,
-      paymentMethod: firstPayment.paymentMethod, paymentMethodLabel: firstPayment.paymentMethodLabel,
-      paymentSourceLabel: sourceLabels[0], paymentSourceLabels: sourceLabels, payments: postedPayments,
-      payoutDate, reference, note, transactionId: firstPayment.transactionId, ledgerEntryId: firstPayment.ledgerEntryId,
-      transactionIds: postedPayments.map((payment) => payment.transactionId),
-      ledgerEntryIds: postedPayments.map((payment) => payment.ledgerEntryId),
-      createdBy: uid, createdByName: context.member.displayName || context.member.email || 'Team member', createdAt: now,
+      displayId: displayId('PAY'),
+      spaceId,
+      spaceName,
+      ownerId: context.settings.ownerId,
+      sellerId,
+      sellerName,
+      sellerUid:
+        sellerSnapshot.data()?.linkedUid
+        || null,
+      status: 'posted',
+      amountMinor,
+      balanceAfterMinor: nextBalance,
+      currency: context.settings.currency,
+      paymentAccountId: firstPayment.accountId,
+      paymentAccountName: firstPayment.accountName,
+      paymentMethod: firstPayment.paymentMethod,
+      paymentMethodLabel: firstPayment.paymentMethodLabel,
+      paymentSourceLabel: sourceLabels[0],
+      paymentSourceLabels: sourceLabels,
+      payments: postedPayments,
+      payoutDate,
+      reference,
+      note,
+      transactionId: firstPayment.transactionId,
+      ledgerEntryId: firstPayment.ledgerEntryId,
+      transactionIds:
+        postedPayments.map(
+          (payment) => payment.transactionId,
+        ),
+      ledgerEntryIds:
+        postedPayments.map(
+          (payment) => payment.ledgerEntryId,
+        ),
+      createdBy: uid,
+      createdByName:
+        context.member.displayName
+        || context.member.email
+        || 'Team member',
+      createdAt: now,
     });
-    const sellerLedgerRef = db.collection('smePosSellerLedger').doc();
+
+    const sellerLedgerRef =
+      db.collection('smePosSellerLedger')
+        .doc();
+
     transaction.create(sellerLedgerRef, {
-      displayId: displayId('SLG'), spaceId, ownerId: context.settings.ownerId, sellerId,
-      sellerName, sellerUid: sellerSnapshot.data()?.linkedUid || null,
-      kind: 'payout', amountMinor: -amountMinor, balanceAfterMinor: nextBalance, currency: context.settings.currency,
-      saleId: null, receiptNumber: null, payoutId: payoutRef.id,
-      note: `${reference ? `Ref ${reference} · ` : ''}Paid from ${sourceLabels.join(' + ')}${note ? ` · ${note}` : ''}`, createdAt: now,
+      displayId: displayId('SLG'),
+      spaceId,
+      ownerId: context.settings.ownerId,
+      sellerId,
+      sellerName,
+      sellerUid:
+        sellerSnapshot.data()?.linkedUid
+        || null,
+      kind: 'payout',
+      amountMinor: -amountMinor,
+      balanceAfterMinor: nextBalance,
+      currency: context.settings.currency,
+      saleId: null,
+      receiptNumber: null,
+      payoutId: payoutRef.id,
+      note:
+        `${reference ? `Ref ${reference} · ` : ''}`
+        + `Paid from ${sourceLabels.join(' + ')}`
+        + `${note ? ` · ${note}` : ''}`,
+      createdAt: now,
     });
+
     const result = {
-      payoutId: payoutRef.id, sellerId, transactionId: firstPayment.transactionId,
-      transactionIds: postedPayments.map((payment) => payment.transactionId), balanceAfterMinor: nextBalance,
+      status: 'posted',
+      payoutId: payoutRef.id,
+      sellerId,
+      transactionId: firstPayment.transactionId,
+      transactionIds:
+        postedPayments.map(
+          (payment) => payment.transactionId,
+        ),
+      balanceAfterMinor: nextBalance,
     };
-    transaction.create(commandRef, { uid, kind: 'record_marketplace_seller_payout', idempotencyKey: key, result, createdAt: now });
+
+    transaction.create(commandRef, {
+      uid,
+      kind: 'record_marketplace_seller_payout',
+      idempotencyKey: key,
+      result,
+      createdAt: now,
+    });
+
     createActivity(transaction, {
-      spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email,
-      action: 'marketplace_seller_payout_recorded', targetType: 'sme_pos_payout', targetId: payoutRef.id,
-      summary: `Paid ${(amountMinor / 100).toFixed(2)} ${context.settings.currency || 'BND'} to ${sellerName} from ${sourceLabels.join(' + ')}.`,
+      spaceId,
+      actorUid: uid,
+      actorName:
+        context.member.displayName
+        || context.member.email,
+      action: 'marketplace_seller_payout_recorded',
+      targetType: 'sme_pos_payout',
+      targetId: payoutRef.id,
+      summary:
+        `Paid ${(amountMinor / 100).toFixed(2)} ${context.settings.currency || 'BND'} to ${sellerName} from ${sourceLabels.join(' + ')}.`,
       now,
     });
+
     return result;
   });
 });

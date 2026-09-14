@@ -932,8 +932,32 @@ export async function recordMarketplaceSellerPayout(input: {
   payoutDate: string;
   reference?: string;
   note?: string;
-}): Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; transactionIds?: string[]; balanceAfterMinor: number } }> {
+}): Promise<{
+  data: {
+    status: 'posted' | 'pending_approval';
+    approvalId?: string;
+    payoutId?: string;
+    sellerId: string;
+    transactionId?: string;
+    transactionIds?: string[];
+    balanceAfterMinor: number;
+  };
+}> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'recordMarketplaceSellerPayout');
-  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { payoutId: string; sellerId: string; transactionId: string; transactionIds?: string[]; balanceAfterMinor: number } }>;
+
+  return call({
+    ...input,
+    idempotencyKey: crypto.randomUUID(),
+  }) as Promise<{
+    data: {
+      status: 'posted' | 'pending_approval';
+      approvalId?: string;
+      payoutId?: string;
+      sellerId: string;
+      transactionId?: string;
+      transactionIds?: string[];
+      balanceAfterMinor: number;
+    };
+  }>;
 }

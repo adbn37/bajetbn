@@ -704,6 +704,16 @@ export interface FinancialApprovalRequest {
   labels?: string[];
   paymentMethod?: PaymentMethodCode | null;
   paymentMethodLabel?: string | null;
+  sellerId?: string | null;
+  sellerName?: string | null;
+  payoutDate?: string | null;
+  reference?: string | null;
+  payments?: Array<{
+    accountId: string;
+    amountMinor: number;
+    paymentMethod?: PaymentMethodCode | null;
+    paymentMethodLabel?: string | null;
+  }>;
   status: FinancialApprovalStatus;
   transactionId?: string | null;
   ledgerEntryIds?: string[];

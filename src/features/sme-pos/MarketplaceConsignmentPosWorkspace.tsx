@@ -1753,8 +1753,21 @@ export function MarketplaceConsignmentPosWorkspace({
       const sellerName = payoutForm.seller.name;
       const currency = payoutForm.seller.currency;
       setPayoutForm(null);
-      setSuccess(`Payout recorded for ${sellerName}. Remaining amount payable: ${formatMoney(result.data.balanceAfterMinor, currency)}.`);
-      await load(); await onChanged();
+
+      if (result.data.status === 'pending_approval') {
+        setSuccess(
+          `Payout for ${sellerName} was sent to the Account Owner for approval. `
+          + `Amount payable remains ${formatMoney(result.data.balanceAfterMinor, currency)} until approval.`,
+        );
+        return;
+      }
+
+      setSuccess(
+        `Payout recorded for ${sellerName}. Remaining amount payable: ${formatMoney(result.data.balanceAfterMinor, currency)}.`,
+      );
+
+      await load();
+      await onChanged();
     } catch (nextError) { setError(getErrorMessage(nextError)); } finally { setBusy(false); }
   }
 
