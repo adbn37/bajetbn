@@ -35,6 +35,7 @@ import type {
   Account,
   AccountAccess,
   AccountClassification,
+  BusinessAccountAccessLevel,
   AccountType,
   InstitutionCode,
   Space,
@@ -51,6 +52,7 @@ type SharedAccountContext = {
   usableSpaceIds: string[];
   balanceSpaceIds: string[];
   ledgerSpaceIds: string[];
+  reportSpaceIds: string[];
 };
 
 export function AccountsPage({
@@ -139,6 +141,7 @@ export function AccountsPage({
             usableSpaceIds: [],
             balanceSpaceIds: [],
             ledgerSpaceIds: [],
+            reportSpaceIds: [],
           };
 
           const addSpace = (values: string[], enabled: boolean) =>
@@ -149,6 +152,7 @@ export function AccountsPage({
             usableSpaceIds: addSpace(current.usableSpaceIds, account.sharedCanUseAccount === true),
             balanceSpaceIds: addSpace(current.balanceSpaceIds, account.sharedCanViewBalance === true),
             ledgerSpaceIds: addSpace(current.ledgerSpaceIds, account.sharedCanViewLedger === true),
+            reportSpaceIds: addSpace(current.reportSpaceIds, account.sharedCanViewReports === true),
           };
 
           const existing = sharedById.get(account.id);
@@ -174,6 +178,9 @@ export function AccountsPage({
             sharedCanViewLedger:
               existing.sharedCanViewLedger === true
               || account.sharedCanViewLedger === true,
+            sharedCanViewReports:
+              existing.sharedCanViewReports === true
+              || account.sharedCanViewReports === true,
           });
         });
       });
@@ -648,9 +655,11 @@ function AccountList({
 type BusinessAccountShareRow = {
   space: Space;
   member: SpaceMember;
+  accessLevel: BusinessAccountAccessLevel;
   canUseAccount: boolean;
   canViewBalance: boolean;
   canViewLedger: boolean;
+  canViewReports: boolean;
 };
 
 function BusinessAccountShareModal({
@@ -700,9 +709,33 @@ function BusinessAccountShareModal({
               next.push({
                 space,
                 member,
-                canUseAccount: Boolean(access?.usableSpaceIds?.includes(space.id)),
-                canViewBalance: Boolean(access?.balanceSpaceIds?.includes(space.id)),
-                canViewLedger: Boolean(access?.ledgerSpaceIds?.includes(space.id)),
+                accessLevel:
+                  access?.accessLevelBySpace?.[space.id]
+                  || 'user',
+                canUseAccount:
+                  Boolean(
+                    access?.usableSpaceIds?.includes(
+                      space.id,
+                    ),
+                  ),
+                canViewBalance:
+                  Boolean(
+                    access?.balanceSpaceIds?.includes(
+                      space.id,
+                    ),
+                  ),
+                canViewLedger:
+                  Boolean(
+                    access?.ledgerSpaceIds?.includes(
+                      space.id,
+                    ),
+                  ),
+                canViewReports:
+                  Boolean(
+                    access?.reportSpaceIds?.includes(
+                      space.id,
+                    ),
+                  ),
               });
             });
         });
@@ -740,9 +773,11 @@ function BusinessAccountShareModal({
         accountId: account.id,
         spaceId: row.space.id,
         memberUid: row.member.uid,
+        accessLevel: row.accessLevel,
         canUseAccount: row.canUseAccount,
         canViewBalance: row.canViewBalance,
         canViewLedger: row.canViewLedger,
+        canViewReports: row.canViewReports,
       });
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -766,6 +801,36 @@ function BusinessAccountShareModal({
             <div><span className="eyebrow">{row.space.name}</span><h2>{row.member.displayName || row.member.email || 'Member'}</h2></div>
           </div>
           <div className="form-stack compact">
+            <label>
+              Access level
+              <select
+                value={row.accessLevel}
+                onChange={(event) =>
+                  patchRow(
+                    row.space.id,
+                    row.member.uid,
+                    {
+                      accessLevel:
+                        event.target.value as BusinessAccountAccessLevel,
+                    },
+                  )
+                }
+              >
+                <option value="manager">
+                  Manager
+                </option>
+                <option value="user">
+                  User
+                </option>
+                <option value="viewer">
+                  Viewer
+                </option>
+              </select>
+              <small>
+                The level describes responsibility. The switches below decide the exact access granted to this account.
+              </small>
+            </label>
+
             <label className="checkbox-field">
               <input type="checkbox" checked={row.canUseAccount} onChange={(event) => patchRow(row.space.id, row.member.uid, { canUseAccount: event.target.checked })} />
               <span><strong>Can use account</strong><small>Can post Business money activity with this account in this Space.</small></span>
@@ -777,6 +842,31 @@ function BusinessAccountShareModal({
             <label className="checkbox-field">
               <input type="checkbox" checked={row.canViewLedger} onChange={(event) => patchRow(row.space.id, row.member.uid, { canViewLedger: event.target.checked })} />
               <span><strong>Can view activity</strong><small>Can see activity for this account inside {row.space.name}.</small></span>
+            </label>
+
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={row.canViewReports}
+                onChange={(event) =>
+                  patchRow(
+                    row.space.id,
+                    row.member.uid,
+                    {
+                      canViewReports:
+                        event.target.checked,
+                    },
+                  )
+                }
+              />
+              <span>
+                <strong>
+                  Can view full reports
+                </strong>
+                <small>
+                  Allows this member to receive full Business report access without granting unrelated management permissions.
+                </small>
+              </span>
             </label>
           </div>
           <div className="modal-actions">

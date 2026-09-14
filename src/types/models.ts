@@ -48,6 +48,7 @@ export type SharedBillPaymentStatus = 'submitted' | 'posted' | 'rejected' | 'rev
 export type CollaborationMode = 'private' | 'owner_managed' | 'collaborative';
 export type AccountType = 'bank' | 'cash' | 'e_wallet' | 'credit_card';
 export type AccountClassification = 'personal' | 'business';
+export type BusinessAccountAccessLevel = 'manager' | 'user' | 'viewer';
 export type InstitutionCode = 'bibd' | 'baiduri' | 'taib' | 'standard_chartered_brunei' | 'cash' | 'other_e_wallet' | 'other';
 export type PaymentMethodCode = 'bank_transfer' | 'cash' | 'debit_card' | 'credit_card' | 'e_wallet' | 'qr_payment' | 'bank_deposit' | 'cheque' | 'other';
 
@@ -1412,6 +1413,8 @@ export interface Account {
   sharedCanUseAccount?: boolean;
   sharedCanViewBalance?: boolean;
   sharedCanViewLedger?: boolean;
+  sharedAccessLevel?: BusinessAccountAccessLevel | null;
+  sharedCanViewReports?: boolean;
   currency: string;
   openingBalanceMinor: number;
   ledgerBalanceMinor: number;
@@ -1434,9 +1437,12 @@ export interface AccountAccess {
   usableSpaceIds?: string[];
   balanceSpaceIds?: string[];
   ledgerSpaceIds?: string[];
+  reportSpaceIds?: string[];
+  accessLevelBySpace?: Record<string, BusinessAccountAccessLevel>;
   canUseAccount: boolean;
   canViewBalance: boolean;
   canViewLedger: boolean;
+  canViewReports?: boolean;
 }
 
 export type BudgetPeriodType = 'monthly' | 'custom';

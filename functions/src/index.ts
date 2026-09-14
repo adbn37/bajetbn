@@ -728,7 +728,31 @@ export const getBusinessSpaceAccounts = onCall({ region }, async (request) => {
       && accessSpaceIds(access, 'ledgerSpaceIds').includes(spaceId)
     );
 
-    if (!owner && !canUse && !canViewBalance && !canViewLedger) return [];
+    const canViewReports =
+      owner
+      || accessSpaceIds(
+        access,
+        'reportSpaceIds',
+      ).includes(
+        spaceId,
+      );
+
+    const sharedAccessLevel =
+      owner
+        ? null
+        : businessAccountAccessLevel(
+            access?.accessLevelBySpace?.[spaceId],
+          );
+
+    if (
+      !owner
+      && !canUse
+      && !canViewBalance
+      && !canViewLedger
+      && !canViewReports
+    ) {
+      return [];
+    }
 
     return [{
       id: item.id,
@@ -750,6 +774,8 @@ export const getBusinessSpaceAccounts = onCall({ region }, async (request) => {
       sharedCanUseAccount: canUse,
       sharedCanViewBalance: canViewBalance,
       sharedCanViewLedger: canViewLedger,
+      sharedAccessLevel,
+      sharedCanViewReports: canViewReports,
       archivedAt: null,
       closedAt: null,
     }];
@@ -811,11 +837,35 @@ export const getBusinessSpaceTransactions = onCall({ region }, async (request) =
   };
 });
 
+const businessAccountAccessLevels = ['manager', 'user', 'viewer'] as const;
+
+function businessAccountAccessLevel(
+  value: unknown,
+): (typeof businessAccountAccessLevels)[number] {
+  if (value === 'manager' || value === 'viewer') return value;
+  return 'user';
+}
+
 export const setBusinessAccountMemberAccess = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const accountId = stringValue(request.data?.accountId, 'Account ID', 80);
   const spaceId = stringValue(request.data?.spaceId, 'Business Space', 80);
   const memberUid = stringValue(request.data?.memberUid, 'Member ID', 160);
+  const requestedAccessLevel =
+    request.data?.accessLevel == null
+    || request.data?.accessLevel === ''
+      ? null
+      : oneOf(
+          request.data.accessLevel,
+          businessAccountAccessLevels,
+          'account access level',
+        );
+
+  const requestedCanViewReports =
+    typeof request.data?.canViewReports === 'boolean'
+      ? request.data.canViewReports
+      : null;
+
   const canUseAccount = request.data?.canUseAccount === true;
   const canViewBalance = request.data?.canViewBalance === true;
   const canViewLedger = request.data?.canViewLedger === true;
@@ -857,38 +907,137 @@ export const setBusinessAccountMemberAccess = onCall({ region }, async (request)
   return db.runTransaction(async (transaction) => {
     const current = await transaction.get(accessRef);
     const data = current.data() || {};
-    const usableSpaceIds = withSpacePermission(accessSpaceIds(data, 'usableSpaceIds'), spaceId, canUseAccount);
-    const balanceSpaceIds = withSpacePermission(accessSpaceIds(data, 'balanceSpaceIds'), spaceId, canViewBalance);
-    const ledgerSpaceIds = withSpacePermission(accessSpaceIds(data, 'ledgerSpaceIds'), spaceId, canViewLedger);
-    const spaceIds = [...new Set([...usableSpaceIds, ...balanceSpaceIds, ...ledgerSpaceIds])];
-    const now = FieldValue.serverTimestamp();
+    const existingAccessLevel =
+      businessAccountAccessLevel(
+        data.accessLevelBySpace?.[spaceId],
+      );
 
-    if (!spaceIds.length) {
-      if (current.exists) transaction.delete(accessRef);
-      return { accountId, spaceId, memberUid, removed: true };
+    const accessLevel =
+      requestedAccessLevel
+      || existingAccessLevel;
+
+    const existingCanViewReports =
+      accessSpaceIds(
+        data,
+        'reportSpaceIds',
+      ).includes(
+        spaceId,
+      );
+
+    const canViewReports =
+      requestedCanViewReports
+      ?? existingCanViewReports;
+
+    const usableSpaceIds =
+      withSpacePermission(
+        accessSpaceIds(data, 'usableSpaceIds'),
+        spaceId,
+        canUseAccount,
+      );
+
+    const balanceSpaceIds =
+      withSpacePermission(
+        accessSpaceIds(data, 'balanceSpaceIds'),
+        spaceId,
+        canViewBalance,
+      );
+
+    const ledgerSpaceIds =
+      withSpacePermission(
+        accessSpaceIds(data, 'ledgerSpaceIds'),
+        spaceId,
+        canViewLedger,
+      );
+
+    const reportSpaceIds =
+      withSpacePermission(
+        accessSpaceIds(data, 'reportSpaceIds'),
+        spaceId,
+        canViewReports,
+      );
+
+    const hasCurrentSpaceAccess =
+      canUseAccount
+      || canViewBalance
+      || canViewLedger
+      || canViewReports;
+
+    const accessLevelBySpace: Record<string, string> =
+      data.accessLevelBySpace
+      && typeof data.accessLevelBySpace === 'object'
+      && !Array.isArray(data.accessLevelBySpace)
+        ? { ...data.accessLevelBySpace }
+        : {};
+
+    if (hasCurrentSpaceAccess) {
+      accessLevelBySpace[spaceId] =
+        accessLevel;
+    } else {
+      delete accessLevelBySpace[spaceId];
     }
 
-    transaction.set(accessRef, {
-      accountId,
-      uid: memberUid,
-      spaceIds,
-      usableSpaceIds,
-      balanceSpaceIds,
-      ledgerSpaceIds,
-      canUseAccount: usableSpaceIds.length > 0,
-      canViewBalance: balanceSpaceIds.length > 0,
-      canViewLedger: ledgerSpaceIds.length > 0,
-      createdAt: current.data()?.createdAt || now,
-      updatedAt: now,
-    }, { merge: true });
+    const spaceIds = [
+      ...new Set([
+        ...usableSpaceIds,
+        ...balanceSpaceIds,
+        ...ledgerSpaceIds,
+        ...reportSpaceIds,
+      ]),
+    ];
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    if (!spaceIds.length) {
+      if (current.exists) {
+        transaction.delete(accessRef);
+      }
+
+      return {
+        accountId,
+        spaceId,
+        memberUid,
+        removed: true,
+      };
+    }
+
+    transaction.set(
+      accessRef,
+      {
+        accountId,
+        uid: memberUid,
+        spaceIds,
+        usableSpaceIds,
+        balanceSpaceIds,
+        ledgerSpaceIds,
+        reportSpaceIds,
+        accessLevelBySpace,
+        canUseAccount:
+          usableSpaceIds.length > 0,
+        canViewBalance:
+          balanceSpaceIds.length > 0,
+        canViewLedger:
+          ledgerSpaceIds.length > 0,
+        canViewReports:
+          reportSpaceIds.length > 0,
+        createdAt:
+          current.data()?.createdAt
+          || now,
+        updatedAt:
+          now,
+      },
+      { merge: true },
+    );
 
     return {
       accountId,
       spaceId,
       memberUid,
+      accessLevel,
       canUseAccount,
       canViewBalance,
       canViewLedger,
+      canViewReports,
     };
   });
 });

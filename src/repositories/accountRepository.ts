@@ -5,6 +5,7 @@ import type {
   Account,
   AccountAccess,
   AccountClassification,
+  BusinessAccountAccessLevel,
   AccountType,
   InstitutionCode,
 } from '../types/models';
@@ -110,9 +111,11 @@ export async function setBusinessAccountMemberAccess(input: {
   accountId: string;
   spaceId: string;
   memberUid: string;
+  accessLevel: BusinessAccountAccessLevel;
   canUseAccount: boolean;
   canViewBalance: boolean;
   canViewLedger: boolean;
+  canViewReports: boolean;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'setBusinessAccountMemberAccess');
