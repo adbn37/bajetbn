@@ -115,6 +115,72 @@ function spaceDisplayLabel(space: Space): string {
   return [space.name, spaceTypeLabels[space.type], space.currency].join(' · ');
 }
 
+function transactionTimestampMillis(value: unknown): number {
+  if (value == null) return 0;
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value)
+      ? value
+      : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+
+    return Number.isFinite(parsed)
+      ? parsed
+      : 0;
+  }
+
+  if (typeof value !== 'object') {
+    return 0;
+  }
+
+  const timestamp = value as {
+    toMillis?: () => number;
+    seconds?: number | string;
+    nanoseconds?: number | string;
+    _seconds?: number | string;
+    _nanoseconds?: number | string;
+  };
+
+  if (typeof timestamp.toMillis === 'function') {
+    const millis = timestamp.toMillis();
+
+    return Number.isFinite(millis)
+      ? millis
+      : 0;
+  }
+
+  const seconds = Number(
+    timestamp.seconds
+    ?? timestamp._seconds,
+  );
+
+  if (!Number.isFinite(seconds)) {
+    return 0;
+  }
+
+  const nanoseconds = Number(
+    timestamp.nanoseconds
+    ?? timestamp._nanoseconds
+    ?? 0,
+  );
+
+  return (
+    seconds * 1000
+    + (
+      Number.isFinite(nanoseconds)
+        ? nanoseconds / 1_000_000
+        : 0
+    )
+  );
+}
+
 function transactionCategorySnapshot(item: FinancialTransaction): TransactionCategory {
   return {
     id: item.categoryId || `legacy-${item.category}`,
@@ -403,8 +469,11 @@ export function TransactionsPage() {
               return dateCompare;
             }
 
-            return (b.postedAt?.toMillis() || 0)
-              - (a.postedAt?.toMillis() || 0);
+            return transactionTimestampMillis(
+              b.postedAt,
+            ) - transactionTimestampMillis(
+              a.postedAt,
+            );
           });
 
       const nextAttachmentCounts: Record<string, number> = {};
