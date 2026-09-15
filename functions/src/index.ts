@@ -963,6 +963,860 @@ export const getBusinessSpaceReportTransactions = onCall({ region }, async (requ
   };
 });
 
+export const getBusinessPosAdvancedReport = onCall({ region }, async (request) => {
+  const uid =
+    requireAuth(
+      request.auth?.uid,
+    );
+
+  const spaceId =
+    stringValue(
+      request.data?.spaceId,
+      'Space ID',
+      80,
+    );
+
+  const [
+    spaceSnapshot,
+    memberSnapshot,
+    settingsSnapshot,
+    ownerAccountSnapshot,
+  ] =
+    await Promise.all([
+      db.collection('spaces')
+        .doc(spaceId)
+        .get(),
+
+      db.collection('spaceMembers')
+        .doc(spaceId + '_' + uid)
+        .get(),
+
+      db.collection('smePosSettings')
+        .doc(spaceId)
+        .get(),
+
+      db.collection('accounts')
+        .where(
+          'classification',
+          '==',
+          'business',
+        )
+        .get(),
+    ]);
+
+  if (
+    !spaceSnapshot.exists
+    || spaceSnapshot.data()?.archivedAt
+    || spaceSnapshot.data()?.type !== 'sme'
+  ) {
+    throw new HttpsError(
+      'not-found',
+      'Business Space not found.',
+    );
+  }
+
+  if (
+    !memberSnapshot.exists
+    || [
+      'suspended',
+      'removed',
+    ].includes(
+      String(
+        memberSnapshot.data()?.status
+        || '',
+      ),
+    )
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'You are not an active member of this Business Space.',
+    );
+  }
+
+  const space =
+    spaceSnapshot.data() || {};
+
+  const ownerId =
+    String(
+      space.ownerId
+      || '',
+    );
+
+  const linkedAccountIds =
+    new Set(
+      ownerAccountSnapshot.docs
+        .filter(
+          (item) => {
+            const account =
+              item.data() || {};
+
+            return (
+              account.ownerId
+                === ownerId
+              && !account.archivedAt
+              && !account.closedAt
+              && account.classification
+                === 'business'
+              && accountLinkedToBusinessSpace(
+                account,
+                spaceId,
+              )
+            );
+          },
+        )
+        .map(
+          (item) =>
+            item.id,
+        ),
+    );
+
+  if (uid !== ownerId) {
+    const accessSnapshot =
+      await db.collection(
+        'accountAccess',
+      )
+        .where(
+          'uid',
+          '==',
+          uid,
+        )
+        .get();
+
+    const hasReportAccess =
+      accessSnapshot.docs.some(
+        (item) => {
+          const access =
+            item.data() || {};
+
+          const accountId =
+            String(
+              access.accountId
+              || '',
+            );
+
+          return (
+            linkedAccountIds.has(
+              accountId,
+            )
+            && accessSpaceIds(
+              access,
+              'reportSpaceIds',
+            ).includes(
+              spaceId,
+            )
+          );
+        },
+      );
+
+    if (!hasReportAccess) {
+      throw new HttpsError(
+        'permission-denied',
+        'The Business Owner has not granted you report access for this Business Space.',
+      );
+    }
+  }
+
+  if (!settingsSnapshot.exists) {
+    return {
+      spaceId,
+      posEnabled:
+        false,
+      mode:
+        null,
+      shopName:
+        String(
+          space.name
+          || 'Business',
+        ),
+      currency:
+        String(
+          space.currency
+          || 'BND',
+        ),
+      sales: [],
+      payouts: [],
+      sellers: [],
+      staff: [],
+    };
+  }
+
+  const settings =
+    settingsSnapshot.data()
+    || {};
+
+  const [
+    salesSnapshot,
+    payoutSnapshot,
+    sellerSnapshot,
+    productSnapshot,
+    listingSnapshot,
+    posAccessSnapshot,
+  ] =
+    await Promise.all([
+      db.collection(
+        'smePosSales',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get(),
+
+      db.collection(
+        'smePosPayouts',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get(),
+
+      db.collection(
+        'smePosSellers',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get(),
+
+      db.collection(
+        'smePosProducts',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get(),
+
+      db.collection(
+        'smePosListings',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get(),
+
+      db.collection(
+        'smePosAccess',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get(),
+    ]);
+
+  const categoryByItemId =
+    new Map<string, string>();
+
+  productSnapshot.docs.forEach(
+    (item) => {
+      categoryByItemId.set(
+        item.id,
+        String(
+          item.data()?.category
+          || '',
+        ),
+      );
+    },
+  );
+
+  listingSnapshot.docs.forEach(
+    (item) => {
+      categoryByItemId.set(
+        item.id,
+        String(
+          item.data()?.category
+          || '',
+        ),
+      );
+    },
+  );
+
+  const staffByUid =
+    new Map<
+      string,
+      {
+        uid: string;
+        name: string;
+        role: string;
+      }
+    >();
+
+  posAccessSnapshot.docs
+    .filter(
+      (item) =>
+        item.data()?.status
+        === 'active',
+    )
+    .forEach(
+      (item) => {
+        const data =
+          item.data() || {};
+
+        const memberUid =
+          String(
+            data.uid
+            || '',
+          );
+
+        if (!memberUid) {
+          return;
+        }
+
+        staffByUid.set(
+          memberUid,
+          {
+            uid:
+              memberUid,
+            name:
+              String(
+                data.displayName
+                || data.email
+                || 'Staff',
+              ),
+            role:
+              String(
+                data.role
+                || 'staff',
+              ),
+          },
+        );
+      },
+    );
+
+  if (
+    ownerId
+    && !staffByUid.has(
+      ownerId,
+    )
+  ) {
+    staffByUid.set(
+      ownerId,
+      {
+        uid:
+          ownerId,
+        name:
+          String(
+            memberSnapshot.data()
+              ?.displayName
+            || 'Business Owner',
+          ),
+        role:
+          'owner',
+      },
+    );
+  }
+
+  const paymentsFrom =
+    (
+      value: unknown,
+    ) => {
+      if (!Array.isArray(value)) {
+        return [];
+      }
+
+      return value.map(
+        (raw) => {
+          const payment =
+            (
+              raw
+              || {}
+            ) as DocumentData;
+
+          return {
+            accountId:
+              String(
+                payment.accountId
+                || '',
+              ),
+            accountName:
+              String(
+                payment.accountName
+                || 'Business account',
+              ),
+            paymentMethod:
+              payment.paymentMethod
+              || null,
+            paymentMethodLabel:
+              typeof payment.paymentMethodLabel
+                === 'string'
+                ? payment.paymentMethodLabel
+                : null,
+            amountMinor:
+              nonNegativeMoney(
+                payment.amountMinor
+                || 0,
+              ),
+            returnedMinor:
+              nonNegativeMoney(
+                payment.returnedMinor
+                || 0,
+              ),
+          };
+        },
+      );
+    };
+
+  const sales =
+    salesSnapshot.docs
+      .filter(
+        (item) =>
+          item.data()?.ownerId
+          === ownerId,
+      )
+      .map(
+        (item) => {
+          const sale =
+            item.data()
+            || {};
+
+          const saleItems =
+            Array.isArray(
+              sale.items,
+            )
+              ? sale.items
+              : [];
+
+          const items =
+            saleItems.map(
+              (raw: unknown) => {
+                const line =
+                  (
+                    raw
+                    || {}
+                  ) as DocumentData;
+
+                const productId =
+                  String(
+                    line.productId
+                    || '',
+                  );
+
+                const listingId =
+                  typeof line.listingId
+                    === 'string'
+                    ? line.listingId
+                    : null;
+
+                return {
+                  productId,
+                  listingId,
+                  productName:
+                    String(
+                      line.productName
+                      || 'Product',
+                    ),
+                  category:
+                    categoryByItemId.get(
+                      listingId
+                      || productId,
+                    )
+                    || '',
+                  sku:
+                    String(
+                      line.sku
+                      || '',
+                    ),
+                  barcode:
+                    String(
+                      line.barcode
+                      || '',
+                    ),
+                  sellerId:
+                    typeof line.sellerId
+                      === 'string'
+                      ? line.sellerId
+                      : null,
+                  sellerName:
+                    typeof line.sellerName
+                      === 'string'
+                      ? line.sellerName
+                      : null,
+                  quantity:
+                    Math.max(
+                      0,
+                      Number(
+                        line.quantity
+                        || 0,
+                      ),
+                    ),
+                  returnedQuantity:
+                    Math.max(
+                      0,
+                      Number(
+                        line.returnedQuantity
+                        || 0,
+                      ),
+                    ),
+                  lineTotalMinor:
+                    nonNegativeMoney(
+                      line.lineTotalMinor
+                      || 0,
+                    ),
+                  lineCostMinor:
+                    nonNegativeMoney(
+                      line.lineCostMinor
+                      || 0,
+                    ),
+                  netLineMinor:
+                    nonNegativeMoney(
+                      line.netLineMinor
+                      ?? line.lineTotalMinor
+                      ?? 0,
+                    ),
+                  returnedMinor:
+                    nonNegativeMoney(
+                      line.returnedMinor
+                      || 0,
+                    ),
+                  commissionMinor:
+                    Math.max(
+                      0,
+                      nonNegativeMoney(
+                        line.commissionMinor
+                        || 0,
+                      )
+                      - nonNegativeMoney(
+                          line.commissionReturnedMinor
+                          || 0,
+                        ),
+                    ),
+                  sellerEarningsMinor:
+                    Math.max(
+                      0,
+                      nonNegativeMoney(
+                        line.sellerEarningMinor
+                        || 0,
+                      )
+                      - nonNegativeMoney(
+                          line.sellerEarningReturnedMinor
+                          || 0,
+                        ),
+                    ),
+                };
+              },
+            );
+
+          const createdBy =
+            String(
+              sale.createdBy
+              || '',
+            );
+
+          const staff =
+            staffByUid.get(
+              createdBy,
+            );
+
+          return {
+            id:
+              item.id,
+            receiptNumber:
+              String(
+                sale.receiptNumber
+                || item.id,
+              ),
+            sourceMode:
+              String(
+                sale.sourceMode
+                || settings.mode
+                || 'standard',
+              ),
+            status:
+              String(
+                sale.status
+                || 'completed',
+              ),
+            returnStatus:
+              String(
+                sale.returnStatus
+                || 'not_returned',
+              ),
+            customerId:
+              typeof sale.customerId
+                === 'string'
+                ? sale.customerId
+                : null,
+            customerName:
+              typeof sale.customerName
+                === 'string'
+                ? sale.customerName
+                : null,
+            createdBy,
+            cashierName:
+              staff?.name
+              || 'Staff',
+            saleDate:
+              String(
+                sale.saleDate
+                || '',
+              ),
+            subtotalMinor:
+              nonNegativeMoney(
+                sale.subtotalMinor
+                || 0,
+              ),
+            discountMinor:
+              nonNegativeMoney(
+                sale.discountMinor
+                || 0,
+              ),
+            totalMinor:
+              nonNegativeMoney(
+                sale.totalMinor
+                || 0,
+              ),
+            returnedMinor:
+              nonNegativeMoney(
+                sale.returnedMinor
+                || 0,
+              ),
+            costMinor:
+              nonNegativeMoney(
+                sale.costMinor
+                || 0,
+              ),
+            profitMinor:
+              Number(
+                sale.profitMinor
+                || 0,
+              ),
+            marketplaceCommissionMinor:
+              nonNegativeMoney(
+                sale.marketplaceCommissionMinor
+                || 0,
+              ),
+            sellerEarningsMinor:
+              nonNegativeMoney(
+                sale.sellerEarningsMinor
+                || 0,
+              ),
+            currency:
+              String(
+                sale.currency
+                || settings.currency
+                || space.currency
+                || 'BND',
+              ),
+            note:
+              String(
+                sale.note
+                || '',
+              ),
+            payments:
+              paymentsFrom(
+                sale.payments,
+              ),
+            items,
+          };
+        },
+      )
+      .sort(
+        (a, b) =>
+          b.saleDate.localeCompare(
+            a.saleDate,
+          ),
+      );
+
+  const payouts =
+    payoutSnapshot.docs
+      .filter(
+        (item) =>
+          item.data()?.ownerId
+          === ownerId,
+      )
+      .map(
+        (item) => {
+          const payout =
+            item.data()
+            || {};
+
+          const payments =
+            paymentsFrom(
+              payout.payments,
+            );
+
+          if (
+            payments.length === 0
+            && payout.paymentAccountId
+          ) {
+            payments.push({
+              accountId:
+                String(
+                  payout.paymentAccountId,
+                ),
+              accountName:
+                String(
+                  payout.paymentAccountName
+                  || 'Business account',
+                ),
+              paymentMethod:
+                payout.paymentMethod
+                || null,
+              paymentMethodLabel:
+                typeof payout.paymentMethodLabel
+                  === 'string'
+                  ? payout.paymentMethodLabel
+                  : null,
+              amountMinor:
+                nonNegativeMoney(
+                  payout.amountMinor
+                  || 0,
+                ),
+              returnedMinor:
+                0,
+            });
+          }
+
+          return {
+            id:
+              item.id,
+            sellerId:
+              String(
+                payout.sellerId
+                || '',
+              ),
+            sellerName:
+              String(
+                payout.sellerName
+                || 'Seller',
+              ),
+            amountMinor:
+              nonNegativeMoney(
+                payout.amountMinor
+                || 0,
+              ),
+            balanceAfterMinor:
+              Number(
+                payout.balanceAfterMinor
+                || 0,
+              ),
+            payoutDate:
+              String(
+                payout.payoutDate
+                || '',
+              ),
+            currency:
+              String(
+                payout.currency
+                || settings.currency
+                || 'BND',
+              ),
+            reference:
+              String(
+                payout.reference
+                || '',
+              ),
+            payments,
+          };
+        },
+      );
+
+  const sellers =
+    sellerSnapshot.docs
+      .filter(
+        (item) =>
+          item.data()?.ownerId
+            === ownerId
+          && !item.data()?.deletedAt,
+      )
+      .map(
+        (item) => {
+          const seller =
+            item.data()
+            || {};
+
+          return {
+            id:
+              item.id,
+            name:
+              String(
+                seller.name
+                || 'Seller',
+              ),
+            balanceMinor:
+              Number(
+                seller.balanceMinor
+                || 0,
+              ),
+            grossSalesMinor:
+              nonNegativeMoney(
+                seller.grossSalesMinor
+                || 0,
+              ),
+            commissionEarnedMinor:
+              nonNegativeMoney(
+                seller.commissionEarnedMinor
+                || 0,
+              ),
+            paidOutMinor:
+              nonNegativeMoney(
+                seller.paidOutMinor
+                || 0,
+              ),
+            soldQuantity:
+              Math.max(
+                0,
+                Number(
+                  seller.soldQuantity
+                  || 0,
+                ),
+              ),
+          };
+        },
+      )
+      .sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name,
+          ),
+      );
+
+  return {
+    spaceId,
+    posEnabled:
+      true,
+    mode:
+      String(
+        settings.mode
+        || 'standard',
+      ),
+    shopName:
+      String(
+        settings.shopName
+        || space.name
+        || 'Business POS',
+      ),
+    currency:
+      String(
+        settings.currency
+        || space.currency
+        || 'BND',
+      ),
+    sales,
+    payouts,
+    sellers,
+    staff:
+      [
+        ...staffByUid.values(),
+      ].sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name,
+          ),
+      ),
+  };
+});
+
 const businessAccountAccessLevels = ['manager', 'user', 'viewer'] as const;
 
 function businessAccountAccessLevel(

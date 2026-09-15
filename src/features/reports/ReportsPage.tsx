@@ -20,6 +20,7 @@ import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import { localeForLanguage } from '../../services/i18n';
 import { buildFinancialHealth, sumAccountBalances } from './financialHealth';
+import { BusinessPosReportPanel } from './BusinessPosReportPanel';
 
 interface AmountBarItem {
   id: string;
@@ -1025,6 +1026,11 @@ export function ReportsPage() {
       <div className="report-data-note">The cash position uses the current balances of accounts that have been used by this Business Space. Those accounts may also be used elsewhere.</div>
     </section>}
 
+    {selectedSpaceRecord?.type === 'sme' && (
+      <BusinessPosReportPanel
+        space={selectedSpaceRecord}
+      />
+    )}
     <section className="reports-grid">
       <article className="panel report-panel"><div className="panel-heading"><div><span className="eyebrow">Spending</span><h2>Where your money went</h2></div></div><AmountBars items={spendingByCategory} currency={currency} emptyText="No spending found for these filters." /></article>
       <article className="panel report-panel"><div className="panel-heading"><div><span className="eyebrow">Accounts</span><h2>Money used from each account</h2></div></div><AmountBars items={spendingByAccount} currency={currency} emptyText="No account spending found for these filters." /></article>
