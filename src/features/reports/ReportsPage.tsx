@@ -2,12 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePreferences } from '../../contexts/PreferencesContext';
 import { categoryIconGlyph } from '../categories/defaultCategories';
-import { listPersonalAccounts } from '../../repositories/accountRepository';
+import {
+  businessSpaceIdsForAccount,
+  listAccountsForSpace,
+  listPersonalAccounts,
+} from '../../repositories/accountRepository';
 import { listBudgets } from '../../repositories/budgetRepository';
 import { listCommitments } from '../../repositories/commitmentRepository';
 import { listGoals } from '../../repositories/goalRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
-import { listTransactions } from '../../repositories/transactionRepository';
+import {
+  listBusinessReportTransactionsForSpace,
+  listTransactions,
+} from '../../repositories/transactionRepository';
 import type { Account, Budget, Commitment, FinancialTransaction, SavingsGoal, Space } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
@@ -218,6 +225,7 @@ export function ReportsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [commitments, setCommitments] = useState<Commitment[]>([]);
+  const [balanceVisibleSpacesByAccount, setBalanceVisibleSpacesByAccount] = useState<Record<string, string[]>>({});
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [selectedPeriod, setSelectedPeriod] = useState<ReportPeriod>('month');
   const [selectedDate, setSelectedDate] = useState(currentDateKey());
@@ -230,8 +238,10 @@ export function ReportsPage() {
 
   useEffect(() => {
     if (!user) return;
+
     setLoading(true);
     setError('');
+
     Promise.all([
       listPersonalAccounts(user.uid),
       listSpaces(user.uid),
@@ -239,25 +249,312 @@ export function ReportsPage() {
       listBudgets(user.uid),
       listGoals(user.uid),
       listCommitments(user.uid),
-    ]).then(([nextAccounts, nextSpaces, nextTransactions, nextBudgets, nextGoals, nextCommitments]) => {
-      const personalSpace =
-        nextSpaces.find((item) => item.type === 'personal' && !item.archivedAt) || null;
-      const personalAccountIds = new Set(nextAccounts.map((item) => item.id));
-      setAccounts(nextAccounts);
-      setSpaces(personalSpace ? [personalSpace] : []);
-      setTransactions(
-        nextTransactions.filter((item) => personalAccountIds.has(item.accountId)),
+    ])
+      .then(
+        async ([
+          nextPersonalAccounts,
+          nextSpaces,
+          nextTransactions,
+          nextBudgets,
+          nextGoals,
+          nextCommitments,
+        ]) => {
+          const activeSpaces =
+            nextSpaces.filter(
+              (item) =>
+                !item.archivedAt,
+            );
+
+          const personalSpace =
+            activeSpaces.find(
+              (item) =>
+                item.type === 'personal',
+            ) || null;
+
+          const businessSpaces =
+            activeSpaces.filter(
+              (item) =>
+                item.type === 'sme',
+            );
+
+          const businessBundles =
+            await Promise.all(
+              businessSpaces.map(
+                async (space) => {
+                  const [
+                    spaceAccounts,
+                    spaceTransactions,
+                  ] = await Promise.all([
+                    listAccountsForSpace(
+                      space.id,
+                    ),
+                    listBusinessReportTransactionsForSpace(
+                      space.id,
+                    ),
+                  ]);
+
+                  const reportAccounts =
+                    spaceAccounts.filter(
+                      (account) =>
+                        account.ownerId === user.uid
+                        || account.sharedCanViewReports === true,
+                    );
+
+                  return {
+                    space,
+                    accounts:
+                      reportAccounts,
+                    transactions:
+                      spaceTransactions,
+                  };
+                },
+              ),
+            );
+
+          const reportableBundles =
+            businessBundles.filter(
+              (bundle) =>
+                bundle.space.ownerId === user.uid
+                || bundle.accounts.length > 0,
+            );
+
+          const reportAccountsById =
+            new Map<string, Account>(
+              nextPersonalAccounts.map(
+                (account) => [
+                  account.id,
+                  account,
+                ],
+              ),
+            );
+
+          const nextBalanceVisibility:
+            Record<string, string[]> = {};
+
+          const addBalanceVisibleSpace = (
+            accountId: string,
+            spaceId: string,
+          ) => {
+            nextBalanceVisibility[
+              accountId
+            ] = Array.from(
+              new Set([
+                ...(
+                  nextBalanceVisibility[
+                    accountId
+                  ] || []
+                ),
+                spaceId,
+              ]),
+            );
+          };
+
+          reportableBundles.forEach(
+            (bundle) => {
+              bundle.accounts.forEach(
+                (account) => {
+                  const existing =
+                    reportAccountsById.get(
+                      account.id,
+                    );
+
+                  const reportSpaceIds =
+                    Array.from(
+                      new Set([
+                        ...(
+                          existing
+                            ?.businessSpaceIds
+                          || []
+                        ),
+                        bundle.space.id,
+                      ]),
+                    );
+
+                  const canViewBalance =
+                    account.ownerId === user.uid
+                    || account.sharedCanViewBalance === true;
+
+                  if (canViewBalance) {
+                    addBalanceVisibleSpace(
+                      account.id,
+                      bundle.space.id,
+                    );
+                  }
+
+                  if (!existing) {
+                    reportAccountsById.set(
+                      account.id,
+                      {
+                        ...account,
+                        businessSpaceIds:
+                          [bundle.space.id],
+                      },
+                    );
+
+                    return;
+                  }
+
+                  reportAccountsById.set(
+                    account.id,
+                    {
+                      ...existing,
+                      ...(canViewBalance
+                        ? {
+                            openingBalanceMinor:
+                              account.openingBalanceMinor,
+                            ledgerBalanceMinor:
+                              account.ledgerBalanceMinor,
+                          }
+                        : {}),
+                      businessSpaceIds:
+                        reportSpaceIds,
+                      sharedCanViewReports:
+                        true,
+                      sharedCanViewBalance:
+                        existing.sharedCanViewBalance === true
+                        || canViewBalance,
+                    },
+                  );
+                },
+              );
+            },
+          );
+
+          const personalAccountIds =
+            new Set(
+              nextPersonalAccounts.map(
+                (item) => item.id,
+              ),
+            );
+
+          const reportTransactions =
+            new Map<
+              string,
+              FinancialTransaction
+            >();
+
+          nextTransactions
+            .filter(
+              (item) =>
+                personalAccountIds.has(
+                  item.accountId,
+                ),
+            )
+            .forEach(
+              (item) =>
+                reportTransactions.set(
+                  item.id,
+                  item,
+                ),
+            );
+
+          reportableBundles.forEach(
+            (bundle) => {
+              bundle.transactions.forEach(
+                (item) =>
+                  reportTransactions.set(
+                    item.id,
+                    item,
+                  ),
+              );
+            },
+          );
+
+          const mergedTransactions =
+            [
+              ...reportTransactions.values(),
+            ].sort(
+              (a, b) => {
+                const dateCompare =
+                  b.transactionDate.localeCompare(
+                    a.transactionDate,
+                  );
+
+                if (
+                  dateCompare !== 0
+                ) {
+                  return dateCompare;
+                }
+
+                return (
+                  (b.postedAt?.toMillis() || 0)
+                  - (a.postedAt?.toMillis() || 0)
+                );
+              },
+            );
+
+          setAccounts(
+            [
+              ...reportAccountsById.values(),
+            ].sort(
+              (a, b) =>
+                a.name.localeCompare(
+                  b.name,
+                ),
+            ),
+          );
+
+          setBalanceVisibleSpacesByAccount(
+            nextBalanceVisibility,
+          );
+
+          setSpaces([
+            ...(personalSpace
+              ? [personalSpace]
+              : []),
+            ...reportableBundles.map(
+              (bundle) =>
+                bundle.space,
+            ),
+          ]);
+
+          setTransactions(
+            mergedTransactions,
+          );
+
+          setBudgets(
+            personalSpace
+              ? nextBudgets.filter(
+                  (item) =>
+                    item.spaceId
+                    === personalSpace.id,
+                )
+              : [],
+          );
+
+          setGoals(
+            personalSpace
+              ? nextGoals.filter(
+                  (item) =>
+                    item.spaceId
+                    === personalSpace.id,
+                )
+              : [],
+          );
+
+          setCommitments(
+            personalSpace
+              ? nextCommitments.filter(
+                  (item) =>
+                    item.spaceId
+                    === personalSpace.id,
+                )
+              : [],
+          );
+        },
+      )
+      .catch(
+        (nextError) =>
+          setError(
+            getErrorMessage(
+              nextError,
+            ),
+          ),
+      )
+      .finally(
+        () =>
+          setLoading(false),
       );
-      setBudgets(
-        personalSpace ? nextBudgets.filter((item) => item.spaceId === personalSpace.id) : [],
-      );
-      setGoals(
-        personalSpace ? nextGoals.filter((item) => item.spaceId === personalSpace.id) : [],
-      );
-      setCommitments(
-        personalSpace ? nextCommitments.filter((item) => item.spaceId === personalSpace.id) : [],
-      );
-    }).catch((nextError) => setError(getErrorMessage(nextError))).finally(() => setLoading(false));
   }, [user]);
 
   const currency = profile?.currency || 'BND';
@@ -440,11 +737,33 @@ export function ReportsPage() {
   }), [moneyIn, moneyOut, shownBudgets, healthCommitments, shownGoals, filteredTransactions, previousTransactions, currency]);
 
   const selectedSpaceRecord = spaces.find((item) => item.id === selectedSpace) || null;
-  const selectedSpaceAccountIds = useMemo(() => new Set(transactions.filter((item) => (
-    item.spaceId === selectedSpace && item.status === 'posted'
-  )).flatMap((item) => [item.accountId, item.destinationAccountId || '']).filter(Boolean)), [transactions, selectedSpace]);
-  const selectedSmeAccounts = accounts.filter((item) => selectedSpaceAccountIds.has(item.id) && !item.closedAt);
-  const selectedSmeCashPosition = sumAccountBalances(selectedSmeAccounts);
+
+  const selectedSmeAccounts = accounts.filter(
+    (item) =>
+      selectedSpaceRecord?.type === 'sme'
+      && item.classification === 'business'
+      && businessSpaceIdsForAccount(item).includes(selectedSpaceRecord.id)
+      && !item.closedAt
+      && (
+        item.ownerId === user?.uid
+        || (
+          balanceVisibleSpacesByAccount[item.id]
+          || []
+        ).includes(selectedSpaceRecord.id)
+      ),
+  );
+
+  const selectedSmeCanViewBalances =
+    selectedSpaceRecord?.type === 'sme'
+    && (
+      selectedSpaceRecord.ownerId === user?.uid
+      || selectedSmeAccounts.length > 0
+    );
+
+  const selectedSmeCashPosition =
+    sumAccountBalances(
+      selectedSmeAccounts,
+    );
   const thirtyDaysFromToday = new Date();
   thirtyDaysFromToday.setDate(thirtyDaysFromToday.getDate() + 30);
   const thirtyDayDate = thirtyDaysFromToday.toISOString().slice(0, 10);
@@ -500,7 +819,7 @@ export function ReportsPage() {
       <div>
         <span className="reports-v110-kicker">Money reports</span>
         <h1>Reports</h1>
-        <p>See how your money changes over time.</p>
+        <p>See Personal money and authorised Business reports without changing account-use permissions.</p>
       </div>
 
       <button
@@ -700,7 +1019,7 @@ export function ReportsPage() {
         <article className="summary-card featured"><span>Business money in</span><strong>{formatMoney(moneyIn, currency)}</strong><small>Income recorded in this Business Space</small></article>
         <article className="summary-card"><span>Business money out</span><strong>{formatMoney(moneyOut, currency)}</strong><small>Expenses recorded in this Business Space</small></article>
         <article className={`summary-card ${moneyLeft < 0 ? 'report-warning-card' : ''}`}><span>Simple profit check</span><strong>{formatMoney(moneyLeft, currency)}</strong><small>Money in minus money out</small></article>
-        <article className="summary-card"><span>Current cash position</span><strong>{formatMoney(selectedSmeCashPosition, currency)}</strong><small>{selectedSmeAccounts.length} account{selectedSmeAccounts.length === 1 ? '' : 's'} used by this Business</small></article>
+        <article className="summary-card"><span>Current cash position</span><strong>{selectedSmeCanViewBalances ? formatMoney(selectedSmeCashPosition, currency) : '—'}</strong><small>{selectedSmeCanViewBalances ? `${selectedSmeAccounts.length} account${selectedSmeAccounts.length === 1 ? '' : 's'} with balance access` : 'Balance access is separate from report access.'}</small></article>
       </div>
       <div className="sme-upcoming-strip"><div><span>Upcoming payments — next 30 days</span><strong>{formatMoney(selectedSmeUpcomingMinor, currency)}</strong></div><small>{selectedSmeUpcoming.length} bill{selectedSmeUpcoming.length === 1 ? '' : 's'} or instalment{selectedSmeUpcoming.length === 1 ? '' : 's'} coming up.</small></div>
       <div className="report-data-note">The cash position uses the current balances of accounts that have been used by this Business Space. Those accounts may also be used elsewhere.</div>

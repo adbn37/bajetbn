@@ -837,6 +837,132 @@ export const getBusinessSpaceTransactions = onCall({ region }, async (request) =
   };
 });
 
+export const getBusinessSpaceReportTransactions = onCall({ region }, async (request) => {
+  const uid = requireAuth(request.auth?.uid);
+  const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
+
+  const [
+    spaceSnapshot,
+    memberSnapshot,
+  ] = await Promise.all([
+    db.collection('spaces').doc(spaceId).get(),
+    db.collection('spaceMembers').doc(spaceId + '_' + uid).get(),
+  ]);
+
+  if (
+    !spaceSnapshot.exists
+    || spaceSnapshot.data()?.archivedAt
+    || spaceSnapshot.data()?.type !== 'sme'
+  ) {
+    throw new HttpsError(
+      'not-found',
+      'Business Space not found.',
+    );
+  }
+
+  const member =
+    memberSnapshot.data() || {};
+
+  if (
+    !memberSnapshot.exists
+    || ['suspended', 'removed'].includes(
+      String(member.status || ''),
+    )
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'You are not an active member of this Business Space.',
+    );
+  }
+
+  const space =
+    spaceSnapshot.data() || {};
+
+  const ownerId =
+    String(space.ownerId || '');
+
+  const transactionSnapshot =
+    await db.collection('transactions')
+      .where('spaceId', '==', spaceId)
+      .get();
+
+  if (uid === ownerId) {
+    return {
+      transactions:
+        transactionSnapshot.docs
+          .filter(
+            (item) =>
+              item.data()?.ownerId
+              === ownerId,
+          )
+          .map(
+            (item) => ({
+              id: item.id,
+              ...item.data(),
+            }),
+          ),
+    };
+  }
+
+  const accessSnapshot =
+    await db.collection('accountAccess')
+      .where('uid', '==', uid)
+      .get();
+
+  const reportAccountIds =
+    new Set(
+      accessSnapshot.docs
+        .filter(
+          (item) =>
+            accessSpaceIds(
+              item.data(),
+              'reportSpaceIds',
+            ).includes(
+              spaceId,
+            ),
+        )
+        .map(
+          (item) =>
+            String(
+              item.data()?.accountId
+              || '',
+            ),
+        )
+        .filter(Boolean),
+    );
+
+  if (reportAccountIds.size === 0) {
+    return {
+      transactions: [],
+    };
+  }
+
+  return {
+    transactions:
+      transactionSnapshot.docs
+        .filter(
+          (item) => {
+            const data =
+              item.data() || {};
+
+            return (
+              data.ownerId === ownerId
+              && typeof data.accountId === 'string'
+              && reportAccountIds.has(
+                data.accountId,
+              )
+            );
+          },
+        )
+        .map(
+          (item) => ({
+            id: item.id,
+            ...item.data(),
+          }),
+        ),
+  };
+});
+
 const businessAccountAccessLevels = ['manager', 'user', 'viewer'] as const;
 
 function businessAccountAccessLevel(
