@@ -34,12 +34,6 @@ function currentMonth() {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function moveMonth(month: string, amount: number) {
-  const [year, monthNumber] = month.split('-').map(Number);
-  const date = new Date(year, monthNumber - 1 + amount, 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
-
 function monthName(month: string, locale: string) {
   const [year, monthNumber] = month.split('-').map(Number);
   return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1, 1));
@@ -227,7 +221,7 @@ export function ReportsPage() {
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [balanceVisibleSpacesByAccount, setBalanceVisibleSpacesByAccount] = useState<Record<string, string[]>>({});
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth());
+  const [, setSelectedMonth] = useState(currentMonth());
   const [selectedPeriod, setSelectedPeriod] = useState<ReportPeriod>('month');
   const [selectedDate, setSelectedDate] = useState(currentDateKey());
   const [showFilters, setShowFilters] = useState(false);
@@ -240,8 +234,10 @@ export function ReportsPage() {
   useEffect(() => {
     if (!user) return;
 
-    setLoading(true);
-    setError('');
+    queueMicrotask(() => {
+      setLoading(true);
+      setError('');
+    });
 
     Promise.all([
       listPersonalAccounts(user.uid),

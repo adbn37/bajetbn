@@ -169,16 +169,32 @@ export function CommitmentsPage({
 
   useEffect(
     () => {
-      void load();
+      let cancelled = false;
+
+      queueMicrotask(() => {
+        if (!cancelled) void load();
+      });
+
+      return () => {
+        cancelled = true;
+      };
     },
     [spaceIdOverride, user],
   );
 
   useEffect(
     () => {
-      if (typeOverride) {
-        setTypeFilter(typeOverride);
-      }
+      if (!typeOverride) return;
+
+      let cancelled = false;
+
+      queueMicrotask(() => {
+        if (!cancelled) setTypeFilter(typeOverride);
+      });
+
+      return () => {
+        cancelled = true;
+      };
     },
     [typeOverride],
   );

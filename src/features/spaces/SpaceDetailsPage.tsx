@@ -40,7 +40,6 @@ import { getSpace, updateSpace } from '../../repositories/spaceRepository';
 import {
   listBusinessTransactionsForSpace,
   listTransactionsForOwnerSpace,
-  listTransactionsForSpace,
   postTransaction,
 } from '../../repositories/transactionRepository';
 import type {
@@ -719,7 +718,17 @@ export function SpaceDetailsPage() {
     user,
   ]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) void load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const activeTransactions = useMemo(
     () => transactions.filter((item) => item.status === 'posted' && item.type !== 'reversal'),
@@ -798,7 +807,6 @@ export function SpaceDetailsPage() {
     space.type === 'project' ||
     space.type === 'event' ||
     (space.type === 'custom' && customModules.includes('group_fund'));
-  const fundTabId: SpaceDetailsTab = space.type === 'trip' ? 'trip_money' : 'group_fund';
   const fundTabLabel = space.type === 'trip' ? 'Trip money' : space.type === 'household' ? 'Household fund' : space.type === 'event' ? 'Event fund' : space.type === 'project' ? 'Project fund' : 'Group fund';
 
   const sharedFinanceTabs: Array<{ id: SpaceDetailsTab; label: string }> =
@@ -2016,9 +2024,17 @@ function SpaceOverview({
   const [reportRange, setReportRange] = useState<SpaceReportRange>('month');
 
   useEffect(() => {
-    if (requestedOverviewSection) {
-      setSection(requestedOverviewSection);
-    }
+    if (!requestedOverviewSection) return;
+
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) setSection(requestedOverviewSection);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [requestedOverviewSection]);
 
   function closeOverviewSection() {
@@ -3016,7 +3032,17 @@ function CustomSpaceModuleSettings({
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setModules(normalizeCustomSpaceModules(space.customModules));
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setModules(normalizeCustomSpaceModules(space.customModules));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [space.customModules]);
 
   const toggleModule = (module: CustomSpaceModule) => {

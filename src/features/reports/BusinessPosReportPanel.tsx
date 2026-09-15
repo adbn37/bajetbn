@@ -326,8 +326,11 @@ export function BusinessPosReportPanel({
       let active =
         true;
 
-      setLoading(true);
-      setError('');
+      queueMicrotask(() => {
+        if (!active) return;
+        setLoading(true);
+        setError('');
+      });
 
       getBusinessPosAdvancedReport(
         space.id,
@@ -822,8 +825,7 @@ export function BusinessPosReportPanel({
       );
 
   const salesByAccount =
-    useMemo(
-      () => {
+    (() => {
         const totals =
           new Map<
             string,
@@ -882,13 +884,10 @@ export function BusinessPosReportPanel({
               b.amountMinor
               - a.amountMinor,
           );
-      },
-      [activeSales],
-    );
+      })();
 
   const salesByPaymentMethod =
-    useMemo(
-      () => {
+    (() => {
         const totals =
           new Map<
             string,
@@ -950,13 +949,10 @@ export function BusinessPosReportPanel({
               b.amountMinor
               - a.amountMinor,
           );
-      },
-      [activeSales],
-    );
+      })();
 
   const productSummary =
-    useMemo(
-      () => {
+    (() => {
         const totals =
           new Map<
             string,
@@ -1024,9 +1020,7 @@ export function BusinessPosReportPanel({
             0,
             10,
           );
-      },
-      [activeSales],
-    );
+      })();
 
   function resetFilters() {
     setRange('month');

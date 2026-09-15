@@ -440,7 +440,17 @@ export function TransactionsPage() {
     }
   };
 
-  useEffect(() => { void load(); }, [user, lastCompletedAt]);
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) void load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, lastCompletedAt]);
 
   const loadApprovals = async () => {
     if (!user) {
@@ -468,13 +478,29 @@ export function TransactionsPage() {
   };
 
   useEffect(() => {
-    void loadApprovals();
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) void loadApprovals();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, lastCompletedAt]);
 
   useEffect(() => {
-    if (requestedApprovals) {
-      setShowApprovalCentre(true);
-    }
+    if (!requestedApprovals) return;
+
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) setShowApprovalCentre(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [requestedApprovals]);
 
   const reviewApproval = async (
@@ -564,16 +590,20 @@ export function TransactionsPage() {
       if (
         requestedReceipt
       ) {
-        setReceiptTransaction(
-          target,
-        );
+        queueMicrotask(() => {
+          setReceiptTransaction(
+            target,
+          );
+        });
 
         return;
       }
 
-      setSelectedTransaction(
-        target,
-      );
+      queueMicrotask(() => {
+        setSelectedTransaction(
+          target,
+        );
+      });
     },
     [
       loading,
@@ -740,15 +770,31 @@ export function TransactionsPage() {
     .filter((item) => item.type === 'transfer')
     .length;
 
-  const expenseCategorySummary = useMemo(() => {
-    const totals = new Map<string, { category: TransactionCategory; amountMinor: number }>();
-    monthlyPosted.filter((item) => item.type === 'expense').forEach((item) => {
-      const category = item.categoryId ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item) : transactionCategorySnapshot(item);
-      const current = totals.get(category.id);
-      totals.set(category.id, { category, amountMinor: (current?.amountMinor || 0) + item.amountMinor });
-    });
-    return [...totals.values()].sort((a, b) => b.amountMinor - a.amountMinor).slice(0, 5);
-  }, [categoryMap, monthlyPosted]);
+  const expenseCategorySummary = (() => {
+    const totals = new Map<
+      string,
+      { category: TransactionCategory; amountMinor: number }
+    >();
+
+    monthlyPosted
+      .filter((item) => item.type === 'expense')
+      .forEach((item) => {
+        const category = item.categoryId
+          ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item)
+          : transactionCategorySnapshot(item);
+
+        const current = totals.get(category.id);
+
+        totals.set(category.id, {
+          category,
+          amountMinor: (current?.amountMinor || 0) + item.amountMinor,
+        });
+      });
+
+    return [...totals.values()]
+      .sort((a, b) => b.amountMinor - a.amountMinor)
+      .slice(0, 5);
+  })();
 
   const visibleTransactions = transactions.filter((item) => {
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
@@ -1465,7 +1511,15 @@ export function MoneyActivityModal({
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
 
   useEffect(() => {
-    setLocalCategories(categories);
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) setLocalCategories(categories);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [categories]);
   useEffect(() => {
     const nextAccounts = accounts.filter(
@@ -1473,16 +1527,48 @@ export function MoneyActivityModal({
         (!selectedSpace || account.currency === selectedSpace.currency)
         && accountAvailableInSelectedSpace(account),
     );
-    if (!nextAccounts.some((account) => account.id === accountId)) setAccountId(nextAccounts[0]?.id || '');
-    if (destinationAccountId === accountId || !nextAccounts.some((account) => account.id === destinationAccountId)) setDestinationAccountId('');
+
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      if (!nextAccounts.some((account) => account.id === accountId)) {
+        setAccountId(nextAccounts[0]?.id || '');
+      }
+
+      if (
+        destinationAccountId === accountId
+        || !nextAccounts.some((account) => account.id === destinationAccountId)
+      ) {
+        setDestinationAccountId('');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [accountId, accounts, destinationAccountId, selectedSpace]);
 
   useEffect(() => {
-    if (type === 'transfer') {
-      setCategoryId('');
-      return;
-    }
-    if (!categoryOptions.some((category) => category.id === categoryId)) setCategoryId(categoryOptions[0]?.id || '');
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      if (type === 'transfer') {
+        setCategoryId('');
+        return;
+      }
+
+      if (!categoryOptions.some((category) => category.id === categoryId)) {
+        setCategoryId(categoryOptions[0]?.id || '');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [categoryId, categoryOptions, type]);
 
   const sourceAccount = accounts.find((account) => account.id === accountId);
@@ -2175,7 +2261,45 @@ function TransactionDetails({ item, source, destination, space, category, online
     }
   };
 
-  useEffect(() => { void loadAttachments(); }, [item.id]);
+  useEffect(() => {
+    let cancelled = false;
+
+    listTransactionAttachments(item.id)
+      .then(async (next) => {
+        const resolved = await Promise.all(
+          next.map(async (attachment) => {
+            try {
+              return [
+                attachment.id,
+                await getTransactionAttachmentUrl(attachment.storagePath),
+              ] as const;
+            } catch {
+              return [attachment.id, ''] as const;
+            }
+          }),
+        );
+
+        return {
+          next,
+          urls: Object.fromEntries(resolved),
+        };
+      })
+      .then(({ next, urls }) => {
+        if (cancelled) return;
+
+        setAttachments(next);
+        setAttachmentUrls(urls);
+        onAttachmentsChanged?.(next.length);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAttachmentError(getErrorMessage(error));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, onAttachmentsChanged]);
 
   async function addAttachment() {
     if (!selectedFile || attachmentBusy) return;
