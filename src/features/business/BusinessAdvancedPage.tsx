@@ -604,7 +604,7 @@ export function BusinessAdvancedPage() {
                   + '/business/payroll'
                 }
               >
-                Payroll
+                Payslips & Salary Documents
               </Link>
 
               <Link

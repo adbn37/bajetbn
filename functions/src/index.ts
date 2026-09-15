@@ -28546,3 +28546,831 @@ async function reviewCommitmentPaymentApproval(
     },
   );
 }
+
+/* =========================================================
+ * v1.14.16 private Business documents
+ * ========================================================= */
+
+async function businessPrivateDocumentAccess(
+  spaceId: string,
+  uid: string,
+) {
+  const [
+    spaceSnapshot,
+    memberSnapshot,
+  ] = await Promise.all([
+    db.collection(
+      'spaces',
+    ).doc(
+      spaceId,
+    ).get(),
+
+    db.collection(
+      'spaceMembers',
+    ).doc(
+      spaceId
+      + '_'
+      + uid,
+    ).get(),
+  ]);
+
+  if (
+    !spaceSnapshot.exists
+    || spaceSnapshot.data()?.archivedAt
+    || spaceSnapshot.data()?.type !== 'sme'
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Business Space unavailable.',
+    );
+  }
+
+  const space =
+    spaceSnapshot.data()
+    || {};
+
+  const ownerId =
+    stringValue(
+      space.ownerId,
+      'Business owner',
+      160,
+    );
+
+  const member =
+    memberSnapshot.exists
+      ? memberSnapshot.data()
+        || {}
+      : {};
+
+  const memberActive =
+    memberSnapshot.exists
+    && ![
+      'suspended',
+      'removed',
+    ].includes(
+      String(
+        member.status
+        || '',
+      ),
+    );
+
+  const isOwner =
+    ownerId === uid;
+
+  const isAuthorisedManager =
+    memberActive
+    && member.role === 'admin'
+    && member.canViewPrivateDocuments === true;
+
+  return {
+    space,
+    ownerId,
+    isOwner,
+    isAuthorisedManager,
+    canManage:
+      isOwner
+      || isAuthorisedManager,
+  };
+}
+
+function privateDocumentPayload(
+  snapshot:
+    FirebaseFirestore.DocumentSnapshot,
+) {
+  return {
+    id:
+      snapshot.id,
+    ...snapshot.data(),
+  };
+}
+
+async function assertPrivateDocumentViewer(
+  document:
+    DocumentData,
+  uid: string,
+) {
+  const spaceId =
+    stringValue(
+      document.spaceId,
+      'Document Space',
+      100,
+    );
+
+  const access =
+    await businessPrivateDocumentAccess(
+      spaceId,
+      uid,
+    );
+
+  const recipientUid =
+    typeof document.recipientUid
+      === 'string'
+      ? document.recipientUid
+      : '';
+
+  if (
+    !access.canManage
+    && recipientUid !== uid
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'You are not authorised to view this private document.',
+    );
+  }
+
+  return access;
+}
+
+export const listBusinessPrivateDocuments = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const requestedType =
+      request.data?.type == null
+      || request.data.type === ''
+        ? null
+        : oneOf(
+            request.data.type,
+            [
+              'payslip',
+              'marketplace_payout_statement',
+            ] as const,
+            'private document type',
+          );
+
+    const access =
+      await businessPrivateDocumentAccess(
+        spaceId,
+        uid,
+      );
+
+    const snapshot =
+      await db.collection(
+        'businessPrivateDocuments',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get();
+
+    const documents =
+      snapshot.docs
+        .filter(
+          (item) => {
+            const data =
+              item.data();
+
+            if (
+              data.ownerId
+              !== access.ownerId
+            ) {
+              return false;
+            }
+
+            if (
+              requestedType
+              && data.type
+                !== requestedType
+            ) {
+              return false;
+            }
+
+            if (
+              access.canManage
+            ) {
+              return true;
+            }
+
+            return (
+              data.recipientUid
+              === uid
+            );
+          },
+        )
+        .map(
+          (item) =>
+            privateDocumentPayload(
+              item,
+            ),
+        )
+        .sort(
+          (
+            a: DocumentData,
+            b: DocumentData,
+          ) =>
+            String(
+              b.period
+              || '',
+            ).localeCompare(
+              String(
+                a.period
+                || '',
+              ),
+            ),
+        );
+
+    return {
+      documents,
+    };
+  },
+);
+
+export const issuePayslipDocument = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const payrollRunId =
+      stringValue(
+        request.data?.payrollRunId,
+        'Payroll run',
+        100,
+      );
+
+    const access =
+      await businessPrivateDocumentAccess(
+        spaceId,
+        uid,
+      );
+
+    if (
+      !access.canManage
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Private payslips require Business Owner or explicitly authorised Manager access.',
+      );
+    }
+
+    const [
+      runSnapshot,
+      profileSnapshot,
+    ] = await Promise.all([
+      db.collection(
+        'businessPayrollRuns',
+      ).doc(
+        payrollRunId,
+      ).get(),
+
+      db.collection(
+        'businessProfiles',
+      ).doc(
+        spaceId,
+      ).get(),
+    ]);
+
+    if (
+      !runSnapshot.exists
+    ) {
+      throw new HttpsError(
+        'not-found',
+        'Payroll run not found.',
+      );
+    }
+
+    const run =
+      runSnapshot.data()
+      || {};
+
+    if (
+      run.spaceId !== spaceId
+      || run.ownerId
+        !== access.ownerId
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Payroll run does not belong to this Business Space.',
+      );
+    }
+
+    if (
+      run.status !== 'posted'
+      || !run.transactionId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only a successfully posted payroll run can issue a payslip.',
+      );
+    }
+
+    const employeeId =
+      stringValue(
+        run.employeeId,
+        'Employee',
+        100,
+      );
+
+    const employeeSnapshot =
+      await db.collection(
+        'businessEmployees',
+      ).doc(
+        employeeId,
+      ).get();
+
+    if (
+      !employeeSnapshot.exists
+    ) {
+      throw new HttpsError(
+        'not-found',
+        'Employee record not found.',
+      );
+    }
+
+    const employee =
+      employeeSnapshot.data()
+      || {};
+
+    if (
+      employee.spaceId !== spaceId
+      || employee.ownerId
+        !== access.ownerId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Employee record no longer matches this Business Space.',
+      );
+    }
+
+    const existingSnapshot =
+      await db.collection(
+        'businessPrivateDocuments',
+      )
+        .where(
+          'sourceId',
+          '==',
+          payrollRunId,
+        )
+        .get();
+
+    const existing =
+      existingSnapshot.docs.find(
+        (item) => {
+          const data =
+            item.data();
+
+          return (
+            data.type === 'payslip'
+            && data.spaceId === spaceId
+            && data.ownerId
+              === access.ownerId
+            && data.status
+              !== 'cancelled'
+          );
+        },
+      );
+
+    if (existing) {
+      return {
+        documentId:
+          existing.id,
+        existing:
+          true,
+      };
+    }
+
+    const grossMinor =
+      Math.max(
+        0,
+        Math.round(
+          Number(
+            run.grossMinor
+            || 0,
+          ),
+        ),
+      );
+
+    const deductionsMinor =
+      Math.max(
+        0,
+        Math.round(
+          Number(
+            run.deductionsMinor
+            || 0,
+          ),
+        ),
+      );
+
+    const netMinor =
+      Math.max(
+        0,
+        Math.round(
+          Number(
+            run.netMinor
+            || (
+              grossMinor
+              - deductionsMinor
+            ),
+          ),
+        ),
+      );
+
+    const profile =
+      profileSnapshot.exists
+        ? profileSnapshot.data()
+          || {}
+        : {};
+
+    const businessName =
+      String(
+        profile.businessName
+        || access.space.name
+        || 'Business',
+      ).slice(
+        0,
+        160,
+      );
+
+    const period =
+      String(
+        run.period
+        || '',
+      ).slice(
+        0,
+        20,
+      );
+
+    const documentRef =
+      db.collection(
+        'businessPrivateDocuments',
+      ).doc();
+
+    const eventRef =
+      db.collection(
+        'businessPrivateDocumentEvents',
+      ).doc();
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    const display =
+      displayId(
+        'PS',
+      );
+
+    const recipientUid =
+      typeof employee.linkedUid
+        === 'string'
+        && employee.linkedUid
+          .trim()
+        ? employee.linkedUid
+          .trim()
+        : null;
+
+    const payslip = {
+      employeeId,
+      employeeName:
+        String(
+          employee.name
+          || run.employeeName
+          || 'Employee',
+        ).slice(
+          0,
+          160,
+        ),
+      employeeNumber:
+        String(
+          employee.employeeNumber
+          || '',
+        ).slice(
+          0,
+          80,
+        ),
+      roleTitle:
+        String(
+          employee.roleTitle
+          || '',
+        ).slice(
+          0,
+          120,
+        ),
+      salaryMinor:
+        grossMinor,
+      allowanceMinor:
+        0,
+      overtimeMinor:
+        0,
+      bonusMinor:
+        0,
+      deductionsMinor,
+      netMinor,
+      paymentDate:
+        String(
+          run.payDate
+          || '',
+        ).slice(
+          0,
+          20,
+        ),
+      paymentMethod:
+        (
+          'Business Account · '
+          + String(
+              run.accountName
+              || 'Account',
+            )
+        ).slice(
+          0,
+          200,
+        ),
+      paymentReference:
+        String(
+          run.transactionId
+          || '',
+        ).slice(
+          0,
+          160,
+        ),
+      note:
+        String(
+          run.note
+          || '',
+        ).slice(
+          0,
+          500,
+        ),
+    };
+
+    await db.runTransaction(
+      async (
+        transaction,
+      ) => {
+        transaction.create(
+          documentRef,
+          {
+            displayId:
+              display,
+            ownerId:
+              access.ownerId,
+            spaceId,
+            type:
+              'payslip',
+            status:
+              'issued',
+            title:
+              (
+                'Payslip · '
+                + payslip.employeeName
+                + ' · '
+                + period
+              ).slice(
+                0,
+                240,
+              ),
+            businessName,
+            businessAddress:
+              String(
+                profile.address
+                || '',
+              ).slice(
+                0,
+                500,
+              ),
+            recipientUid,
+            recipientName:
+              payslip.employeeName,
+            recipientPhone:
+              String(
+                employee.phone
+                || '',
+              ).slice(
+                0,
+                80,
+              ),
+            sourceType:
+              'business_payroll_run',
+            sourceId:
+              payrollRunId,
+            period,
+            currency:
+              String(
+                run.currency
+                || access.space.currency
+                || 'BND',
+              ).slice(
+                0,
+                10,
+              ),
+            amountMinor:
+              netMinor,
+            payslip,
+            version:
+              1,
+            supersedesDocumentId:
+              null,
+            supersededByDocumentId:
+              null,
+            issuedBy:
+              uid,
+            issuedAt:
+              now,
+            cancelledBy:
+              null,
+            cancelledAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.create(
+          eventRef,
+          {
+            documentId:
+              documentRef.id,
+            ownerId:
+              access.ownerId,
+            spaceId,
+            documentType:
+              'payslip',
+            action:
+              'issued',
+            actorUid:
+              uid,
+            channel:
+              null,
+            createdAt:
+              now,
+          },
+        );
+      },
+    );
+
+    return {
+      documentId:
+        documentRef.id,
+      existing:
+        false,
+    };
+  },
+);
+
+export const getBusinessPrivateDocument = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const documentId =
+      stringValue(
+        request.data?.documentId,
+        'Private document',
+        100,
+      );
+
+    const documentSnapshot =
+      await db.collection(
+        'businessPrivateDocuments',
+      ).doc(
+        documentId,
+      ).get();
+
+    if (
+      !documentSnapshot.exists
+    ) {
+      throw new HttpsError(
+        'not-found',
+        'Private document not found.',
+      );
+    }
+
+    const document =
+      documentSnapshot.data()
+      || {};
+
+    await assertPrivateDocumentViewer(
+      document,
+      uid,
+    );
+
+    await db.collection(
+      'businessPrivateDocumentEvents',
+    ).add({
+      documentId,
+      ownerId:
+        document.ownerId,
+      spaceId:
+        document.spaceId,
+      documentType:
+        document.type,
+      action:
+        'viewed',
+      actorUid:
+        uid,
+      channel:
+        null,
+      createdAt:
+        FieldValue.serverTimestamp(),
+    });
+
+    return {
+      document:
+        privateDocumentPayload(
+          documentSnapshot,
+        ),
+    };
+  },
+);
+
+export const markBusinessPrivateDocumentShared = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const documentId =
+      stringValue(
+        request.data?.documentId,
+        'Private document',
+        100,
+      );
+
+    const channel =
+      oneOf(
+        request.data?.channel,
+        [
+          'whatsapp',
+          'copy_link',
+        ] as const,
+        'share channel',
+      );
+
+    const documentSnapshot =
+      await db.collection(
+        'businessPrivateDocuments',
+      ).doc(
+        documentId,
+      ).get();
+
+    if (
+      !documentSnapshot.exists
+    ) {
+      throw new HttpsError(
+        'not-found',
+        'Private document not found.',
+      );
+    }
+
+    const document =
+      documentSnapshot.data()
+      || {};
+
+    await assertPrivateDocumentViewer(
+      document,
+      uid,
+    );
+
+    await db.collection(
+      'businessPrivateDocumentEvents',
+    ).add({
+      documentId,
+      ownerId:
+        document.ownerId,
+      spaceId:
+        document.spaceId,
+      documentType:
+        document.type,
+      action:
+        'shared',
+      actorUid:
+        uid,
+      channel,
+      createdAt:
+        FieldValue.serverTimestamp(),
+    });
+
+    return {
+      documentId,
+      recorded:
+        true,
+    };
+  },
+);

@@ -39,6 +39,11 @@ import {
 } from '../../repositories/businessPayrollRepository';
 
 import {
+  issuePayslipDocument,
+  listBusinessPrivateDocuments,
+} from '../../repositories/privateDocumentRepository';
+
+import {
   getSpace,
 } from '../../repositories/spaceRepository';
 
@@ -46,6 +51,7 @@ import type {
   Account,
   BusinessEmployee,
   BusinessPayrollRun,
+  BusinessPrivateDocument,
   BusinessProfile,
   Space,
 } from '../../types/models';
@@ -202,6 +208,13 @@ export function BusinessPayrollPage() {
   );
 
   const [
+    payslips,
+    setPayslips,
+  ] = useState<BusinessPrivateDocument[]>(
+    [],
+  );
+
+  const [
     editingEmployee,
     setEditingEmployee,
   ] = useState<
@@ -283,6 +296,7 @@ export function BusinessPayrollPage() {
             nextAccounts,
             nextEmployees,
             nextRuns,
+            nextPayslips,
           ] =
             await Promise.all([
               getBusinessProfile(
@@ -298,6 +312,10 @@ export function BusinessPayrollPage() {
               listBusinessPayrollRuns(
                 user.uid,
                 spaceId,
+              ),
+              listBusinessPrivateDocuments(
+                spaceId,
+                'payslip',
               ),
             ]);
 
@@ -315,6 +333,10 @@ export function BusinessPayrollPage() {
 
           setRuns(
             nextRuns,
+          );
+
+          setPayslips(
+            nextPayslips,
           );
 
           setPayrollForm(
@@ -386,6 +408,28 @@ export function BusinessPayrollPage() {
         ),
       [
         runs,
+      ],
+    );
+
+  const payslipByRunId =
+    useMemo(
+      () =>
+        new Map(
+          payslips
+            .filter(
+              (document) =>
+                document.type === 'payslip'
+                && document.status !== 'cancelled',
+            )
+            .map(
+              (document) => [
+                document.sourceId,
+                document,
+              ],
+            ),
+        ),
+      [
+        payslips,
       ],
     );
 
@@ -765,6 +809,52 @@ export function BusinessPayrollPage() {
     }
   }
 
+  async function issuePayslip(
+    run:
+      BusinessPayrollRun,
+  ) {
+    if (!space) {
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    setFeedback('');
+
+    try {
+      const result =
+        await issuePayslipDocument(
+          space.id,
+          run.id,
+        );
+
+      setFeedback(
+        result.existing
+          ? 'This payroll run already has an issued payslip.'
+          : 'Private payslip issued.',
+      );
+
+      await load();
+
+      window.open(
+        '/documents/'
+          + result.documentId,
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } catch (
+      nextError
+    ) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function enablePayroll() {
     setBusy(true);
     setError('');
@@ -871,9 +961,9 @@ export function BusinessPayrollPage() {
       data-business-payroll
     >
       <PageHeader
-        eyebrow="Business payroll"
-        title={space.name}
-        description="Manage employees, payroll runs, wage posting and payroll history for this Business Space."
+          eyebrow="Payslips & salary documents"
+          title={space.name}
+          description="Manage salary records, wage posting and private payslips for this Business Space."
         action={
           <Link
             className="button secondary"
@@ -1516,21 +1606,57 @@ export function BusinessPayrollPage() {
                         )}
                       </div>
 
-                      {run.status === 'pending' && (
-                        <button
-                          type="button"
-                          className="button secondary"
-                          disabled={busy}
-                          onClick={
-                            () =>
-                              void retryRun(
-                                run,
-                              )
-                          }
-                        >
-                          Retry Posting
-                        </button>
-                      )}
+                      <div className="button-row">
+                        {run.status === 'pending' && (
+                          <button
+                            type="button"
+                            className="button secondary"
+                            disabled={busy}
+                            onClick={
+                              () =>
+                                void retryRun(
+                                  run,
+                                )
+                            }
+                          >
+                            Retry Posting
+                          </button>
+                        )}
+
+                        {run.status === 'posted' && (
+                          payslipByRunId.has(
+                            run.id,
+                          )
+                            ? (
+                              <Link
+                                className="button secondary"
+                                to={
+                                  '/documents/'
+                                  + payslipByRunId.get(
+                                      run.id,
+                                    )!.id
+                                }
+                              >
+                                Open Payslip
+                              </Link>
+                            )
+                            : (
+                              <button
+                                type="button"
+                                className="button secondary"
+                                disabled={busy}
+                                onClick={
+                                  () =>
+                                    void issuePayslip(
+                                      run,
+                                    )
+                                }
+                              >
+                                Issue Payslip
+                              </button>
+                            )
+                        )}
+                      </div>
                     </article>
                   ),
                 )}

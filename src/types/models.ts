@@ -574,6 +574,64 @@ export interface BusinessPayrollRun {
   updatedAt?: Timestamp;
 }
 
+export type BusinessPrivateDocumentType =
+  | 'payslip'
+  | 'marketplace_payout_statement';
+
+export type BusinessPrivateDocumentStatus =
+  | 'issued'
+  | 'reissued'
+  | 'cancelled';
+
+export interface BusinessPayslipSnapshot {
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: string;
+  roleTitle: string;
+  salaryMinor: number;
+  allowanceMinor: number;
+  overtimeMinor: number;
+  bonusMinor: number;
+  deductionsMinor: number;
+  netMinor: number;
+  paymentDate: string;
+  paymentMethod: string;
+  paymentReference: string;
+  note: string;
+}
+
+export interface BusinessPrivateDocument {
+  id: string;
+  displayId: string;
+  ownerId: string;
+  spaceId: string;
+  type: BusinessPrivateDocumentType;
+  status: BusinessPrivateDocumentStatus;
+  title: string;
+  businessName: string;
+  businessAddress: string;
+  recipientUid?: string | null;
+  recipientName: string;
+  recipientPhone: string;
+  sourceType:
+    | 'business_payroll_run'
+    | 'marketplace_payout';
+  sourceId: string;
+  period: string;
+  currency: string;
+  amountMinor: number;
+  payslip?: BusinessPayslipSnapshot | null;
+  version: number;
+  supersedesDocumentId?: string | null;
+  supersededByDocumentId?: string | null;
+  issuedBy: string;
+  issuedAt?: Timestamp;
+  cancelledBy?: string | null;
+  cancelledAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface BusinessContact {
   id: string;
   displayId: string;
