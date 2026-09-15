@@ -19,6 +19,7 @@ import {
 } from '../categories/defaultCategories';
 import {
   businessSpaceIdsForAccount,
+  listAccountsForSpace,
   listAllAccounts,
 } from '../../repositories/accountRepository';
 import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
@@ -28,6 +29,7 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import {
   getTransactionAttachmentUrl,
   listAllTransactionAttachments,
+  listBusinessTransactionsForSpace,
   listFinancialApprovalRequests,
   listTransactionAttachments,
   listTransactions,
@@ -198,6 +200,7 @@ export function TransactionsPage() {
   const [searchParams] = useSearchParams();
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [writableAccounts, setWritableAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [customCategories, setCustomCategories] = useState<TransactionCategory[]>([]);
   const [transactionAttachmentCounts, setTransactionAttachmentCounts] = useState<Record<string, number>>({});
@@ -263,22 +266,171 @@ export function TransactionsPage() {
         listAllCustomCategories(user.uid),
         listAllTransactionAttachments(user.uid),
       ]);
+
+      const activeSpaces =
+        nextSpaces.filter(
+          (space) => !space.archivedAt,
+        );
+
+      const businessSpaces =
+        activeSpaces.filter(
+          (space) => space.type === 'sme',
+        );
+
+      const businessBundles =
+        await Promise.all(
+          businessSpaces.map(
+            async (space) => {
+              const [spaceAccounts, spaceTransactions] =
+                await Promise.all([
+                  listAccountsForSpace(space.id),
+                  listBusinessTransactionsForSpace(space.id),
+                ]);
+
+              return {
+                spaceId: space.id,
+                accounts: spaceAccounts,
+                transactions: spaceTransactions,
+              };
+            },
+          ),
+        );
+
+      const historyAccountMap =
+        new Map<string, Account>(
+          nextAccounts.map(
+            (account) => [account.id, account],
+          ),
+        );
+
+      const writableAccountMap =
+        new Map<string, Account>(
+          nextAccounts
+            .filter(
+              (account) =>
+                !account.archivedAt
+                && !account.closedAt,
+            )
+            .map(
+              (account) => [account.id, account],
+            ),
+        );
+
+      const mergeSharedAccount = (
+        target: Map<string, Account>,
+        account: Account,
+        spaceId: string,
+      ) => {
+        const existing =
+          target.get(account.id);
+
+        const allowedSpaceIds =
+          Array.from(
+            new Set([
+              ...(existing?.businessSpaceIds || []),
+              spaceId,
+            ]),
+          );
+
+        target.set(
+          account.id,
+          {
+            ...(existing || account),
+            ...account,
+            businessSpaceIds:
+              allowedSpaceIds,
+          },
+        );
+      };
+
+      businessBundles.forEach(
+        (bundle) => {
+          bundle.accounts.forEach(
+            (account) => {
+              if (account.ownerId === user.uid) {
+                return;
+              }
+
+              if (account.sharedCanViewLedger === true) {
+                mergeSharedAccount(
+                  historyAccountMap,
+                  account,
+                  bundle.spaceId,
+                );
+              }
+
+              if (account.sharedCanUseAccount === true) {
+                mergeSharedAccount(
+                  writableAccountMap,
+                  account,
+                  bundle.spaceId,
+                );
+              }
+            },
+          );
+        },
+      );
+
+      const transactionMap =
+        new Map<string, FinancialTransaction>(
+          nextTransactions.map(
+            (item) => [item.id, item],
+          ),
+        );
+
+      businessBundles.forEach(
+        (bundle) => {
+          bundle.transactions.forEach(
+            (item) => {
+              transactionMap.set(
+                item.id,
+                item,
+              );
+            },
+          );
+        },
+      );
+
+      const mergedTransactions =
+        [...transactionMap.values()]
+          .sort((a, b) => {
+            const dateCompare =
+              b.transactionDate.localeCompare(
+                a.transactionDate,
+              );
+
+            if (dateCompare !== 0) {
+              return dateCompare;
+            }
+
+            return (b.postedAt?.toMillis() || 0)
+              - (a.postedAt?.toMillis() || 0);
+          });
+
       const nextAttachmentCounts: Record<string, number> = {};
       nextAttachments.forEach((attachment) => {
         nextAttachmentCounts[attachment.transactionId] = (nextAttachmentCounts[attachment.transactionId] || 0) + 1;
       });
-      const personalAccountIds = new Set(
-        nextAccounts
-          .filter((account) => account.classification === 'personal')
-          .map((account) => account.id),
-      );
+
       setTransactions(
-        nextTransactions.filter((item) => personalAccountIds.has(item.accountId)),
+        mergedTransactions,
       );
-      setAccounts(nextAccounts);
-      setSpaces(
-        nextSpaces.filter((space) => !space.archivedAt && space.type !== 'sme'),
+
+      setAccounts(
+        [...historyAccountMap.values()]
+          .sort(
+            (a, b) => a.name.localeCompare(b.name),
+          ),
       );
+
+      setWritableAccounts(
+        [...writableAccountMap.values()]
+          .sort(
+            (a, b) => a.name.localeCompare(b.name),
+          ),
+      );
+
+      setSpaces(activeSpaces);
       setCustomCategories(nextCustomCategories);
       setTransactionAttachmentCounts(nextAttachmentCounts);
     } catch (nextError) {
@@ -450,7 +602,46 @@ export function TransactionsPage() {
   }
   const categoryMap = useMemo(() => new Map(allCategories.map((category) => [category.id, category])), [allCategories]);
   const accountMap = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
-  const activeAccounts = useMemo(() => accounts.filter((account) => account.classification === 'personal' && !account.archivedAt && !account.closedAt), [accounts]);
+
+  const historyAccounts = useMemo(
+    () => accounts.filter(
+      (account) =>
+        !account.archivedAt
+        && !account.closedAt,
+    ),
+    [accounts],
+  );
+
+  const activeWritableAccounts = useMemo(
+    () => writableAccounts.filter(
+      (account) =>
+        !account.archivedAt
+        && !account.closedAt,
+    ),
+    [writableAccounts],
+  );
+
+  const writableSpaces = useMemo(
+    () => spaces.filter(
+      (space) => {
+        if (space.type === 'sme') {
+          return activeWritableAccounts.some(
+            (account) =>
+              account.classification === 'business'
+              && businessSpaceIdsForAccount(account).includes(space.id),
+          );
+        }
+
+        return activeWritableAccounts.some(
+          (account) =>
+            account.classification === 'personal'
+            && account.currency === space.currency,
+        );
+      },
+    ),
+    [activeWritableAccounts, spaces],
+  );
+
   const spaceMap = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
 
   const availableLabels = useMemo(() => {
@@ -505,7 +696,7 @@ export function TransactionsPage() {
   const toggleAccountFilter = (accountId: string) => {
     setSelectedAccountIds((current) => {
       if (current === null) {
-        return accounts
+        return historyAccounts
           .map((account) => account.id)
           .filter((id) => id !== accountId);
       }
@@ -517,8 +708,8 @@ export function TransactionsPage() {
       const next = [...current, accountId];
 
       if (
-        accounts.length > 0
-        && next.length >= accounts.length
+        historyAccounts.length > 0
+        && next.length >= historyAccounts.length
       ) {
         return null;
       }
@@ -698,7 +889,7 @@ export function TransactionsPage() {
       <PageHeader
         eyebrow="Money records"
         title="Money activity"
-        description="Record money in, money out, and money moved between accounts."
+        description="View Personal and Business money activity in one place, with shared Business access respected."
         action={<div className="header-actions">
           <Link className="button secondary" to="/recurring">Recurring money</Link>
           {approvalRequests.length > 0 && (
@@ -714,12 +905,12 @@ export function TransactionsPage() {
             </button>
           )}
           <button className="button secondary" onClick={() => setShowCategoryManager(true)}>Edit categories</button>
-          <button className="button primary" onClick={() => setShowForm(true)} disabled={!accounts.length || !spaces.length}>+ Add money activity</button>
+          <button className="button primary" onClick={() => setShowForm(true)} disabled={!activeWritableAccounts.length || !writableSpaces.length}>+ Add money activity</button>
         </div>}
       />
       {error && <div className="notice error">{error}</div>}
       {feedback && <div className="notice success">{feedback} {feedback.includes('device') && <Link to="/offline-sync">View Offline & sync</Link>}</div>}
-      <div className="info-banner"><strong>Saved to your account.</strong><span>Use Undo to fix a mistake.</span></div>
+      <div className="info-banner"><strong>Personal and Business money together.</strong><span>Shared Business activity appears only when you have ledger access.</span></div>
 
       <section className="transaction-summary">
         <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
@@ -779,7 +970,7 @@ export function TransactionsPage() {
                 </div>
 
                 <div className="transaction-account-filter-options">
-                  {accounts.map((account) => {
+                  {historyAccounts.map((account) => {
                     const checked = selectedAccountIds === null
                       || selectedAccountIds.includes(account.id);
 
@@ -803,7 +994,7 @@ export function TransactionsPage() {
                   })}
                 </div>
 
-                {accounts.length === 0 && (
+                {historyAccounts.length === 0 && (
                   <small className="transaction-account-filter-empty">
                     No Accounts available.
                   </small>
@@ -817,7 +1008,7 @@ export function TransactionsPage() {
       </section>
 
       {loading ? <div className="loading-panel">Loading money activity…</div> : visibleTransactions.length === 0 ? (
-        <EmptyState title="No matching money activity" description="Change the filters or add money in, money out, or a money move." action={accounts.length && spaces.length ? <button className="button primary" onClick={() => setShowForm(true)}>Add money activity</button> : undefined} />
+        <EmptyState title="No matching money activity" description="Change the filters or add money in, money out, or a money move." action={activeWritableAccounts.length && writableSpaces.length ? <button className="button primary" onClick={() => setShowForm(true)}>Add money activity</button> : undefined} />
       ) : (
         <section className="transaction-list">
           {visibleTransactions.map((item) => {
@@ -874,8 +1065,8 @@ export function TransactionsPage() {
       )}
 
       {showForm && profile && <MoneyActivityModal
-        accounts={activeAccounts}
-        spaces={spaces}
+        accounts={activeWritableAccounts}
+        spaces={writableSpaces}
         categories={allCategories}
         labelSuggestions={availableLabels}
         onCategoriesChanged={refreshCategories}
@@ -892,8 +1083,8 @@ export function TransactionsPage() {
 
       {correctionDraft && profile && correctionDraft.type !== 'reversal' && (
         <MoneyActivityModal
-          accounts={activeAccounts}
-          spaces={spaces}
+          accounts={activeWritableAccounts}
+          spaces={writableSpaces}
           categories={allCategories}
           labelSuggestions={availableLabels}
           onCategoriesChanged={refreshCategories}
