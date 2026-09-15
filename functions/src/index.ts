@@ -2441,33 +2441,6 @@ function invoiceTaxSnapshot(
   };
 }
 
-function assertOwnedInvoiceSpace(
-  data: DocumentData | undefined,
-  uid: string,
-) {
-  if (
-    !data
-    || data.archivedAt
-  ) {
-    throw new HttpsError(
-      'failed-precondition',
-      'The SME Space is unavailable.',
-    );
-  }
-
-  if (
-    data.type !== 'sme'
-    || data.ownerId !== uid
-  ) {
-    throw new HttpsError(
-      'permission-denied',
-      'Only the SME Space owner can manage business invoices.',
-    );
-  }
-
-  return data;
-}
-
 function assertInvoiceManagerSpace(
   data: DocumentData | undefined,
   member: DocumentData | undefined,
@@ -6765,7 +6738,7 @@ export const getBusinessInvoiceWorkspace = onCall(
           }),
         )
         .sort(
-          (a, b) =>
+          (a: DocumentData, b: DocumentData) =>
             String(
               b.issueDate
               || '',
@@ -6874,7 +6847,7 @@ export const getBusinessInvoicePayments = onCall(
           }),
         )
         .sort(
-          (a, b) =>
+          (a: DocumentData, b: DocumentData) =>
             String(
               b.paymentDate
               || '',
