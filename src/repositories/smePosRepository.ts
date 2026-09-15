@@ -608,10 +608,28 @@ export async function cancelSmePosReservation(input: {
   reservationId: string;
   cancelDate: string;
   reason?: string;
-}): Promise<{ data: { reservationId: string; refundedMinor: number } }> {
+}): Promise<{
+  data: {
+    status: 'posted' | 'pending_approval';
+    approvalId?: string;
+    reservationId: string;
+    refundedMinor: number;
+  };
+}> {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'cancelSmePosReservation');
-  return call({ ...input, idempotencyKey: crypto.randomUUID() }) as Promise<{ data: { reservationId: string; refundedMinor: number } }>;
+
+  return call({
+    ...input,
+    idempotencyKey: crypto.randomUUID(),
+  }) as Promise<{
+    data: {
+      status: 'posted' | 'pending_approval';
+      approvalId?: string;
+      reservationId: string;
+      refundedMinor: number;
+    };
+  }>;
 }
 
 export async function checkoutStandardPos(input: {

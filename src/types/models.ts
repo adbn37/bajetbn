@@ -722,6 +722,9 @@ export interface FinancialApprovalRequest {
     itemId: string;
     quantity: number;
   }>;
+  reservationId?: string | null;
+  reservationNumber?: string | null;
+  cancellationDate?: string | null;
   status: FinancialApprovalStatus;
   transactionId?: string | null;
   ledgerEntryIds?: string[];

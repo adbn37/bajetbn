@@ -4137,6 +4137,736 @@ async function reviewPosReturnApproval(input: {
   });
 }
 
+async function reviewPosReservationCancellationApproval(input: {
+  uid: string;
+  approvalId: string;
+  decision: 'approved' | 'rejected';
+  reviewNote: string;
+  key: string;
+}) {
+  const approvalRef =
+    db.collection('financialApprovalRequests')
+      .doc(input.approvalId);
+
+  const commandRef =
+    db.collection('financialCommands')
+      .doc(commandId(input.uid, input.key));
+
+  return db.runTransaction(async (transaction) => {
+    const [
+      commandSnapshot,
+      approvalSnapshot,
+    ] = await Promise.all([
+      transaction.get(commandRef),
+      transaction.get(approvalRef),
+    ]);
+
+    if (commandSnapshot.exists) {
+      return commandSnapshot.data()?.result;
+    }
+
+    if (!approvalSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Booking cancellation approval was not found.',
+      );
+    }
+
+    const approval =
+      approvalSnapshot.data() || {};
+
+    if (
+      String(approval.ownerId || '')
+      !== input.uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the Account Owner can review this booking cancellation.',
+      );
+    }
+
+    if (
+      approval.action
+      !== 'pos_refund_or_sensitive_money_out'
+      || !approval.reservationId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This approval request is not a booking cancellation.',
+      );
+    }
+
+    if (
+      approval.status
+      !== 'pending'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This booking cancellation has already been reviewed.',
+      );
+    }
+
+    const requestedBy =
+      stringValue(
+        approval.requestedBy,
+        'Requester',
+        160,
+      );
+
+    const spaceId =
+      stringValue(
+        approval.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const reservationId =
+      stringValue(
+        approval.reservationId,
+        'Booking',
+        100,
+      );
+
+    const cancellationDate =
+      localDate(
+        approval.cancellationDate
+        || approval.transactionDate,
+        'Cancellation date',
+      );
+
+    const reason =
+      optionalString(
+        approval.note,
+        500,
+      );
+
+    const reservationRef =
+      db.collection('smePosReservations')
+        .doc(reservationId);
+
+    const reservationSnapshot =
+      await transaction.get(
+        reservationRef,
+      );
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    if (
+      input.decision
+      === 'rejected'
+    ) {
+      transaction.update(
+        approvalRef,
+        {
+          status: 'rejected',
+          reviewNote: input.reviewNote,
+          reviewedBy: input.uid,
+          reviewedAt: now,
+          updatedAt: now,
+        },
+      );
+
+      if (
+        reservationSnapshot.exists
+        && reservationSnapshot.data()
+          ?.pendingCancellationApprovalId
+          === input.approvalId
+      ) {
+        transaction.update(
+          reservationRef,
+          {
+            pendingCancellationApprovalId:
+              FieldValue.delete(),
+            updatedAt: now,
+          },
+        );
+      }
+
+      createNotification(
+        transaction,
+        {
+          uid: requestedBy,
+          spaceId,
+          type: 'financial_approval_rejected',
+          title: 'Booking cancellation rejected',
+          message:
+            'The Account Owner rejected your booking cancellation request. The booking remains active.',
+          targetPath: '/transactions?approvals=1',
+          actionLabel: 'View request',
+          now,
+        },
+      );
+
+      const result = {
+        approvalId: input.approvalId,
+        status: 'rejected',
+        reservationId,
+      };
+
+      transaction.create(
+        commandRef,
+        {
+          uid: input.uid,
+          kind: 'review_pos_reservation_cancellation',
+          idempotencyKey: input.key,
+          result,
+          createdAt: now,
+        },
+      );
+
+      return result;
+    }
+
+    if (!reservationSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'The booking is no longer available.',
+      );
+    }
+
+    const reservation =
+      reservationSnapshot.data() || {};
+
+    const spaceRef =
+      db.collection('spaces').doc(spaceId);
+
+    const memberRef =
+      db.collection('spaceMembers')
+        .doc(`${spaceId}_${requestedBy}`);
+
+    const settingsRef =
+      db.collection('smePosSettings')
+        .doc(spaceId);
+
+    const accessRef =
+      db.collection('smePosAccess')
+        .doc(`${spaceId}_${requestedBy}`);
+
+    const [
+      spaceSnapshot,
+      memberSnapshot,
+      settingsSnapshot,
+      accessSnapshot,
+    ] = await Promise.all([
+      transaction.get(spaceRef),
+      transaction.get(memberRef),
+      transaction.get(settingsRef),
+      transaction.get(accessRef),
+    ]);
+
+    if (
+      !spaceSnapshot.exists
+      || spaceSnapshot.data()?.archivedAt
+      || spaceSnapshot.data()?.type !== 'sme'
+      || String(
+        spaceSnapshot.data()?.ownerId || '',
+      ) !== input.uid
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The Business Space is unavailable or ownership has changed.',
+      );
+    }
+
+    if (!settingsSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The POS settings are unavailable.',
+      );
+    }
+
+    const settings =
+      settingsSnapshot.data() || {};
+
+    if (
+      String(settings.ownerId || '')
+      !== input.uid
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The POS owner no longer matches the Account Owner.',
+      );
+    }
+
+    if (
+      !memberSnapshot.exists
+      || ['suspended', 'removed'].includes(
+        String(memberSnapshot.data()?.status || ''),
+      )
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The requester is no longer an active Business member.',
+      );
+    }
+
+    if (
+      !accessSnapshot.exists
+      || accessSnapshot.data()?.status !== 'active'
+      || accessSnapshot.data()?.role !== 'manager'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The requester is no longer an active POS Manager.',
+      );
+    }
+
+    if (
+      reservation.spaceId !== spaceId
+      || reservation.ownerId !== input.uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'This booking belongs to another Business.',
+      );
+    }
+
+    if (
+      ['completed', 'cancelled'].includes(
+        String(reservation.status || ''),
+      )
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This booking has already been closed.',
+      );
+    }
+
+    if (
+      reservation.pendingCancellationApprovalId
+      !== input.approvalId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This booking no longer matches the pending cancellation request.',
+      );
+    }
+
+    const sourceMode =
+      oneOf(
+        reservation.sourceMode,
+        smePosModes,
+        'Booking POS mode',
+      );
+
+    if (
+      approval.sourceMode
+      && approval.sourceMode !== sourceMode
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The booking POS mode changed after cancellation was requested.',
+      );
+    }
+
+    const items =
+      Array.isArray(reservation.items)
+        ? reservation.items.map(
+            (item: unknown) => ({
+              ...((item || {}) as DocumentData),
+            }),
+          )
+        : [];
+
+    const itemRefs =
+      items.map(
+        (item: DocumentData) =>
+          sourceMode === 'marketplace_consignment'
+            ? db.collection('smePosListings').doc(
+                stringValue(
+                  item.itemId,
+                  'Booking item',
+                  80,
+                ),
+              )
+            : db.collection('smePosProducts').doc(
+                stringValue(
+                  item.itemId,
+                  'Booking item',
+                  80,
+                ),
+              ),
+      );
+
+    const itemSnapshots =
+      await Promise.all(
+        itemRefs.map(
+          (ref) => transaction.get(ref),
+        ),
+      );
+
+    itemSnapshots.forEach(
+      (itemSnapshot, index) => {
+        if (
+          !itemSnapshot.exists
+          || itemSnapshot.data()?.spaceId !== spaceId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'A reserved item record is unavailable.',
+          );
+        }
+
+        const item =
+          itemSnapshot.data() || {};
+
+        if (item.trackStock === false) {
+          return;
+        }
+
+        const quantity =
+          integerBetween(
+            items[index].quantity,
+            'Reserved quantity',
+            1,
+            9_999,
+          );
+
+        if (
+          Number(item.reservedQuantity || 0)
+          < quantity
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Reserved stock no longer matches this booking.',
+          );
+        }
+      },
+    );
+
+    const originalPayments =
+      Array.isArray(reservation.payments)
+        ? reservation.payments.map(
+            (row: unknown) => ({
+              ...((row || {}) as DocumentData),
+            }),
+          )
+        : [];
+
+    const refundRows:
+      SmePosPaymentRequestRow[] =
+      originalPayments
+        .map(
+          (row: DocumentData) => ({
+            accountId:
+              stringValue(
+                row.accountId,
+                'Deposit account',
+                80,
+              ),
+            paymentMethod:
+              row.paymentMethod
+                ? oneOf(
+                    row.paymentMethod,
+                    paymentMethodCodes,
+                    'Payment method',
+                  )
+                : null,
+            paymentMethodLabel:
+              optionalString(
+                row.paymentMethodLabel,
+                80,
+              ) || null,
+            amountMinor:
+              Math.max(
+                0,
+                nonNegativeMoney(
+                  row.amountMinor || 0,
+                )
+                - nonNegativeMoney(
+                    row.returnedMinor || 0,
+                  ),
+              ),
+          }),
+        )
+        .filter(
+          (row: SmePosPaymentRequestRow) =>
+            row.amountMinor > 0,
+        );
+
+    const refundedMinor =
+      refundRows.reduce(
+        (sum, row) =>
+          sum + row.amountMinor,
+        0,
+      );
+
+    if (refundedMinor <= 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This booking no longer has a deposit available to refund.',
+      );
+    }
+
+    const approvedAmountMinor =
+      positiveMoney(
+        approval.amountMinor,
+      );
+
+    if (
+      refundedMinor
+      !== approvedAmountMinor
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The booking payments changed after cancellation was requested. Reject this request and submit a new cancellation.',
+      );
+    }
+
+    const approvedRefundRows =
+      parseSmePosPaymentRows(
+        {
+          payments: approval.payments,
+        },
+        approvedAmountMinor,
+      );
+
+    const refundSourcesMatch =
+      approvedRefundRows.length
+        === refundRows.length
+      && refundRows.every(
+        (row, index) => {
+          const approved =
+            approvedRefundRows[index];
+
+          return (
+            approved.accountId === row.accountId
+            && approved.amountMinor === row.amountMinor
+            && approved.paymentMethod === row.paymentMethod
+            && approved.paymentMethodLabel === row.paymentMethodLabel
+          );
+        },
+      );
+
+    if (!refundSourcesMatch) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The booking refund allocation changed after cancellation was requested. Reject this request and submit a new cancellation.',
+      );
+    }
+
+    const approvalCurrency =
+      stringValue(
+        approval.currency,
+        'Approval currency',
+        12,
+      );
+
+    const currentCurrency =
+      String(
+        reservation.currency
+        || settings.currency
+        || '',
+      );
+
+    if (
+      approvalCurrency
+      !== currentCurrency
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The booking currency changed after cancellation was requested.',
+      );
+    }
+
+    const refundPayments =
+      await postSmePosPayments({
+        transaction,
+        rows: refundRows,
+        settings,
+        spaceId,
+        uid: requestedBy,
+        idempotencyKey:
+          `${input.key}:refund`,
+        now,
+        transactionDate:
+          cancellationDate,
+        direction: 'out',
+        entryType:
+          sourceMode === 'marketplace_consignment'
+            ? 'marketplace_pos_reservation_refund'
+            : 'sme_pos_reservation_refund',
+        counterparty:
+          String(
+            reservation.customerName
+            || 'POS customer',
+          ),
+        note:
+          reason
+          || `Cancelled booking ${reservation.reservationNumber || reservationId}`,
+        categoryId:
+          'expense-other',
+        extra: {
+          posReservationId:
+            reservationId,
+          financialApprovalId:
+            input.approvalId,
+          approvedBy:
+            input.uid,
+        },
+      });
+
+    itemSnapshots.forEach(
+      (itemSnapshot, index) => {
+        const item =
+          itemSnapshot.data() || {};
+
+        if (item.trackStock === false) {
+          return;
+        }
+
+        transaction.update(
+          itemSnapshot.ref,
+          {
+            reservedQuantity:
+              Math.max(
+                0,
+                Number(
+                  item.reservedQuantity
+                  || 0,
+                )
+                - Number(
+                    items[index].quantity
+                    || 0,
+                  ),
+              ),
+            updatedAt: now,
+          },
+        );
+      },
+    );
+
+    const updatedPayments =
+      originalPayments.map(
+        (row: DocumentData) => ({
+          ...row,
+          returnedMinor:
+            nonNegativeMoney(
+              row.amountMinor || 0,
+            ),
+        }),
+      );
+
+    transaction.update(
+      reservationRef,
+      {
+        status: 'cancelled',
+        remainingMinor: 0,
+        payments: updatedPayments,
+        cancellationRefunds: refundPayments,
+        pendingCancellationApprovalId:
+          FieldValue.delete(),
+        cancelledAt: now,
+        updatedAt: now,
+      },
+    );
+
+    const firstRefund =
+      refundPayments[0];
+
+    transaction.update(
+      approvalRef,
+      {
+        status: 'approved',
+        transactionId:
+          firstRefund?.transactionId || null,
+        ledgerEntryIds:
+          refundPayments
+            .map(
+              (row) =>
+                row.ledgerEntryId,
+            )
+            .filter(Boolean),
+        reviewNote:
+          input.reviewNote,
+        reviewedBy:
+          input.uid,
+        reviewedAt:
+          now,
+        updatedAt:
+          now,
+      },
+    );
+
+    createNotification(
+      transaction,
+      {
+        uid: requestedBy,
+        spaceId,
+        type:
+          'financial_approval_approved',
+        title:
+          'Booking cancellation approved',
+        message:
+          'The Account Owner approved cancellation of '
+          + String(
+              reservation.reservationNumber
+              || reservationId,
+            )
+          + ' and refunded '
+          + (
+              refundedMinor
+              / 100
+            ).toFixed(2)
+          + ' '
+          + currentCurrency
+          + '.',
+        targetPath:
+          '/transactions?approvals=1',
+        actionLabel:
+          'View approval',
+        now,
+      },
+    );
+
+    createActivity(
+      transaction,
+      {
+        spaceId,
+        actorUid:
+          input.uid,
+        actorName:
+          'Account Owner',
+        action:
+          'sme_pos_reservation_cancellation_approved',
+        targetType:
+          'sme_pos_reservation',
+        targetId:
+          reservationId,
+        summary:
+          `Approved cancellation of ${reservation.reservationNumber || reservationId} and refunded ${(refundedMinor / 100).toFixed(2)} ${currentCurrency}.`,
+        now,
+      },
+    );
+
+    const result = {
+      approvalId:
+        input.approvalId,
+      status: 'approved',
+      reservationId,
+      refundedMinor,
+      transactionId:
+        firstRefund?.transactionId || '',
+    };
+
+    transaction.create(
+      commandRef,
+      {
+        uid: input.uid,
+        kind:
+          'review_pos_reservation_cancellation',
+        idempotencyKey:
+          input.key,
+        result,
+        createdAt: now,
+      },
+    );
+
+    return result;
+  });
+}
+
 export const reviewFinancialApprovalRequest = onCall(
   { region },
   async (request) => {
@@ -4225,6 +4955,16 @@ export const reviewFinancialApprovalRequest = onCall(
       approvalPreData.action
       === 'pos_refund_or_sensitive_money_out'
     ) {
+      if (approvalPreData.reservationId) {
+        return reviewPosReservationCancellationApproval({
+          uid,
+          approvalId,
+          decision,
+          reviewNote,
+          key,
+        });
+      }
+
       return reviewPosReturnApproval({
         uid,
         approvalId,
@@ -11296,12 +12036,20 @@ export const cancelSmePosReservation = onCall({ region }, async (request) => {
   const context = await requireSmePosActor(spaceId, uid, ['owner', 'manager']);
   const reservationRef = db.collection('smePosReservations').doc(reservationId);
   const commandRef = db.collection('smePosCommands').doc(commandId(uid, key));
+  const approvalRef = db.collection('financialApprovalRequests').doc();
   return db.runTransaction(async (transaction) => {
     const [command, snapshot] = await Promise.all([transaction.get(commandRef), transaction.get(reservationRef)]);
     if (command.exists) return command.data()?.result;
     if (!snapshot.exists || snapshot.data()?.spaceId !== spaceId || snapshot.data()?.ownerId !== context.settings.ownerId) throw new HttpsError('not-found', 'Booking not found.');
     const reservation = snapshot.data() || {};
     if (['completed', 'cancelled'].includes(String(reservation.status || ''))) throw new HttpsError('failed-precondition', 'This booking is already closed.');
+
+    if (reservation.pendingCancellationApprovalId) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This booking already has a cancellation waiting for Account Owner approval.',
+      );
+    }
     const sourceMode = oneOf(reservation.sourceMode, smePosModes, 'Booking POS mode');
     const items = Array.isArray(reservation.items) ? reservation.items : [];
     const itemRefs = items.map((item: DocumentData) => sourceMode === 'marketplace_consignment'
@@ -11323,6 +12071,169 @@ export const cancelSmePosReservation = onCall({ region }, async (request) => {
       amountMinor: Math.max(0, nonNegativeMoney(row.amountMinor || 0) - nonNegativeMoney(row.returnedMinor || 0)),
     })).filter((row: SmePosPaymentRequestRow) => row.amountMinor > 0);
     const refundedMinor = refundRows.reduce((sum, row) => sum + row.amountMinor, 0);
+
+    if (context.role === 'manager' && refundedMinor > 0) {
+      const firstRefund = refundRows[0];
+
+      if (!firstRefund) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The booking refund source is unavailable.',
+        );
+      }
+
+      const category = systemCategories.get('expense-other');
+
+      if (!category) {
+        throw new HttpsError(
+          'internal',
+          'POS refund category is unavailable.',
+        );
+      }
+
+      const firstOriginalPayment =
+        originalPayments.find(
+          (row: DocumentData) =>
+            String(row.accountId || '') === firstRefund.accountId,
+        );
+
+      const now = FieldValue.serverTimestamp();
+
+      transaction.create(approvalRef, {
+        displayId: displayId('APR'),
+        ownerId: String(context.settings.ownerId),
+        requestedBy: uid,
+        requestedByName:
+          context.member.displayName
+          || context.member.email
+          || 'POS Manager',
+        spaceId,
+        spaceName: String(
+          context.space.name
+          || context.settings.shopName
+          || 'Business',
+        ),
+        action: 'pos_refund_or_sensitive_money_out',
+        transactionType: 'expense',
+        accountId: firstRefund.accountId,
+        accountName: String(
+          firstOriginalPayment?.accountName
+          || 'Business account',
+        ),
+        destinationAccountId: null,
+        destinationAccountName: null,
+        amountMinor: refundedMinor,
+        currency: String(
+          reservation.currency
+          || context.settings.currency
+          || 'BND',
+        ),
+        transactionDate: cancelDate,
+        category: category.name,
+        categoryId: category.id,
+        categoryIcon: category.icon,
+        categoryColor: category.color,
+        categoryScope: 'business',
+        categoryIsSystem: true,
+        counterparty: String(
+          reservation.customerName
+          || 'POS customer',
+        ),
+        note: reason,
+        labels: [],
+        paymentMethod: firstRefund.paymentMethod,
+        paymentMethodLabel: firstRefund.paymentMethodLabel,
+        payments: refundRows,
+        sourceMode,
+        reservationId,
+        reservationNumber: String(
+          reservation.reservationNumber
+          || reservationId,
+        ),
+        cancellationDate: cancelDate,
+        status: 'pending',
+        transactionId: null,
+        ledgerEntryIds: [],
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      transaction.update(
+        reservationRef,
+        {
+          pendingCancellationApprovalId:
+            approvalRef.id,
+          updatedAt: now,
+        },
+      );
+
+      createNotification(transaction, {
+        uid: String(context.settings.ownerId),
+        spaceId,
+        type: 'financial_approval_requested',
+        title: 'Booking cancellation needs approval',
+        message:
+          (
+            context.member.displayName
+            || context.member.email
+            || 'A POS Manager'
+          )
+          + ' requested cancellation of '
+          + String(
+              reservation.reservationNumber
+              || reservationId,
+            )
+          + ' with a refund of '
+          + (refundedMinor / 100).toFixed(2)
+          + ' '
+          + String(
+              reservation.currency
+              || context.settings.currency
+              || 'BND',
+            )
+          + '.',
+        targetPath: '/transactions?approvals=1',
+        actionLabel: 'Review cancellation',
+        now,
+      });
+
+      createActivity(transaction, {
+        spaceId,
+        actorUid: uid,
+        actorName:
+          context.member.displayName
+          || context.member.email,
+        action:
+          'sme_pos_reservation_cancellation_requested',
+        targetType: 'financial_approval',
+        targetId: approvalRef.id,
+        summary:
+          `Requested cancellation of ${reservation.reservationNumber || reservationId} with refund ${(refundedMinor / 100).toFixed(2)} ${reservation.currency || context.settings.currency || 'BND'}.`,
+        now,
+      });
+
+      const result = {
+        status: 'pending_approval',
+        approvalId: approvalRef.id,
+        reservationId,
+        refundedMinor,
+      };
+
+      transaction.create(commandRef, {
+        uid,
+        kind:
+          'request_pos_reservation_cancellation_approval',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    }
+
     const now = FieldValue.serverTimestamp();
     const refundPayments = await postSmePosPayments({
       transaction, rows: refundRows, settings: context.settings, spaceId, uid, idempotencyKey: `${key}:refund`, now,
@@ -11336,7 +12247,7 @@ export const cancelSmePosReservation = onCall({ region }, async (request) => {
     });
     const updatedPayments = originalPayments.map((row: DocumentData) => ({ ...row, returnedMinor: nonNegativeMoney(row.amountMinor || 0) }));
     transaction.update(reservationRef, { status: 'cancelled', remainingMinor: 0, payments: updatedPayments, cancellationRefunds: refundPayments, cancelledAt: now, updatedAt: now });
-    const result = { reservationId, refundedMinor };
+    const result = { status: 'posted', reservationId, refundedMinor };
     transaction.create(commandRef, { uid, kind: 'cancel_sme_pos_reservation', idempotencyKey: key, result, createdAt: now });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: context.member.displayName || context.member.email, action: 'sme_pos_reservation_cancelled', targetType: 'sme_pos_reservation', targetId: reservationId, summary: `Cancelled booking ${reservation.reservationNumber || reservationId}${refundedMinor ? ` and refunded ${refundedMinor / 100} ${context.settings.currency}` : ''}.`, now });
     return result;

@@ -182,7 +182,22 @@ export function SmePosReservationsPanel({ space, settings, role, reservations, p
         setSuccess(`Booking completed. Receipt ${result.data.receiptNumber} is ready in Sales.`);
       } else {
         const result = await cancelSmePosReservation({ spaceId: space.id, reservationId: reservation.id, cancelDate: date, reason: note });
-        setSuccess(result.data.refundedMinor > 0 ? `Booking cancelled. ${formatMoney(result.data.refundedMinor, reservation.currency)} deposit refunded automatically.` : 'Booking cancelled and stock released.');
+
+        if (result.data.status === 'pending_approval') {
+          setSuccess(
+            `Cancellation request sent to the Account Owner for approval. `
+            + `${formatMoney(result.data.refundedMinor, reservation.currency)} deposit refund is pending. `
+            + 'The booking remains active and its stock is still reserved.',
+          );
+          setAction(null);
+          return;
+        }
+
+        setSuccess(
+          result.data.refundedMinor > 0
+            ? `Booking cancelled. ${formatMoney(result.data.refundedMinor, reservation.currency)} deposit refunded automatically.`
+            : 'Booking cancelled and stock released.',
+        );
       }
       await onRefresh();
       setAction(null);
@@ -206,7 +221,7 @@ export function SmePosReservationsPanel({ space, settings, role, reservations, p
 
     {action && <Modal title={action.kind === 'deposit' ? `Add deposit · ${bookingReference(action.reservation.reservationNumber)}` : action.kind === 'complete' ? `Complete booking · ${bookingReference(action.reservation.reservationNumber)}` : `Cancel booking · ${bookingReference(action.reservation.reservationNumber)}`} onClose={() => !busy && setAction(null)}>
       <form className="form-stack" onSubmit={submit}>
-        {action.kind === 'cancel' ? <div className="notice warning">Reserved stock will be released. Any deposit already collected will be refunded automatically to the original payment account(s).</div> : <div className="notice">Remaining balance: <strong>{formatMoney(action.reservation.remainingMinor, action.reservation.currency)}</strong></div>}
+        {action.kind === 'cancel' ? <div className="notice warning">{role === 'manager' && action.reservation.depositMinor > 0 ? 'If a deposit refund is required, this cancellation will be sent to the Account Owner for approval. The booking stays active and its stock remains reserved until approved.' : 'Reserved stock will be released. Any deposit already collected will be refunded automatically to the original payment account(s).'}</div> : <div className="notice">Remaining balance: <strong>{formatMoney(action.reservation.remainingMinor, action.reservation.currency)}</strong></div>}
         {action.kind !== 'cancel' && action.reservation.remainingMinor > 0 && <SmePosPaymentSplitEditor accounts={paymentAccounts} currency={action.reservation.currency} totalMinor={action.kind === 'complete' ? action.reservation.remainingMinor : paymentDraftTotalMinor(rows)} rows={rows} onChange={setRows} disabled={busy} label={action.kind === 'complete' ? 'Final payment' : 'Additional deposit'} />}
         <label>{action.kind === 'cancel' ? 'Cancellation date' : action.kind === 'complete' ? 'Sale date' : 'Payment date'}<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label>
         <label>{action.kind === 'cancel' ? 'Reason' : 'Note'}<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional" /></label>
