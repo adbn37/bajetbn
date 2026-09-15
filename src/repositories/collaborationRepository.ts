@@ -155,6 +155,7 @@ export async function createSpaceInvitation(input: {
   canUseAccounts: boolean;
   canViewBalances: boolean;
   canViewLedger: boolean;
+  canViewPrivateDocuments?: boolean;
   posRole?: Exclude<SmePosRole, 'owner'> | null;
 }): Promise<{ data: { invitationId: string; token: string } }> {
   const { functions } = requireFirebase();
@@ -190,6 +191,7 @@ export async function updateSpaceMember(input: {
   canUseAccounts: boolean;
   canViewBalances: boolean;
   canViewLedger: boolean;
+  canViewPrivateDocuments?: boolean;
   status: 'active' | 'suspended';
 }) {
   const { functions } = requireFirebase();

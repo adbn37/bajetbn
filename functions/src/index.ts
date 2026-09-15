@@ -16487,6 +16487,7 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
   const canUseAccounts = request.data?.canUseAccounts === true;
   const canViewBalances = request.data?.canViewBalances === true;
   const canViewLedger = request.data?.canViewLedger === true;
+  const requestedPrivateDocumentAccess = request.data?.canViewPrivateDocuments === true;
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const manager = await requireSpaceManager(spaceId, uid);
   const space = await db.collection('spaces').doc(spaceId).get();
@@ -16494,6 +16495,9 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
   if (space.data()?.type === 'personal') throw new HttpsError('failed-precondition', 'Personal Spaces cannot have members.');
   if (posRole && space.data()?.type !== 'sme') throw new HttpsError('failed-precondition', 'POS roles are only available in an SME Space.');
   if (posRole && space.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'Only the SME Space owner can assign a POS role during an invitation.');
+  if (requestedPrivateDocumentAccess && space.data()?.type !== 'sme') throw new HttpsError('failed-precondition', 'Private Business document access is only available in a Business Space.');
+  if (requestedPrivateDocumentAccess && space.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'Only the Business Owner can grant private document access.');
+  const canViewPrivateDocuments = space.data()?.type === 'sme' && requestedPrivateDocumentAccess;
 
   if (space.data()?.type === 'sme') {
     await assertBasicSmeAdditionalMemberCapacity(
@@ -16556,6 +16560,7 @@ export const createSpaceInvitation = onCall({ region }, async (request) => {
       canUseAccounts,
       canViewBalances,
       canViewLedger,
+      canViewPrivateDocuments,
       posRole,
       token,
       status: 'pending',
@@ -16760,6 +16765,7 @@ export const acceptSpaceInvitation = onCall({ region }, async (request) => {
       canUseAccounts: invitation.canUseAccounts === true,
       canViewBalances: invitation.canViewBalances === true,
       canViewLedger: invitation.canViewLedger === true,
+      canViewPrivateDocuments: invitation.canViewPrivateDocuments === true,
       invitedBy: invitation.invitedBy,
       joinedAt: now,
       updatedAt: now,
@@ -16847,14 +16853,41 @@ export const updateSpaceMember = onCall({ region }, async (request) => {
   const status = oneOf(request.data?.status, ['active', 'suspended'] as const, 'member status');
   const manager = await requireSpaceManager(spaceId, uid);
   const memberRef = db.collection('spaceMembers').doc(`${spaceId}_${memberUid}`);
-  const member = await memberRef.get();
+  const [member, space] = await Promise.all([
+    memberRef.get(),
+    db.collection('spaces').doc(spaceId).get(),
+  ]);
   if (!member.exists) throw new HttpsError('not-found', 'Member not found.');
+  if (!space.exists || space.data()?.archivedAt) throw new HttpsError('not-found', 'Space not found.');
   if (member.data()?.role === 'owner') throw new HttpsError('failed-precondition', 'The Space owner cannot be changed here.');
+
+  const privateDocumentPatchProvided =
+    typeof request.data?.canViewPrivateDocuments === 'boolean';
+
+  if (
+    privateDocumentPatchProvided
+    && space.data()?.type === 'sme'
+    && space.data()?.ownerId !== uid
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the Business Owner can change private document access.',
+    );
+  }
+
+  const canViewPrivateDocuments =
+    space.data()?.type === 'sme'
+      ? privateDocumentPatchProvided
+        ? request.data?.canViewPrivateDocuments === true
+        : member.data()?.canViewPrivateDocuments === true
+      : false;
+
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     transaction.update(memberRef, {
       role, status, canUseAccounts: request.data?.canUseAccounts === true,
       canViewBalances: request.data?.canViewBalances === true, canViewLedger: request.data?.canViewLedger === true,
+      canViewPrivateDocuments,
       updatedAt: now,
     });
     createActivity(transaction, { spaceId, actorUid: uid, actorName: manager.displayName, action: 'member_updated', targetType: 'member', targetId: memberUid, summary: `Updated ${member.data()?.displayName || member.data()?.email || 'a member'} to ${role} (${status}).`, now });

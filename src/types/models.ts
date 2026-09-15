@@ -1128,6 +1128,7 @@ export interface SpaceMember {
   canUseAccounts: boolean;
   canViewBalances: boolean;
   canViewLedger: boolean;
+  canViewPrivateDocuments?: boolean;
   invitedBy?: string | null;
   joinedAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -1280,6 +1281,7 @@ export interface SpaceInvitation {
   canUseAccounts: boolean;
   canViewBalances: boolean;
   canViewLedger: boolean;
+  canViewPrivateDocuments?: boolean;
   posRole?: Exclude<SmePosRole, 'owner'> | null;
   token: string;
   status: InvitationStatus;
