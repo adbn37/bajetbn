@@ -29374,3 +29374,354 @@ export const markBusinessPrivateDocumentShared = onCall(
     };
   },
 );
+
+export const linkBusinessEmployeeAccount = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const employeeId =
+      stringValue(
+        request.data?.employeeId,
+        'Employee',
+        100,
+      );
+
+    const email =
+      typeof request.data?.email === 'string'
+        ? request.data.email
+            .trim()
+            .toLowerCase()
+            .slice(0, 160)
+        : '';
+
+    const employeeRef =
+      db.collection(
+        'businessEmployees',
+      ).doc(
+        employeeId,
+      );
+
+    const employeeSnapshot =
+      await employeeRef.get();
+
+    if (!employeeSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Employee record not found.',
+      );
+    }
+
+    const employee =
+      employeeSnapshot.data()
+      || {};
+
+    const spaceId =
+      stringValue(
+        employee.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const spaceSnapshot =
+      await db.collection(
+        'spaces',
+      ).doc(
+        spaceId,
+      ).get();
+
+    if (
+      !spaceSnapshot.exists
+      || spaceSnapshot.data()?.archivedAt
+      || spaceSnapshot.data()?.type !== 'sme'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Business Space unavailable.',
+      );
+    }
+
+    if (
+      spaceSnapshot.data()?.ownerId !== uid
+      || employee.ownerId !== uid
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the Business Owner can link an employee to a BajetBN account.',
+      );
+    }
+
+    let linkedUid:
+      string
+      | null =
+      null;
+
+    let linkedEmail:
+      string
+      | null =
+      null;
+
+    if (email) {
+      let targetUser;
+
+      try {
+        targetUser =
+          await getAuth()
+            .getUserByEmail(
+              email,
+            );
+      } catch (error) {
+        const code =
+          error
+          && typeof error === 'object'
+          && 'code' in error
+            ? String(
+                (
+                  error as {
+                    code?: unknown;
+                  }
+                ).code
+                || '',
+              )
+            : '';
+
+        if (
+          code.includes(
+            'user-not-found',
+          )
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'No BajetBN account uses that email address.',
+          );
+        }
+
+        throw error;
+      }
+
+      linkedUid =
+        targetUser.uid;
+
+      linkedEmail =
+        String(
+          targetUser.email
+          || email,
+        )
+          .trim()
+          .toLowerCase()
+          .slice(
+            0,
+            160,
+          );
+
+      const employeesSnapshot =
+        await db.collection(
+          'businessEmployees',
+        )
+          .where(
+            'spaceId',
+            '==',
+            spaceId,
+          )
+          .get();
+
+      const conflict =
+        employeesSnapshot.docs.find(
+          (item) =>
+            item.id !== employeeId
+            && item.data()?.linkedUid === linkedUid
+            && !item.data()?.archivedAt,
+        );
+
+      if (conflict) {
+        throw new HttpsError(
+          'already-exists',
+          'That BajetBN account is already linked to another active employee in this Business Space.',
+        );
+      }
+    }
+
+    const now =
+      FieldValue.serverTimestamp();
+
+    await employeeRef.update({
+      linkedUid,
+      linkedEmail,
+      linkedBy:
+        uid,
+      linkedAt:
+        now,
+      updatedAt:
+        now,
+    });
+
+    const documentsSnapshot =
+      await db.collection(
+        'businessPrivateDocuments',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get();
+
+    const matchingDocuments =
+      documentsSnapshot.docs.filter(
+        (item) => {
+          const data =
+            item.data();
+
+          return (
+            data.type === 'payslip'
+            && data.ownerId === uid
+            && data.payslip?.employeeId === employeeId
+          );
+        },
+      );
+
+    let updatedDocuments =
+      0;
+
+    for (
+      let offset = 0;
+      offset < matchingDocuments.length;
+      offset += 400
+    ) {
+      const batch =
+        db.batch();
+
+      const chunk =
+        matchingDocuments.slice(
+          offset,
+          offset + 400,
+        );
+
+      for (
+        const documentSnapshot
+        of chunk
+      ) {
+        batch.update(
+          documentSnapshot.ref,
+          {
+            recipientUid:
+              linkedUid,
+            recipientName:
+              String(
+                employee.name
+                || 'Employee',
+              ).slice(
+                0,
+                160,
+              ),
+            recipientPhone:
+              String(
+                employee.phone
+                || '',
+              ).slice(
+                0,
+                80,
+              ),
+            recipientLinkedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        const eventRef =
+          db.collection(
+            'businessPrivateDocumentEvents',
+          ).doc();
+
+        batch.create(
+          eventRef,
+          {
+            documentId:
+              documentSnapshot.id,
+            ownerId:
+              uid,
+            spaceId,
+            documentType:
+              'payslip',
+            action:
+              linkedUid
+                ? 'recipient_linked'
+                : 'recipient_unlinked',
+            actorUid:
+              uid,
+            channel:
+              null,
+            createdAt:
+              now,
+          },
+        );
+      }
+
+      if (chunk.length) {
+        await batch.commit();
+
+        updatedDocuments +=
+          chunk.length;
+      }
+    }
+
+    return {
+      linkedUid,
+      linkedEmail,
+      updatedDocuments,
+    };
+  },
+);
+
+export const listMyPrivateDocuments = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const snapshot =
+      await db.collection(
+        'businessPrivateDocuments',
+      )
+        .where(
+          'recipientUid',
+          '==',
+          uid,
+        )
+        .get();
+
+    const documents =
+      snapshot.docs
+        .map(
+          (item) =>
+            privateDocumentPayload(
+              item,
+            ),
+        )
+        .sort(
+          (
+            a: DocumentData,
+            b: DocumentData,
+          ) =>
+            String(
+              b.period
+              || '',
+            ).localeCompare(
+              String(
+                a.period
+                || '',
+              ),
+            ),
+        );
+
+    return {
+      documents,
+    };
+  },
+);

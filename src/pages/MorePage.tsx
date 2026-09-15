@@ -14,6 +14,7 @@ const moneyTools = [
 const appTools = [
   { to: '/calendar', label: 'Calendar' },
   { to: '/search', label: 'Search' },
+  { to: '/documents', label: 'My private documents' },
   { to: '/settings', label: 'Settings' },
   { to: '/subscription', label: 'Subscription' },
 ];

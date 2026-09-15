@@ -543,6 +543,8 @@ export interface BusinessEmployee {
   roleTitle: string;
   employeeNumber: string;
   phone: string;
+  linkedUid?: string | null;
+  linkedEmail?: string | null;
   monthlyWageMinor: number;
   currency: string;
   archivedAt?: Timestamp | null;

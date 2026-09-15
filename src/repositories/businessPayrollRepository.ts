@@ -252,6 +252,33 @@ export async function updateBusinessEmployee(
   );
 }
 
+export async function linkBusinessEmployeeAccount(
+  employeeId: string,
+  email: string,
+): Promise<{
+  linkedUid: string | null;
+  linkedEmail: string | null;
+  updatedDocuments: number;
+}> {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'linkBusinessEmployeeAccount',
+  );
+
+  const result = await call({
+    employeeId,
+    email: email.trim(),
+  });
+
+  return result.data as {
+    linkedUid: string | null;
+    linkedEmail: string | null;
+    updatedDocuments: number;
+  };
+}
+
 export async function setBusinessEmployeeArchived(
   employeeId: string,
   archived: boolean,

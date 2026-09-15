@@ -11,6 +11,24 @@ import type {
   BusinessPrivateDocumentType,
 } from '../types/models';
 
+export async function listMyPrivateDocuments(): Promise<BusinessPrivateDocument[]> {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'listMyPrivateDocuments',
+  );
+
+  const result = await call({});
+
+  return (
+    (result.data as {
+      documents?: BusinessPrivateDocument[];
+    }).documents
+    || []
+  );
+}
+
 export async function listBusinessPrivateDocuments(
   spaceId: string,
   type?: BusinessPrivateDocumentType,

@@ -30,6 +30,7 @@ import {
 
 import {
   createBusinessEmployee,
+  linkBusinessEmployeeAccount,
   listBusinessEmployees,
   listBusinessPayrollRuns,
   postBusinessPayrollRun,
@@ -65,6 +66,7 @@ interface EmployeeForm {
   roleTitle: string;
   employeeNumber: string;
   phone: string;
+  linkedEmail: string;
   monthlyWage: string;
 }
 
@@ -96,6 +98,7 @@ function blankEmployee(): EmployeeForm {
     roleTitle: '',
     employeeNumber: '',
     phone: '',
+    linkedEmail: '',
     monthlyWage: '0.00',
   };
 }
@@ -286,8 +289,18 @@ export function BusinessPayrollPage() {
           if (
             !nextSpace
             || nextSpace.type !== 'sme'
-            || nextSpace.ownerId !== user.uid
           ) {
+            return;
+          }
+
+          if (nextSpace.ownerId !== user.uid) {
+            const nextPayslips =
+              await listBusinessPrivateDocuments(
+                spaceId,
+                'payslip',
+              );
+
+            setPayslips(nextPayslips);
             return;
           }
 
@@ -462,6 +475,9 @@ export function BusinessPayrollPage() {
         employee.employeeNumber,
       phone:
         employee.phone,
+      linkedEmail:
+        employee.linkedEmail
+        || '',
       monthlyWage:
         minorInput(
           employee.monthlyWageMinor,
@@ -530,18 +546,28 @@ export function BusinessPayrollPage() {
       if (
         editingEmployee === 'new'
       ) {
-        await createBusinessEmployee(
-          space.id,
-          {
-            ...input,
-            currency:
-              space.currency
-              || 'BND',
-          },
-        );
+        const employeeId =
+          await createBusinessEmployee(
+            space.id,
+            {
+              ...input,
+              currency:
+                space.currency
+                || 'BND',
+            },
+          );
+
+        if (employeeForm.linkedEmail.trim()) {
+          await linkBusinessEmployeeAccount(
+            employeeId,
+            employeeForm.linkedEmail,
+          );
+        }
 
         setFeedback(
-          'Employee added.',
+          employeeForm.linkedEmail.trim()
+            ? 'Employee added and linked to their BajetBN account.'
+            : 'Employee added.',
         );
       } else if (
         editingEmployee
@@ -551,8 +577,15 @@ export function BusinessPayrollPage() {
           input,
         );
 
+        await linkBusinessEmployeeAccount(
+          editingEmployee.id,
+          employeeForm.linkedEmail,
+        );
+
         setFeedback(
-          'Employee updated.',
+          employeeForm.linkedEmail.trim()
+            ? 'Employee updated and BajetBN account linked.'
+            : 'Employee updated. BajetBN account link removed.',
         );
       }
 
@@ -915,9 +948,9 @@ export function BusinessPayrollPage() {
     return (
       <main className="page">
         <PageHeader
-          eyebrow="Business payroll"
+          eyebrow="My Payslips"
           title={space.name}
-          description="Employee wage information and payroll are restricted to the business owner."
+          description="Only private salary documents your BajetBN account is authorised to view are shown here."
           action={
             <Link
               className="button secondary"
@@ -927,6 +960,48 @@ export function BusinessPayrollPage() {
             </Link>
           }
         />
+
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
+
+        {payslips.length === 0 ? (
+          <div className="mini-empty">
+            <h3>No payslips available</h3>
+            <p>
+              Ask the Business Owner to link your employee record to your BajetBN sign-in email and issue your payslip.
+            </p>
+          </div>
+        ) : (
+          <div className="business-contact-list">
+            {payslips.map((document) => (
+              <article
+                className="business-contact-card"
+                key={document.id}
+              >
+                <div>
+                  <small>{document.period}</small>
+                  <h3>{document.title}</h3>
+                  <strong>
+                    {money(
+                      document.amountMinor,
+                      document.currency,
+                    )}
+                  </strong>
+                </div>
+
+                <Link
+                  className="button secondary"
+                  to={'/documents/' + document.id}
+                >
+                  Open Payslip
+                </Link>
+              </article>
+            ))}
+          </div>
+        )}
       </main>
     );
   }
@@ -1175,6 +1250,29 @@ export function BusinessPayrollPage() {
                 </label>
 
                 <label>
+                  BajetBN sign-in email
+                  <input
+                    type="email"
+                    maxLength={160}
+                    placeholder="employee@example.com"
+                    value={employeeForm.linkedEmail}
+                    onChange={
+                      (event) =>
+                        setEmployeeForm(
+                          (current) => ({
+                            ...current,
+                            linkedEmail:
+                              event.target.value,
+                          }),
+                        )
+                    }
+                  />
+                  <small>
+                    Optional. Link the employee to their BajetBN sign-in email so only that account can open their private payslips.
+                  </small>
+                </label>
+
+                <label>
                   Default monthly wage
                   <input
                     type="number"
@@ -1266,6 +1364,12 @@ export function BusinessPayrollPage() {
                               || currency,
                           )}
                         </strong>
+
+                        <small>
+                          {employee.linkedEmail
+                            ? 'BajetBN linked · ' + employee.linkedEmail
+                            : 'BajetBN account not linked'}
+                        </small>
                       </div>
 
                       <div className="button-row">

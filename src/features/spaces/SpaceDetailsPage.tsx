@@ -2101,6 +2101,22 @@ function SpaceOverview({
     }
   }
 
+  if (space.type === 'sme') {
+    quickLinks.push({
+      key: 'payslips',
+      to: `/spaces/${space.id}/business/payroll`,
+      icon: 'P',
+      title:
+        space.ownerId === user?.uid
+          ? 'Payslips & Salary Documents'
+          : 'My Payslips',
+      detail:
+        space.ownerId === user?.uid
+          ? 'Manage salary records and private employee payslips.'
+          : 'Open private payslips linked to your BajetBN account.',
+    });
+  }
+
   if (space.type === 'collection') {
     quickLinks.unshift({ key: 'collection', to: `/spaces/${space.id}/collection`, icon: 'C', title: 'Collection inventory', detail: 'Scan, find, label, and organise collectibles.', featured: true });
   }
