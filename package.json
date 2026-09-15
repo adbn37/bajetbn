@@ -1,7 +1,7 @@
 {
   "name": "bajetbn",
   "private": true,
-  "version": "1.14.15",
+  "version": "1.14.16",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -17,7 +17,7 @@
     "deploy:functions:staging": "firebase use staging && firebase deploy --only functions",
     "deploy:staging": "npm run build -- --mode staging && firebase use staging && firebase deploy --only firestore:rules,firestore:indexes,storage,functions",
     "verify:structure": "node scripts/verify-structure.mjs",
-    "postbuild": "node scripts/generate-service-worker.mjs",
+    "postbuild": "node scripts/generate-service-worker.mjs && node scripts/copy-release-marker.mjs",
     "verify:release-candidate": "node scripts/verify-release-candidate-hardening.mjs",
     "verify:build-output": "node scripts/verify-build-output.mjs",
     "verify:pre-v1-scope": "node scripts/verify-pre-v1-scope-audit.mjs",
