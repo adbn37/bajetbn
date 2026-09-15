@@ -186,7 +186,15 @@ export function BusinessAdvancedPage() {
 
   useEffect(
     () => {
-      void load();
+      let cancelled = false;
+
+      queueMicrotask(() => {
+        if (!cancelled) void load();
+      });
+
+      return () => {
+        cancelled = true;
+      };
     },
     [load],
   );
@@ -604,7 +612,7 @@ export function BusinessAdvancedPage() {
                   + '/business/payroll'
                 }
               >
-                Payslips & Salary Documents
+                Payroll, Payslips & Salary Documents
               </Link>
 
               <Link
