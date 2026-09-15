@@ -109,7 +109,7 @@ export function BusinessAdvancedPage() {
     useState<BusinessContact[]>([]);
 
   const [view, setView] =
-    useState<View>('contacts');
+    useState<View>('overview');
 
   const [loading, setLoading] =
     useState(true);
@@ -384,9 +384,9 @@ export function BusinessAdvancedPage() {
   return (
     <main className="page business-admin-page">
       <PageHeader
-        eyebrow="Business"
+        eyebrow="Business Admin"
         title={space.name}
-        description="Business details and contacts."
+        description="Business administration, records and tools."
         action={
           <Link
             className="button secondary"
@@ -415,7 +415,6 @@ export function BusinessAdvancedPage() {
       >
         <button
           type="button"
-          hidden
           className={
             view === 'overview'
               ? 'active'
@@ -425,7 +424,7 @@ export function BusinessAdvancedPage() {
             () => setView('overview')
           }
         >
-          Overview
+          Business Admin
         </button>
 
         <button

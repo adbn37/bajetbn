@@ -953,6 +953,13 @@ export function SpaceActionHub({
                   ) : (
                     <ShortcutLink to={`/spaces/${space.id}/business`} label={businessAdminLabel} onClick={() => setSpaceMoreOpen(false)} />
                   )}
+                  {businessIndustry === 'marketplace' && isBusinessOwner && (
+                    <ShortcutLink
+                      to={`/spaces/${space.id}/business`}
+                      label="Business Admin"
+                      onClick={() => setSpaceMoreOpen(false)}
+                    />
+                  )}
                   {businessIndustry === 'retail' && (
                     <ShortcutButton label="Purchase List" onClick={() => { setSpaceMoreOpen(false); setTool('shopping'); }} />
                   )}
