@@ -386,9 +386,14 @@ export function SpaceDetailsPage() {
         || (
           nextSpace.type === 'sme'
           && nextSpace.ownerId === user.uid
+          && requestedSection === 'budgets'
+        )
+        || (
+          nextSpace.type === 'sme'
+          && canReadSmeFinancials
           && [
-            'budgets',
             'bills',
+            'instalments',
           ].includes(
             requestedSection || '',
           )
@@ -2071,10 +2076,30 @@ function SpaceOverview({
   const quickLinks: QuickItem[] = canViewFinancials ? [
     { key: 'money', section: 'money', icon: '↔', title: 'Money activity', detail: 'See only money activity saved in this Space.' },
     { key: 'budgets', section: 'budgets', icon: '▤', title: space.type === 'trip' ? 'Trip budget' : space.type === 'event' ? 'Event budget' : space.type === 'project' ? 'Project budget' : space.type === 'property' ? 'Property budget' : space.type === 'vehicle' ? 'Vehicle budget' : space.type === 'asset' ? 'Asset budget' : 'Budgets', detail: 'Review budgets connected to this Space.' },
-    { key: 'bills', section: 'bills', icon: '◷', title: 'Bills & instalments', detail: 'See only bills and instalments for this Space.' },
+    { key: 'bills', section: 'bills', icon: '◷', title: 'Bills', detail: 'See bills assigned to this Space.' },
     { key: 'reports', section: 'reports', icon: '⌁', title: 'Money reports', detail: 'Weekly, monthly, yearly or custom dates for this Space.' },
     { key: 'calendar', section: 'calendar', icon: '▦', title: 'Calendar', detail: 'See dates and deadlines belonging to this Space.' },
   ] : [];
+
+  if (space.type === 'sme' && canViewFinancials) {
+    const billIndex = quickLinks.findIndex(
+      (item) => item.key === 'bills',
+    );
+
+    if (billIndex >= 0) {
+      quickLinks.splice(
+        billIndex + 1,
+        0,
+        {
+          key: 'instalments',
+          section: 'instalments',
+          icon: '▥',
+          title: 'Instalments',
+          detail: 'See instalment totals, payments, remaining balance and next due date.',
+        },
+      );
+    }
+  }
 
   if (space.type === 'collection') {
     quickLinks.unshift({ key: 'collection', to: `/spaces/${space.id}/collection`, icon: 'C', title: 'Collection inventory', detail: 'Scan, find, label, and organise collectibles.', featured: true });
@@ -2211,10 +2236,7 @@ function SpaceOverview({
                     ? 'Asset budget'
                     : 'Budgets',
     goals: 'Goals',
-    bills:
-      space.type === 'personal'
-        ? 'Bills'
-        : 'Bills & instalments',
+    bills: 'Bills',
     instalments: 'Instalments',
     reports: 'Money reports',
     calendar: 'Calendar',
@@ -2692,19 +2714,39 @@ function SpaceOverview({
         )}
 
         {space.type === 'sme'
-          && space.ownerId === user?.uid
+          && canViewFinancials
           && section === 'bills'
           && (
             <Suspense
               fallback={
                 <div className="loading-panel">
-                  Loading Business Bills & Instalments…
+                  Loading Business Bills…
                 </div>
               }
             >
               <EmbeddedCommitmentsPage
                 embedded
                 spaceIdOverride={space.id}
+                typeOverride="bill"
+              />
+            </Suspense>
+          )}
+
+        {space.type === 'sme'
+          && canViewFinancials
+          && section === 'instalments'
+          && (
+            <Suspense
+              fallback={
+                <div className="loading-panel">
+                  Loading Business Instalments…
+                </div>
+              }
+            >
+              <EmbeddedCommitmentsPage
+                embedded
+                spaceIdOverride={space.id}
+                typeOverride="instalment"
               />
             </Suspense>
           )}

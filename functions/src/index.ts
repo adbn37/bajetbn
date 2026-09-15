@@ -8279,6 +8279,350 @@ export const recordGoalContribution = onCall({ region }, async request=>{const u
 
 export const reverseGoalContribution = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const contributionId=stringValue(request.data?.contributionId,'Contribution ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const originalRef=db.collection('goalContributions').doc(contributionId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,o]=await Promise.all([transaction.get(commandRef),transaction.get(originalRef)]);if(c.exists)return c.data()?.result;if(!o.exists)throw new HttpsError('not-found','Goal contribution not found.');const original=o.data();if(original?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this contribution.');if(original?.status!=='posted'||original?.reversalOf||original?.reversedBy)throw new HttpsError('failed-precondition','This contribution cannot be reversed.');const goalRef=db.collection('goals').doc(String(original?.goalId));const goal=await transaction.get(goalRef);if(!goal.exists)throw new HttpsError('not-found','Goal not found.');const amount=positiveMoney(original?.amountMinor);const next=Math.max(0,Number(goal.data()?.currentMinor||0)-amount);const reversalRef=db.collection('goalContributions').doc();const now=FieldValue.serverTimestamp();const result={contributionId:reversalRef.id,originalContributionId:contributionId};transaction.create(reversalRef,{displayId:displayId('GCT'),ownerId:uid,goalId:original?.goalId,amountMinor:amount,currency:original?.currency,contributionDate:new Date().toISOString().slice(0,10),note:`Reversal of ${original?.displayId||contributionId}`,status:'posted',reversalOf:contributionId,reversedBy:null,createdAt:now,updatedAt:now});transaction.update(originalRef,{status:'reversed',reversedBy:reversalRef.id,updatedAt:now});transaction.update(goalRef,{currentMinor:next,status:next>=Number(goal.data()?.targetMinor||0)?'completed':'active',updatedAt:now});transaction.create(commandRef,{uid,kind:'reverse_goal_contribution',idempotencyKey:key,result,createdAt:now});return result;});});
 
+
+export const getSpaceCommitmentWorkspace = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Space ID',
+        80,
+      );
+
+    const spaceSnapshot =
+      await db.collection(
+        'spaces',
+      ).doc(
+        spaceId,
+      ).get();
+
+    if (
+      !spaceSnapshot.exists
+      || spaceSnapshot.data()?.archivedAt
+    ) {
+      throw new HttpsError(
+        'not-found',
+        'Space not found.',
+      );
+    }
+
+    await requireActiveSpaceMember(
+      spaceId,
+      uid,
+    );
+
+    const space =
+      spaceSnapshot.data()
+      || {};
+
+    const isOwner =
+      String(
+        space.ownerId
+        || '',
+      ) === uid;
+
+    const commitmentSnapshot =
+      await db.collection(
+        'commitments',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get();
+
+    const commitmentDocs =
+      commitmentSnapshot.docs
+        .filter(
+          (item) => {
+            const data =
+              item.data()
+              || {};
+
+            return (
+              !data.archivedAt
+              && !data.stoppedAt
+            );
+          },
+        );
+
+    const paymentSnapshots =
+      await Promise.all(
+        commitmentDocs.map(
+          (item) =>
+            db.collection(
+              'commitmentPayments',
+            )
+              .where(
+                'commitmentId',
+                '==',
+                item.id,
+              )
+              .get(),
+        ),
+      );
+
+    const commitments =
+      commitmentDocs
+        .map(
+          (item) => {
+            const data =
+              item.data()
+              || {};
+
+            if (isOwner) {
+              return {
+                id:
+                  item.id,
+                ...data,
+              };
+            }
+
+            return {
+              id:
+                item.id,
+              displayId:
+                String(
+                  data.displayId
+                  || item.id,
+                ),
+              ownerId:
+                String(
+                  data.ownerId
+                  || '',
+                ),
+              type:
+                data.type,
+              name:
+                String(
+                  data.name
+                  || 'Commitment',
+                ),
+              payee:
+                String(
+                  data.payee
+                  || '',
+                ),
+              spaceId,
+              accountId:
+                null,
+              categoryId:
+                String(
+                  data.categoryId
+                  || '',
+                ),
+              categoryName:
+                String(
+                  data.categoryName
+                  || 'Expense',
+                ),
+              categoryIcon:
+                String(
+                  data.categoryIcon
+                  || '',
+                ),
+              categoryColor:
+                String(
+                  data.categoryColor
+                  || '',
+                ),
+              amountMinor:
+                nonNegativeMoney(
+                  data.amountMinor
+                  || 0,
+                ),
+              totalAmountMinor:
+                data.totalAmountMinor == null
+                  ? null
+                  : nonNegativeMoney(
+                      data.totalAmountMinor,
+                    ),
+              amountPaidMinor:
+                nonNegativeMoney(
+                  data.amountPaidMinor
+                  || 0,
+                ),
+              sharedCycleDueDate:
+                data.sharedCycleDueDate
+                || null,
+              sharedAssignedMinor:
+                nonNegativeMoney(
+                  data.sharedAssignedMinor
+                  || 0,
+                ),
+              sharedSettledMinor:
+                nonNegativeMoney(
+                  data.sharedSettledMinor
+                  || 0,
+                ),
+              currency:
+                String(
+                  data.currency
+                  || space.currency
+                  || 'BND',
+                ),
+              frequency:
+                data.frequency,
+              startDate:
+                String(
+                  data.startDate
+                  || '',
+                ),
+              nextDueDate:
+                data.nextDueDate
+                || null,
+              endDate:
+                data.endDate
+                || null,
+              reminderDays:
+                Number(
+                  data.reminderDays
+                  || 0,
+                ),
+              status:
+                data.status,
+              note:
+                '',
+              archivedAt:
+                null,
+              stoppedAt:
+                null,
+              stoppedPreviousNextDueDate:
+                null,
+            };
+          },
+        )
+        .sort(
+          (a, b) =>
+            String(
+              a.nextDueDate
+              || '9999-12-31',
+            ).localeCompare(
+              String(
+                b.nextDueDate
+                || '9999-12-31',
+              ),
+            ),
+        );
+
+    const payments =
+      paymentSnapshots
+        .flatMap(
+          (snapshot) =>
+            snapshot.docs.map(
+              (item) => {
+                const data =
+                  item.data()
+                  || {};
+
+                if (isOwner) {
+                  return {
+                    id:
+                      item.id,
+                    ...data,
+                  };
+                }
+
+                return {
+                  id:
+                    item.id,
+                  displayId:
+                    String(
+                      data.displayId
+                      || item.id,
+                    ),
+                  ownerId:
+                    String(
+                      data.ownerId
+                      || '',
+                    ),
+                  commitmentId:
+                    String(
+                      data.commitmentId
+                      || '',
+                    ),
+                  transactionId:
+                    null,
+                  amountMinor:
+                    nonNegativeMoney(
+                      data.amountMinor
+                      || 0,
+                    ),
+                  currency:
+                    String(
+                      data.currency
+                      || space.currency
+                      || 'BND',
+                    ),
+                  paymentDate:
+                    String(
+                      data.paymentDate
+                      || '',
+                    ),
+                  paymentMethod:
+                    data.paymentMethod
+                    || null,
+                  paymentMethodLabel:
+                    data.paymentMethodLabel
+                    || null,
+                  dueDateApplied:
+                    data.dueDateApplied
+                    || null,
+                  previousNextDueDate:
+                    data.previousNextDueDate
+                    || null,
+                  previousStatus:
+                    data.previousStatus
+                    || 'active',
+                  source:
+                    data.source
+                    || 'direct',
+                  sharedBillAssignmentId:
+                    null,
+                  sharedBillPaymentId:
+                    null,
+                  paidByUid:
+                    data.paidByUid
+                    || null,
+                  status:
+                    data.status
+                    || 'posted',
+                  reversedBy:
+                    null,
+                };
+              },
+            ),
+        )
+        .sort(
+          (a, b) =>
+            String(
+              b.paymentDate
+              || '',
+            ).localeCompare(
+              String(
+                a.paymentDate
+                || '',
+              ),
+            ),
+        );
+
+    return {
+      spaceId,
+      isOwner,
+      commitments,
+      payments,
+    };
+  },
+);
+
+
 export const createCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const type=oneOf(request.data?.type,commitmentTypes,'commitment type');const name=stringValue(request.data?.name,'Commitment name',80);const payee=optionalString(request.data?.payee,120);const spaceId=stringValue(request.data?.spaceId,'Space');const accountId=optionalString(request.data?.accountId,80)||null;const categoryId=stringValue(request.data?.categoryId,'Category ID',80);const amountMinor=positiveMoney(request.data?.amountMinor);const totalAmountMinor=type==='instalment'?positiveMoney(request.data?.totalAmountMinor):null;if(type==='instalment'&&Number(totalAmountMinor)<amountMinor)throw new HttpsError('invalid-argument','Instalment total must be at least one payment amount.');const frequency=oneOf(request.data?.frequency,commitmentFrequencies,'frequency');const startDate=localDate(request.data?.startDate,'Start date');const endDate=optionalLocalDate(request.data?.endDate,'End date');const reminderDays=integerBetween(request.data?.reminderDays,'Reminder days',0,60);const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);
   const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const spaceRef=db.collection('spaces').doc(spaceId);const memberRef=db.collection('spaceMembers').doc(`${spaceId}_${uid}`);const accountRef=accountId?db.collection('accounts').doc(accountId):null;const categoryRef=categoryId.startsWith('custom-')?db.collection('categories').doc(categoryId):null;

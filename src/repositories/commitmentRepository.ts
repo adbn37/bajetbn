@@ -68,6 +68,34 @@ export async function listCommitmentPaymentsForCommitment(
     );
 }
 
+export async function getSpaceCommitmentWorkspace(
+  spaceId: string,
+): Promise<{
+  spaceId: string;
+  isOwner: boolean;
+  commitments: Commitment[];
+  payments: CommitmentPayment[];
+}> {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'getSpaceCommitmentWorkspace',
+  );
+
+  const result =
+    await call({
+      spaceId,
+    });
+
+  return result.data as {
+    spaceId: string;
+    isOwner: boolean;
+    commitments: Commitment[];
+    payments: CommitmentPayment[];
+  };
+}
+
 export async function listCommitmentPayments(uid: string): Promise<CommitmentPayment[]> {
   const { db } = requireFirebase();
   const snapshot = await getDocs(query(collection(db, 'commitmentPayments'), where('ownerId', '==', uid)));
