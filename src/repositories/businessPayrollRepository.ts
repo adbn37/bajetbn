@@ -133,6 +133,7 @@ export async function listBusinessEmployees(
   spaceId: string,
 ): Promise<BusinessEmployee[]> {
   const { db } = requireFirebase();
+  const uid = requireUid();
 
   const snapshot =
     await getDocs(
@@ -140,6 +141,11 @@ export async function listBusinessEmployees(
         collection(
           db,
           'businessEmployees',
+        ),
+        where(
+          'ownerId',
+          '==',
+          uid,
         ),
         where(
           'spaceId',
