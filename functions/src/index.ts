@@ -5847,6 +5847,918 @@ async function reviewPosReservationCancellationApproval(input: {
   });
 }
 
+async function reviewCommitmentPaymentApproval(
+  input: {
+    uid: string;
+    approvalId: string;
+    decision:
+      | 'approved'
+      | 'rejected';
+    reviewNote: string;
+    key: string;
+  },
+) {
+  const approvalRef =
+    db.collection(
+      'financialApprovalRequests',
+    ).doc(
+      input.approvalId,
+    );
+
+  const approvalPre =
+    await approvalRef.get();
+
+  if (!approvalPre.exists) {
+    throw new HttpsError(
+      'not-found',
+      'Approval request was not found.',
+    );
+  }
+
+  const approvalPreData =
+    approvalPre.data()
+    || {};
+
+  const commitmentId =
+    stringValue(
+      approvalPreData.commitmentId,
+      'Commitment ID',
+      100,
+    );
+
+  const spaceId =
+    stringValue(
+      approvalPreData.spaceId,
+      'Business Space',
+      100,
+    );
+
+  const requestedBy =
+    stringValue(
+      approvalPreData.requestedBy,
+      'Requester',
+      160,
+    );
+
+  const accountId =
+    stringValue(
+      approvalPreData.accountId,
+      'Account',
+      100,
+    );
+
+  const commitmentRef =
+    db.collection(
+      'commitments',
+    ).doc(
+      commitmentId,
+    );
+
+  const spaceRef =
+    db.collection(
+      'spaces',
+    ).doc(
+      spaceId,
+    );
+
+  const memberRef =
+    db.collection(
+      'spaceMembers',
+    ).doc(
+      spaceId
+      + '_'
+      + requestedBy,
+    );
+
+  const accountRef =
+    db.collection(
+      'accounts',
+    ).doc(
+      accountId,
+    );
+
+  const accessRef =
+    db.collection(
+      'accountAccess',
+    ).doc(
+      accountAccessDocumentId(
+        accountId,
+        requestedBy,
+      ),
+    );
+
+  const commandRef =
+    db.collection(
+      'financialCommands',
+    ).doc(
+      commandId(
+        input.uid,
+        input.key,
+      ),
+    );
+
+  const budgetCandidateRefs =
+    (
+      await db.collection(
+        'budgets',
+      )
+        .where(
+          'ownerId',
+          '==',
+          input.uid,
+        )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get()
+    ).docs.map(
+      (item) =>
+        item.ref,
+    );
+
+  return db.runTransaction(
+    async (transaction) => {
+      const commandSnapshot =
+        await transaction.get(
+          commandRef,
+        );
+
+      if (commandSnapshot.exists) {
+        return commandSnapshot.data()?.result;
+      }
+
+      const approvalSnapshot =
+        await transaction.get(
+          approvalRef,
+        );
+
+      if (!approvalSnapshot.exists) {
+        throw new HttpsError(
+          'not-found',
+          'Approval request was not found.',
+        );
+      }
+
+      const approval =
+        approvalSnapshot.data()
+        || {};
+
+      if (
+        String(
+          approval.ownerId
+          || '',
+        ) !== input.uid
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only the Account Owner can review this request.',
+        );
+      }
+
+      if (
+        approval.status
+        !== 'pending'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This approval request has already been reviewed.',
+        );
+      }
+
+      if (
+        ![
+          'bill_payment',
+          'instalment_payment',
+        ].includes(
+          String(
+            approval.action
+            || '',
+          ),
+        )
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This is not a bill or instalment payment approval.',
+        );
+      }
+
+      const now =
+        FieldValue.serverTimestamp();
+
+      if (
+        input.decision
+        === 'rejected'
+      ) {
+        transaction.update(
+          approvalRef,
+          {
+            status:
+              'rejected',
+            reviewNote:
+              input.reviewNote,
+            reviewedBy:
+              input.uid,
+            reviewedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        createNotification(
+          transaction,
+          {
+            uid:
+              requestedBy,
+            spaceId,
+            type:
+              'financial_approval_rejected',
+            title:
+              approval.action
+                === 'instalment_payment'
+                  ? 'Instalment payment rejected'
+                  : 'Bill payment rejected',
+            message:
+              'The Account Owner rejected the requested payment.',
+            targetPath:
+              '/transactions?approvals=1',
+            actionLabel:
+              'View request',
+            now,
+          },
+        );
+
+        const result = {
+          approvalId:
+            input.approvalId,
+          status:
+            'rejected',
+          commitmentId,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid:
+              input.uid,
+            kind:
+              'review_commitment_payment_approval',
+            idempotencyKey:
+              input.key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      }
+
+      const [
+        commitmentSnapshot,
+        spaceSnapshot,
+        memberSnapshot,
+        accountSnapshot,
+        accessSnapshot,
+        budgetSnapshots,
+      ] =
+        await Promise.all([
+          transaction.get(
+            commitmentRef,
+          ),
+          transaction.get(
+            spaceRef,
+          ),
+          transaction.get(
+            memberRef,
+          ),
+          transaction.get(
+            accountRef,
+          ),
+          transaction.get(
+            accessRef,
+          ),
+          Promise.all(
+            budgetCandidateRefs.map(
+              (ref) =>
+                transaction.get(
+                  ref,
+                ),
+            ),
+          ),
+        ]);
+
+      if (
+        !spaceSnapshot.exists
+        || spaceSnapshot.data()?.archivedAt
+        || spaceSnapshot.data()?.type !== 'sme'
+        || String(
+            spaceSnapshot.data()?.ownerId
+            || '',
+          ) !== input.uid
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The Business Space is unavailable or ownership has changed.',
+        );
+      }
+
+      if (
+        !memberSnapshot.exists
+        || [
+          'suspended',
+          'removed',
+        ].includes(
+          String(
+            memberSnapshot.data()?.status
+            || '',
+          ),
+        )
+        || memberSnapshot.data()?.canUseAccounts
+          !== true
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The requester no longer has active account-use permission.',
+        );
+      }
+
+      if (
+        !accessSnapshot.exists
+        || !accessSpaceIds(
+            accessSnapshot.data(),
+            'usableSpaceIds',
+          ).includes(
+            spaceId,
+          )
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The requester no longer has permission to use this account.',
+        );
+      }
+
+      if (!accountSnapshot.exists) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The payment account is unavailable.',
+        );
+      }
+
+      const account =
+        assertAccount(
+          accountSnapshot.data(),
+          input.uid,
+          'Account',
+        );
+
+      if (
+        accountSnapshot.data()?.classification
+          !== 'business'
+        || !accountLinkedToBusinessSpace(
+            accountSnapshot.data() || {},
+            spaceId,
+          )
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The payment account is no longer linked to this Business Space.',
+        );
+      }
+
+      if (!commitmentSnapshot.exists) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The bill or instalment is unavailable.',
+        );
+      }
+
+      const commitment =
+        commitmentSnapshot.data()
+        || {};
+
+      if (
+        commitment.ownerId
+          !== input.uid
+        || commitment.spaceId
+          !== spaceId
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The commitment no longer belongs to this Account Owner and Business Space.',
+        );
+      }
+
+      if (
+        commitment.archivedAt
+        || commitment.stoppedAt
+        || commitment.status
+          === 'completed'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The bill or instalment is no longer active.',
+        );
+      }
+
+      if (
+        Number(
+          commitment.sharedAssignedMinor
+          || 0,
+        )
+        > Number(
+            commitment.sharedSettledMinor
+            || 0,
+          )
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This commitment now has open shared bill assignments.',
+        );
+      }
+
+      const commitmentType =
+        oneOf(
+          commitment.type,
+          commitmentTypes,
+          'commitment type',
+        );
+
+      const expectedAction =
+        commitmentType
+          === 'instalment'
+            ? 'instalment_payment'
+            : 'bill_payment';
+
+      if (
+        approval.action
+        !== expectedAction
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The commitment type changed after this approval was requested.',
+        );
+      }
+
+      const currentDueDate =
+        commitment.nextDueDate
+        || commitment.startDate
+        || null;
+
+      const requestedDueDate =
+        approval.dueDateApplied
+        || null;
+
+      if (
+        currentDueDate
+        !== requestedDueDate
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This bill or instalment has moved to another payment cycle. Request a new payment approval.',
+        );
+      }
+
+      if (
+        account.currency
+        !== commitment.currency
+        || account.currency
+          !== approval.currency
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Account and commitment currencies no longer match.',
+        );
+      }
+
+      const amountMinor =
+        positiveMoney(
+          approval.amountMinor,
+        );
+
+      if (
+        commitmentType
+        === 'instalment'
+      ) {
+        const remaining =
+          Math.max(
+            0,
+            Number(
+              commitment.totalAmountMinor
+              || 0,
+            )
+            - Number(
+                commitment.amountPaidMinor
+                || 0,
+              ),
+          );
+
+        if (
+          amountMinor
+          > remaining
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The remaining instalment balance is now lower than this payment request.',
+          );
+        }
+      }
+
+      const paymentDate =
+        localDate(
+          approval.transactionDate,
+          'Payment date',
+        );
+
+      const {
+        paymentMethod,
+        paymentMethodLabel,
+      } =
+        paymentMethodValues(
+          approval,
+        );
+
+      const categoryId =
+        stringValue(
+          commitment.categoryId,
+          'Category ID',
+          100,
+        );
+
+      const budgetIds =
+        matchingBudgetIds(
+          budgetSnapshots,
+          {
+            spaceId,
+            categoryId,
+            transactionDate:
+              paymentDate,
+          },
+        );
+
+      const transactionRef =
+        db.collection(
+          'transactions',
+        ).doc();
+
+      const paymentRef =
+        db.collection(
+          'commitmentPayments',
+        ).doc();
+
+      const delta =
+        accountEffect(
+          account.type,
+          'out',
+          amountMinor,
+        );
+
+      updateAccountBalance(
+        transaction,
+        accountRef,
+        account,
+        delta,
+      );
+
+      const ledgerEntryId =
+        createLedgerEntry(
+          transaction,
+          {
+            accountId,
+            ownerId:
+              input.uid,
+            spaceId,
+            transactionId:
+              transactionRef.id,
+            entryType:
+              'commitment_payment',
+            amountMinor:
+              delta,
+            currency:
+              account.currency,
+            idempotencyKey:
+              input.key,
+            now,
+          },
+        );
+
+      if (budgetIds.length) {
+        updateBudgetsSpent(
+          transaction,
+          budgetSnapshots,
+          budgetIds,
+          amountMinor,
+        );
+      }
+
+      const previousNextDueDate =
+        commitment.nextDueDate
+        ?? commitment.startDate
+        ?? null;
+
+      const previousStatus =
+        commitment.status
+          === 'completed'
+            ? 'completed'
+            : 'active';
+
+      const nextPaid =
+        Number(
+          commitment.amountPaidMinor
+          || 0,
+        )
+        + amountMinor;
+
+      let nextDueDate =
+        addFrequency(
+          String(
+            previousNextDueDate
+            || paymentDate,
+          ),
+          oneOf(
+            commitment.frequency,
+            commitmentFrequencies,
+            'frequency',
+          ),
+        );
+
+      let nextStatus:
+        | 'active'
+        | 'completed' =
+        'active';
+
+      if (
+        commitmentType
+          === 'instalment'
+        && nextPaid
+          >= Number(
+            commitment.totalAmountMinor
+            || 0,
+          )
+      ) {
+        nextStatus =
+          'completed';
+
+        nextDueDate =
+          null;
+      } else if (
+        commitmentType
+          === 'bill'
+        && commitment.frequency
+          === 'once'
+      ) {
+        nextStatus =
+          'completed';
+
+        nextDueDate =
+          null;
+      } else if (
+        nextDueDate
+        && commitment.endDate
+        && nextDueDate
+          > commitment.endDate
+      ) {
+        nextStatus =
+          'completed';
+
+        nextDueDate =
+          null;
+      }
+
+      transaction.create(
+        transactionRef,
+        {
+          displayId:
+            displayId('TXN'),
+          ownerId:
+            input.uid,
+          createdBy:
+            requestedBy,
+          approvedBy:
+            input.uid,
+          financialApprovalId:
+            input.approvalId,
+          type:
+            'expense',
+          status:
+            'posted',
+          spaceId,
+          accountId,
+          destinationAccountId:
+            null,
+          amountMinor,
+          currency:
+            account.currency,
+          category:
+            String(
+              commitment.categoryName
+              || 'Expense',
+            ),
+          categoryId,
+          categoryIcon:
+            String(
+              commitment.categoryIcon
+              || 'circle',
+            ),
+          categoryColor:
+            String(
+              commitment.categoryColor
+              || 'blue',
+            ),
+          categoryScope:
+            'business',
+          categoryIsSystem:
+            !categoryId.startsWith(
+              'custom-',
+            ),
+          counterparty:
+            commitment.payee
+            || commitment.name,
+          note:
+            optionalString(
+              approval.note,
+              500,
+            )
+            || 'Payment for '
+            + String(
+                commitment.name
+                || 'commitment',
+              ),
+          paymentMethod,
+          paymentMethodLabel,
+          transactionDate:
+            paymentDate,
+          reversalOf:
+            null,
+          reversedBy:
+            null,
+          budgetIds,
+          commitmentId,
+          commitmentPaymentId:
+            paymentRef.id,
+          createdAt:
+            now,
+          postedAt:
+            now,
+          updatedAt:
+            now,
+        },
+      );
+
+      transaction.create(
+        paymentRef,
+        {
+          displayId:
+            displayId('PAY'),
+          ownerId:
+            input.uid,
+          commitmentId,
+          transactionId:
+            transactionRef.id,
+          amountMinor,
+          currency:
+            account.currency,
+          paymentDate,
+          paymentMethod,
+          paymentMethodLabel,
+          dueDateApplied:
+            previousNextDueDate,
+          previousNextDueDate,
+          previousStatus,
+          source:
+            'direct',
+          sharedBillAssignmentId:
+            null,
+          sharedBillPaymentId:
+            null,
+          paidByUid:
+            requestedBy,
+          status:
+            'posted',
+          reversedBy:
+            null,
+          financialApprovalId:
+            input.approvalId,
+          approvedBy:
+            input.uid,
+          createdAt:
+            now,
+          updatedAt:
+            now,
+        },
+      );
+
+      transaction.update(
+        commitmentRef,
+        {
+          accountId,
+          amountPaidMinor:
+            nextPaid,
+          nextDueDate,
+          status:
+            nextStatus,
+          sharedCycleDueDate:
+            nextDueDate,
+          sharedAssignedMinor:
+            0,
+          sharedSettledMinor:
+            0,
+          updatedAt:
+            now,
+        },
+      );
+
+      transaction.update(
+        approvalRef,
+        {
+          status:
+            'approved',
+          transactionId:
+            transactionRef.id,
+          commitmentPaymentId:
+            paymentRef.id,
+          ledgerEntryIds:
+            [ledgerEntryId],
+          reviewNote:
+            input.reviewNote,
+          reviewedBy:
+            input.uid,
+          reviewedAt:
+            now,
+          updatedAt:
+            now,
+        },
+      );
+
+      createNotification(
+        transaction,
+        {
+          uid:
+            requestedBy,
+          spaceId,
+          type:
+            'financial_approval_approved',
+          title:
+            commitmentType
+              === 'instalment'
+                ? 'Instalment payment approved'
+                : 'Bill payment approved',
+          message:
+            'The Account Owner approved the '
+            + (
+                amountMinor
+                / 100
+              ).toFixed(2)
+            + ' '
+            + account.currency
+            + ' payment for '
+            + String(
+                commitment.name
+                || 'this commitment',
+              )
+            + '.',
+          targetPath:
+            '/transactions?approvals=1',
+          actionLabel:
+            'View approval',
+          now,
+        },
+      );
+
+      const result = {
+        approvalId:
+          input.approvalId,
+        status:
+          'approved',
+        commitmentId,
+        commitmentPaymentId:
+          paymentRef.id,
+        transactionId:
+          transactionRef.id,
+      };
+
+      transaction.create(
+        commandRef,
+        {
+          uid:
+            input.uid,
+          kind:
+            'review_commitment_payment_approval',
+          idempotencyKey:
+            input.key,
+          result,
+          createdAt:
+            now,
+        },
+      );
+
+      return result;
+    },
+  );
+}
+
 export const reviewFinancialApprovalRequest = onCall(
   { region },
   async (request) => {
@@ -5916,6 +6828,19 @@ export const reviewFinancialApprovalRequest = onCall(
         'permission-denied',
         'Only the Account Owner can approve or reject this request.',
       );
+    }
+
+    if (
+      approvalPreData.action === 'bill_payment'
+      || approvalPreData.action === 'instalment_payment'
+    ) {
+      return reviewCommitmentPaymentApproval({
+        uid,
+        approvalId,
+        decision,
+        reviewNote,
+        key,
+      });
     }
 
     if (
@@ -9040,6 +9965,543 @@ export const updateCommitment = onCall(
 );
 
 export const archiveCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const ref=db.collection('commitments').doc(commitmentId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,i]=await Promise.all([transaction.get(commandRef),transaction.get(ref)]);if(c.exists)return c.data()?.result;if(!i.exists)throw new HttpsError('not-found','Commitment not found.');if(i.data()?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');const now=FieldValue.serverTimestamp();const result={commitmentId,archived:true};transaction.update(ref,{archivedAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'archive_commitment',idempotencyKey:key,result,createdAt:now});return result;});});
+
+export const requestBusinessCommitmentPayment = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const commitmentId =
+      stringValue(
+        request.data?.commitmentId,
+        'Commitment ID',
+        100,
+      );
+
+    const accountId =
+      stringValue(
+        request.data?.accountId,
+        'Account',
+        100,
+      );
+
+    const amountMinor =
+      positiveMoney(
+        request.data?.amountMinor,
+      );
+
+    const paymentDate =
+      localDate(
+        request.data?.paymentDate,
+        'Payment date',
+      );
+
+    const {
+      paymentMethod,
+      paymentMethodLabel,
+    } =
+      paymentMethodValues(
+        request.data || {},
+      );
+
+    const note =
+      optionalString(
+        request.data?.note,
+        500,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const commitmentRef =
+      db.collection(
+        'commitments',
+      ).doc(
+        commitmentId,
+      );
+
+    const accountRef =
+      db.collection(
+        'accounts',
+      ).doc(
+        accountId,
+      );
+
+    const preAccountSnapshot =
+      await accountRef.get();
+
+    if (!preAccountSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Account was not found.',
+      );
+    }
+
+    const financialOwnerId =
+      String(
+        preAccountSnapshot.data()?.ownerId
+        || '',
+      );
+
+    if (!financialOwnerId) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Account owner is unavailable.',
+      );
+    }
+
+    if (financialOwnerId === uid) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The Account Owner should save this payment directly.',
+      );
+    }
+
+    const commitmentPre =
+      await commitmentRef.get();
+
+    if (!commitmentPre.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Commitment was not found.',
+      );
+    }
+
+    const spaceId =
+      stringValue(
+        commitmentPre.data()?.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const duplicateSnapshot =
+      await db.collection(
+        'financialApprovalRequests',
+      )
+        .where(
+          'commitmentId',
+          '==',
+          commitmentId,
+        )
+        .get();
+
+    if (
+      duplicateSnapshot.docs.some(
+        (item) =>
+          item.data()?.status === 'pending',
+      )
+    ) {
+      throw new HttpsError(
+        'already-exists',
+        'This bill or instalment already has a payment waiting for Account Owner approval.',
+      );
+    }
+
+    const spaceRef =
+      db.collection(
+        'spaces',
+      ).doc(
+        spaceId,
+      );
+
+    const memberRef =
+      db.collection(
+        'spaceMembers',
+      ).doc(
+        spaceId
+        + '_'
+        + uid,
+      );
+
+    const approvalRef =
+      db.collection(
+        'financialApprovalRequests',
+      ).doc();
+
+    return db.runTransaction(
+      async (transaction) => {
+        const commandSnapshot =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (commandSnapshot.exists) {
+          return commandSnapshot.data()?.result;
+        }
+
+        const [
+          commitmentSnapshot,
+          spaceSnapshot,
+          memberSnapshot,
+          accountSnapshot,
+        ] =
+          await Promise.all([
+            transaction.get(
+              commitmentRef,
+            ),
+            transaction.get(
+              spaceRef,
+            ),
+            transaction.get(
+              memberRef,
+            ),
+            transaction.get(
+              accountRef,
+            ),
+          ]);
+
+        if (!commitmentSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Commitment was not found.',
+          );
+        }
+
+        if (
+          !spaceSnapshot.exists
+          || spaceSnapshot.data()?.archivedAt
+          || spaceSnapshot.data()?.type !== 'sme'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The Business Space is unavailable.',
+          );
+        }
+
+        if (
+          !memberSnapshot.exists
+          || [
+            'suspended',
+            'removed',
+          ].includes(
+            String(
+              memberSnapshot.data()?.status
+              || '',
+            ),
+          )
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'You are no longer an active member of this Business Space.',
+          );
+        }
+
+        const commitment =
+          commitmentSnapshot.data()
+          || {};
+
+        if (
+          commitment.ownerId
+            !== financialOwnerId
+          || commitment.spaceId
+            !== spaceId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'This commitment does not belong to the selected Business account owner.',
+          );
+        }
+
+        if (
+          commitment.archivedAt
+          || commitment.stoppedAt
+          || commitment.status
+            === 'completed'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This bill or instalment is not active.',
+          );
+        }
+
+        if (
+          Number(
+            commitment.sharedAssignedMinor
+            || 0,
+          )
+          > Number(
+              commitment.sharedSettledMinor
+              || 0,
+            )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This commitment has open shared bill assignments. Complete or reverse them from Sharing first.',
+          );
+        }
+
+        const account =
+          await assertAccountForSpaceActor(
+            transaction,
+            accountSnapshot,
+            uid,
+            spaceId,
+            spaceSnapshot.data() || {},
+            memberSnapshot.data() || {},
+            'Account',
+          );
+
+        if (
+          account.ownerId
+          !== financialOwnerId
+          || accountSnapshot.data()?.classification
+            !== 'business'
+          || !accountLinkedToBusinessSpace(
+              accountSnapshot.data() || {},
+              spaceId,
+            )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The selected Business account is no longer available for this Space.',
+          );
+        }
+
+        if (
+          account.currency
+          !== commitment.currency
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Account and commitment currencies must match.',
+          );
+        }
+
+        const commitmentType =
+          oneOf(
+            commitment.type,
+            commitmentTypes,
+            'commitment type',
+          );
+
+        if (
+          commitmentType
+          === 'instalment'
+        ) {
+          const remaining =
+            Math.max(
+              0,
+              Number(
+                commitment.totalAmountMinor
+                || 0,
+              )
+              - Number(
+                  commitment.amountPaidMinor
+                  || 0,
+                ),
+            );
+
+          if (
+            amountMinor
+            > remaining
+          ) {
+            throw new HttpsError(
+              'invalid-argument',
+              'Payment cannot exceed the remaining instalment balance.',
+            );
+          }
+        }
+
+        const action =
+          commitmentType
+            === 'instalment'
+              ? 'instalment_payment'
+              : 'bill_payment';
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.create(
+          approvalRef,
+          {
+            displayId:
+              displayId('APR'),
+            ownerId:
+              financialOwnerId,
+            requestedBy:
+              uid,
+            requestedByName:
+              memberSnapshot.data()?.displayName
+              || memberSnapshot.data()?.email
+              || 'Business member',
+            spaceId,
+            spaceName:
+              String(
+                spaceSnapshot.data()?.name
+                || 'Business',
+              ),
+            action,
+            transactionType:
+              'expense',
+            accountId,
+            accountName:
+              String(
+                accountSnapshot.data()?.name
+                || 'Business account',
+              ),
+            destinationAccountId:
+              null,
+            destinationAccountName:
+              null,
+            amountMinor,
+            currency:
+              account.currency,
+            transactionDate:
+              paymentDate,
+            category:
+              String(
+                commitment.categoryName
+                || 'Expense',
+              ),
+            categoryId:
+              String(
+                commitment.categoryId
+                || 'expense-other',
+              ),
+            categoryIcon:
+              String(
+                commitment.categoryIcon
+                || 'circle',
+              ),
+            categoryColor:
+              String(
+                commitment.categoryColor
+                || 'blue',
+              ),
+            categoryScope:
+              'business',
+            categoryIsSystem:
+              !String(
+                commitment.categoryId
+                || '',
+              ).startsWith(
+                'custom-',
+              ),
+            counterparty:
+              String(
+                commitment.payee
+                || commitment.name
+                || 'Bill payment',
+              ),
+            note,
+            labels: [],
+            paymentMethod,
+            paymentMethodLabel,
+            commitmentId,
+            commitmentName:
+              String(
+                commitment.name
+                || 'Commitment',
+              ),
+            commitmentType,
+            commitmentPaymentId:
+              null,
+            dueDateApplied:
+              commitment.nextDueDate
+              || commitment.startDate
+              || null,
+            status:
+              'pending',
+            transactionId:
+              null,
+            ledgerEntryIds: [],
+            reviewNote:
+              null,
+            reviewedBy:
+              null,
+            reviewedAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        createNotification(
+          transaction,
+          {
+            uid:
+              financialOwnerId,
+            spaceId,
+            type:
+              'financial_approval_requested',
+            title:
+              commitmentType
+                === 'instalment'
+                  ? 'Instalment payment needs approval'
+                  : 'Bill payment needs approval',
+            message:
+              (
+                memberSnapshot.data()?.displayName
+                || memberSnapshot.data()?.email
+                || 'A Business member'
+              )
+              + ' requested a '
+              + (commitmentType
+                  === 'instalment'
+                    ? 'instalment'
+                    : 'bill')
+              + ' payment of '
+              + (
+                  amountMinor
+                  / 100
+                ).toFixed(2)
+              + ' '
+              + account.currency
+              + '.',
+            targetPath:
+              '/transactions?approvals=1',
+            actionLabel:
+              'Review request',
+            now,
+          },
+        );
+
+        const result = {
+          status:
+            'pending_approval',
+          approvalId:
+            approvalRef.id,
+          commitmentId,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'request_commitment_payment_approval',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
 
 export const payCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const accountId=stringValue(request.data?.accountId,'Account');const requestedAmount=request.data?.amountMinor==null?null:positiveMoney(request.data?.amountMinor);const paymentDate=localDate(request.data?.paymentDate,'Payment date');const{paymentMethod,paymentMethodLabel}=paymentMethodValues(request.data||{});const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const commitmentRef=db.collection('commitments').doc(commitmentId);const accountRef=db.collection('accounts').doc(accountId);const budgetCandidateRefs=(await db.collection('budgets').where('ownerId','==',uid).get()).docs.map(item=>item.ref);

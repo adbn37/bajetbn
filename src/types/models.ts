@@ -704,6 +704,11 @@ export interface FinancialApprovalRequest {
   labels?: string[];
   paymentMethod?: PaymentMethodCode | null;
   paymentMethodLabel?: string | null;
+  commitmentId?: string | null;
+  commitmentName?: string | null;
+  commitmentType?: CommitmentType | null;
+  commitmentPaymentId?: string | null;
+  dueDateApplied?: string | null;
   sellerId?: string | null;
   sellerName?: string | null;
   payoutDate?: string | null;

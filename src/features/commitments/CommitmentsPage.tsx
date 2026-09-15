@@ -7,7 +7,10 @@ import { PaymentMethodField } from '../../components/PaymentMethodField';
 import { suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_TRANSACTION_CATEGORIES, categoryIconGlyph } from '../categories/defaultCategories';
-import { listAccounts } from '../../repositories/accountRepository';
+import {
+  listAccounts,
+  listAccountsForSpace,
+} from '../../repositories/accountRepository';
 import { listCustomCategories } from '../../repositories/categoryRepository';
 import {
   createCommitment,
@@ -15,6 +18,7 @@ import {
   listAllCommitments,
   listCommitmentPayments,
   payCommitment,
+  requestBusinessCommitmentPayment,
   updateCommitment,
 } from '../../repositories/commitmentRepository';
 import { manageCommitment } from '../../repositories/lifecycleRepository';
@@ -45,7 +49,7 @@ export function CommitmentsPage({
 } = {}) {
   const { user, profile } = useAuth();
   const [items, setItems] = useState<Commitment[]>([]); const [payments, setPayments] = useState<CommitmentPayment[]>([]); const [accounts, setAccounts] = useState<Account[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [categories, setCategories] = useState<TransactionCategory[]>([]);
-  const [editing, setEditing] = useState<Commitment | null>(null); const [paying, setPaying] = useState<Commitment | null>(null); const [showForm, setShowForm] = useState(false); const [typeFilter, setTypeFilter] = useState<'all' | CommitmentType>(typeOverride || 'all'); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
+  const [editing, setEditing] = useState<Commitment | null>(null); const [paying, setPaying] = useState<Commitment | null>(null); const [showForm, setShowForm] = useState(false); const [typeFilter, setTypeFilter] = useState<'all' | CommitmentType>(typeOverride || 'all'); const [busyId, setBusyId] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Commitment, CommitmentLifecycleAction> | null>(null);
   const load = async () => {
     if (!user) return;
@@ -104,9 +108,16 @@ export function CommitmentsPage({
                 targetSpace,
               ];
 
+        const spaceAccounts =
+          targetSpace.type === 'sme'
+            ? await listAccountsForSpace(
+                targetSpace.id,
+              )
+            : nextAccounts;
+
         setItems(nextItems);
         setPayments(nextPayments);
-        setAccounts(nextAccounts);
+        setAccounts(spaceAccounts);
         setSpaces(editableSpaces);
 
         setCategories([
@@ -210,6 +221,17 @@ export function CommitmentsPage({
     !spaceIdOverride
     || currentSpace?.ownerId === user?.uid;
 
+  const canRequestCurrentSpacePayment =
+    canManageCurrentSpace
+    || (
+      currentSpace?.type === 'sme'
+      && accounts.some(
+        (account) =>
+          account.classification === 'business'
+          && account.sharedCanUseAccount === true,
+      )
+    );
+
   const accountsForCommitment = (
     commitment: Commitment,
   ) => {
@@ -227,7 +249,13 @@ export function CommitmentsPage({
         account.currency === commitment.currency
         && (
           businessAccount
-            ? account.classification === 'business'
+            ? (
+                account.classification === 'business'
+                && (
+                  account.ownerId === user?.uid
+                  || account.sharedCanUseAccount === true
+                )
+              )
             : account.classification !== 'business'
         ),
     );
@@ -316,13 +344,14 @@ export function CommitmentsPage({
             )
       }
     />{error && <div className="notice error">{error}</div>}
-    {embedded && !canManageCurrentSpace && <div className="notice"><strong>Space payment history</strong><span>Bills and instalments are visible here, but only the Space owner can edit or pay them.</span></div>}
+    {success && <div className="notice success">{success}</div>}
+    {embedded && !canManageCurrentSpace && <div className="notice"><strong>Space payment history</strong><span>{canRequestCurrentSpacePayment ? 'You can request a payment from a shared Business account. The Account Owner must approve it before any money or commitment balance changes.' : 'Bills and instalments are visible here. Account-use permission is required before you can request a payment.'}</span></div>}
     <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     {!typeOverride && <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>}
-    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} spaceMap={spaceMap} showSpace={!spaceIdOverride} busyId={busyId} onPay={canManageCurrentSpace ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} />
+    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} spaceMap={spaceMap} showSpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} />
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit bill or instalment' : 'Add bill or instalment'} onClose={() => setShowForm(false)}><CommitmentForm item={editing} accounts={accounts} spaces={spaces} categories={categories} lockedSpaceId={spaceIdOverride} typeOverride={typeOverride} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
-    {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accountsForCommitment(paying)} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
+    {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accountsForCommitment(paying)} onSaved={async (status) => { setPaying(null); setSuccess(status === 'pending_approval' ? 'Payment request sent to the Account Owner. No account or commitment balance changes until it is approved.' : 'Payment saved.'); await load(); }} /></Modal>}
   </main>;
 }
 
@@ -881,39 +910,377 @@ function CommitmentForm({
   );
 }
 
-function PaymentForm({ item, accounts, onSaved }: { item: Commitment; accounts: Account[]; onSaved: () => Promise<void> }) {
-  const [accountId, setAccountId] = useState(item.accountId || accounts[0]?.id || '');
-  const available = accounts.filter((account) => account.currency === item.currency);
-  const selectedAccount = available.find((account) => account.id === accountId);
-  const [amount, setAmount] = useState(String((item.type === 'instalment' && item.totalAmountMinor ? Math.min(item.amountMinor, item.totalAmountMinor - item.amountPaidMinor) : item.amountMinor) / 100));
-  const [date, setDate] = useState(today());
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(suggestedPaymentMethod(selectedAccount));
-  const [paymentMethodCustom, setPaymentMethodCustom] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const parsedAmountMinor = useMemo(() => { try { return Math.max(0, toMinorUnits(amount)); } catch { return 0; } }, [amount]);
-  const remainingBefore = item.type === 'instalment' && item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0;
-  const remainingAfter = Math.max(0, remainingBefore - parsedAmountMinor);
-  const submit = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
+function PaymentForm({
+  item,
+  accounts,
+  onSaved,
+}: {
+  item: Commitment;
+  accounts: Account[];
+  onSaved: (
+    status:
+      | 'posted'
+      | 'pending_approval',
+  ) => Promise<void>;
+}) {
+  const { user } =
+    useAuth();
+
+  const initialAccountId =
+    item.accountId
+    && accounts.some(
+      (account) =>
+        account.id === item.accountId,
+    )
+      ? item.accountId
+      : accounts[0]?.id || '';
+
+  const [accountId, setAccountId] =
+    useState(
+      initialAccountId,
+    );
+
+  const available =
+    accounts.filter(
+      (account) =>
+        account.currency
+        === item.currency,
+    );
+
+  const selectedAccount =
+    available.find(
+      (account) =>
+        account.id
+        === accountId,
+    );
+
+  const requiresApproval =
+    Boolean(
+      selectedAccount
+      && user
+      && selectedAccount.ownerId
+        !== user.uid,
+    );
+
+  const [amount, setAmount] =
+    useState(
+      String(
+        (
+          item.type === 'instalment'
+          && item.totalAmountMinor
+            ? Math.min(
+                item.amountMinor,
+                item.totalAmountMinor
+                - item.amountPaidMinor,
+              )
+            : item.amountMinor
+        ) / 100,
+      ),
+    );
+
+  const [date, setDate] =
+    useState(today());
+
+  const [
+    paymentMethod,
+    setPaymentMethod,
+  ] =
+    useState<PaymentMethodCode>(
+      suggestedPaymentMethod(
+        selectedAccount,
+      ),
+    );
+
+  const [
+    paymentMethodCustom,
+    setPaymentMethodCustom,
+  ] =
+    useState('');
+
+  const [note, setNote] =
+    useState('');
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const parsedAmountMinor =
+    useMemo(
+      () => {
+        try {
+          return Math.max(
+            0,
+            toMinorUnits(
+              amount,
+            ),
+          );
+        } catch {
+          return 0;
+        }
+      },
+      [amount],
+    );
+
+  const remainingBefore =
+    item.type === 'instalment'
+    && item.totalAmountMinor
+      ? Math.max(
+          0,
+          item.totalAmountMinor
+          - item.amountPaidMinor,
+        )
+      : 0;
+
+  const remainingAfter =
+    Math.max(
+      0,
+      remainingBefore
+      - parsedAmountMinor,
+    );
+
+  const submit = async (
+    event: FormEvent,
+  ) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+
     try {
-      const amountMinor = toMinorUnits(amount);
-      if (amountMinor <= 0) throw new Error('Enter a payment greater than BND 0.00.');
-      await payCommitment({ commitmentId: item.id, accountId, amountMinor, paymentDate: date, paymentMethod, paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined, note });
-      await onSaved();
-    } catch (nextError) { setError(getErrorMessage(nextError)); }
-    finally { setBusy(false); }
+      if (!selectedAccount) {
+        throw new Error(
+          'Choose an account you are allowed to use.',
+        );
+      }
+
+      const amountMinor =
+        toMinorUnits(
+          amount,
+        );
+
+      if (amountMinor <= 0) {
+        throw new Error(
+          'Enter a payment greater than BND 0.00.',
+        );
+      }
+
+      const input = {
+        commitmentId:
+          item.id,
+        accountId:
+          selectedAccount.id,
+        amountMinor,
+        paymentDate:
+          date,
+        paymentMethod,
+        paymentMethodLabel:
+          paymentMethod === 'other'
+            ? paymentMethodCustom.trim()
+            : undefined,
+        note,
+      };
+
+      if (requiresApproval) {
+        await requestBusinessCommitmentPayment(
+          input,
+        );
+
+        await onSaved(
+          'pending_approval',
+        );
+      } else {
+        await payCommitment(
+          input,
+        );
+
+        await onSaved(
+          'posted',
+        );
+      }
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
   };
-  return <form className="form-stack" onSubmit={submit}>
-    {error && <div className="notice error">{error}</div>}
-    <div className="notice">This saves a payment and updates the selected account balance once.</div>
-    <label>Account used<select value={accountId} onChange={(event) => { const nextId = event.target.value; setAccountId(nextId); setPaymentMethod(suggestedPaymentMethod(available.find((account) => account.id === nextId))); setPaymentMethodCustom(''); }} required>{available.map((account) => <option value={account.id} key={account.id}>{account.name} — {formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
-    <PaymentMethodField value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
-    <label>Amount paid now (BND)<input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" required/><small>The amount you are paying now.</small></label>
-    {item.type === 'instalment' && item.totalAmountMinor && <div className="transaction-preview"><div><span>Amount left before payment</span><strong>{formatMoney(remainingBefore, item.currency)}</strong></div><div><span>Amount left after payment</span><strong>{formatMoney(remainingAfter, item.currency)}</strong></div><small>The amount left cannot go below BND 0.00.</small></div>}
-    <label>Payment date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required/></label>
-    <label>Note<textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2}/></label>
-    <button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Save payment'}</button>
-  </form>;
+
+  return (
+    <form
+      className="form-stack"
+      onSubmit={submit}
+    >
+      {error && (
+        <div className="notice error">
+          {error}
+        </div>
+      )}
+
+      <div className="notice">
+        {requiresApproval
+          ? 'This payment uses a shared Business account. It will stay pending until the Account Owner approves it. Nothing is deducted while waiting.'
+          : 'This saves a payment and updates the selected account balance once.'}
+      </div>
+
+      <label>
+        Account used
+        <select
+          value={accountId}
+          onChange={(event) => {
+            const nextId =
+              event.target.value;
+
+            setAccountId(
+              nextId,
+            );
+
+            setPaymentMethod(
+              suggestedPaymentMethod(
+                available.find(
+                  (account) =>
+                    account.id
+                    === nextId,
+                ),
+              ),
+            );
+
+            setPaymentMethodCustom(
+              '',
+            );
+          }}
+          required
+        >
+          {available.map(
+            (account) => (
+              <option
+                value={account.id}
+                key={account.id}
+              >
+                {account.name}
+                {' — '}
+                {account.sharedCanViewBalance === false
+                  ? 'Balance hidden'
+                  : formatMoney(
+                      account.ledgerBalanceMinor,
+                      account.currency,
+                    )}
+              </option>
+            ),
+          )}
+        </select>
+      </label>
+
+      <PaymentMethodField
+        value={paymentMethod}
+        customLabel={paymentMethodCustom}
+        onChange={(value, custom) => {
+          setPaymentMethod(
+            value,
+          );
+
+          setPaymentMethodCustom(
+            custom,
+          );
+        }}
+      />
+
+      <label>
+        Amount paid now (BND)
+        <input
+          value={amount}
+          onChange={(event) =>
+            setAmount(
+              event.target.value,
+            )
+          }
+          inputMode="decimal"
+          required
+        />
+        <small>
+          The amount you are paying now.
+        </small>
+      </label>
+
+      {item.type === 'instalment'
+        && item.totalAmountMinor
+        && (
+          <div className="transaction-preview">
+            <div>
+              <span>
+                Amount left before payment
+              </span>
+              <strong>
+                {formatMoney(
+                  remainingBefore,
+                  item.currency,
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Amount left after payment
+              </span>
+              <strong>
+                {formatMoney(
+                  remainingAfter,
+                  item.currency,
+                )}
+              </strong>
+            </div>
+
+            <small>
+              The amount left cannot go below BND 0.00.
+            </small>
+          </div>
+        )}
+
+      <label>
+        Payment date
+        <input
+          type="date"
+          value={date}
+          onChange={(event) =>
+            setDate(
+              event.target.value,
+            )
+          }
+          required
+        />
+      </label>
+
+      <label>
+        Note
+        <textarea
+          value={note}
+          onChange={(event) =>
+            setNote(
+              event.target.value,
+            )
+          }
+          rows={2}
+        />
+      </label>
+
+      <button
+        className="button primary full"
+        disabled={
+          busy
+          || !selectedAccount
+        }
+      >
+        {busy
+          ? requiresApproval
+            ? 'Requesting approval…'
+            : 'Saving…'
+          : requiresApproval
+            ? 'Request payment approval'
+            : 'Save payment'}
+      </button>
+    </form>
+  );
 }

@@ -151,6 +151,28 @@ export async function payCommitment(input: { commitmentId: string; accountId: st
   return httpsCallable(functions, 'payCommitment')({ ...input, idempotencyKey: crypto.randomUUID() });
 }
 
+export async function requestBusinessCommitmentPayment(input: {
+  commitmentId: string;
+  accountId: string;
+  amountMinor: number;
+  paymentDate: string;
+  paymentMethod?: PaymentMethodCode;
+  paymentMethodLabel?: string;
+  note?: string;
+}) {
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable(
+    functions,
+    'requestBusinessCommitmentPayment',
+  );
+
+  return call({
+    ...input,
+    idempotencyKey: crypto.randomUUID(),
+  });
+}
+
 export async function listCommitments(uid: string): Promise<Commitment[]> {
   return (await listAllCommitments(uid)).filter((item) => !item.archivedAt && !item.stoppedAt);
 }
