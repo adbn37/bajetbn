@@ -304,17 +304,26 @@ export function BusinessPayrollPage() {
             return;
           }
 
-          const [
+          const nextProfile =
+            await getBusinessProfile(
+              spaceId,
+            );
+
+          setProfile(
             nextProfile,
+          );
+
+          if (!nextProfile) {
+            return;
+          }
+
+          const [
             nextAccounts,
             nextEmployees,
             nextRuns,
             nextPayslips,
           ] =
             await Promise.all([
-              getBusinessProfile(
-                spaceId,
-              ),
               listAccountsForOwnerSpace(
                 user.uid,
                 spaceId,
@@ -331,10 +340,6 @@ export function BusinessPayrollPage() {
                 'payslip',
               ),
             ]);
-
-          setProfile(
-            nextProfile,
-          );
 
           setAccounts(
             nextAccounts,
@@ -1020,7 +1025,11 @@ export function BusinessPayrollPage() {
         <PageHeader
           eyebrow="Business payroll"
           title={space.name}
-          description="Set up the Business Profile before using payroll."
+          description={
+            error
+              ? 'Payroll could not load the Business Profile.'
+              : 'Set up the Business Profile before using payroll.'
+          }
           action={
             <Link
               className="button primary"
@@ -1030,6 +1039,12 @@ export function BusinessPayrollPage() {
             </Link>
           }
         />
+
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
       </main>
     );
   }
