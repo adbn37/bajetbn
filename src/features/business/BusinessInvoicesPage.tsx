@@ -16,7 +16,7 @@ import { Modal } from '../../components/Modal';
 
 import { useAuth } from '../../contexts/AuthContext';
 
-import { listAccountsForOwnerSpace } from '../../repositories/accountRepository';
+import { listAccountsForSpace } from '../../repositories/accountRepository';
 
 import {
   getBusinessProfile,
@@ -27,8 +27,8 @@ import {
   cancelBusinessInvoice,
   createBusinessInvoice,
   issueBusinessInvoice,
+  getBusinessInvoiceWorkspace,
   listBusinessInvoicePayments,
-  listBusinessInvoices,
   recordBusinessInvoicePayment,
   updateBusinessInvoice,
   type BusinessInvoiceInput,
@@ -339,6 +339,12 @@ export function BusinessInvoicesPage() {
   const [invoices, setInvoices] =
     useState<BusinessInvoice[]>([]);
 
+  const [
+    canManageInvoices,
+    setCanManageInvoices,
+  ] =
+    useState(false);
+
   const [payments, setPayments] =
     useState<
       BusinessInvoicePayment[]
@@ -404,6 +410,7 @@ export function BusinessInvoicesPage() {
 
         setLoading(true);
         setError('');
+        setCanManageInvoices(false);
 
         try {
           const nextSpace =
@@ -422,7 +429,7 @@ export function BusinessInvoicesPage() {
             nextProfile,
             nextContacts,
             nextAccounts,
-            nextInvoices,
+            workspace,
           ] = await Promise.all([
             getBusinessProfile(
               spaceId,
@@ -430,12 +437,10 @@ export function BusinessInvoicesPage() {
             listBusinessContacts(
               spaceId,
             ),
-            listAccountsForOwnerSpace(
-              user.uid,
+            listAccountsForSpace(
               spaceId,
             ),
-            listBusinessInvoices(
-              user.uid,
+            getBusinessInvoiceWorkspace(
               spaceId,
             ),
           ]);
@@ -447,11 +452,19 @@ export function BusinessInvoicesPage() {
           );
 
           setAccounts(
-            nextAccounts,
+            nextAccounts.filter(
+              (account) =>
+                account.ownerId === user.uid
+                || account.sharedCanUseAccount === true,
+            ),
           );
 
           setInvoices(
-            nextInvoices,
+            workspace.invoices,
+          );
+
+          setCanManageInvoices(
+            workspace.canManageInvoices === true,
           );
         } catch (nextError) {
           setError(
@@ -550,15 +563,13 @@ export function BusinessInvoicesPage() {
     );
   }
 
-  if (
-    space.ownerId !== user?.uid
-  ) {
+  if (!canManageInvoices) {
     return (
       <main className="page">
         <PageHeader
           eyebrow="Business invoices"
           title={space.name}
-          description="Invoice administration is restricted to the business owner."
+          description="Invoice administration is available to the Business Owner and authorised Business Admins."
           action={
             <Link
               className="button secondary"
@@ -571,9 +582,18 @@ export function BusinessInvoicesPage() {
             </Link>
           }
         />
+
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
       </main>
     );
   }
+
+  const isOwner =
+    space.ownerId === user?.uid;
 
   const openNewInvoice = () => {
     const next =
@@ -786,7 +806,6 @@ export function BusinessInvoicesPage() {
     try {
       const nextPayments =
         await listBusinessInvoicePayments(
-          user.uid,
           invoice.id,
         );
 
@@ -947,6 +966,17 @@ export function BusinessInvoicesPage() {
       {feedback && (
         <div className="notice success">
           {feedback}
+        </div>
+      )}
+
+      {!isOwner && (
+        <div className="notice">
+          <strong>
+            Business Admin invoice access
+          </strong>
+          <span>
+            You can create, edit and issue invoices and record incoming customer payments. Invoice cancellation and financial corrections remain restricted to the Business Owner.
+          </span>
         </div>
       )}
 
@@ -2017,7 +2047,7 @@ export function BusinessInvoicesPage() {
                       </button>
                     )}
 
-                    {(
+                    {isOwner && (
                       invoice.status
                         === 'draft'
                       || (
@@ -2048,7 +2078,7 @@ export function BusinessInvoicesPage() {
           </div>
         )}
       </section>
-      {cancelInvoiceTarget && (
+      {isOwner && cancelInvoiceTarget && (
         <Modal
           title="Cancel invoice"
           onClose={() => {

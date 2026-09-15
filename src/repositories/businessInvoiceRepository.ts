@@ -1,10 +1,3 @@
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-} from 'firebase/firestore';
-
 import { httpsCallable } from 'firebase/functions';
 
 import { requireFirebase } from '../services/firebase';
@@ -42,65 +35,75 @@ function requireOnline() {
   }
 }
 
-export async function listBusinessInvoices(
-  uid: string,
+export async function getBusinessInvoiceWorkspace(
   spaceId: string,
-): Promise<BusinessInvoice[]> {
-  const { db } = requireFirebase();
+): Promise<{
+  ownerId: string;
+  isOwner: boolean;
+  canManageInvoices: boolean;
+  canCancelInvoices: boolean;
+  invoices: BusinessInvoice[];
+}> {
+  const { functions } =
+    requireFirebase();
 
-  const snapshot = await getDocs(
-    query(
-      collection(db, 'businessInvoices'),
-      where('ownerId', '==', uid),
-      where('spaceId', '==', spaceId),
-    ),
-  );
-
-  return snapshot.docs
-    .map(
-      (item) => ({
-        id: item.id,
-        ...item.data(),
-      }) as BusinessInvoice,
-    )
-    .sort(
-      (a, b) =>
-        b.issueDate.localeCompare(
-          a.issueDate,
-        ),
+  const call =
+    httpsCallable(
+      functions,
+      'getBusinessInvoiceWorkspace',
     );
+
+  const result =
+    await call({
+      spaceId,
+    });
+
+  return result.data as {
+    ownerId: string;
+    isOwner: boolean;
+    canManageInvoices: boolean;
+    canCancelInvoices: boolean;
+    invoices: BusinessInvoice[];
+  };
 }
 
+export async function listBusinessInvoices(
+  _uid: string,
+  spaceId: string,
+): Promise<BusinessInvoice[]> {
+  const workspace =
+    await getBusinessInvoiceWorkspace(
+      spaceId,
+    );
+
+  return workspace.invoices;
+}
 export async function listBusinessInvoicePayments(
-  uid: string,
   invoiceId: string,
 ): Promise<BusinessInvoicePayment[]> {
-  const { db } = requireFirebase();
+  const { functions } =
+    requireFirebase();
 
-  const snapshot = await getDocs(
-    query(
-      collection(
-        db,
-        'businessInvoicePayments',
-      ),
-      where('ownerId', '==', uid),
-      where('invoiceId', '==', invoiceId),
-    ),
-  );
-
-  return snapshot.docs
-    .map(
-      (item) => ({
-        id: item.id,
-        ...item.data(),
-      }) as BusinessInvoicePayment,
-    )
-    .sort(
-      (a, b) =>
-        b.paymentDate.localeCompare(
-          a.paymentDate,
-        ),
+  const call =
+    httpsCallable(
+      functions,
+      'getBusinessInvoicePayments',
     );
+
+  const result =
+    await call({
+      invoiceId,
+    });
+
+  return (
+    (
+      result.data as {
+        payments?:
+          BusinessInvoicePayment[];
+      }
+    ).payments
+    || []
+  );
 }
 
 export async function createBusinessInvoice(

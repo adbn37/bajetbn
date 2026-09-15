@@ -2468,9 +2468,104 @@ function assertOwnedInvoiceSpace(
   return data;
 }
 
+function assertInvoiceManagerSpace(
+  data: DocumentData | undefined,
+  member: DocumentData | undefined,
+  uid: string,
+) {
+  if (
+    !data
+    || data.archivedAt
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The SME Space is unavailable.',
+    );
+  }
+
+  if (
+    data.type !== 'sme'
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Business invoices require a Business Space.',
+    );
+  }
+
+  if (
+    data.ownerId === uid
+  ) {
+    return data;
+  }
+
+  if (
+    !member
+    || [
+      'suspended',
+      'removed',
+    ].includes(
+      String(
+        member.status
+        || '',
+      ),
+    )
+    || member.role !== 'admin'
+  ) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the Business Owner or an authorised Business Admin can manage invoices.',
+    );
+  }
+
+  return data;
+}
+
+async function requireInvoiceManagerSpace(
+  spaceId: string,
+  uid: string,
+) {
+  const [
+    spaceSnapshot,
+    memberSnapshot,
+  ] = await Promise.all([
+    db.collection(
+      'spaces',
+    ).doc(
+      spaceId,
+    ).get(),
+
+    db.collection(
+      'spaceMembers',
+    ).doc(
+      spaceId
+      + '_'
+      + uid,
+    ).get(),
+  ]);
+
+  const space =
+    assertInvoiceManagerSpace(
+      spaceSnapshot.data(),
+      memberSnapshot.data(),
+      uid,
+    );
+
+  return {
+    space,
+    ownerId:
+      stringValue(
+        space.ownerId,
+        'Business owner',
+        160,
+      ),
+    isOwner:
+      space.ownerId === uid,
+  };
+}
+
 function assertInvoiceCustomer(
   data: DocumentData | undefined,
-  uid: string,
+  ownerId: string,
   spaceId: string,
 ) {
   if (
@@ -2484,7 +2579,7 @@ function assertInvoiceCustomer(
   }
 
   if (
-    data.ownerId !== uid
+    data.ownerId !== ownerId
     || data.spaceId !== spaceId
     || ![
       'customer',
@@ -6623,6 +6718,181 @@ export const reviewFinancialApprovalRequest = onCall(
   },
 );
 
+export const getBusinessInvoiceWorkspace = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const context =
+      await requireInvoiceManagerSpace(
+        spaceId,
+        uid,
+      );
+
+    const snapshot =
+      await db.collection(
+        'businessInvoices',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get();
+
+    const invoices =
+      snapshot.docs
+        .filter(
+          (item) =>
+            item.data()?.ownerId
+            === context.ownerId,
+        )
+        .map(
+          (item) => ({
+            id:
+              item.id,
+            ...item.data(),
+          }),
+        )
+        .sort(
+          (a, b) =>
+            String(
+              b.issueDate
+              || '',
+            ).localeCompare(
+              String(
+                a.issueDate
+                || '',
+              ),
+            ),
+        );
+
+    return {
+      spaceId,
+      ownerId:
+        context.ownerId,
+      isOwner:
+        context.isOwner,
+      canManageInvoices:
+        true,
+      canCancelInvoices:
+        context.isOwner,
+      invoices,
+    };
+  },
+);
+
+export const getBusinessInvoicePayments = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const invoiceId =
+      stringValue(
+        request.data?.invoiceId,
+        'Invoice',
+        100,
+      );
+
+    const invoiceSnapshot =
+      await db.collection(
+        'businessInvoices',
+      ).doc(
+        invoiceId,
+      ).get();
+
+    if (!invoiceSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Invoice not found.',
+      );
+    }
+
+    const invoice =
+      invoiceSnapshot.data()
+      || {};
+
+    const spaceId =
+      stringValue(
+        invoice.spaceId,
+        'Invoice Space',
+        100,
+      );
+
+    const context =
+      await requireInvoiceManagerSpace(
+        spaceId,
+        uid,
+      );
+
+    if (
+      invoice.ownerId
+      !== context.ownerId
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Invoice ownership no longer matches this Business Space.',
+      );
+    }
+
+    const snapshot =
+      await db.collection(
+        'businessInvoicePayments',
+      )
+        .where(
+          'invoiceId',
+          '==',
+          invoiceId,
+        )
+        .get();
+
+    const payments =
+      snapshot.docs
+        .filter(
+          (item) =>
+            item.data()?.ownerId
+            === context.ownerId,
+        )
+        .map(
+          (item) => ({
+            id:
+              item.id,
+            ...item.data(),
+          }),
+        )
+        .sort(
+          (a, b) =>
+            String(
+              b.paymentDate
+              || '',
+            ).localeCompare(
+              String(
+                a.paymentDate
+                || '',
+              ),
+            ),
+        );
+
+    return {
+      invoiceId,
+      payments,
+    };
+  },
+);
+
 export const createBusinessInvoice = onCall(
   { region },
   async (request) => {
@@ -6697,6 +6967,15 @@ export const createBusinessInvoice = onCall(
         'spaces',
       ).doc(spaceId);
 
+    const memberRef =
+      db.collection(
+        'spaceMembers',
+      ).doc(
+        spaceId
+        + '_'
+        + uid,
+      );
+
     const profileRef =
       db.collection(
         'businessProfiles',
@@ -6725,26 +7004,36 @@ export const createBusinessInvoice = onCall(
 
         const [
           spaceSnapshot,
+          memberSnapshot,
           profileSnapshot,
           customerSnapshot,
           counterSnapshot,
         ] = await Promise.all([
           transaction.get(spaceRef),
+          transaction.get(memberRef),
           transaction.get(profileRef),
           transaction.get(customerRef),
           transaction.get(counterRef),
         ]);
 
         const space =
-          assertOwnedInvoiceSpace(
+          assertInvoiceManagerSpace(
             spaceSnapshot.data(),
+            memberSnapshot.data(),
             uid,
+          );
+
+        const financialOwnerId =
+          stringValue(
+            space.ownerId,
+            'Business owner',
+            160,
           );
 
         const customer =
           assertInvoiceCustomer(
             customerSnapshot.data(),
-            uid,
+            financialOwnerId,
             spaceId,
           );
 
@@ -6815,7 +7104,10 @@ export const createBusinessInvoice = onCall(
             displayId:
               displayId('INV'),
             invoiceNumber,
-            ownerId: uid,
+            ownerId:
+              financialOwnerId,
+            createdBy:
+              uid,
             spaceId,
             customerId,
             customerName:
@@ -7011,15 +7303,21 @@ export const updateBusinessInvoice = onCall(
           || {};
 
         if (
-          invoice.ownerId !== uid
-          || invoice.status
+          invoice.status
             !== 'draft'
         ) {
           throw new HttpsError(
             'failed-precondition',
-            'Only your draft invoices can be edited.',
+            'Only a draft invoice can be edited.',
           );
         }
+
+        const financialOwnerId =
+          stringValue(
+            invoice.ownerId,
+            'Invoice owner',
+            160,
+          );
 
         const spaceId =
           stringValue(
@@ -7043,10 +7341,20 @@ export const updateBusinessInvoice = onCall(
             'spaces',
           ).doc(spaceId);
 
+        const memberRef =
+          db.collection(
+            'spaceMembers',
+          ).doc(
+            spaceId
+            + '_'
+            + uid,
+          );
+
         const [
           customerSnapshot,
           profileSnapshot,
           spaceSnapshot,
+          memberSnapshot,
         ] = await Promise.all([
           transaction.get(
             customerRef,
@@ -7057,17 +7365,34 @@ export const updateBusinessInvoice = onCall(
           transaction.get(
             spaceRef,
           ),
+          transaction.get(
+            memberRef,
+          ),
         ]);
 
-        assertOwnedInvoiceSpace(
-          spaceSnapshot.data(),
-          uid,
-        );
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        if (
+          String(
+            space.ownerId
+            || '',
+          ) !== financialOwnerId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Invoice ownership no longer matches this Business Space.',
+          );
+        }
 
         const customer =
           assertInvoiceCustomer(
             customerSnapshot.data(),
-            uid,
+            financialOwnerId,
             spaceId,
           );
 
@@ -7134,6 +7459,8 @@ export const updateBusinessInvoice = onCall(
             balanceDueMinor:
               totals.totalMinor,
             notes,
+            updatedBy:
+              uid,
             updatedAt:
               now,
           },
@@ -7223,12 +7550,58 @@ export const issueBusinessInvoice = onCall(
           snapshot.data()
           || {};
 
+        const financialOwnerId =
+          stringValue(
+            invoice.ownerId,
+            'Invoice owner',
+            160,
+          );
+
+        const spaceId =
+          stringValue(
+            invoice.spaceId,
+            'Invoice Space',
+            100,
+          );
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            db.collection(
+              'spaces',
+            ).doc(
+              spaceId,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'spaceMembers',
+            ).doc(
+              spaceId
+              + '_'
+              + uid,
+            ),
+          ),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
         if (
-          invoice.ownerId !== uid
+          String(
+            space.ownerId
+            || '',
+          ) !== financialOwnerId
         ) {
           throw new HttpsError(
-            'permission-denied',
-            'You do not own this invoice.',
+            'failed-precondition',
+            'Invoice ownership no longer matches this Business Space.',
           );
         }
 
@@ -7258,6 +7631,8 @@ export const issueBusinessInvoice = onCall(
               'issued',
             issuedAt:
               now,
+            issuedBy:
+              uid,
             updatedAt:
               now,
           },
@@ -7533,14 +7908,12 @@ export const recordBusinessInvoicePayment = onCall(
           invoiceSnapshot.data()
           || {};
 
-        if (
-          invoice.ownerId !== uid
-        ) {
-          throw new HttpsError(
-            'permission-denied',
-            'You do not own this invoice.',
+        const financialOwnerId =
+          stringValue(
+            invoice.ownerId,
+            'Invoice owner',
+            160,
           );
-        }
 
         if (
           ![
@@ -7565,12 +7938,67 @@ export const recordBusinessInvoicePayment = onCall(
             100,
           );
 
-        const account =
-          assertAccount(
-            accountSnapshot.data(),
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            db.collection(
+              'spaces',
+            ).doc(
+              spaceId,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'spaceMembers',
+            ).doc(
+              spaceId
+              + '_'
+              + uid,
+            ),
+          ),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
             uid,
+          );
+
+        if (
+          String(
+            space.ownerId
+            || '',
+          ) !== financialOwnerId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Invoice ownership no longer matches this Business Space.',
+          );
+        }
+
+        const account =
+          await assertAccountForSpaceActor(
+            transaction,
+            accountSnapshot,
+            uid,
+            spaceId,
+            space,
+            memberSnapshot.data() || {},
             'Business Account',
           );
+
+        if (
+          account.ownerId
+          !== financialOwnerId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The selected account does not belong to this Business owner.',
+          );
+        }
 
         const accountData =
           accountSnapshot.data()
@@ -7648,7 +8076,7 @@ export const recordBusinessInvoicePayment = onCall(
             {
               accountId,
               ownerId:
-                uid,
+                financialOwnerId,
               spaceId,
               transactionId:
                 transactionRef.id,
@@ -7700,6 +8128,8 @@ export const recordBusinessInvoicePayment = onCall(
                 40,
               ),
             ownerId:
+              financialOwnerId,
+            receivedBy:
               uid,
             spaceId,
             accountId,
@@ -7758,7 +8188,7 @@ export const recordBusinessInvoicePayment = onCall(
             displayId:
               displayId('TXN'),
             ownerId:
-              uid,
+              financialOwnerId,
             createdBy:
               uid,
             type:
