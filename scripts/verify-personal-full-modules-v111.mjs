@@ -234,7 +234,7 @@ check(
       'typeOverride',
     )
     && commitments.includes(
-      'listCommitmentsForOwnerSpace',
+      'getSpaceCommitmentWorkspace',
     ),
   'Bills opens a functional bill-only module.',
 );
@@ -260,32 +260,16 @@ check(
 );
 
 check(
-  (
-    commitmentRepo.includes(
-      'listCommitmentPaymentsForCommitment',
-    )
-    && commitments.includes(
-      'listCommitmentPaymentsForCommitment',
-    )
+  commitmentRepo.includes(
+    'getSpaceCommitmentWorkspace',
   )
-    || (
-      commitmentRepo.includes(
-        'export async function listCommitmentPayments(uid: string)',
-      )
-      && commitmentRepo.includes(
-        "where('ownerId', '==', uid)",
-      )
-      && commitments.includes(
-        'listCommitmentPayments(',
-      )
-      && commitments.includes(
-        'scopedPayments',
-      )
-      && commitments.includes(
-        'nextPayment.commitmentId',
-      )
+    && commitments.includes(
+      'getSpaceCommitmentWorkspace',
+    )
+    && commitmentRepo.includes(
+      'listCommitmentPaymentsForCommitment',
     ),
-  'Commitment payment history loads per commitment.',
+  'Commitment payment history stays Space-scoped and commitment-addressable.',
 );
 
 /* ----------------------------------------------------------

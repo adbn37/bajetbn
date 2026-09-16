@@ -1,7 +1,26 @@
 import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(path, 'utf8').replace(/\r\n?/g, '\n');
-const need = (text, token, label) => { if (!text.includes(token)) throw new Error(`Missing ${label}: ${token}`); };
+const compact = (value) =>
+  value
+    .replace(/\s+/g, '')
+    .replace(
+      /,([)\]}}])/g,
+      '$1',
+    );
+
+const need = (text, token, label) => {
+  if (
+    !text.includes(token)
+    && !compact(text).includes(
+      compact(token),
+    )
+  ) {
+    throw new Error(
+      `Missing ${label}: ${token}`,
+    );
+  }
+};
 const reject = (text, token, label) => { if (text.includes(token)) throw new Error(`Unsafe ${label} found: ${token}`); };
 
 const functions = read('functions/src/index.ts');

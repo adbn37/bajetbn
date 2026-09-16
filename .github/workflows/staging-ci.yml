@@ -58,10 +58,12 @@ jobs:
         run: npm run verify:all-structural
 
       - name: Build staging
-        run: npm run build -- --mode staging
+        run: npm run build:staging
 
       - name: Verify build and PWA output
-        run: node scripts/verify-build-output.mjs
+        run: |
+          node scripts/verify-build-output.mjs
+          npm run verify:built-environment-v11417 -- staging
 
       - name: Deploy to Cloudflare Pages
         env:

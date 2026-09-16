@@ -18,37 +18,132 @@ function expect(condition, message) {
   if (!condition) failures.push(message);
 }
 
-for (const route of ['spaces/archived', 'accounts/closed', 'budgets/archived', 'goals/archived', 'bills/archived', 'categories/archived']) {
-  expect(app.includes(`path="${route}"`), `Missing route: ${route}`);
+for (const route of [
+  'spaces/archived',
+  'accounts/closed',
+  'budgets/archived',
+  'goals/archived',
+  'bills/archived',
+  'categories/archived',
+]) {
+  expect(
+    app.includes(`path="${route}"`),
+    `Missing route: ${route}`,
+  );
 }
 
-for (const [name, source] of [['Spaces', spaces], ['Accounts', accounts], ['Budgets', budgets], ['Goals', goals], ['Bills', bills]]) {
-  expect(!source.includes('archived-items-panel'), `${name} still renders inactive records inline.`);
+for (const [name, source] of [
+  ['Spaces', spaces],
+  ['Accounts', accounts],
+  ['Budgets', budgets],
+  ['Goals', goals],
+  ['Bills', bills],
+]) {
+  expect(
+    !source.includes('archived-items-panel'),
+    `${name} still renders inactive records inline.`,
+  );
 }
 
-expect(spaces.includes('to="/spaces/archived"'), 'Spaces archive button is missing.');
-expect(accounts.includes('to="/accounts/closed"'), 'Closed Accounts button is missing.');
-expect(budgets.includes('to="/budgets/archived"'), 'Archived Budgets button is missing.');
-expect(goals.includes('to="/goals/archived"'), 'Previous Goals button is missing.');
-expect(bills.includes('to="/bills/archived"'), 'Stopped Items button is missing.');
-expect(transactions.includes('to="/categories/archived"'), 'Hidden Categories button is missing.');
+expect(
+  spaces.includes('to="/spaces/archived"'),
+  'Spaces archive button is missing.',
+);
+expect(
+  accounts.includes('to="/accounts/closed"'),
+  'Closed Accounts button is missing.',
+);
+expect(
+  budgets.includes('to="/budgets/archived"'),
+  'Archived Budgets button is missing.',
+);
+expect(
+  goals.includes('to="/goals/archived"'),
+  'Previous Goals button is missing.',
+);
+expect(
+  bills.includes('to="/bills/archived"'),
+  'Stopped Items button is missing.',
+);
+expect(
+  transactions.includes('to="/categories/archived"'),
+  'Hidden Categories button is missing.',
+);
 
-expect(dashboard.includes('home-v110-account-carousel'), 'Overview account carousel is missing.');
-expect(!dashboard.includes('home-v110-accounts') && !dashboard.includes('add-account-tile'), 'Legacy duplicate Overview account strip still exists.');
-expect(dashboard.includes('transactions?accountId='), 'Overview account tiles do not open filtered money activity.');
-expect(transactions.includes('useSearchParams'), 'Money activity does not read the account query parameter.');
-expect(transactions.includes('accounts={activeAccounts}'), 'Closed accounts may still appear in new money activity forms.');
+expect(
+  dashboard.includes('home-v110-account-carousel'),
+  'Overview account carousel is missing.',
+);
+expect(
+  !dashboard.includes('home-v110-accounts')
+    && !dashboard.includes('add-account-tile'),
+  'Legacy duplicate Overview account strip still exists.',
+);
+expect(
+  dashboard.includes('transactions?accountId='),
+  'Overview account tiles do not open filtered money activity.',
+);
+expect(
+  transactions.includes('useSearchParams'),
+  'Money activity does not read the account query parameter.',
+);
 
-expect(css.includes('.archive-card-grid'), 'Archive page layout styles are missing.');
-expect(css.includes('.overview-account-grid'), 'Compact Overview account styles are missing.');
-expect(css.includes('grid-template-columns:repeat(2,minmax(0,1fr))'), 'Mobile two-column grid rule is missing.');
-expect(css.includes('.modal-backdrop { align-items:end;'), 'Mobile bottom-sheet modal rule is missing.');
-expect(read('src/components/LifecycleConfirmModal.tsx').includes('LifecycleConfirmModal'), 'BajetBN lifecycle confirmation modal is missing.');
+// v1.14.x separates history-visible accounts from accounts that are
+// allowed in new/corrected money activity forms.
+expect(
+  transactions.includes('const activeWritableAccounts = useMemo('),
+  'Active writable account filtering is missing.',
+);
+expect(
+  transactions.includes('!account.archivedAt')
+    && transactions.includes('!account.closedAt'),
+  'Writable account filtering does not exclude archived/closed accounts.',
+);
+expect(
+  transactions.includes('accounts={activeWritableAccounts}'),
+  'Closed accounts may still appear in new money activity forms.',
+);
 
-for (const [name, source] of [['Spaces', spaces], ['Accounts', accounts], ['Budgets', budgets], ['Bills', bills]]) {
-  expect(!source.includes('if (!confirm(') && !source.includes('window.confirm('), `${name} still uses a browser confirmation for lifecycle controls.`);
+expect(
+  css.includes('.archive-card-grid'),
+  'Archive page layout styles are missing.',
+);
+expect(
+  css.includes('.overview-account-grid'),
+  'Compact Overview account styles are missing.',
+);
+expect(
+  css.includes('grid-template-columns:repeat(2,minmax(0,1fr))'),
+  'Mobile two-column grid rule is missing.',
+);
+expect(
+  css.includes('.modal-backdrop { align-items:end;'),
+  'Mobile bottom-sheet modal rule is missing.',
+);
+expect(
+  read('src/components/LifecycleConfirmModal.tsx').includes(
+    'LifecycleConfirmModal',
+  ),
+  'BajetBN lifecycle confirmation modal is missing.',
+);
+
+for (const [name, source] of [
+  ['Spaces', spaces],
+  ['Accounts', accounts],
+  ['Budgets', budgets],
+  ['Bills', bills],
+]) {
+  expect(
+    !source.includes('if (!confirm(')
+      && !source.includes('window.confirm('),
+    `${name} still uses a browser confirmation for lifecycle controls.`,
+  );
 }
-expect(!transactions.includes('if (!window.confirm(message))'), 'Category lifecycle still uses a browser confirmation.');
+
+expect(
+  !transactions.includes('if (!window.confirm(message))'),
+  'Category lifecycle still uses a browser confirmation.',
+);
 
 for (const file of [
   'src/features/spaces/ArchivedSpacesPage.tsx',
@@ -58,18 +153,40 @@ for (const file of [
   'src/features/commitments/ArchivedCommitmentsPage.tsx',
   'src/features/categories/ArchivedCategoriesPage.tsx',
 ]) {
-  expect(fs.existsSync(file), `Missing dedicated archive page: ${file}`);
+  expect(
+    fs.existsSync(file),
+    `Missing dedicated archive page: ${file}`,
+  );
+
   if (fs.existsSync(file)) {
     const source = read(file);
-    expect(source.includes('Restore') || source.includes('Reopen'), `${file} is missing a restore/reopen action.`);
-    expect(source.includes('Delete permanently'), `${file} is missing the safe permanent-delete action.`);
+
+    expect(
+      source.includes('Restore')
+        || source.includes('Reopen'),
+      `${file} is missing a restore/reopen action.`,
+    );
+
+    expect(
+      source.includes('Delete permanently'),
+      `${file} is missing the safe permanent-delete action.`,
+    );
   }
 }
 
 if (failures.length) {
-  console.error(`Mobile/archive verification failed (${failures.length} of ${checks} checks):`);
-  failures.forEach((failure) => console.error(`- ${failure}`));
+  console.error(
+    `Mobile/archive verification failed (${failures.length} of ${checks} checks):`,
+  );
+
+  failures.forEach(
+    (failure) =>
+      console.error(`- ${failure}`),
+  );
+
   process.exit(1);
 }
 
-console.log(`Mobile UX and dedicated archive page checks passed (${checks} structural checks).`);
+console.log(
+  `Mobile UX and dedicated archive page checks passed (${checks} structural checks).`,
+);

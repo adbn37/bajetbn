@@ -7,6 +7,10 @@
   },
   "production": {
     "gitBranch": "main",
-    "url": "https://bajetbn.pages.dev"
+    "firebaseProject": "bajetbn-staging",
+    "cloudflareProject": "bajetbn",
+    "url": "https://bajetbn.com",
+    "automaticDeployments": "disabled",
+    "sharedFirebaseBackend": true
   }
 }

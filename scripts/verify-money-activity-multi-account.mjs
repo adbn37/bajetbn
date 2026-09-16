@@ -1,20 +1,29 @@
 import fs from 'node:fs';
 
-const read = (path) => fs.readFileSync(path, 'utf8');
+const read = (path) =>
+  fs.readFileSync(path, 'utf8');
+
+const compact = (value) =>
+  value.replace(/\s+/g, '');
 
 const page = read(
   'src/features/transactions/TransactionsPage.tsx',
 );
 
-const styles = read('src/styles/global.css');
+const styles =
+  read('src/styles/global.css');
 
-const packageJson = JSON.parse(
-  read('package.json'),
-);
+const packageJson =
+  JSON.parse(
+    read('package.json'),
+  );
 
 let checks = 0;
 
-function need(condition, message) {
+function need(
+  condition,
+  message,
+) {
   checks += 1;
 
   if (!condition) {
@@ -71,8 +80,10 @@ need(
 );
 
 need(
-  page.includes(
-    'monthlyPosted.filter((item) => item.type === \'expense\')',
+  compact(page).includes(
+    compact(
+      "monthlyPosted.filter((item) => item.type === 'expense')",
+    ),
   ),
   'Top categories must derive from the filtered monthly set.',
 );
@@ -107,7 +118,9 @@ need(
 
 need(
   String(
-    packageJson.scripts?.['verify:all-structural'] || '',
+    packageJson.scripts
+      ?.['verify:all-structural']
+    || '',
   ).includes(
     'verify-money-activity-multi-account.mjs',
   ),

@@ -176,8 +176,11 @@ check(
     && marketplacePos.includes(
       'Payout history',
     )
-    && !marketplacePos.includes(
+    && marketplacePos.includes(
       "bookings: 'Bookings'",
+    )
+    && marketplacePos.includes(
+      'SmePosReservationsPanel',
     ),
   'Phase 8: Marketplace Consignment POS retained.',
 );

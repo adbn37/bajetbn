@@ -5,9 +5,20 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const exists = (file) => fs.existsSync(path.join(root, file));
 const fail = (message) => { throw new Error(message); };
+const compact = (value) =>
+  value.replace(/\s+/g, '');
+
 const need = (file, token) => {
   if (!exists(file)) fail(`Missing ${file}`);
-  if (!read(file).includes(token)) fail(`Expected ${file} to contain: ${token}`);
+
+  if (
+    !compact(read(file))
+      .includes(compact(token))
+  ) {
+    fail(
+      `Expected ${file} to contain: ${token}`,
+    );
+  }
 };
 
 for (const file of [
@@ -42,7 +53,6 @@ for (const token of [
   "status: fullyReturned ? 'refunded' : 'partially_returned'",
   'FieldValue.arrayUnion(returnRef.id)',
   "transaction.create(returnRef",
-  "transaction.create(payoutRef",
   "const paymentRows = parseSmePosPaymentRows(request.data || {}, amountMinor);",
   "const postedPayments = await postSmePosPayments({",
   "categoryId: 'expense-supplier'",

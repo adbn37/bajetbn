@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import * as bwipjs from '@bwip-js/browser';
 import { BarcodeCameraScanner } from '../../components/BarcodeCameraScanner';
 import { CollectionItemPhoto } from '../../components/CollectionItemPhoto';
 import { EmptyState } from '../../components/EmptyState';
@@ -599,21 +598,39 @@ function CollectionLabel({ item }: { item: CollectionItem }) {
   const barcodeRef = useRef<HTMLCanvasElement | null>(null);
   const qrRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
-    if (barcodeRef.current) bwipjs.toCanvas(barcodeRef.current, {
-      bcid: 'code128',
-      text: item.internalCode,
-      scale: 2,
-      height: 10,
-      includetext: true,
-      textxalign: 'center',
-    });
-    if (qrRef.current) bwipjs.toCanvas(qrRef.current, {
-      bcid: 'qrcode',
-      text: item.internalCode,
-      scale: 2,
-      paddingwidth: 1,
-      paddingheight: 1,
-    });
+    let cancelled = false;
+
+    void import('@bwip-js/browser')
+      .then((bwipjs) => {
+        if (cancelled) return;
+
+        if (barcodeRef.current) bwipjs.toCanvas(barcodeRef.current, {
+          bcid: 'code128',
+          text: item.internalCode,
+          scale: 2,
+          height: 10,
+          includetext: true,
+          textxalign: 'center',
+        });
+
+        if (qrRef.current) bwipjs.toCanvas(qrRef.current, {
+          bcid: 'qrcode',
+          text: item.internalCode,
+          scale: 2,
+          paddingwidth: 1,
+          paddingheight: 1,
+        });
+      })
+      .catch((error) => {
+        console.error(
+          '[BajetBN collection] Barcode label renderer could not load.',
+          error,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [item.internalCode]);
 
   return <article className="collection-print-label">

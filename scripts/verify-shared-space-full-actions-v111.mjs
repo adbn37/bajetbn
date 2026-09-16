@@ -279,8 +279,20 @@ check(
 
 check(
   details.includes(
-    'Loading Business Bills & Instalments',
+    'Loading Business Bills',
   )
+    && details.includes(
+      'Loading Business Instalments',
+    )
+    && details.includes(
+      'typeOverride="bill"',
+    )
+    && details.includes(
+      'typeOverride="instalment"',
+    )
+    && commitments.includes(
+      'getSpaceCommitmentWorkspace',
+    )
     && commitments.includes(
       'payCommitment',
     )

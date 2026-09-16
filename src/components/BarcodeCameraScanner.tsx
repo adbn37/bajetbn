@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
-import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import type { IScannerControls } from '@zxing/browser';
 import { getErrorMessage } from '../utils/errors';
 
 interface BarcodeCameraScannerProps {
@@ -29,8 +28,26 @@ export function BarcodeCameraScanner({ startLabel, disabled = false, onDetected,
     onError('');
     handledRef.current = false;
     setScanning(true);
+
     try {
-      const hints = new Map<DecodeHintType, unknown>();
+      const [
+        browserModule,
+        libraryModule,
+      ] = await Promise.all([
+        import('@zxing/browser'),
+        import('@zxing/library'),
+      ]);
+
+      const {
+        BrowserMultiFormatReader,
+      } = browserModule;
+
+      const {
+        BarcodeFormat,
+        DecodeHintType,
+      } = libraryModule;
+
+      const hints = new Map();
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
         BarcodeFormat.AZTEC,
         BarcodeFormat.CODABAR,
@@ -50,41 +67,80 @@ export function BarcodeCameraScanner({ startLabel, disabled = false, onDetected,
         BarcodeFormat.UPC_A,
         BarcodeFormat.UPC_E,
       ]);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-      const reader = new BrowserMultiFormatReader(hints, {
-        delayBetweenScanAttempts: 180,
-        delayBetweenScanSuccess: 800,
-      });
-      const controls = await reader.decodeFromConstraints(
-        {
-          audio: false,
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        },
-        videoRef.current || undefined,
-        (result, _scanError, activeControls) => {
-          if (!result || handledRef.current) return;
-          handledRef.current = true;
-          activeControls.stop();
-          controlsRef.current = null;
-          setScanning(false);
-          void onDetected(result.getText());
-        },
+      hints.set(
+        DecodeHintType.TRY_HARDER,
+        true,
       );
-      controlsRef.current = controls;
+
+      const reader =
+        new BrowserMultiFormatReader(
+          hints,
+          {
+            delayBetweenScanAttempts: 180,
+            delayBetweenScanSuccess: 800,
+          },
+        );
+
+      const controls =
+        await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: {
+                ideal: 'environment',
+              },
+              width: {
+                ideal: 1280,
+              },
+              height: {
+                ideal: 720,
+              },
+            },
+          },
+          videoRef.current
+          || undefined,
+          (
+            result,
+            _scanError,
+            activeControls,
+          ) => {
+            if (
+              !result
+              || handledRef.current
+            ) {
+              return;
+            }
+
+            handledRef.current = true;
+            activeControls.stop();
+            controlsRef.current = null;
+            setScanning(false);
+
+            void onDetected(
+              result.getText(),
+            );
+          },
+        );
+
+      controlsRef.current =
+        controls;
+
       try {
         await controls.streamVideoConstraintsApply?.({
-          advanced: [{ focusMode: 'continuous' }],
+          advanced: [{
+            focusMode:
+              'continuous',
+          }],
         } as unknown as MediaTrackConstraints);
       } catch {
-        // Continuous autofocus is optional and unavailable on some cameras.
+        // Continuous autofocus is optional.
       }
     } catch (error) {
       setScanning(false);
-      onError(`Camera could not start. ${getErrorMessage(error)} You can enter the barcode manually instead.`);
+
+      onError(
+        `Camera could not start. ${getErrorMessage(error)} You can enter the barcode manually instead.`,
+      );
     }
   };
 

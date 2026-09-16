@@ -69,18 +69,18 @@ check(
 );
 
 check(
-  pos.includes("['register', 'sales']"),
-  'Marketplace POS is focused on Register and Sales.',
+  pos.includes("['register', 'bookings', 'sales']"),
+  'Marketplace POS keeps Register, Bookings and Sales as the primary workflow.',
 );
 
 check(
-  !pos.includes("bookings: 'Bookings'")
-  && !pos.includes("tab === 'bookings'")
-  && !pos.includes('SmePosReservationsPanel')
-  && !pos.includes('SmePosCreateReservationModal')
-  && !pos.includes('setBookingForm')
-  && !pos.includes('Reserve / take deposit'),
-  'Marketplace Bookings UI is removed.',
+  pos.includes("bookings: 'Bookings'")
+  && pos.includes("tab === 'bookings'")
+  && pos.includes('SmePosReservationsPanel')
+  && pos.includes('SmePosCreateReservationModal')
+  && pos.includes('setBookingForm')
+  && pos.includes('Reserve / take deposit'),
+  'Marketplace Bookings UI is retained.',
 );
 
 check(

@@ -108,10 +108,10 @@ for (const text of [
   'SmePosCreateReservationModal',
   'listSmePosReservations',
 ]) {
-  reject(
+  need(
     'src/features/sme-pos/MarketplaceConsignmentPosWorkspace.tsx',
     text,
-    `Marketplace booking UI removed ${text}`,
+    `Marketplace POS booking capability ${text}`,
   );
 }
 

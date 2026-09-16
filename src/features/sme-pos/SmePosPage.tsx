@@ -1,31 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
-import { listSpaceMembers } from '../../repositories/collaborationRepository';
 import { getBusinessProfile } from '../../repositories/businessAdvancedRepository';
 import { getMySmePosAccess, getSmePosSettings } from '../../repositories/smePosRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
-import type { BusinessProfile, SmePosAccess, SmePosRole, SmePosSettings, Space, SpaceMember } from '../../types/models';
+import type { BusinessProfile, SmePosAccess, SmePosRole, SmePosSettings, Space } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
-import { MarketplaceConsignmentPosWorkspace } from './MarketplaceConsignmentPosWorkspace';
-import { StandardPosWorkspace } from './StandardPosWorkspace';
 
-const roleLabels: Record<SmePosRole, string> = {
-  owner: 'POS owner',
-  manager: 'Manager',
-  cashier: 'Cashier',
-  stock_staff: 'Stock staff',
-  seller: 'Seller',
-  viewer: 'View only',
-};
+const MarketplaceConsignmentPosWorkspace = lazy(
+  () => import('./MarketplaceConsignmentPosWorkspace')
+    .then((module) => ({
+      default: module.MarketplaceConsignmentPosWorkspace,
+    })),
+);
+
+const StandardPosWorkspace = lazy(
+  () => import('./StandardPosWorkspace')
+    .then((module) => ({
+      default: module.StandardPosWorkspace,
+    })),
+);
 
 export function SmePosPage() {
   const { user } = useAuth();
   const { spaceId = '' } = useParams();
   const [space, setSpace] = useState<Space | null>(null);
-  const [members, setMembers] = useState<SpaceMember[]>([]);
   const [settings, setSettings] = useState<SmePosSettings | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [myAccess, setMyAccess] = useState<SmePosAccess | null>(null);
@@ -33,10 +34,6 @@ export function SmePosPage() {
   const [error, setError] = useState('');
   const [accessDenied, setAccessDenied] = useState(false);
 
-  const currentMember = useMemo(
-    () => members.find((item) => item.uid === user?.uid) || null,
-    [members, user?.uid],
-  );
   const isOwner = Boolean(
     space
     && user
@@ -50,13 +47,15 @@ export function SmePosPage() {
     setError('');
     setAccessDenied(false);
     try {
-      const [spaces, nextMembers] = await Promise.all([
-        listSpaces(user.uid),
-        listSpaceMembers(spaceId),
-      ]);
-      const nextSpace = spaces.find((item) => item.id === spaceId) || null;
+      const spaces =
+        await listSpaces(user.uid);
+
+      const nextSpace =
+        spaces.find(
+          (item) => item.id === spaceId,
+        ) || null;
+
       setSpace(nextSpace);
-      setMembers(nextMembers);
       if (!nextSpace || nextSpace.type !== 'sme') return;
 
       const nextBusinessProfile =
@@ -98,7 +97,22 @@ export function SmePosPage() {
     }
   }, [spaceId, user]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(
+    () => {
+      let cancelled = false;
+
+      queueMicrotask(() => {
+        if (!cancelled) {
+          void load();
+        }
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    },
+    [load],
+  );
 
   useEffect(() => {
     if (!user || !spaceId || !settings || !role) return;
@@ -180,21 +194,23 @@ export function SmePosPage() {
     {space.archivedAt && <div className="notice">This Business Space is archived. Restore it before using the POS.</div>}
     {error && <div className="notice error">{error}</div>}
     <div id="sme-pos-workspace">
-      {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
-        space={space}
-        settings={settings}
-        inventoryProfile={
-          businessProfile?.marketplaceInventoryProfile
-          || 'general'
-        }
-        role={role}
-        onChanged={load}
-      /> : <StandardPosWorkspace
-        space={space}
-        settings={settings}
-        role={role}
-        onChanged={load}
-      />}
+      <Suspense fallback={<div className="loading-panel">Loading POS workspace…</div>}>
+        {settings.mode === 'marketplace_consignment' ? <MarketplaceConsignmentPosWorkspace
+          space={space}
+          settings={settings}
+          inventoryProfile={
+            businessProfile?.marketplaceInventoryProfile
+            || 'general'
+          }
+          role={role}
+          onChanged={load}
+        /> : <StandardPosWorkspace
+          space={space}
+          settings={settings}
+          role={role}
+          onChanged={load}
+        />}
+      </Suspense>
     </div>
   </main>;
 }

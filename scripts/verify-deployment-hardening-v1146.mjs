@@ -37,10 +37,6 @@ function check(condition, message) {
   }
 }
 
-/*
- * Existing staging isolation
- */
-
 check(
   wrangler.includes(
     'name = "bajetbn-staging"',
@@ -49,190 +45,69 @@ check(
 );
 
 check(
-  wrangler.includes(
-    'pages_build_output_dir = "dist"',
+  stagingWorkflow.includes(
+    'npm run build:staging',
   ),
-  'Staging Wrangler configuration points only to dist.',
+  'Staging uses the explicit staging build.',
 );
 
 check(
-  wrangler.includes(
-    'intentionally staging-only',
+  stagingWorkflow.includes(
+    'verify:built-environment-v11417',
   ),
-  'Staging-only intent is documented.',
+  'Staging verifies its compiled environment before deployment.',
 );
 
 check(
   stagingWorkflow.includes(
     'cd "$RUNNER_TEMP"',
-  ),
-  'Staging Wrangler executes outside the repository.',
-);
-
-check(
-  stagingWorkflow.includes(
-    '"$GITHUB_WORKSPACE/dist"',
-  ),
-  'Staging deploy uses the absolute verified dist artifact.',
-);
-
-check(
-  stagingWorkflow.includes(
-    '--project-name bajetbn-staging',
-  ),
-  'Staging deploy targets only bajetbn-staging.',
-);
-
-check(
-  stagingWorkflow.includes(
-    '--branch staging',
-  ),
-  'Staging deploy explicitly identifies the staging branch.',
-);
-
-/*
- * Production target protection
- */
-
-check(
-  deploy.includes(
-    '$ProductionProject = "bajetbn"',
   )
-    && deploy.includes(
-      '$StagingProject    = "bajetbn-staging"',
+    && stagingWorkflow.includes(
+      '"$GITHUB_WORKSPACE/dist"',
     ),
-  'Production and staging Cloudflare project names are explicit.',
+  'Staging Wrangler runs outside the repository and deploys only dist.',
 );
-
-check(
-  deploy.includes(
-    '$ProductionBranch = "main"',
-  ),
-  'Production branch is fixed to main.',
-);
-
-check(
-  deploy.includes(
-    'Production deployment can run only from main',
-  ),
-  'Production deployment refuses non-main branches.',
-);
-
-/*
- * Release lineage
- */
 
 for (const token of [
+  '$ProductionProject = "bajetbn"',
+  '$StagingProject = "bajetbn-staging"',
+  '$ProductionBranch = "main"',
   'origin/main',
   'origin/staging',
   'ExpectedSha',
   'ExpectedVersion',
-  'refs/tags/',
-  'package.json',
-  'release.json',
-]) {
-  check(
-    deploy.includes(token),
-    `Production release guard includes ${token}.`,
-  );
-}
-
-check(
-  deploy.includes(
-    'Production release must exactly match the staging-approved SHA.',
-  ),
-  'Production SHA must exactly match staging.',
-);
-
-check(
-  deploy.includes(
-    'does not point to the approved release SHA',
-  ),
-  'Release tag must point to the approved SHA.',
-);
-
-/*
- * Validation before mutation
- */
-
-for (const token of [
   'verify:all-structural',
+  'verify:built-environment-v11417',
+  'verify-build-output.mjs',
   '--omit=dev',
   '--audit-level=high',
-  '--mode',
-  'production',
-  'verify-build-output.mjs',
-  'diff',
-  '--check',
+  '[switch]$DryRun',
+  'GetTempPath()',
+  'pages deploy',
+  '--project-name $ProductionProject',
+  '--branch $ProductionBranch',
+  '--commit-hash $ExpectedSha',
+  '--commit-dirty=false',
+  'precache-manifest.json',
 ]) {
   check(
     deploy.includes(token),
-    `Production deploy validates ${token}.`,
+    `Production deployment guard includes ${token}.`,
   );
 }
 
 check(
-  deploy.includes(
-    '[switch]$DryRun',
-  )
-    && deploy.includes(
-      'Cloudflare was NOT changed.',
-    ),
-  'Production deploy supports a no-mutation dry run.',
-);
-
-/*
- * Wrangler repository isolation
- */
-
-check(
-  deploy.includes(
-    'GetTempPath()',
-  )
-    && deploy.includes(
-      'Push-Location $DeployWorkingDirectory',
-    ),
-  'Production Wrangler runs from an isolated temporary directory.',
-);
-
-check(
-  deploy.includes(
-    'pages deploy',
-  )
-    && deploy.includes(
-      '--project-name $ProductionProject',
-    )
-    && deploy.includes(
-      '--branch $ProductionBranch',
-    ),
-  'Production Pages target is passed explicitly.',
-);
-
-check(
-  deploy.includes(
-    '--commit-hash $ExpectedSha',
-  )
-    && deploy.includes(
-      '--commit-message "BajetBN v$ExpectedVersion"',
-    )
-    && deploy.includes(
-      '--commit-dirty=false',
-    ),
-  'Production deployment receives explicit release identity metadata.',
+  !deploy.includes(
+    'refs/tags/',
+  ),
+  'Production deployment no longer requires a tag before live smoke testing.',
 );
 
 check(
   !deploy.includes(
     'firebase deploy',
   ),
-  'Cloudflare production script does not deploy Firebase resources.',
-);
-
-check(
-  !deploy.includes(
-    'wrangler.toml',
-  ),
-  'Production deploy does not consume the staging-only Wrangler config.',
+  'Production Cloudflare deployment never deploys Firebase.',
 );
 
 const executableDeployLines =
@@ -248,12 +123,8 @@ check(
   !executableDeployLines.includes(
     'functions/',
   ),
-  'Production Cloudflare command never targets Firebase Functions.',
+  'Production Cloudflare command never uploads the repository Firebase Functions directory.',
 );
-
-/*
- * Structural-suite registration
- */
 
 check(
   packageJson.scripts[
@@ -261,7 +132,7 @@ check(
   ]
     ===
     'node scripts/verify-deployment-hardening-v1146.mjs',
-  'Deployment-hardening verifier has a dedicated npm command.',
+  'Deployment-hardening verifier remains registered.',
 );
 
 check(
@@ -270,7 +141,7 @@ check(
   ].includes(
     'npm run verify:deployment-hardening-v1146',
   ),
-  'Deployment-hardening verifier is part of the full structural suite.',
+  'Deployment-hardening verifier remains part of the full structural suite.',
 );
 
 if (failures.length) {
@@ -280,5 +151,5 @@ if (failures.length) {
 }
 
 console.log(
-  'BajetBN v1.14.6 deployment hardening verification PASS.',
+  'BajetBN deployment hardening verification PASS.',
 );

@@ -65,25 +65,51 @@ function check(
   );
 }
 
+const versionParts =
+  (value) =>
+    String(value || '')
+      .split('.')
+      .map((part) => Number(part));
+
+const atLeast11412 =
+  (value) => {
+    const [major, minor, patch] =
+      versionParts(value);
+
+    return (
+      major > 1
+      || (
+        major === 1
+        && (
+          minor > 14
+          || (
+            minor === 14
+            && patch >= 12
+          )
+        )
+      )
+    );
+  };
+
 check(
-  pkg.version === '1.14.12',
-  'package.json identifies v1.14.12.',
+  atLeast11412(pkg.version),
+  'package.json is v1.14.12 or newer.',
 );
 
 check(
-  lock.version === '1.14.12'
-    && lock.packages?.['']?.version === '1.14.12',
-  'package-lock.json identifies v1.14.12.',
+  lock.version === pkg.version
+    && lock.packages?.['']?.version === pkg.version,
+  'package-lock.json matches package.json.',
 );
 
 check(
-  release.version === '1.14.12',
-  'release.json identifies v1.14.12.',
+  release.version === pkg.version,
+  'release.json matches package.json.',
 );
 
 check(
-  release.label === 'BajetBN v1.14.12',
-  'Release label is BajetBN v1.14.12.',
+  release.label === `BajetBN v${release.version}`,
+  'Release label matches release version.',
 );
 
 check(
@@ -92,8 +118,10 @@ check(
 );
 
 check(
-  release.releasedAt === '2026-09-13',
-  'Release date is 2026-09-13.',
+  /^\d{4}-\d{2}-\d{2}$/.test(
+    String(release.releasedAt || ''),
+  ),
+  'Release date is a valid ISO date.',
 );
 
 check(
@@ -180,15 +208,15 @@ check(
 );
 
 check(
-  deploy.includes(
-    '$ProductionProject = "bajetbn"',
+  /\$ProductionProject\s*=\s*"bajetbn"/.test(
+    deploy,
   ),
   'Production Cloudflare project remains fixed.',
 );
 
 check(
-  deploy.includes(
-    '$StagingProject    = "bajetbn-staging"',
+  /\$StagingProject\s*=\s*"bajetbn-staging"/.test(
+    deploy,
   ),
   'Production and staging Cloudflare projects remain separated.',
 );
