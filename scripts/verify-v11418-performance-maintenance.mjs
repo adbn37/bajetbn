@@ -238,6 +238,66 @@ check(
   'v1.14.18 verifier is registered.',
 );
 
+const spaceActionHub =
+  fs.readFileSync(
+    'src/features/spaces/SpaceActionHub.tsx',
+    'utf8',
+  ).replace(/\r\n?/g, '\n');
+
+const deferredActionModules = [
+  "../collaboration/CollaborationPage",
+  "../transactions/TransactionsPage",
+  "./SharedExpensesPanel",
+  "./SpaceFundPanel",
+  "./TripPlanningPanel",
+  "./SpaceWorkPanel",
+];
+
+check(
+  deferredActionModules.every(
+    (specifier) =>
+      spaceActionHub.includes(
+        `import('${specifier}')`,
+      ),
+  ),
+  'Space launcher tools are loaded on demand.',
+);
+
+check(
+  !spaceActionHub.includes(
+    "import { CollaborationPage } from '../collaboration/CollaborationPage';",
+  )
+    && !spaceActionHub.includes(
+      "import { MoneyActivityModal } from '../transactions/TransactionsPage';",
+    )
+    && !spaceActionHub.includes(
+      "import { SharedExpensesPanel } from './SharedExpensesPanel';",
+    )
+    && !spaceActionHub.includes(
+      "import { SpaceFundPanel } from './SpaceFundPanel';",
+    )
+    && !spaceActionHub.includes(
+      "import { TripPlanningPanel } from './TripPlanningPanel';",
+    )
+    && !spaceActionHub.includes(
+      "import { SpaceWorkPanel } from './SpaceWorkPanel';",
+    ),
+  'Space launcher no longer eagerly bundles tool workspaces.',
+);
+
+check(
+  spaceActionHub.includes(
+    'Loading Money Activity...',
+  )
+    && spaceActionHub.includes(
+      'Loading Space tool...',
+    )
+    && spaceActionHub.includes(
+      '<Suspense',
+    ),
+  'Deferred launcher tools have local loading boundaries.',
+);
+
 check(
   tripVerifier.includes(
     `"import('./TripCommandCentre')"`,

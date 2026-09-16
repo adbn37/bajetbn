@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   type CSSProperties,
   useCallback,
   useEffect,
@@ -29,12 +31,72 @@ import type {
 } from '../../types/models';
 import { getSpaceHomeExperience } from './spaceExperience';
 import { DEFAULT_TRANSACTION_CATEGORIES } from '../categories/defaultCategories';
-import { CollaborationPage } from '../collaboration/CollaborationPage';
-import { MoneyActivityModal } from '../transactions/TransactionsPage';
-import { SharedExpensesPanel } from './SharedExpensesPanel';
-import { SpaceFundPanel } from './SpaceFundPanel';
-import { TripPlanningPanel } from './TripPlanningPanel';
-import { SpaceWorkPanel } from './SpaceWorkPanel';
+
+const CollaborationPage = lazy(
+  async () => {
+    const module =
+      await import('../collaboration/CollaborationPage');
+
+    return {
+      default: module.CollaborationPage,
+    };
+  },
+);
+
+const MoneyActivityModal = lazy(
+  async () => {
+    const module =
+      await import('../transactions/TransactionsPage');
+
+    return {
+      default: module.MoneyActivityModal,
+    };
+  },
+);
+
+const SharedExpensesPanel = lazy(
+  async () => {
+    const module =
+      await import('./SharedExpensesPanel');
+
+    return {
+      default: module.SharedExpensesPanel,
+    };
+  },
+);
+
+const SpaceFundPanel = lazy(
+  async () => {
+    const module =
+      await import('./SpaceFundPanel');
+
+    return {
+      default: module.SpaceFundPanel,
+    };
+  },
+);
+
+const TripPlanningPanel = lazy(
+  async () => {
+    const module =
+      await import('./TripPlanningPanel');
+
+    return {
+      default: module.TripPlanningPanel,
+    };
+  },
+);
+
+const SpaceWorkPanel = lazy(
+  async () => {
+    const module =
+      await import('./SpaceWorkPanel');
+
+    return {
+      default: module.SpaceWorkPanel,
+    };
+  },
+);
 
 type SpaceTool =
   | 'fund'
@@ -1242,6 +1304,13 @@ export function SpaceActionHub({
       )}
 
       {moneyType && (
+        <Suspense
+          fallback={
+            <div className="loading-panel">
+              Loading Money Activity...
+            </div>
+          }
+        >
         <MoneyActivityModal
           accounts={accounts}
           spaces={[space]}
@@ -1262,6 +1331,7 @@ export function SpaceActionHub({
             }
           }}
         />
+        </Suspense>
       )}
 
       {tool && (
@@ -1269,6 +1339,13 @@ export function SpaceActionHub({
           title={`${space.name} - ${toolTitle[tool]}`}
           onClose={() => setTool(null)}
         >
+          <Suspense
+            fallback={
+              <div className="loading-panel">
+                Loading Space tool...
+              </div>
+            }
+          >
           <div className="space-tool-modal">
             {tool === 'trip_planning' && space.type === 'trip' && (
               <TripPlanningPanel
@@ -1326,6 +1403,7 @@ export function SpaceActionHub({
               />
             )}
           </div>
+          </Suspense>
         </Modal>
       )}
     </>
