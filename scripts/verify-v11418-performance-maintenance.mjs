@@ -11,6 +11,21 @@ function check(condition, message) {
   }
 }
 
+function versionAtLeast(value, floor) {
+  const current = String(value).split('.').map(Number);
+  const minimum = String(floor).split('.').map(Number);
+
+  for (let index = 0; index < 3; index += 1) {
+    const currentPart = current[index] || 0;
+    const minimumPart = minimum[index] || 0;
+
+    if (currentPart > minimumPart) return true;
+    if (currentPart < minimumPart) return false;
+  }
+
+  return true;
+}
+
 const pkg =
   JSON.parse(
     fs.readFileSync(
@@ -100,10 +115,13 @@ const reminderVerifier =
   ).replace(/\r\n?/g, '\n');
 
 check(
-  pkg.version === '1.14.18'
-    && release.version === '1.14.18'
-    && release.label === 'BajetBN v1.14.18',
-  'v1.14.18 package and release metadata are aligned.',
+  pkg.version === release.version
+    && release.label === `BajetBN v${release.version}`
+    && versionAtLeast(
+      pkg.version,
+      '1.14.18',
+    ),
+  'v1.14.18+ package and release metadata are aligned.',
 );
 
 check(

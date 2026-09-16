@@ -200,6 +200,60 @@ function comparisonText(current: number, previous: number, currency: string) {
   return `${formatMoney(Math.abs(difference), currency)} ${difference > 0 ? 'more' : 'less'} than the previous period`;
 }
 
+function postedAtMillis(value: unknown) {
+  if (value === null || value === undefined) return 0;
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  if (typeof value !== 'object') return 0;
+
+  const timestamp = value as {
+    toMillis?: () => number;
+    seconds?: number;
+    nanoseconds?: number;
+    _seconds?: number;
+    _nanoseconds?: number;
+  };
+
+  if (typeof timestamp.toMillis === 'function') {
+    const milliseconds = Number(timestamp.toMillis());
+    return Number.isFinite(milliseconds) ? milliseconds : 0;
+  }
+
+  const seconds = Number(
+    timestamp.seconds
+    ?? timestamp._seconds,
+  );
+
+  if (!Number.isFinite(seconds)) return 0;
+
+  const nanoseconds = Number(
+    timestamp.nanoseconds
+    ?? timestamp._nanoseconds
+    ?? 0,
+  );
+
+  return (
+    seconds * 1000
+    + (
+      Number.isFinite(nanoseconds)
+        ? Math.floor(nanoseconds / 1_000_000)
+        : 0
+    )
+  );
+}
+
 function AmountBars({ items, currency, emptyText }: { items: AmountBarItem[]; currency: string; emptyText: string }) {
   const maximum = Math.max(0, ...items.map((item) => item.amountMinor));
   if (!items.length) return <div className="report-empty">{emptyText}</div>;
@@ -474,8 +528,12 @@ export function ReportsPage() {
                 }
 
                 return (
-                  (b.postedAt?.toMillis() || 0)
-                  - (a.postedAt?.toMillis() || 0)
+                  postedAtMillis(
+                    b.postedAt,
+                  )
+                  - postedAtMillis(
+                    a.postedAt,
+                  )
                 );
               },
             );
