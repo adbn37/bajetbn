@@ -121,6 +121,10 @@ Write-Host "=== STRUCTURAL VERIFICATION ===" -ForegroundColor Cyan
 Invoke-Checked "npm.cmd" @("run", "verify:all-structural")
 
 Write-Host ""
+Write-Host "=== v1.14.18 PERFORMANCE + MAINTENANCE VERIFICATION ===" -ForegroundColor Cyan
+Invoke-Checked "npm.cmd" @("run", "verify:v11418-performance")
+
+Write-Host ""
 Write-Host "=== PRODUCTION DEPENDENCY AUDIT ===" -ForegroundColor Cyan
 Invoke-Checked "npm.cmd" @("audit", "--omit=dev", "--audit-level=high")
 

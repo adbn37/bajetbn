@@ -39,6 +39,12 @@ const workflow =
     'utf8',
   ).replace(/\r\n?/g, '\n');
 
+const productionDeploy =
+  fs.readFileSync(
+    'scripts/deploy-production.ps1',
+    'utf8',
+  ).replace(/\r\n?/g, '\n');
+
 const spaceDetails =
   fs.readFileSync(
     'src/features/spaces/SpaceDetailsPage.tsx',
@@ -153,6 +159,28 @@ check(
     'run: npm run verify:v11418-performance',
   ),
   'Staging CI runs the v1.14.18 performance-maintenance verifier.',
+);
+
+const productionStructuralIndex =
+  productionDeploy.indexOf(
+    'Invoke-Checked "npm.cmd" @("run", "verify:all-structural")',
+  );
+
+const productionPerformanceIndex =
+  productionDeploy.indexOf(
+    'Invoke-Checked "npm.cmd" @("run", "verify:v11418-performance")',
+  );
+
+const productionAuditIndex =
+  productionDeploy.indexOf(
+    'Invoke-Checked "npm.cmd" @("audit", "--omit=dev", "--audit-level=high")',
+  );
+
+check(
+  productionStructuralIndex >= 0
+    && productionPerformanceIndex > productionStructuralIndex
+    && productionAuditIndex > productionPerformanceIndex,
+  'Controlled production deployment runs the v1.14.18 verifier before audit/build/deploy.',
 );
 
 check(
