@@ -67,6 +67,9 @@ const spaceFirstFinal =
   fs.readFileSync(
     'scripts/verify-space-first-final.mjs',
     'utf8',
+  ).replace(
+    /\r\n?/g,
+    '\n',
   );
 
 const personalFullModules =
