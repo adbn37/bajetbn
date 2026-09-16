@@ -64,8 +64,11 @@ for (const token of [
 
 need(
   details.includes(
-    "import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAutomationPanel';",
+    "import('../collaboration/SpaceReminderAutomationPanel')",
   )
+    && details.includes(
+      'default: module.SpaceReminderAutomationPanel',
+    )
     && details.includes('<SpaceReminderAutomationPanel')
     && details.includes("currentMember.status || 'active'"),
   'Space reminder settings must be mounted for active Space members.',

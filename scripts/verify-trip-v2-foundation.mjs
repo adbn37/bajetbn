@@ -67,8 +67,9 @@ need(
 );
 
 need(
-  details.includes("import { TripCommandCentre } from './TripCommandCentre';"),
-  'SpaceDetailsPage must import TripCommandCentre.',
+  details.includes("import('./TripCommandCentre')")
+    && details.includes('default: module.TripCommandCentre'),
+  'SpaceDetailsPage must load TripCommandCentre.',
 );
 
 need(

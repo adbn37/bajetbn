@@ -56,9 +56,12 @@ need(
 
 need(
   details.includes(
-    "import { CollectionCommandCentre } from './CollectionCommandCentre';",
-  ),
-  'Space Details must import CollectionCommandCentre.',
+    "import('./CollectionCommandCentre')",
+  )
+    && details.includes(
+      'default: module.CollectionCommandCentre',
+    ),
+  'Space Details must load CollectionCommandCentre.',
 );
 
 need(

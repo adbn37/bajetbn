@@ -81,8 +81,11 @@ for (const token of [
 
 need(
   details.includes(
-    "import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';",
+    "import('../collaboration/SpaceChatPanel')",
   )
+    && details.includes(
+      'default: module.SpaceChatPanel',
+    )
     && details.includes("{ id: 'chat', label: 'Chat' }")
     && details.includes("activeTab === 'chat'"),
   'Existing Space Chat tab wiring must remain intact.',

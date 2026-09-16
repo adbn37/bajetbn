@@ -58,25 +58,13 @@ import type {
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
-import { CollaborationPage, type CollaborationTab } from '../collaboration/CollaborationPage';
+import type { CollaborationTab } from '../collaboration/CollaborationPage';
 import { DEFAULT_TRANSACTION_CATEGORIES } from '../categories/defaultCategories';
-import { MoneyActivityModal } from '../transactions/TransactionsPage';
-import { SpaceChatPanel } from '../collaboration/SpaceChatPanel';
 import { useSpacePresenceHeartbeat } from '../collaboration/useSpacePresence';
-import { SpaceReminderAutomationPanel } from '../collaboration/SpaceReminderAutomationPanel';
-import { SharedExpensesPanel } from './SharedExpensesPanel';
-import { SpaceFundPanel } from './SpaceFundPanel';
 import { SpaceActionHub } from './SpaceActionHub';
-import { SpaceWorkPanel } from './SpaceWorkPanel';
-import { HouseholdCommandCentre } from './HouseholdCommandCentre';
-import { TripCommandCentre } from './TripCommandCentre';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
-import { CollectionCommandCentre } from './CollectionCommandCentre';
-import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
-import { MarketplaceSpaceManagementSection } from './MarketplaceSpaceManagementSection';
 import { SpaceAvatar } from './SpaceAvatar';
-import { SpaceAvatarSettings } from './SpaceAvatarSettings';
 
 import type { CustomSpaceModule } from '../../types/models';
 
@@ -120,6 +108,149 @@ const EmbeddedCommitmentsPage = lazy(
 
     return {
       default: module.CommitmentsPage,
+    };
+  },
+);
+
+const CollaborationPage = lazy(
+  async () => {
+    const module =
+      await import('../collaboration/CollaborationPage');
+
+    return {
+      default: module.CollaborationPage,
+    };
+  },
+);
+
+const MoneyActivityModal = lazy(
+  async () => {
+    const module =
+      await import('../transactions/TransactionsPage');
+
+    return {
+      default: module.MoneyActivityModal,
+    };
+  },
+);
+
+const SpaceChatPanel = lazy(
+  async () => {
+    const module =
+      await import('../collaboration/SpaceChatPanel');
+
+    return {
+      default: module.SpaceChatPanel,
+    };
+  },
+);
+
+const SpaceReminderAutomationPanel = lazy(
+  async () => {
+    const module =
+      await import('../collaboration/SpaceReminderAutomationPanel');
+
+    return {
+      default: module.SpaceReminderAutomationPanel,
+    };
+  },
+);
+
+const SharedExpensesPanel = lazy(
+  async () => {
+    const module =
+      await import('./SharedExpensesPanel');
+
+    return {
+      default: module.SharedExpensesPanel,
+    };
+  },
+);
+
+const SpaceFundPanel = lazy(
+  async () => {
+    const module =
+      await import('./SpaceFundPanel');
+
+    return {
+      default: module.SpaceFundPanel,
+    };
+  },
+);
+
+const SpaceWorkPanel = lazy(
+  async () => {
+    const module =
+      await import('./SpaceWorkPanel');
+
+    return {
+      default: module.SpaceWorkPanel,
+    };
+  },
+);
+
+const HouseholdCommandCentre = lazy(
+  async () => {
+    const module =
+      await import('./HouseholdCommandCentre');
+
+    return {
+      default: module.HouseholdCommandCentre,
+    };
+  },
+);
+
+const TripCommandCentre = lazy(
+  async () => {
+    const module =
+      await import('./TripCommandCentre');
+
+    return {
+      default: module.TripCommandCentre,
+    };
+  },
+);
+
+const CollectionCommandCentre = lazy(
+  async () => {
+    const module =
+      await import('./CollectionCommandCentre');
+
+    return {
+      default: module.CollectionCommandCentre,
+    };
+  },
+);
+
+const SmeOperationsCommandCentre = lazy(
+  async () => {
+    const module =
+      await import('./SmeOperationsCommandCentre');
+
+    return {
+      default: module.SmeOperationsCommandCentre,
+    };
+  },
+);
+
+const MarketplaceSpaceManagementSection = lazy(
+  async () => {
+    const module =
+      await import('./MarketplaceSpaceManagementSection');
+
+    return {
+      default: module.MarketplaceSpaceManagementSection,
+    };
+  },
+);
+
+const SpaceAvatarSettings = lazy(
+  async () => {
+    const module =
+      await import('./SpaceAvatarSettings');
+
+    return {
+      default: module.SpaceAvatarSettings,
     };
   },
 );
@@ -901,6 +1032,13 @@ export function SpaceDetailsPage() {
     {error && <div className="notice error">{error}</div>}
     {space.archivedAt && <div className="notice">This Space is hidden. Its previous money records are still kept.</div>}
 
+    <Suspense
+      fallback={
+        <div className="loading-panel">
+          Loading Space module...
+        </div>
+      }
+    >
     {space.type !== 'sme' && !compactActionHome && (
       <section className="space-details-identity">
         <SpaceAvatar space={space} size="large" />
@@ -1365,6 +1503,7 @@ export function SpaceDetailsPage() {
 
       <PersonalSpaceSettings space={space} />
     </>}
+    </Suspense>
   </main>;
 }
 

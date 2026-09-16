@@ -57,8 +57,11 @@ jobs:
       - name: Run all structural and release-safety checks
         run: npm run verify:all-structural
 
+      - name: Run v1.14.18 performance maintenance checks
+        run: npm run verify:v11418-performance
+
       - name: Build staging
-        run: npm run build:staging
+        run: npm run build:staging:ci
 
       - name: Verify build and PWA output
         run: |

@@ -57,9 +57,12 @@ need(
 
 need(
   details.includes(
-    "import { HouseholdCommandCentre } from './HouseholdCommandCentre';",
-  ),
-  'SpaceDetailsPage must import HouseholdCommandCentre.',
+    "import('./HouseholdCommandCentre')",
+  )
+    && details.includes(
+      'default: module.HouseholdCommandCentre',
+    ),
+  'SpaceDetailsPage must load HouseholdCommandCentre.',
 );
 
 need(

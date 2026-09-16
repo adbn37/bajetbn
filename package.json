@@ -1,7 +1,7 @@
 {
   "name": "bajetbn",
   "private": true,
-  "version": "1.14.17",
+  "version": "1.14.18",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -76,7 +76,10 @@
     "build:staging": "node scripts/build-app.mjs staging",
     "postbuild:staging": "node scripts/generate-service-worker.mjs",
     "verify:v11417-hardening": "node scripts/verify-v11417-hardening.mjs",
-    "verify:built-environment-v11417": "node scripts/verify-built-environment-v11417.mjs"
+    "verify:built-environment-v11417": "node scripts/verify-built-environment-v11417.mjs",
+    "build:staging:ci": "node scripts/build-app.mjs staging --skip-typecheck",
+    "postbuild:staging:ci": "node scripts/generate-service-worker.mjs",
+    "verify:v11418-performance": "node scripts/verify-v11418-performance-maintenance.mjs"
   },
   "dependencies": {
     "@bwip-js/browser": "4.11.2",

@@ -56,9 +56,12 @@ expect(
 
 expect(
   details.includes(
-    "import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';",
-  ),
-  'SpaceDetailsPage must import the SME Operations Command Centre.',
+    "import('./SmeOperationsCommandCentre')",
+  )
+    && details.includes(
+      'default: module.SmeOperationsCommandCentre',
+    ),
+  'SpaceDetailsPage must load the SME Operations Command Centre.',
 );
 
 expect(

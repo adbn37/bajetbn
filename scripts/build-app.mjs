@@ -4,9 +4,22 @@ import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 
 const mode = process.argv[2] || 'production';
+const skipTypecheck =
+  process.argv.includes(
+    '--skip-typecheck',
+  );
 
 if (!['production', 'staging'].includes(mode)) {
   throw new Error('Build mode must be production or staging.');
+}
+
+if (
+  skipTypecheck
+  && mode !== 'staging'
+) {
+  throw new Error(
+    'TypeScript skipping is allowed only for the staging CI build.',
+  );
 }
 
 const requiredKeys = [
@@ -146,10 +159,16 @@ function runNodeScript(scriptPath, args) {
   }
 }
 
-runNodeScript(
-  path.resolve('node_modules/typescript/bin/tsc'),
-  ['-b'],
-);
+if (!skipTypecheck) {
+  runNodeScript(
+    path.resolve('node_modules/typescript/bin/tsc'),
+    ['-b'],
+  );
+} else {
+  console.log(
+    'TypeScript compile: already validated by staging CI.',
+  );
+}
 
 runNodeScript(
   path.resolve('node_modules/vite/bin/vite.js'),
