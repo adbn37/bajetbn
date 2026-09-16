@@ -35,6 +35,35 @@ jobs:
     steps:
       - name: Check out staging source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect Functions changes
+        id: functions_changes
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: validating Firebase Functions."
+            exit 0
+          fi
+
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+
+          if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "No reliable previous SHA: validating Firebase Functions."
+            exit 0
+          fi
+
+          if git diff --quiet "$before" "$after" -- functions .node-version; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Firebase Functions source unchanged."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Firebase Functions source changed."
+          fi
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
@@ -46,12 +75,14 @@ jobs:
         run: npm ci
 
       - name: Install Functions dependencies
+        if: steps.functions_changes.outputs.changed == 'true'
         run: npm ci --prefix functions
 
       - name: TypeScript validation
         run: npm run typecheck
 
       - name: Build Firebase Functions
+        if: steps.functions_changes.outputs.changed == 'true'
         run: npm run build --prefix functions
 
       - name: Run all structural and release-safety checks

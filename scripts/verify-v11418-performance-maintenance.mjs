@@ -155,6 +155,66 @@ check(
   'Staging CI runs the v1.14.18 performance-maintenance verifier.',
 );
 
+check(
+  workflow.includes(
+    'fetch-depth: 2',
+  )
+    && workflow.includes(
+      '- name: Detect Functions changes',
+    )
+    && workflow.includes(
+      'id: functions_changes',
+    )
+    && workflow.includes(
+      'git diff --quiet "$before" "$after" -- functions .node-version',
+    )
+    && workflow.includes(
+      "if: steps.functions_changes.outputs.changed == 'true'",
+    ),
+  'Staging CI detects Functions changes before installing or building Functions.',
+);
+
+const functionsInstallIndex =
+  workflow.indexOf(
+    '- name: Install Functions dependencies',
+  );
+
+const functionsBuildIndex =
+  workflow.indexOf(
+    '- name: Build Firebase Functions',
+  );
+
+check(
+  functionsInstallIndex >= 0
+    && functionsBuildIndex > functionsInstallIndex
+    && workflow.slice(
+      functionsInstallIndex,
+      functionsInstallIndex + 220,
+    ).includes(
+      "if: steps.functions_changes.outputs.changed == 'true'",
+    )
+    && workflow.slice(
+      functionsBuildIndex,
+      functionsBuildIndex + 220,
+    ).includes(
+      "if: steps.functions_changes.outputs.changed == 'true'",
+    ),
+  'Functions npm ci and TypeScript build are conditional on Functions changes.',
+);
+
+check(
+  workflow.includes(
+    'if [ "${{ github.event_name }}" != "push" ]; then',
+  )
+    && workflow.includes(
+      'Manual run: validating Firebase Functions.',
+    )
+    && workflow.includes(
+      'No reliable previous SHA: validating Firebase Functions.',
+    ),
+  'Manual or ambiguous staging runs conservatively validate Firebase Functions.',
+);
+
 const deferredModules = [
   "../collaboration/CollaborationPage",
   "../transactions/TransactionsPage",
