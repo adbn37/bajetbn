@@ -2570,6 +2570,1051 @@ function assertInvoiceCustomer(
   return data;
 }
 
+export const ensureLinkedMoneyOffer = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const sourceType =
+      oneOf(
+        request.data?.sourceType,
+        [
+          'business_payroll_run',
+          'marketplace_payout',
+        ] as const,
+        'linked money source type',
+      );
+
+    const sourceId =
+      stringValue(
+        request.data?.sourceId,
+        'Linked money source',
+        160,
+      );
+
+    const sourceCollection =
+      sourceType
+        === 'business_payroll_run'
+        ? 'businessPayrollRuns'
+        : 'smePosPayouts';
+
+    const sourceRef =
+      db.collection(
+        sourceCollection,
+      ).doc(
+        sourceId,
+      );
+
+    const offerRef =
+      db.collection(
+        'linkedMoneyOffers',
+      ).doc(
+        sourceType
+        + '_'
+        + sourceId,
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            offerRef,
+          );
+
+        if (existing.exists) {
+          const data =
+            existing.data()
+            || {};
+
+          return {
+            status:
+              String(
+                data.status
+                || 'pending',
+              ),
+            offerId:
+              offerRef.id,
+            recipientUid:
+              String(
+                data.recipientUid
+                || '',
+              ),
+          };
+        }
+
+        const sourceSnapshot =
+          await transaction.get(
+            sourceRef,
+          );
+
+        if (
+          !sourceSnapshot.exists
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'The payment record was not found.',
+          );
+        }
+
+        const source =
+          sourceSnapshot.data()
+          || {};
+
+        if (
+          String(
+            source.ownerId
+            || '',
+          ) !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Only the Business Owner can create a recipient link for this payment.',
+          );
+        }
+
+        if (
+          source.status
+          !== 'posted'
+          || !source.transactionId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The Business payment must be posted before it can be linked.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            source.spaceId,
+            'Business Space',
+            160,
+          );
+
+        const spaceRef =
+          db.collection(
+            'spaces',
+          ).doc(
+            spaceId,
+          );
+
+        const spaceSnapshot =
+          await transaction.get(
+            spaceRef,
+          );
+
+        if (
+          !spaceSnapshot.exists
+          || spaceSnapshot.data()?.archivedAt
+          || spaceSnapshot.data()?.type
+            !== 'sme'
+          || String(
+            spaceSnapshot.data()?.ownerId
+            || '',
+          ) !== uid
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The Business Space is unavailable or ownership has changed.',
+          );
+        }
+
+        let recipientUid = '';
+        let recipientName = '';
+        let amountMinor = 0;
+        let transactionDate = '';
+        let kind:
+          | 'salary'
+          | 'seller_payout';
+
+        if (
+          sourceType
+          === 'business_payroll_run'
+        ) {
+          const employeeId =
+            stringValue(
+              source.employeeId,
+              'Employee',
+              160,
+            );
+
+          const employeeSnapshot =
+            await transaction.get(
+              db.collection(
+                'businessEmployees',
+              ).doc(
+                employeeId,
+              ),
+            );
+
+          if (
+            !employeeSnapshot.exists
+            || employeeSnapshot.data()?.ownerId
+              !== uid
+            || employeeSnapshot.data()?.spaceId
+              !== spaceId
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The employee record for this payroll payment is unavailable.',
+            );
+          }
+
+          recipientUid =
+            typeof employeeSnapshot.data()?.linkedUid
+              === 'string'
+              ? employeeSnapshot.data()!.linkedUid.trim()
+              : '';
+
+          recipientName =
+            String(
+              source.employeeName
+              || employeeSnapshot.data()?.name
+              || 'Employee',
+            );
+
+          amountMinor =
+            positiveMoney(
+              source.netMinor,
+            );
+
+          transactionDate =
+            localDate(
+              source.payDate,
+              'Payroll payment date',
+            );
+
+          kind =
+            'salary';
+        } else {
+          recipientUid =
+            typeof source.sellerUid
+              === 'string'
+              ? source.sellerUid.trim()
+              : '';
+
+          recipientName =
+            String(
+              source.sellerName
+              || 'Marketplace seller',
+            );
+
+          amountMinor =
+            positiveMoney(
+              source.amountMinor,
+            );
+
+          transactionDate =
+            localDate(
+              source.payoutDate,
+              'Payout date',
+            );
+
+          kind =
+            'seller_payout';
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        if (!recipientUid) {
+          transaction.update(
+            sourceRef,
+            {
+              linkedMoneyOfferId:
+                null,
+              linkedMoneyStatus:
+                'external',
+              updatedAt:
+                now,
+            },
+          );
+
+          return {
+            status:
+              'external',
+            offerId:
+              null,
+            recipientUid:
+              '',
+          };
+        }
+
+        const sourceSpaceName =
+          String(
+            spaceSnapshot.data()?.name
+            || 'Business',
+          );
+
+        transaction.create(
+          offerRef,
+          {
+            displayId:
+              displayId('LMO'),
+            sourceOwnerId:
+              uid,
+            sourceSpaceId:
+              spaceId,
+            sourceSpaceName,
+            sourceType,
+            sourceId,
+            sourceTransactionId:
+              String(
+                source.transactionId,
+              ),
+            recipientUid,
+            recipientName,
+            kind,
+            amountMinor,
+            currency:
+              String(
+                source.currency
+                || spaceSnapshot.data()?.currency
+                || 'BND',
+              ),
+            transactionDate,
+            status:
+              'pending',
+            personalSpaceId:
+              null,
+            acceptedAccountId:
+              null,
+            personalTransactionId:
+              null,
+            declinedAt:
+              null,
+            acceptedAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.update(
+          sourceRef,
+          {
+            linkedMoneyOfferId:
+              offerRef.id,
+            linkedMoneyStatus:
+              'pending',
+            updatedAt:
+              now,
+          },
+        );
+
+        createNotification(
+          transaction,
+          {
+            uid:
+              recipientUid,
+            spaceId,
+            type:
+              'linked_money_received',
+            title:
+              kind === 'salary'
+                ? 'Salary recorded for you'
+                : 'Seller payout recorded for you',
+            message:
+              sourceSpaceName
+              + ' recorded '
+              + (
+                amountMinor / 100
+              ).toFixed(2)
+              + ' '
+              + String(
+                source.currency
+                || spaceSnapshot.data()?.currency
+                || 'BND',
+              )
+              + ' for you. Add it to a Personal account if you want it in your BajetBN money records.',
+            targetPath:
+              '/linked-money',
+            actionLabel:
+              'Review payment',
+            now,
+          },
+        );
+
+        return {
+          status:
+            'pending',
+          offerId:
+            offerRef.id,
+          recipientUid,
+        };
+      },
+    );
+  },
+);
+
+export const getLinkedMoneyOffers = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const snapshot =
+      await db.collection(
+        'linkedMoneyOffers',
+      )
+        .where(
+          'recipientUid',
+          '==',
+          uid,
+        )
+        .get();
+
+    const offers =
+      snapshot.docs
+        .map(
+          (item) => ({
+            id:
+              item.id,
+            ...item.data(),
+          }) as DocumentData & {
+            id: string;
+          },
+        )
+        .sort(
+          (a, b) => {
+            const dateCompare =
+              String(
+                b.transactionDate
+                || '',
+              ).localeCompare(
+                String(
+                  a.transactionDate
+                  || '',
+                ),
+              );
+
+            if (
+              dateCompare !== 0
+            ) {
+              return dateCompare;
+            }
+
+            return (
+              Number(
+                b.createdAt?.toMillis?.()
+                || 0,
+              )
+              - Number(
+                a.createdAt?.toMillis?.()
+                || 0,
+              )
+            );
+          },
+        );
+
+    return {
+      offers,
+    };
+  },
+);
+
+export const respondLinkedMoneyOffer = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const offerId =
+      stringValue(
+        request.data?.offerId,
+        'Linked payment',
+        220,
+      );
+
+    const decision =
+      oneOf(
+        request.data?.decision,
+        [
+          'accept',
+          'decline',
+        ] as const,
+        'linked payment decision',
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const accountId =
+      decision === 'accept'
+        ? stringValue(
+            request.data?.accountId,
+            'Personal account',
+            160,
+          )
+        : '';
+
+    const personalSpaceId =
+      decision === 'accept'
+        ? stringValue(
+            request.data?.personalSpaceId,
+            'Personal Space',
+            160,
+          )
+        : '';
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const offerRef =
+      db.collection(
+        'linkedMoneyOffers',
+      ).doc(
+        offerId,
+      );
+
+    const accountRef =
+      accountId
+        ? db.collection(
+            'accounts',
+          ).doc(
+            accountId,
+          )
+        : null;
+
+    const personalSpaceRef =
+      personalSpaceId
+        ? db.collection(
+            'spaces',
+          ).doc(
+            personalSpaceId,
+          )
+        : null;
+
+    return db.runTransaction(
+      async (transaction) => {
+        const commandSnapshot =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (
+          commandSnapshot.exists
+        ) {
+          return commandSnapshot.data()
+            ?.result;
+        }
+
+        const offerSnapshot =
+          await transaction.get(
+            offerRef,
+          );
+
+        if (
+          !offerSnapshot.exists
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'This linked payment is unavailable.',
+          );
+        }
+
+        const offer =
+          offerSnapshot.data()
+          || {};
+
+        if (
+          String(
+            offer.recipientUid
+            || '',
+          ) !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'This linked payment belongs to another recipient.',
+          );
+        }
+
+        if (
+          offer.status
+          !== 'pending'
+        ) {
+          const result = {
+            status:
+              String(
+                offer.status
+                || 'pending',
+              ),
+            offerId,
+            personalTransactionId:
+              offer.personalTransactionId
+              || null,
+          };
+
+          transaction.create(
+            commandRef,
+            {
+              uid,
+              kind:
+                'respond_linked_money_offer',
+              idempotencyKey:
+                key,
+              result,
+              createdAt:
+                FieldValue.serverTimestamp(),
+            },
+          );
+
+          return result;
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        if (
+          decision === 'decline'
+        ) {
+          transaction.update(
+            offerRef,
+            {
+              status:
+                'declined',
+              declinedAt:
+                now,
+              updatedAt:
+                now,
+            },
+          );
+
+          const result = {
+            status:
+              'declined',
+            offerId,
+            personalTransactionId:
+              null,
+          };
+
+          transaction.create(
+            commandRef,
+            {
+              uid,
+              kind:
+                'respond_linked_money_offer',
+              idempotencyKey:
+                key,
+              result,
+              createdAt:
+                now,
+            },
+          );
+
+          return result;
+        }
+
+        if (
+          !accountRef
+          || !personalSpaceRef
+        ) {
+          throw new HttpsError(
+            'invalid-argument',
+            'Choose a Personal account.',
+          );
+        }
+
+        const [
+          accountSnapshot,
+          personalSpaceSnapshot,
+        ] =
+          await Promise.all([
+            transaction.get(
+              accountRef,
+            ),
+            transaction.get(
+              personalSpaceRef,
+            ),
+          ]);
+
+        if (
+          !accountSnapshot.exists
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'The Personal account was not found.',
+          );
+        }
+
+        const account =
+          accountRecord(
+            accountSnapshot.data(),
+            'Personal account',
+          );
+
+        if (
+          account.ownerId !== uid
+          || accountSnapshot.data()
+            ?.classification
+            !== 'personal'
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Choose one of your own Personal accounts.',
+          );
+        }
+
+        if (
+          !personalSpaceSnapshot.exists
+          || personalSpaceSnapshot.data()
+            ?.archivedAt
+          || personalSpaceSnapshot.data()
+            ?.type !== 'personal'
+          || String(
+            personalSpaceSnapshot.data()
+              ?.ownerId
+            || '',
+          ) !== uid
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Your Personal Space is unavailable.',
+          );
+        }
+
+        const currency =
+          String(
+            offer.currency
+            || 'BND',
+          );
+
+        if (
+          account.currency
+          !== currency
+          || String(
+            personalSpaceSnapshot.data()
+              ?.currency
+            || '',
+          ) !== currency
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The Personal account must use the same currency as this payment.',
+          );
+        }
+
+        const amountMinor =
+          positiveMoney(
+            offer.amountMinor,
+          );
+
+        const transactionDate =
+          localDate(
+            offer.transactionDate,
+            'Payment date',
+          );
+
+        const kind =
+          oneOf(
+            offer.kind,
+            [
+              'salary',
+              'seller_payout',
+            ] as const,
+            'linked payment kind',
+          );
+
+        const category =
+          systemCategories.get(
+            kind === 'salary'
+              ? 'income-salary'
+              : 'income-other',
+          );
+
+        if (!category) {
+          throw new HttpsError(
+            'internal',
+            'The Personal income category is unavailable.',
+          );
+        }
+
+        const personalTransactionRef =
+          db.collection(
+            'transactions',
+          ).doc();
+
+        const delta =
+          accountEffect(
+            account.type,
+            'in',
+            amountMinor,
+          );
+
+        updateAccountBalance(
+          transaction,
+          accountRef,
+          account,
+          delta,
+        );
+
+        const ledgerEntryId =
+          createLedgerEntry(
+            transaction,
+            {
+              accountId,
+              ownerId:
+                uid,
+              spaceId:
+                personalSpaceId,
+              transactionId:
+                personalTransactionRef.id,
+              entryType:
+                'linked_money_in',
+              amountMinor:
+                delta,
+              currency,
+              idempotencyKey:
+                key,
+              now,
+            },
+          );
+
+        transaction.create(
+          personalTransactionRef,
+          {
+            displayId:
+              displayId('TXN'),
+            ownerId:
+              uid,
+            createdBy:
+              uid,
+            type:
+              'income',
+            status:
+              'posted',
+            spaceId:
+              personalSpaceId,
+            accountId,
+            destinationAccountId:
+              null,
+            amountMinor,
+            currency,
+            category:
+              category.name,
+            categoryId:
+              category.id,
+            categoryIcon:
+              category.icon,
+            categoryColor:
+              category.color,
+            categoryScope:
+              category.scope,
+            categoryIsSystem:
+              true,
+            counterparty:
+              String(
+                offer.sourceSpaceName
+                || 'Business',
+              ),
+            note:
+              kind === 'salary'
+                ? 'Linked salary payment from '
+                  + String(
+                    offer.sourceSpaceName
+                    || 'Business',
+                  )
+                : 'Linked seller payout from '
+                  + String(
+                    offer.sourceSpaceName
+                    || 'Business',
+                  ),
+            labels:
+              [
+                'linked-money',
+                kind === 'salary'
+                  ? 'salary'
+                  : 'seller-payout',
+              ],
+            paymentMethod:
+              null,
+            paymentMethodLabel:
+              null,
+            transactionDate,
+            reversalOf:
+              null,
+            reversedBy:
+              null,
+            budgetIds:
+              [],
+            commitmentId:
+              null,
+            commitmentPaymentId:
+              null,
+            linkedMoneyOfferId:
+              offerId,
+            linkedMoneySourceTransactionId:
+              String(
+                offer.sourceTransactionId
+                || '',
+              ),
+            linkedMoneyKind:
+              kind,
+            createdAt:
+              now,
+            postedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.update(
+          offerRef,
+          {
+            status:
+              'accepted',
+            personalSpaceId,
+            acceptedAccountId:
+              accountId,
+            personalTransactionId:
+              personalTransactionRef.id,
+            acceptedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        const sourceType =
+          oneOf(
+            offer.sourceType,
+            [
+              'business_payroll_run',
+              'marketplace_payout',
+            ] as const,
+            'linked money source type',
+          );
+
+        const sourceCollection =
+          sourceType
+            === 'business_payroll_run'
+            ? 'businessPayrollRuns'
+            : 'smePosPayouts';
+
+        const sourceRef =
+          db.collection(
+            sourceCollection,
+          ).doc(
+            stringValue(
+              offer.sourceId,
+              'Linked money source',
+              160,
+            ),
+          );
+
+        transaction.update(
+          sourceRef,
+          {
+            linkedMoneyStatus:
+              'accepted',
+            linkedMoneyOfferId:
+              offerId,
+            updatedAt:
+              now,
+          },
+        );
+
+        const sourceOwnerId =
+          String(
+            offer.sourceOwnerId
+            || '',
+          );
+
+        if (
+          sourceOwnerId
+          && sourceOwnerId !== uid
+        ) {
+          createNotification(
+            transaction,
+            {
+              uid:
+                sourceOwnerId,
+              spaceId:
+                String(
+                  offer.sourceSpaceId
+                  || '',
+                ),
+              type:
+                'linked_money_accepted',
+              title:
+                'Recipient added the payment',
+              message:
+                String(
+                  offer.recipientName
+                  || 'The recipient',
+                )
+                + ' added the payment to their Personal Money records.',
+              targetPath:
+                sourceType
+                  === 'business_payroll_run'
+                  ? '/spaces/'
+                    + String(
+                      offer.sourceSpaceId
+                      || '',
+                    )
+                    + '/business/payroll'
+                  : '/spaces/'
+                    + String(
+                      offer.sourceSpaceId
+                      || '',
+                    )
+                    + '?section=marketplace-payouts',
+              actionLabel:
+                'View source',
+              now,
+            },
+          );
+        }
+
+        const result = {
+          status:
+            'accepted',
+          offerId,
+          personalTransactionId:
+            personalTransactionRef.id,
+          ledgerEntryId,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'respond_linked_money_offer',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
 export const postTransaction = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const type = oneOf(request.data?.type, transactionTypes, 'transaction type');

@@ -3,6 +3,10 @@ import { httpsCallable } from 'firebase/functions';
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
 import {
+  ensureLinkedMoneyOffer,
+} from './linkedMoneyRepository';
+
+import {
   addOfflineTransactionCommand,
   listOfflineCommands,
   notifyOfflineSyncCompleted,
@@ -289,11 +293,30 @@ export async function reviewFinancialApprovalRequest(input: {
     idempotencyKey: idempotencyKey(),
   });
 
-  return result.data as {
-    approvalId: string;
-    status: 'approved' | 'rejected';
-    transactionId?: string;
-  };
+  const data =
+    result.data as {
+      approvalId: string;
+      status: 'approved' | 'rejected';
+      transactionId?: string;
+      payoutId?: string;
+    };
+
+  if (
+    data.status === 'approved'
+    && data.payoutId
+  ) {
+    try {
+      await ensureLinkedMoneyOffer(
+        'marketplace_payout',
+        data.payoutId,
+      );
+    } catch {
+      // Approval and payout remain valid. Recipient linking is
+      // optional and may be retried independently.
+    }
+  }
+
+  return data;
 }
 
 export async function postTransaction(input: {

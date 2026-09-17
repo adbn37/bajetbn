@@ -262,6 +262,42 @@ export interface SmePosPayoutPayment {
   ledgerEntryId: string;
 }
 
+export type LinkedMoneyKind =
+  | 'salary'
+  | 'seller_payout';
+
+export type LinkedMoneyOfferStatus =
+  | 'pending'
+  | 'accepted'
+  | 'declined';
+
+export interface LinkedMoneyOffer {
+  id: string;
+  displayId: string;
+  sourceOwnerId: string;
+  sourceSpaceId: string;
+  sourceSpaceName: string;
+  sourceType:
+    | 'business_payroll_run'
+    | 'marketplace_payout';
+  sourceId: string;
+  sourceTransactionId: string;
+  recipientUid: string;
+  recipientName: string;
+  kind: LinkedMoneyKind;
+  amountMinor: number;
+  currency: string;
+  transactionDate: string;
+  status: LinkedMoneyOfferStatus;
+  personalSpaceId?: string | null;
+  acceptedAccountId?: string | null;
+  personalTransactionId?: string | null;
+  declinedAt?: Timestamp | null;
+  acceptedAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface SmePosPayout {
   id: string;
   displayId: string;
@@ -291,6 +327,8 @@ export interface SmePosPayout {
   ledgerEntryIds?: string[];
   createdBy: string;
   createdByName?: string;
+  linkedMoneyOfferId?: string | null;
+  linkedMoneyStatus?: 'pending' | 'accepted' | 'declined' | 'external' | 'unavailable' | null;
   createdAt?: Timestamp;
 }
 
@@ -571,6 +609,8 @@ export interface BusinessPayrollRun {
   status: BusinessPayrollRunStatus;
   transactionId?: string | null;
   idempotencyKey: string;
+  linkedMoneyOfferId?: string | null;
+  linkedMoneyStatus?: 'pending' | 'accepted' | 'declined' | 'external' | 'unavailable' | null;
   failureReason?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -856,6 +896,9 @@ export interface FinancialTransaction {
   sharedBillPaymentId?: string | null;
   financialApprovalId?: string | null;
   approvedBy?: string | null;
+  linkedMoneyOfferId?: string | null;
+  linkedMoneySourceTransactionId?: string | null;
+  linkedMoneyKind?: LinkedMoneyKind | null;
   paymentProofPath?: string | null;
   recurringTemplateId?: string | null;
   recurringRunId?: string | null;

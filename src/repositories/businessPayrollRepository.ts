@@ -17,6 +17,10 @@ import {
   requireFirebase,
 } from '../services/firebase';
 
+import {
+  ensureLinkedMoneyOffer,
+} from './linkedMoneyRepository';
+
 import type {
   BusinessEmployee,
   BusinessPayrollRun,
@@ -403,6 +407,8 @@ async function postPayrollTransaction(
           input.currency,
         transactionDate:
           input.payDate,
+        categoryId:
+          'expense-wages',
         category:
           'Payroll / Wages',
         categoryScope:
@@ -448,6 +454,29 @@ async function postPayrollTransaction(
           serverTimestamp(),
       },
     );
+
+    try {
+      await ensureLinkedMoneyOffer(
+        'business_payroll_run',
+        runId,
+      );
+    } catch (
+      linkedError
+    ) {
+      await updateDoc(
+        runRef,
+        {
+          linkedMoneyStatus:
+            'unavailable',
+          linkedMoneyFailureReason:
+            errorMessage(
+              linkedError,
+            ),
+          updatedAt:
+            serverTimestamp(),
+        },
+      );
+    }
 
     return data.transactionId;
   } catch (error) {

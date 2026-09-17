@@ -38,6 +38,7 @@ const SmePosArchivedRecordsPage = lazy(() => import('../features/sme-pos/SmePosA
 const AccountsPage = lazy(() => import('../features/accounts/AccountsPage').then((module) => ({ default: module.AccountsPage })));
 const ClosedAccountsPage = lazy(() => import('../features/accounts/ClosedAccountsPage').then((module) => ({ default: module.ClosedAccountsPage })));
 const TransactionsPage = lazy(() => import('../features/transactions/TransactionsPage').then((module) => ({ default: module.TransactionsPage })));
+const LinkedMoneyPage = lazy(() => import('../features/linked-money/LinkedMoneyPage').then((module) => ({ default: module.LinkedMoneyPage })));
 const PublicTransactionSharePage = lazy(() => import('../features/transactions/PublicTransactionSharePage').then((module) => ({ default: module.PublicTransactionSharePage })));
 const RecurringTransactionsPage = lazy(() => import('../features/recurring/RecurringTransactionsPage').then((module) => ({ default: module.RecurringTransactionsPage })));
 const StoppedRecurringTransactionsPage = lazy(() => import('../features/recurring/StoppedRecurringTransactionsPage').then((module) => ({ default: module.StoppedRecurringTransactionsPage })));
@@ -109,6 +110,7 @@ export default function App() {
                   <Route path="accounts" element={<AccountsPage />} />
                   <Route path="accounts/closed" element={<ClosedAccountsPage />} />
                   <Route path="transactions" element={<TransactionsPage />} />
+                  <Route path="linked-money" element={<LinkedMoneyPage />} />
                   <Route path="recurring" element={<RecurringTransactionsPage />} />
                   <Route path="recurring/stopped" element={<StoppedRecurringTransactionsPage />} />
                   <Route path="budgets" element={<BudgetsPage />} />

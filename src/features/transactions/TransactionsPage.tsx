@@ -965,6 +965,7 @@ export function TransactionsPage() {
         title="Money activity"
         description="View your Personal money activity. Business money stays inside its Business Space."
         action={<div className="header-actions">
+          <Link className="button secondary" to="/linked-money">Linked money</Link>
           <Link className="button secondary" to="/recurring">Recurring money</Link>
           {approvalRequests.length > 0 && (
             <button

@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
+import { ensureLinkedMoneyOffer } from './linkedMoneyRepository';
 import type {
   PaymentMethodCode,
   SmePosAccess,
@@ -988,18 +989,36 @@ export async function recordMarketplaceSellerPayout(input: {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'recordMarketplaceSellerPayout');
 
-  return call({
-    ...input,
-    idempotencyKey: crypto.randomUUID(),
-  }) as Promise<{
-    data: {
-      status: 'posted' | 'pending_approval';
-      approvalId?: string;
-      payoutId?: string;
-      sellerId: string;
-      transactionId?: string;
-      transactionIds?: string[];
-      balanceAfterMinor: number;
+  const result =
+    await call({
+      ...input,
+      idempotencyKey: crypto.randomUUID(),
+    }) as {
+      data: {
+        status: 'posted' | 'pending_approval';
+        approvalId?: string;
+        payoutId?: string;
+        sellerId: string;
+        transactionId?: string;
+        transactionIds?: string[];
+        balanceAfterMinor: number;
+      };
     };
-  }>;
+
+  if (
+    result.data.status === 'posted'
+    && result.data.payoutId
+  ) {
+    try {
+      await ensureLinkedMoneyOffer(
+        'marketplace_payout',
+        result.data.payoutId,
+      );
+    } catch {
+      // The payout is valid even if the optional recipient link
+      // cannot be created immediately. It can be retried later.
+    }
+  }
+
+  return result;
 }

@@ -795,7 +795,9 @@ export function BusinessPayrollPage() {
       });
 
       setFeedback(
-        'Payroll posted to the Business Account and Business transaction ledger.',
+        employee.linkedUid
+          ? 'Payroll posted. The linked BajetBN recipient will be able to add the salary to Personal Money.'
+          : 'Payroll posted. This employee is not linked to a BajetBN account, so the salary remains Business-side only.',
       );
 
       setPayrollForm(
