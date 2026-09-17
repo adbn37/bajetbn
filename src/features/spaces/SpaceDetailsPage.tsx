@@ -1871,16 +1871,18 @@ function SpaceHomeOverview({
           <div className="space-home-v1147-activity">
             {recentRows.map(
               (item) => (
-                <Link
+                <button
+                  type="button"
                   key={item.id}
-                  className="space-home-v1147-activity-row"
-                  to={
-              space.type === 'sme'
-                ? `/spaces/${space.id}/business/money`
-                : '/spaces/'
-                  + space.id
-                  + '?section=money'
-            }
+                  className="space-home-v1147-activity-row space-home-v1147-activity-button"
+                  onClick={() => {
+                    const destination =
+                      space.type === 'sme'
+                        ? `/spaces/${space.id}/business/money`
+                        : `/spaces/${space.id}?section=money`;
+
+                    window.location.assign(destination);
+                  }}
                 >
                   <div>
                     <strong>
@@ -1906,7 +1908,7 @@ function SpaceHomeOverview({
                   <strong>
                     {transactionAmount(item)}
                   </strong>
-                </Link>
+                </button>
               ),
             )}
           </div>
