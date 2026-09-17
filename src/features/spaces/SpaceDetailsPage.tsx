@@ -1856,9 +1856,11 @@ function SpaceHomeOverview({
           <Link
             className="button secondary compact"
             to={
-              '/spaces/'
-              + space.id
-              + '?section=money'
+              space.type === 'sme'
+                ? `/spaces/${space.id}/business/money`
+                : '/spaces/'
+                  + space.id
+                  + '?section=money'
             }
           >
             View all
@@ -1873,10 +1875,12 @@ function SpaceHomeOverview({
                   key={item.id}
                   className="space-home-v1147-activity-row"
                   to={
-                    '/spaces/'
-                    + space.id
-                    + '?section=money'
-                  }
+              space.type === 'sme'
+                ? `/spaces/${space.id}/business/money`
+                : '/spaces/'
+                  + space.id
+                  + '?section=money'
+            }
                 >
                   <div>
                     <strong>
