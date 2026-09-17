@@ -79,6 +79,10 @@ for (
     'listTransactionsForOwnerAccount(',
     "space.type === 'personal'",
     'setWritableAccounts(',
+    'if (!cancelled) void load();',
+    'View your Personal money activity. Business money stays inside its Business Space.',
+    'Personal money only.',
+    'Business activity is kept inside its specific Business Space.',
   ]
 ) {
   assert.equal(
@@ -99,6 +103,8 @@ for (
     'listFinancialApprovalRequests(',
     'spaceFilter',
     'setSpaceFilter',
+    'Personal and Business money together.',
+    'View Personal and Business money activity in one place',
   ]
 ) {
   assert.equal(

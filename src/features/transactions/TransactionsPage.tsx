@@ -488,6 +488,18 @@ export function TransactionsPage() {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) void load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, lastCompletedAt]);
+
   const loadApprovals = async () => {
     setApprovalRequests([]);
     setApprovalError('');
@@ -951,7 +963,7 @@ export function TransactionsPage() {
       <PageHeader
         eyebrow="Money records"
         title="Money activity"
-        description="View Personal and Business money activity in one place, with shared Business access respected."
+        description="View your Personal money activity. Business money stays inside its Business Space."
         action={<div className="header-actions">
           <Link className="button secondary" to="/recurring">Recurring money</Link>
           {approvalRequests.length > 0 && (
@@ -972,7 +984,7 @@ export function TransactionsPage() {
       />
       {error && <div className="notice error">{error}</div>}
       {feedback && <div className="notice success">{feedback} {feedback.includes('device') && <Link to="/offline-sync">View Offline & sync</Link>}</div>}
-      <div className="info-banner"><strong>Personal and Business money together.</strong><span>Shared Business activity appears only when you have ledger access.</span></div>
+      <div className="info-banner"><strong>Personal money only.</strong><span>Business activity is kept inside its specific Business Space.</span></div>
 
       <section className="transaction-summary">
         <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
