@@ -1457,7 +1457,7 @@ export function MoneyActivityModal({
   labelSuggestions?: string[];
   timezone: string;
   online: boolean;
-  initialType?: Exclude<PrimaryType, 'transfer'>;
+  initialType?: PrimaryType;
   initialValues?: TransactionInput;
   lockedSpaceId?: string;
   onCategoriesChanged?: () => Promise<TransactionCategory[]>;

@@ -11657,3 +11657,185 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+
+/* ==========================================================
+   BAJETBN V115 REFERENCE UI + SPACE REFRESH
+   Theme-aware staging UI pass.
+   ========================================================== */
+
+.bajetbn-reference-home,
+.bajetbn-reference-space {
+  --bajetbn-ref-radius-xl: 24px;
+  --bajetbn-ref-radius-lg: 18px;
+  --bajetbn-ref-radius-md: 14px;
+}
+
+.bajetbn-total-assets-card {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 0.9rem;
+  padding: 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: var(--bajetbn-ref-radius-xl);
+  background:
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--accent) 17%, transparent), transparent 44%),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--accent) 6%), var(--surface));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.12);
+}
+
+.bajetbn-total-assets-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bajetbn-total-assets-head > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.bajetbn-total-assets-head span {
+  font-size: 0.94rem;
+  font-weight: 720;
+}
+
+.bajetbn-total-assets-head small {
+  color: var(--muted);
+}
+
+.bajetbn-asset-visibility {
+  min-width: 64px;
+  height: 38px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.bajetbn-total-assets-value {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: clamp(1.8rem, 5vw, 2.7rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.bajetbn-total-assets-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+
+.bajetbn-total-assets-breakdown > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: var(--bajetbn-ref-radius-md);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+}
+
+.bajetbn-total-assets-breakdown span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.bajetbn-total-assets-breakdown strong {
+  overflow: hidden;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bajetbn-reference-home .home-v110-account-carousel {
+  gap: 0.65rem;
+  padding-bottom: 0.35rem;
+  scroll-snap-type: x mandatory;
+}
+
+.bajetbn-reference-home .home-v110-account-slide {
+  flex: 0 0 min(78vw, 355px) !important;
+  min-height: 160px;
+  border-radius: var(--bajetbn-ref-radius-xl) !important;
+  scroll-snap-align: start;
+}
+
+.bajetbn-reference-home .home-v111-selected-month-summary,
+.bajetbn-reference-home .home-v111-account-hint {
+  display: none;
+}
+
+.bajetbn-reference-actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.55rem !important;
+}
+
+.bajetbn-reference-actions > a,
+.bajetbn-reference-actions > button {
+  display: grid !important;
+  align-content: center;
+  justify-items: center;
+  min-width: 0;
+  min-height: 92px;
+  gap: 0.2rem;
+  padding: 0.8rem 0.55rem !important;
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: var(--bajetbn-ref-radius-lg) !important;
+  background: var(--surface);
+  box-shadow: none !important;
+  color: var(--text);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bajetbn-reference-actions > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bajetbn-reference-actions > :is(a, button) > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.bajetbn-reference-actions > :is(a, button) > strong {
+  font-size: 0.84rem;
+}
+
+.bajetbn-reference-actions > :is(a, button) > small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.bajetbn-reference-space .panel,
+.bajetbn-reference-space .sme-pos-hero,
+.bajetbn-reference-space .collection-space-hero {
+  border-radius: var(--bajetbn-ref-radius-xl);
+}
+
+@media (max-width: 720px) {
+  .bajetbn-reference-actions > a,
+  .bajetbn-reference-actions > button {
+    min-height: 80px;
+    padding-inline: 0.35rem !important;
+  }
+
+  .bajetbn-reference-actions > :is(a, button) > small {
+    display: none;
+  }
+}

@@ -1017,7 +1017,10 @@ export function SpaceDetailsPage() {
    */
   const showDetailedSpaceOverviews = () => false;
 
-  return <main className="page space-details-page">
+  return <main
+    className={`page space-details-page bajetbn-reference-space bajetbn-reference-space-${space.type}`}
+    data-space-type={space.type}
+  >
     <PageHeader
       eyebrow={`${spaceTypeLabel[space.type]} Space`}
       title={space.name}

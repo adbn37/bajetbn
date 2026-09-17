@@ -195,6 +195,16 @@ export function DashboardPage() {
   ] = useState(false);
 
   const [
+    quickInitialType,
+    setQuickInitialType,
+  ] = useState<'expense' | 'income' | 'transfer'>('expense');
+
+  const [
+    assetsVisible,
+    setAssetsVisible,
+  ] = useState(true);
+
+  const [
     quickOptionsLoaded,
     setQuickOptionsLoaded,
   ] = useState(false);
@@ -281,6 +291,56 @@ export function DashboardPage() {
               === 'personal',
         ),
       [accounts],
+    );
+
+  const personalAssetAccounts =
+    useMemo(
+      () =>
+        quickAccounts.filter(
+          (account) =>
+            account.type !== 'credit_card',
+        ),
+      [quickAccounts],
+    );
+
+  const totalPersonalAssets =
+    useMemo(
+      () =>
+        personalAssetAccounts.reduce(
+          (sum, account) =>
+            sum + account.ledgerBalanceMinor,
+          0,
+        ),
+      [personalAssetAccounts],
+    );
+
+  const personalAssetBreakdown =
+    useMemo(
+      () => {
+        const groups = new Map<string, number>();
+
+        personalAssetAccounts.forEach(
+          (account) => {
+            const label =
+              account.type === 'bank'
+                ? 'Bank'
+                : account.type === 'cash'
+                  ? 'Cash'
+                  : account.type === 'e_wallet'
+                    ? 'E-wallet'
+                    : 'Other';
+
+            groups.set(
+              label,
+              (groups.get(label) || 0)
+              + account.ledgerBalanceMinor,
+            );
+          },
+        );
+
+        return Array.from(groups.entries());
+      },
+      [personalAssetAccounts],
     );
 
   const activeAccount =
@@ -436,14 +496,22 @@ export function DashboardPage() {
     ]);
 
   const openQuickActivity =
-    useCallback(async () => {
+    useCallback(async (
+      initialType: 'expense' | 'income' | 'transfer' = 'expense',
+    ) => {
       if (
         loading
         || quickLoading
         || quickAccounts.length === 0
+        || (
+          initialType === 'transfer'
+          && quickAccounts.length < 2
+        )
       ) {
         return;
       }
+
+      setQuickInitialType(initialType);
 
       const ready =
         await loadQuickOptions();
@@ -802,7 +870,7 @@ export function DashboardPage() {
     || 'there';
 
   return (
-    <main className="page home-v110">
+    <main className="page home-v110 bajetbn-reference-home">
       <header className="home-v110-header">
         <div>
           <span className="home-v110-kicker">
@@ -843,6 +911,64 @@ export function DashboardPage() {
           and try again.
         </div>
       )}
+
+      <section
+        className="bajetbn-total-assets-card"
+        aria-label="Personal total assets"
+      >
+        <div className="bajetbn-total-assets-head">
+          <div>
+            <span>Total assets</span>
+            <small>Personal only - Business excluded</small>
+          </div>
+
+          <button
+            type="button"
+            className="bajetbn-asset-visibility"
+            onClick={() =>
+              setAssetsVisible(
+                (current) => !current,
+              )
+            }
+          >
+            {assetsVisible ? 'Hide' : 'Show'}
+          </button>
+        </div>
+
+        <strong className="bajetbn-total-assets-value">
+          {assetsVisible
+            ? formatMoney(
+                totalPersonalAssets,
+                currency,
+              )
+            : '******'}
+        </strong>
+
+        <div className="bajetbn-total-assets-breakdown">
+          {personalAssetBreakdown.length > 0
+            ? personalAssetBreakdown.map(
+                ([label, value]) => (
+                  <div key={label}>
+                    <span>{label}</span>
+                    <strong>
+                      {assetsVisible
+                        ? formatMoney(
+                            value,
+                            currency,
+                          )
+                        : '****'}
+                    </strong>
+                  </div>
+                ),
+              )
+            : (
+              <div>
+                <span>Accounts</span>
+                <strong>No personal assets yet</strong>
+              </div>
+            )}
+        </div>
+      </section>
 
       {homeAccounts.length > 0 ? (
         <section className="home-v110-carousel-section">
@@ -1068,41 +1194,45 @@ export function DashboardPage() {
         </section>
       )}
 
-      <section className="home-v110-shortcuts">
-        <Link to="/bills">
-          <span aria-hidden="true">
-            ▤
-          </span>
+      <section className="home-v110-shortcuts bajetbn-reference-actions">
+        <button
+          type="button"
+          onClick={() =>
+            void openQuickActivity('expense')
+          }
+        >
+          <span aria-hidden="true">+</span>
+          <strong>Add</strong>
+          <small>Transaction</small>
+        </button>
 
-          <strong>Bills</strong>
-          <small>Manage</small>
-        </Link>
+        <button
+          type="button"
+          disabled={quickAccounts.length < 2}
+          onClick={() =>
+            void openQuickActivity('transfer')
+          }
+        >
+          <span aria-hidden="true">M</span>
+          <strong>Move</strong>
+          <small>Money</small>
+        </button>
 
-        <Link to="/debt">
-          <span aria-hidden="true">
-            ↔
-          </span>
-
-          <strong>Debt</strong>
-          <small>Owe & owed</small>
-        </Link>
+        <button
+          type="button"
+          onClick={() =>
+            void openQuickActivity('expense')
+          }
+        >
+          <span aria-hidden="true">R</span>
+          <strong>Receipt</strong>
+          <small>Add expense</small>
+        </button>
 
         <Link to="/reports">
-          <span aria-hidden="true">
-            ⌁
-          </span>
-
+          <span aria-hidden="true">%</span>
           <strong>Reports</strong>
           <small>Insights</small>
-        </Link>
-
-        <Link to="/settings">
-          <span aria-hidden="true">
-            ✦
-          </span>
-
-          <strong>Themes</strong>
-          <small>Appearance</small>
         </Link>
       </section>
 
@@ -1462,6 +1592,7 @@ export function DashboardPage() {
               profile.timezone
             }
             online={online}
+            initialType={quickInitialType}
             onClose={
               closeQuickActivity
             }
