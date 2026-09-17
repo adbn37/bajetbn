@@ -19,8 +19,7 @@ import {
 } from '../categories/defaultCategories';
 import {
   businessSpaceIdsForAccount,
-  listAccountsForSpace,
-  listAllAccounts,
+  listPersonalAccounts,
 } from '../../repositories/accountRepository';
 import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
 import { createCategory, listAllCustomCategories, updateCategory } from '../../repositories/categoryRepository';
@@ -29,10 +28,8 @@ import { listSpaces } from '../../repositories/spaceRepository';
 import {
   getTransactionAttachmentUrl,
   listAllTransactionAttachments,
-  listBusinessTransactionsForSpace,
-  listFinancialApprovalRequests,
   listTransactionAttachments,
-  listTransactions,
+  listTransactionsForOwnerAccount,
   postTransaction,
   reviewFinancialApprovalRequest,
   removeTransactionAttachment,
@@ -290,7 +287,6 @@ export function TransactionsPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('current_month');
-  const [spaceFilter, setSpaceFilter] = useState('all');
   const initialAccountFilter = searchParams.get('accountId');
 
   const requestedTransactionId =
@@ -322,131 +318,51 @@ export function TransactionsPage() {
 
   const load = async () => {
     if (!user) return;
+
     setLoading(true);
     setError('');
+
     try {
-      const [nextTransactions, nextAccounts, nextSpaces, nextCustomCategories, nextAttachments] = await Promise.all([
-        listTransactions(user.uid),
-        listAllAccounts(user.uid),
-        listSpaces(user.uid),
-        listAllCustomCategories(user.uid),
-        listAllTransactionAttachments(user.uid),
+      const [
+        nextAccounts,
+        nextSpaces,
+        nextCustomCategories,
+        nextAttachments,
+      ] = await Promise.all([
+        listPersonalAccounts(
+          user.uid,
+        ),
+        listSpaces(
+          user.uid,
+        ),
+        listAllCustomCategories(
+          user.uid,
+        ),
+        listAllTransactionAttachments(
+          user.uid,
+        ),
       ]);
 
-      const activeSpaces =
-        nextSpaces.filter(
-          (space) => !space.archivedAt,
-        );
-
-      const businessSpaces =
-        activeSpaces.filter(
-          (space) => space.type === 'sme',
-        );
-
-      const businessBundles =
+      const transactionLists =
         await Promise.all(
-          businessSpaces.map(
-            async (space) => {
-              const [spaceAccounts, spaceTransactions] =
-                await Promise.all([
-                  listAccountsForSpace(space.id),
-                  listBusinessTransactionsForSpace(space.id),
-                ]);
-
-              return {
-                spaceId: space.id,
-                accounts: spaceAccounts,
-                transactions: spaceTransactions,
-              };
-            },
-          ),
-        );
-
-      const historyAccountMap =
-        new Map<string, Account>(
           nextAccounts.map(
-            (account) => [account.id, account],
+            (account) =>
+              listTransactionsForOwnerAccount(
+                user.uid,
+                account.id,
+              ),
           ),
         );
-
-      const writableAccountMap =
-        new Map<string, Account>(
-          nextAccounts
-            .filter(
-              (account) =>
-                !account.archivedAt
-                && !account.closedAt,
-            )
-            .map(
-              (account) => [account.id, account],
-            ),
-        );
-
-      const mergeSharedAccount = (
-        target: Map<string, Account>,
-        account: Account,
-        spaceId: string,
-      ) => {
-        const existing =
-          target.get(account.id);
-
-        const allowedSpaceIds =
-          Array.from(
-            new Set([
-              ...(existing?.businessSpaceIds || []),
-              spaceId,
-            ]),
-          );
-
-        target.set(
-          account.id,
-          {
-            ...(existing || account),
-            ...account,
-            businessSpaceIds:
-              allowedSpaceIds,
-          },
-        );
-      };
-
-      businessBundles.forEach(
-        (bundle) => {
-          bundle.accounts.forEach(
-            (account) => {
-              if (account.ownerId === user.uid) {
-                return;
-              }
-
-              if (account.sharedCanViewLedger === true) {
-                mergeSharedAccount(
-                  historyAccountMap,
-                  account,
-                  bundle.spaceId,
-                );
-              }
-
-              if (account.sharedCanUseAccount === true) {
-                mergeSharedAccount(
-                  writableAccountMap,
-                  account,
-                  bundle.spaceId,
-                );
-              }
-            },
-          );
-        },
-      );
 
       const transactionMap =
-        new Map<string, FinancialTransaction>(
-          nextTransactions.map(
-            (item) => [item.id, item],
-          ),
-        );
+        new Map<
+          string,
+          FinancialTransaction
+        >();
 
-      businessBundles.forEach(
-        (bundle) => {
-          bundle.transactions.forEach(
+      transactionLists.forEach(
+        (items) => {
+          items.forEach(
             (item) => {
               transactionMap.set(
                 item.id,
@@ -457,93 +373,125 @@ export function TransactionsPage() {
         },
       );
 
-      const mergedTransactions =
+      const personalTransactions =
         [...transactionMap.values()]
-          .sort((a, b) => {
-            const dateCompare =
-              b.transactionDate.localeCompare(
-                a.transactionDate,
+          .sort(
+            (a, b) => {
+              const dateCompare =
+                b.transactionDate.localeCompare(
+                  a.transactionDate,
+                );
+
+              if (
+                dateCompare !== 0
+              ) {
+                return dateCompare;
+              }
+
+              return (
+                transactionTimestampMillis(
+                  b.postedAt,
+                )
+                - transactionTimestampMillis(
+                  a.postedAt,
+                )
               );
+            },
+          );
 
-            if (dateCompare !== 0) {
-              return dateCompare;
-            }
+      const personalTransactionIds =
+        new Set(
+          personalTransactions.map(
+            (item) =>
+              item.id,
+          ),
+        );
 
-            return transactionTimestampMillis(
-              b.postedAt,
-            ) - transactionTimestampMillis(
-              a.postedAt,
-            );
-          });
+      const nextAttachmentCounts:
+        Record<string, number> = {};
 
-      const nextAttachmentCounts: Record<string, number> = {};
-      nextAttachments.forEach((attachment) => {
-        nextAttachmentCounts[attachment.transactionId] = (nextAttachmentCounts[attachment.transactionId] || 0) + 1;
-      });
+      nextAttachments.forEach(
+        (attachment) => {
+          if (
+            !personalTransactionIds.has(
+              attachment.transactionId,
+            )
+          ) {
+            return;
+          }
+
+          nextAttachmentCounts[
+            attachment.transactionId
+          ] = (
+            nextAttachmentCounts[
+              attachment.transactionId
+            ] || 0
+          ) + 1;
+        },
+      );
+
+      const personalSpaces =
+        nextSpaces.filter(
+          (space) =>
+            space.type === 'personal'
+            && !space.archivedAt,
+        );
 
       setTransactions(
-        mergedTransactions,
+        personalTransactions,
       );
 
       setAccounts(
-        [...historyAccountMap.values()]
+        [...nextAccounts]
           .sort(
-            (a, b) => a.name.localeCompare(b.name),
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
           ),
       );
 
       setWritableAccounts(
-        [...writableAccountMap.values()]
+        nextAccounts
+          .filter(
+            (account) =>
+              !account.archivedAt
+              && !account.closedAt,
+          )
           .sort(
-            (a, b) => a.name.localeCompare(b.name),
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
           ),
       );
 
-      setSpaces(activeSpaces);
-      setCustomCategories(nextCustomCategories);
-      setTransactionAttachmentCounts(nextAttachmentCounts);
+      setSpaces(
+        personalSpaces,
+      );
+
+      setCustomCategories(
+        nextCustomCategories,
+      );
+
+      setTransactionAttachmentCounts(
+        nextAttachmentCounts,
+      );
     } catch (nextError) {
-      setError(getErrorMessage(nextError));
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    let cancelled = false;
-
-    queueMicrotask(() => {
-      if (!cancelled) void load();
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, lastCompletedAt]);
-
   const loadApprovals = async () => {
-    if (!user) {
-      setApprovalRequests([]);
-      return;
-    }
-
-    setApprovalLoading(true);
+    setApprovalRequests([]);
     setApprovalError('');
-
-    try {
-      const nextApprovals =
-        await listFinancialApprovalRequests();
-
-      setApprovalRequests(
-        nextApprovals,
-      );
-    } catch (nextError) {
-      setApprovalError(
-        getErrorMessage(nextError),
-      );
-    } finally {
-      setApprovalLoading(false);
-    }
+    setApprovalLoading(false);
   };
 
   useEffect(() => {
@@ -869,7 +817,6 @@ export function TransactionsPage() {
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
     if (statusFilter !== 'all' && item.status !== statusFilter) return false;
     if (periodFilter === 'current_month' && !item.transactionDate.startsWith(currentMonth)) return false;
-    if (spaceFilter !== 'all' && item.spaceId !== spaceFilter) return false;
     if (!accountMatchesFilter(item)) return false;
     if (categoryFilter !== 'all' && item.categoryId !== categoryFilter && `legacy-${item.category}` !== categoryFilter) return false;
 
@@ -1060,7 +1007,6 @@ export function TransactionsPage() {
         <div className="transaction-filter-grid">
           <label>Period<select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}><option value="current_month">This month</option><option value="all">All time</option></select></label>
           <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Saved</option><option value="reversed">Undone</option></select></label>
-          {spaces.some((space) => space.type !== 'personal') && <label>Space<select value={spaceFilter} onChange={(event) => setSpaceFilter(event.target.value)}><option value="all">All</option>{spaces.filter((space) => space.type !== 'personal').map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select></label>}
           <div className="transaction-account-filter">
             <span className="transaction-filter-label">Accounts</span>
 

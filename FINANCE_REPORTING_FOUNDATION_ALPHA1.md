@@ -8,7 +8,7 @@ This slice introduces the shared **basic cash-flow reporting contract** used by 
 - Transfers are excluded from Money In and Money Out.
 - Reversed originals are excluded.
 - Posted reversal records are excluded from basic cash-flow totals.
-- Duplicate transaction IDs are counted once when Personal and Business report sources are merged.
+- Duplicate transaction IDs are counted once when Personal transaction sources overlap.
 - Date ranges are inclusive.
 - Account, Space and category filters are applied after the basic posted income/expense rule.
 - Callable-returned serialized timestamps and Firestore Timestamp objects are both safe for sorting.
@@ -23,3 +23,11 @@ Refund / return records continue to follow their canonical transaction records a
 ## Migration scope
 
 Only Money Reports moves to the shared metrics module in Alpha 1. Dashboard, Business Accounting and POS remain behaviorally unchanged until their numbers are compared against the same regression fixtures in later slices.
+
+## Scope correction — Alpha 1B
+
+Global Money Reports are Personal-only.
+
+Business transactions and Business reports do not enter the Global Money Reports dataset. They remain inside their specific Business Space.
+
+This correction replaces the earlier implementation assumption that authorised Business report data should be merged into Global Money Reports.
