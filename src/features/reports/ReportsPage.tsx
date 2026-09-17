@@ -21,6 +21,12 @@ import { formatMoney } from '../../utils/money';
 import { localeForLanguage } from '../../services/i18n';
 import { buildFinancialHealth, sumAccountBalances } from './financialHealth';
 import { BusinessPosReportPanel } from './BusinessPosReportPanel';
+import {
+  filterCashFlowReportTransactions,
+  mergeReportTransactions,
+  reportTransactionCategoryKey,
+  summarizeCashFlow,
+} from './reportingMetrics';
 
 interface AmountBarItem {
   id: string;
@@ -184,10 +190,6 @@ function reportPeriodLabel(
   }`;
 }
 
-function categoryKey(transaction: FinancialTransaction) {
-  return transaction.categoryId || `name:${(transaction.category || 'Other').toLowerCase()}`;
-}
-
 function percent(value: number, total: number) {
   if (total <= 0) return 0;
   return Math.min(100, Math.max(0, Math.round((value / total) * 100)));
@@ -198,60 +200,6 @@ function comparisonText(current: number, previous: number, currency: string) {
   const difference = current - previous;
   if (difference === 0) return 'Same as the previous period';
   return `${formatMoney(Math.abs(difference), currency)} ${difference > 0 ? 'more' : 'less'} than the previous period`;
-}
-
-function postedAtMillis(value: unknown) {
-  if (value === null || value === undefined) return 0;
-
-  if (value instanceof Date) {
-    return value.getTime();
-  }
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
-
-  if (typeof value !== 'object') return 0;
-
-  const timestamp = value as {
-    toMillis?: () => number;
-    seconds?: number;
-    nanoseconds?: number;
-    _seconds?: number;
-    _nanoseconds?: number;
-  };
-
-  if (typeof timestamp.toMillis === 'function') {
-    const milliseconds = Number(timestamp.toMillis());
-    return Number.isFinite(milliseconds) ? milliseconds : 0;
-  }
-
-  const seconds = Number(
-    timestamp.seconds
-    ?? timestamp._seconds,
-  );
-
-  if (!Number.isFinite(seconds)) return 0;
-
-  const nanoseconds = Number(
-    timestamp.nanoseconds
-    ?? timestamp._nanoseconds
-    ?? 0,
-  );
-
-  return (
-    seconds * 1000
-    + (
-      Number.isFinite(nanoseconds)
-        ? Math.floor(nanoseconds / 1_000_000)
-        : 0
-    )
-  );
 }
 
 function AmountBars({ items, currency, emptyText }: { items: AmountBarItem[]; currency: string; emptyText: string }) {
@@ -478,64 +426,18 @@ export function ReportsPage() {
               ),
             );
 
-          const reportTransactions =
-            new Map<
-              string,
-              FinancialTransaction
-            >();
-
-          nextTransactions
-            .filter(
-              (item) =>
-                personalAccountIds.has(
-                  item.accountId,
-                ),
-            )
-            .forEach(
-              (item) =>
-                reportTransactions.set(
-                  item.id,
-                  item,
-                ),
-            );
-
-          reportableBundles.forEach(
-            (bundle) => {
-              bundle.transactions.forEach(
-                (item) =>
-                  reportTransactions.set(
-                    item.id,
-                    item,
-                  ),
-              );
-            },
-          );
-
           const mergedTransactions =
-            [
-              ...reportTransactions.values(),
-            ].sort(
-              (a, b) => {
-                const dateCompare =
-                  b.transactionDate.localeCompare(
-                    a.transactionDate,
-                  );
-
-                if (
-                  dateCompare !== 0
-                ) {
-                  return dateCompare;
-                }
-
-                return (
-                  postedAtMillis(
-                    b.postedAt,
-                  )
-                  - postedAtMillis(
-                    a.postedAt,
-                  )
-                );
-              },
+            mergeReportTransactions(
+              nextTransactions.filter(
+                (item) =>
+                  personalAccountIds.has(
+                    item.accountId,
+                  ),
+              ),
+              ...reportableBundles.map(
+                (bundle) =>
+                  bundle.transactions,
+              ),
             );
 
           setAccounts(
@@ -617,7 +519,7 @@ export function ReportsPage() {
   const spaceNames = useMemo(() => new Map(spaces.map((item) => [item.id, item.type === 'personal' ? 'Personal' : item.name])), [spaces]);
   const categoryOptions = useMemo(() => {
     const options = new Map<string, string>();
-    transactions.forEach((item) => options.set(categoryKey(item), item.category || 'Other'));
+    transactions.forEach((item) => options.set(reportTransactionCategoryKey(item), item.category || 'Other'));
     return [...options.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [transactions]);
 
@@ -646,50 +548,103 @@ export function ReportsPage() {
     [selectedPeriod, activePeriodRange, selectedDate, locale],
   );
 
-  const matchesNonMonthFilters = (item: FinancialTransaction) => (
-    (!selectedSpace || item.spaceId === selectedSpace)
-    && (!selectedAccount || item.accountId === selectedAccount || item.destinationAccountId === selectedAccount)
-    && (!selectedCategory || categoryKey(item) === selectedCategory)
-  );
+  const filteredTransactions =
+    useMemo(
+      () =>
+        filterCashFlowReportTransactions(
+          transactions,
+          {
+            range:
+              activePeriodRange,
+            spaceId:
+              selectedSpace
+              || undefined,
+            accountId:
+              selectedAccount
+              || undefined,
+            categoryKey:
+              selectedCategory
+              || undefined,
+          },
+        ),
+      [
+        transactions,
+        activePeriodRange,
+        selectedSpace,
+        selectedAccount,
+        selectedCategory,
+      ],
+    );
 
-  const filteredTransactions = useMemo(() => transactions.filter((item) => (
-    item.status === 'posted'
-    && (item.type === 'income' || item.type === 'expense')
-    && item.transactionDate >= activePeriodRange.start
-    && item.transactionDate <= activePeriodRange.end
-    && matchesNonMonthFilters(item)
-  )), [
-    transactions,
-    activePeriodRange,
-    selectedSpace,
-    selectedAccount,
-    selectedCategory,
-  ]);
+  const previousTransactions =
+    useMemo(
+      () =>
+        filterCashFlowReportTransactions(
+          transactions,
+          {
+            range:
+              previousPeriodRange,
+            spaceId:
+              selectedSpace
+              || undefined,
+            accountId:
+              selectedAccount
+              || undefined,
+            categoryKey:
+              selectedCategory
+              || undefined,
+          },
+        ),
+      [
+        transactions,
+        previousPeriodRange,
+        selectedSpace,
+        selectedAccount,
+        selectedCategory,
+      ],
+    );
 
-  const previousTransactions = useMemo(() => transactions.filter((item) => (
-    item.status === 'posted'
-    && (item.type === 'income' || item.type === 'expense')
-    && item.transactionDate >= previousPeriodRange.start
-    && item.transactionDate <= previousPeriodRange.end
-    && matchesNonMonthFilters(item)
-  )), [
-    transactions,
-    previousPeriodRange,
-    selectedSpace,
-    selectedAccount,
-    selectedCategory,
-  ]);
+  const currentCashFlow =
+    useMemo(
+      () =>
+        summarizeCashFlow(
+          filteredTransactions,
+        ),
+      [
+        filteredTransactions,
+      ],
+    );
 
-  const moneyIn = filteredTransactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amountMinor, 0);
-  const moneyOut = filteredTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amountMinor, 0);
-  const moneyLeft = moneyIn - moneyOut;
-  const previousMoneyIn = previousTransactions.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amountMinor, 0);
-  const previousMoneyOut = previousTransactions.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amountMinor, 0);
+  const previousCashFlow =
+    useMemo(
+      () =>
+        summarizeCashFlow(
+          previousTransactions,
+        ),
+      [
+        previousTransactions,
+      ],
+    );
+
+  const moneyIn =
+    currentCashFlow.moneyIn;
+
+  const moneyOut =
+    currentCashFlow.moneyOut;
+
+  const moneyLeft =
+    currentCashFlow.netCashFlow;
+
+  const previousMoneyIn =
+    previousCashFlow.moneyIn;
+
+  const previousMoneyOut =
+    previousCashFlow.moneyOut;
 
   const spendingByCategory = useMemo(() => {
     const grouped = new Map<string, AmountBarItem>();
     filteredTransactions.filter((item) => item.type === 'expense').forEach((item) => {
-      const key = categoryKey(item);
+      const key = reportTransactionCategoryKey(item);
       const current = grouped.get(key) || { id: key, label: `${categoryIconGlyph(item.categoryIcon || '')} ${item.category || 'Other'}`, amountMinor: 0, detail: 'Spending category' };
       current.amountMinor += item.amountMinor;
       grouped.set(key, current);
@@ -737,7 +692,7 @@ export function ReportsPage() {
       && transaction.transactionDate >= activePeriodRange.start
       && transaction.transactionDate <= activePeriodRange.end
       && (!selectedAccount || transaction.accountId === selectedAccount)
-      && (!selectedCategory || categoryKey(transaction) === selectedCategory)
+      && (!selectedCategory || reportTransactionCategoryKey(transaction) === selectedCategory)
     )).reduce((sum, transaction) => sum + transaction.amountMinor, 0);
     return { ...item, reportSpentMinor: spentMinor };
   }), [budgets, transactions, activePeriodRange, selectedSpace, selectedAccount, selectedCategory]);

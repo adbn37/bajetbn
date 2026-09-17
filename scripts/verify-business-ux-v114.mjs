@@ -104,12 +104,58 @@ function walk(directory) {
   return output;
 }
 
+function versionAtLeast(
+  value,
+  floor,
+) {
+  const current =
+    String(value)
+      .split('.')
+      .map(Number);
+
+  const minimum =
+    String(floor)
+      .split('.')
+      .map(Number);
+
+  for (
+    let index = 0;
+    index < 3;
+    index += 1
+  ) {
+    const currentPart =
+      current[index]
+      || 0;
+
+    const minimumPart =
+      minimum[index]
+      || 0;
+
+    if (
+      currentPart
+      > minimumPart
+    ) {
+      return true;
+    }
+
+    if (
+      currentPart
+      < minimumPart
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 check(
-  /^1\.14\.\d+$/.test(
+  versionAtLeast(
     pkg.version,
+    '1.14.0',
   )
     && release.version === pkg.version,
-  'v1.14 package and release versions match.',
+  'v1.14+ package and release versions match.',
 );
 
 check(
