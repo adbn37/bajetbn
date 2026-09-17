@@ -2236,6 +2236,32 @@ function SpaceOverview({
     { key: 'calendar', section: 'calendar', icon: '▦', title: 'Calendar', detail: 'See dates and deadlines belonging to this Space.' },
   ] : [];
 
+  if (space.type === 'sme') {
+    const moneyItem = quickLinks.find(
+      (item) => item.key === 'money',
+    );
+
+    if (moneyItem) {
+      moneyItem.to =
+        `/spaces/${space.id}/business/money`;
+      delete moneyItem.section;
+      moneyItem.title =
+        'Business Money Activity';
+      moneyItem.detail =
+        'Full Money Activity workspace, locked to this Business Space only.';
+    }
+
+    const reportItem = quickLinks.find(
+      (item) => item.key === 'reports',
+    );
+
+    if (reportItem) {
+      reportItem.title =
+        'Business money reports';
+      reportItem.detail =
+        'Ledger reports from the same Business Money Activity records and selected period.';
+    }
+  }
   if (space.type === 'sme' && canViewFinancials) {
     const billIndex = quickLinks.findIndex(
       (item) => item.key === 'bills',
