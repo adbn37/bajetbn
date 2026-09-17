@@ -27,7 +27,7 @@ const BusinessWizardPage = lazy(() => import('../features/business/BusinessWizar
 const BusinessInvoicesPage = lazy(() => import('../features/business/BusinessInvoicesPage').then((module) => ({ default: module.BusinessInvoicesPage })));
 const BusinessAccountingPage = lazy(() => import('../features/business/BusinessAccountingPage').then((module) => ({ default: module.BusinessAccountingPage })));
 const BusinessTaxPage = lazy(() => import('../features/business/BusinessTaxPage').then((module) => ({ default: module.BusinessTaxPage })));
-const BusinessPayrollPage = lazy(() => import('../features/business/BusinessPayrollPage').then((module) => ({ default: module.BusinessPayrollPage })));
+const BusinessPayrollPage = lazy(() => import('../features/business/BusinessPayrollManagedPage').then((module) => ({ default: module.BusinessPayrollManagedPage })));
 const PrivateBusinessDocumentPage = lazy(() => import('../features/business/PrivateBusinessDocumentPage').then((module) => ({ default: module.PrivateBusinessDocumentPage })));
 const MyPrivateDocumentsPage = lazy(() => import('../features/business/MyPrivateDocumentsPage').then((module) => ({ default: module.MyPrivateDocumentsPage })));
 const BusinessIndustryPage = lazy(() => import('../features/business/BusinessIndustryPage').then((module) => ({ default: module.BusinessIndustryPage })));

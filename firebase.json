@@ -1,22 +1,46 @@
 {
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs22",
-    "predeploy": ["npm --prefix functions run build"]
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "emulators": {
-    "auth": { "port": 9099 },
-    "functions": { "port": 5001 },
-    "firestore": { "port": 8080 },
-    "storage": { "port": 9199 },
-    "ui": { "enabled": true, "port": 4000 },
-    "singleProjectMode": true
-  }
+    "functions":  [
+                      {
+                          "source":  "functions",
+                          "codebase":  "default",
+                          "runtime":  "nodejs22",
+                          "predeploy":  [
+                                            "npm --prefix functions run build"
+                                        ]
+                      },
+                      {
+                          "source":  "functions-payroll",
+                          "codebase":  "payroll",
+                          "runtime":  "nodejs22",
+                          "predeploy":  [
+                                            "npm --prefix functions-payroll install --omit dev --no-package-lock"
+                                        ]
+                      }
+                  ],
+    "firestore":  {
+                      "rules":  "firestore.rules",
+                      "indexes":  "firestore.indexes.json"
+                  },
+    "storage":  {
+                    "rules":  "storage.rules"
+                },
+    "emulators":  {
+                      "auth":  {
+                                   "port":  9099
+                               },
+                      "functions":  {
+                                        "port":  5001
+                                    },
+                      "firestore":  {
+                                        "port":  8080
+                                    },
+                      "storage":  {
+                                      "port":  9199
+                                  },
+                      "ui":  {
+                                 "enabled":  true,
+                                 "port":  4000
+                             },
+                      "singleProjectMode":  true
+                  }
 }
