@@ -13222,3 +13222,34 @@ strong {
     min-width: 150px;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 HOME ACCOUNT DRAG
+   Mouse / trackpad horizontal dragging for Home account cards.
+   Touch keeps native horizontal scrolling.
+   ========================================================== */
+
+.bajetbn-home-account-strip {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.bajetbn-home-account-strip.dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
+.bajetbn-home-account-strip.dragging
+.bajetbn-home-account-card {
+  pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  .bajetbn-home-account-strip {
+    cursor: auto;
+  }
+}

@@ -277,6 +277,15 @@ export function DashboardPage() {
   const accountCarouselRef =
     useRef<HTMLDivElement | null>(null);
 
+  const accountDragRef =
+    useRef({
+      active: false,
+      pointerId: -1,
+      startX: 0,
+      startScrollLeft: 0,
+      moved: false,
+    });
+
   const currency =
     profile?.currency || 'BND';
 
@@ -749,6 +758,115 @@ export function DashboardPage() {
     }
   }
 
+  function handleAccountDragStart(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    const carousel =
+      accountCarouselRef.current;
+
+    if (
+      !carousel
+      || homeAccounts.length <= 1
+      || event.pointerType === 'touch'
+    ) {
+      return;
+    }
+
+    accountDragRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: carousel.scrollLeft,
+      moved: false,
+    };
+
+    carousel.setPointerCapture(
+      event.pointerId,
+    );
+
+    carousel.classList.add(
+      'dragging',
+    );
+  }
+
+  function handleAccountDragMove(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    const carousel =
+      accountCarouselRef.current;
+
+    const drag =
+      accountDragRef.current;
+
+    if (
+      !carousel
+      || !drag.active
+      || drag.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    const delta =
+      event.clientX - drag.startX;
+
+    if (Math.abs(delta) > 4) {
+      drag.moved = true;
+    }
+
+    carousel.scrollLeft =
+      drag.startScrollLeft - delta;
+  }
+
+  function handleAccountDragEnd(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    const carousel =
+      accountCarouselRef.current;
+
+    const drag =
+      accountDragRef.current;
+
+    if (
+      !carousel
+      || drag.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    if (
+      carousel.hasPointerCapture(
+        event.pointerId,
+      )
+    ) {
+      carousel.releasePointerCapture(
+        event.pointerId,
+      );
+    }
+
+    carousel.classList.remove(
+      'dragging',
+    );
+
+    accountDragRef.current = {
+      active: false,
+      pointerId: -1,
+      startX: 0,
+      startScrollLeft: carousel.scrollLeft,
+      moved: drag.moved,
+    };
+  }
+
+  function handleAccountCardClick(
+    index: number,
+  ) {
+    if (accountDragRef.current.moved) {
+      accountDragRef.current.moved = false;
+      return;
+    }
+
+    selectHomeAccount(index);
+  }
+
   function handleAccountCarouselScroll() {
     const carousel =
       accountCarouselRef.current;
@@ -1105,6 +1223,10 @@ export function DashboardPage() {
             ref={accountCarouselRef}
             className="bajetbn-home-account-strip"
             onScroll={handleAccountCarouselScroll}
+            onPointerDown={handleAccountDragStart}
+            onPointerMove={handleAccountDragMove}
+            onPointerUp={handleAccountDragEnd}
+            onPointerCancel={handleAccountDragEnd}
           >
             {homeAccounts.map(
               (
@@ -1148,7 +1270,7 @@ export function DashboardPage() {
                     }
                     aria-pressed={selected}
                     onClick={() =>
-                      selectHomeAccount(index)
+                      handleAccountCardClick(index)
                     }
                   >
                     <span className="bajetbn-home-account-card-head">
