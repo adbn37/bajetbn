@@ -551,9 +551,13 @@ export function BusinessHomePage() {
 
         <Link
           className="button secondary compact"
-          to={'/spaces/' + space.id}
+          to={
+            '/spaces/'
+            + space.id
+            + '?details=1'
+          }
         >
-          Space
+          Tools
         </Link>
       </header>
 

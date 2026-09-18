@@ -6,7 +6,13 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import {
+  Link,
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
@@ -926,6 +932,29 @@ export function SpaceDetailsPage() {
       {error && <div className="notice error">{error}</div>}
       <Link className="button primary" to="/spaces">Back to Spaces</Link>
     </main>;
+  }
+
+  /*
+   * A Business Space now has one canonical landing page:
+   * the dedicated Business Home.
+   *
+   * Query-driven Business tools remain on SpaceDetailsPage, so existing
+   * Accounts, Marketplace sections, tabs and detailed tools continue
+   * to work without changing their routes.
+   */
+  const plainBusinessLanding =
+    space.type === 'sme'
+    && !requestedTab
+    && !requestedSection
+    && !detailedOverviewRequested;
+
+  if (plainBusinessLanding) {
+    return (
+      <Navigate
+        to={'/business/' + space.id}
+        replace
+      />
+    );
   }
 
   const customModules =
