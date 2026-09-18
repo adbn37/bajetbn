@@ -1548,32 +1548,46 @@ export function MoneyActivityModal({
   const categoryOptions = localCategories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
 
-  const compactCategoryOptions = useMemo(() => {
-    if (showAllCategories || categoryOptions.length <= 7) {
+  const primaryCategoryOptions = useMemo(() => {
+    if (categoryOptions.length <= 4) {
       return categoryOptions;
     }
 
-    const firstSeven = categoryOptions.slice(0, 7);
+    const firstFour = categoryOptions.slice(0, 4);
 
     if (
       selectedCategory
-      && !firstSeven.some(
+      && !firstFour.some(
         (category) =>
           category.id === selectedCategory.id,
       )
     ) {
       return [
-        ...categoryOptions.slice(0, 6),
+        ...categoryOptions.slice(0, 3),
         selectedCategory,
       ];
     }
 
-    return firstSeven;
+    return firstFour;
   }, [
     categoryOptions,
     selectedCategory,
-    showAllCategories,
   ]);
+
+  const secondaryCategoryOptions = useMemo(
+    () =>
+      categoryOptions.filter(
+        (category) =>
+          !primaryCategoryOptions.some(
+            (primary) =>
+              primary.id === category.id,
+          ),
+      ),
+    [
+      categoryOptions,
+      primaryCategoryOptions,
+    ],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -2333,7 +2347,7 @@ export function MoneyActivityModal({
     )}
 
     {type !== 'transfer' && (
-      <fieldset className="category-picker bajetbn-category-grid-picker">
+      <fieldset className="category-picker bajetbn-reference-category-picker">
         <legend className="category-picker-legend">
           <span>Category</span>
 
@@ -2350,13 +2364,13 @@ export function MoneyActivityModal({
           )}
         </legend>
 
-        <div className="category-option-grid bajetbn-category-grid">
-          {compactCategoryOptions.map((category) => (
+        <div className="bajetbn-reference-category-row">
+          {primaryCategoryOptions.map((category) => (
             <button
               type="button"
               key={category.id}
               className={
-                `category-option bajetbn-category-grid-item ${categoryId === category.id ? 'selected' : ''}`
+                `bajetbn-reference-category-item ${categoryId === category.id ? 'selected' : ''}`
               }
               onClick={() =>
                 setCategoryId(category.id)
@@ -2370,20 +2384,16 @@ export function MoneyActivityModal({
                 {categoryIconGlyph(category.icon)}
               </span>
 
-              <span className="bajetbn-category-grid-label">
+              <span>
                 {category.name}
               </span>
-
-              {!category.isSystem && (
-                <small>Custom</small>
-              )}
             </button>
           ))}
 
-          {categoryOptions.length > 7 && (
+          {categoryOptions.length > 4 && (
             <button
               type="button"
-              className="category-option bajetbn-category-grid-item bajetbn-category-more"
+              className="bajetbn-reference-category-item bajetbn-reference-category-more"
               onClick={() =>
                 setShowAllCategories(
                   (current) => !current,
@@ -2395,17 +2405,53 @@ export function MoneyActivityModal({
                 className="category-icon category-slate"
                 aria-hidden="true"
               >
-                {showAllCategories ? '−' : '•••'}
+                {showAllCategories ? '←' : '→'}
               </span>
 
-              <span className="bajetbn-category-grid-label">
+              <span>
                 {showAllCategories
-                  ? 'Show less'
+                  ? 'Less'
                   : 'More'}
               </span>
             </button>
           )}
         </div>
+
+        {showAllCategories
+          && secondaryCategoryOptions.length > 0
+          && (
+            <div className="bajetbn-reference-category-more-panel">
+              {secondaryCategoryOptions.map((category) => (
+                <button
+                  type="button"
+                  key={category.id}
+                  className={
+                    `bajetbn-reference-category-more-item ${categoryId === category.id ? 'selected' : ''}`
+                  }
+                  onClick={() => {
+                    setCategoryId(category.id);
+                    setShowAllCategories(false);
+                  }}
+                >
+                  <span
+                    className={
+                      `category-icon category-${category.color}`
+                    }
+                  >
+                    {categoryIconGlyph(category.icon)}
+                  </span>
+
+                  <span>
+                    {category.name}
+                  </span>
+
+                  {!category.isSystem && (
+                    <small>Custom</small>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
       </fieldset>
     )}
 

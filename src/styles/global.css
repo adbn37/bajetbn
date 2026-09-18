@@ -12574,3 +12574,184 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
       repeat(3, minmax(0, 1fr)) !important;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 REFERENCE CATEGORY SELECTOR
+   Match the approved reference: icon tiles + labels + More.
+   ========================================================== */
+
+.bajetbn-reference-activity-form
+.bajetbn-reference-category-picker {
+  overflow: visible;
+}
+
+.bajetbn-reference-category-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.42rem;
+  width: 100%;
+}
+
+.bajetbn-reference-category-item {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+.bajetbn-reference-category-item
+.category-icon {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 94%,
+      var(--accent) 6%
+    );
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.bajetbn-reference-category-item
+> span:last-child {
+  width: 100%;
+  min-height: 2.15em;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.bajetbn-reference-category-item.selected
+.category-icon {
+  border-color: var(--accent);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 16%,
+      var(--surface)
+    );
+  color: var(--accent);
+  box-shadow:
+    0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--accent) 38%,
+      transparent
+    );
+}
+
+.bajetbn-reference-category-item.selected
+> span:last-child {
+  color: var(--text);
+  font-weight: 750;
+}
+
+.bajetbn-reference-category-item:active
+.category-icon {
+  transform: scale(0.96);
+}
+
+.bajetbn-reference-category-more
+.category-icon {
+  border-radius: 50%;
+  color: var(--accent);
+}
+
+.bajetbn-reference-category-more-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+}
+
+.bajetbn-reference-category-more-item {
+  min-width: 0;
+  min-height: 82px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.35rem;
+  padding: 0.48rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+}
+
+.bajetbn-reference-category-more-item
+.category-icon {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border-radius: 10px;
+}
+
+.bajetbn-reference-category-more-item
+> span:nth-child(2) {
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.bajetbn-reference-category-more-item
+> small {
+  font-size: 0.54rem;
+  color: var(--muted);
+}
+
+.bajetbn-reference-category-more-item.selected {
+  border-color: var(--accent);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 10%,
+      var(--surface)
+    );
+}
+
+@media (max-width: 360px) {
+  .bajetbn-reference-category-row {
+    gap: 0.28rem;
+  }
+
+  .bajetbn-reference-category-item
+  .category-icon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .bajetbn-reference-category-item
+  > span:last-child {
+    font-size: 0.62rem;
+  }
+
+  .bajetbn-reference-category-more-panel {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
