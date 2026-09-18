@@ -69,6 +69,32 @@ check(
 );
 
 check(
+  accountAvatar.includes(
+    'AccountFallbackIcon',
+  )
+    && accountAvatar.includes(
+      "account.type === 'cash'",
+    )
+    && accountAvatar.includes(
+      "account.type === 'e_wallet'",
+    )
+    && accountAvatar.includes(
+      "account.type === 'credit_card'",
+    ),
+  'AccountAvatar uses semantic fallback icons instead of letter badges.',
+);
+
+check(
+  !accountAvatar.includes(
+    "return 'BI';",
+  )
+    && !accountAvatar.includes(
+      "return 'B';",
+    ),
+  'Old BIBD/Baiduri letter badges are removed.',
+);
+
+check(
   accountSettings.includes(
     'uploadAccountAvatar',
   )

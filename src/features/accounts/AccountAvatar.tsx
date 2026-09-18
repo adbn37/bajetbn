@@ -59,33 +59,99 @@ function inferredInstitutionCode(
   return null;
 }
 
-function fallbackLabel(
-  account: Account,
-) {
-  const code =
-    inferredInstitutionCode(account);
-
-  if (code === 'bibd') return 'BI';
-  if (code === 'baiduri') return 'B';
-  if (code === 'taib') return 'T';
-  if (
-    code ===
-      'standard_chartered_brunei'
-  ) {
-    return 'SC';
+function AccountFallbackIcon({
+  account,
+}: {
+  account: Account;
+}) {
+  if (account.type === 'cash') {
+    return (
+      <svg viewBox="0 0 24 24">
+        <rect
+          x="4"
+          y="6"
+          width="16"
+          height="12"
+          rx="2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+        <circle
+          cx="12"
+          cy="12"
+          r="2.4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+        <path
+          d="M7 9h.01M17 15h.01"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
   }
 
-  if (code === 'cash') return '$';
-  if (code === 'other_e_wallet') {
-    return 'W';
+  if (account.type === 'e_wallet') {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M5 7.5h11.5A2.5 2.5 0 0 1 19 10v7H6a2 2 0 0 1-2-2V7.5A2.5 2.5 0 0 1 6.5 5H17"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M15 11h5v4h-5a2 2 0 0 1 0-4Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (account.type === 'credit_card') {
+    return (
+      <svg viewBox="0 0 24 24">
+        <rect
+          x="3.5"
+          y="5.5"
+          width="17"
+          height="13"
+          rx="2.2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+        <path
+          d="M4 9h16M7 15h4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
   }
 
   return (
-    account.name
-      .trim()
-      .charAt(0)
-      .toUpperCase()
-    || '?'
+    <svg viewBox="0 0 24 24">
+      <path
+        d="m4 9 8-4 8 4M5.5 10.5h13M7 11v6M11 11v6M15 11v6M19 11v6M4.5 18.5h15"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -169,9 +235,9 @@ export function AccountAvatar({
           loading="lazy"
         />
       ) : (
-        <span>
-          {fallbackLabel(account)}
-        </span>
+        <AccountFallbackIcon
+          account={account}
+        />
       )}
     </span>
   );

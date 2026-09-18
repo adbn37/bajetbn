@@ -13949,3 +13949,26 @@ strong {
     text-align: left;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 ACCOUNT SEMANTIC ICON FALLBACK
+   Uploaded account images remain authoritative.
+   Accounts without an uploaded image use a real semantic icon.
+   ========================================================== */
+
+.account-avatar svg {
+  width: 58%;
+  height: 58%;
+  display: block;
+}
+
+.account-avatar-small svg {
+  width: 56%;
+  height: 56%;
+}
+
+.account-avatar-large svg {
+  width: 57%;
+  height: 57%;
+}
