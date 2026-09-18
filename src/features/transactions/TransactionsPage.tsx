@@ -1541,11 +1541,39 @@ export function MoneyActivityModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const receiptAutoOpenedRef = useRef(false);
 
   const scope = spaceScope(selectedSpace);
   const categoryOptions = localCategories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
+
+  const compactCategoryOptions = useMemo(() => {
+    if (showAllCategories || categoryOptions.length <= 7) {
+      return categoryOptions;
+    }
+
+    const firstSeven = categoryOptions.slice(0, 7);
+
+    if (
+      selectedCategory
+      && !firstSeven.some(
+        (category) =>
+          category.id === selectedCategory.id,
+      )
+    ) {
+      return [
+        ...categoryOptions.slice(0, 6),
+        selectedCategory,
+      ];
+    }
+
+    return firstSeven;
+  }, [
+    categoryOptions,
+    selectedCategory,
+    showAllCategories,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1607,6 +1635,13 @@ export function MoneyActivityModal({
       cancelled = true;
     };
   }, [categoryId, categoryOptions, type]);
+
+  useEffect(() => {
+    setShowAllCategories(false);
+  }, [
+    scope,
+    type,
+  ]);
 
   const sourceAccount = accounts.find((account) => account.id === accountId);
   const destinationAccount = accounts.find((account) => account.id === destinationAccountId);
@@ -2297,11 +2332,82 @@ export function MoneyActivityModal({
       </div>
     )}
 
-    {type !== 'transfer' && <fieldset className="category-picker"><legend className="category-picker-legend"><span>Category</span>{canManageCategories && <button type="button" className="text-button" onClick={() => setShowCategoryEditor(true)}>+ Add category</button>}</legend><div className="category-option-grid">
-      {categoryOptions.map((category) => <button type="button" key={category.id} className={`category-option ${categoryId === category.id ? 'selected' : ''}`} onClick={() => setCategoryId(category.id)}>
-        <span className={`category-icon category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span>{!category.isSystem && <small>Custom</small>}
-      </button>)}
-    </div></fieldset>}
+    {type !== 'transfer' && (
+      <fieldset className="category-picker bajetbn-category-grid-picker">
+        <legend className="category-picker-legend">
+          <span>Category</span>
+
+          {canManageCategories && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() =>
+                setShowCategoryEditor(true)
+              }
+            >
+              + Add category
+            </button>
+          )}
+        </legend>
+
+        <div className="category-option-grid bajetbn-category-grid">
+          {compactCategoryOptions.map((category) => (
+            <button
+              type="button"
+              key={category.id}
+              className={
+                `category-option bajetbn-category-grid-item ${categoryId === category.id ? 'selected' : ''}`
+              }
+              onClick={() =>
+                setCategoryId(category.id)
+              }
+            >
+              <span
+                className={
+                  `category-icon category-${category.color}`
+                }
+              >
+                {categoryIconGlyph(category.icon)}
+              </span>
+
+              <span className="bajetbn-category-grid-label">
+                {category.name}
+              </span>
+
+              {!category.isSystem && (
+                <small>Custom</small>
+              )}
+            </button>
+          ))}
+
+          {categoryOptions.length > 7 && (
+            <button
+              type="button"
+              className="category-option bajetbn-category-grid-item bajetbn-category-more"
+              onClick={() =>
+                setShowAllCategories(
+                  (current) => !current,
+                )
+              }
+              aria-expanded={showAllCategories}
+            >
+              <span
+                className="category-icon category-slate"
+                aria-hidden="true"
+              >
+                {showAllCategories ? '−' : '•••'}
+              </span>
+
+              <span className="bajetbn-category-grid-label">
+                {showAllCategories
+                  ? 'Show less'
+                  : 'More'}
+              </span>
+            </button>
+          )}
+        </div>
+      </fieldset>
+    )}
 
     <section className="transaction-label-editor">
       <div className="transaction-label-editor-heading">
