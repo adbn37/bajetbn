@@ -293,34 +293,27 @@ export function DashboardPage() {
   const homeAccounts =
     useMemo(
       () =>
-        [...accounts].sort(
-          (a, b) => {
-            const aGroup =
-              a.classification === 'business'
-                ? 1
-                : 0;
-
-            const bGroup =
-              b.classification === 'business'
-                ? 1
-                : 0;
-
-            if (aGroup !== bGroup) {
-              return aGroup - bGroup;
-            }
-
-            return a.name.localeCompare(
-              b.name,
-            );
-          },
-        ),
+        accounts
+          .filter(
+            (account) =>
+              account.classification
+                === 'personal',
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
+          ),
       [accounts],
     );
 
   /*
-   * Global Add remains personal-first.
-   * Business accounts may appear on Home, but normal Home
-   * money entry continues through the Personal Space.
+   * Personal Home is strictly Personal-account only.
+   * Business accounts belong to the dedicated Business Home
+   * and never appear in the Personal Home account carousel.
+   *
+   * Global Add remains personal-first as well.
    */
   const quickAccounts =
     useMemo(

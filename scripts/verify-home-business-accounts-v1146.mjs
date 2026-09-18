@@ -48,13 +48,13 @@ check(
 );
 
 check(
-  dashboard.includes(
-    "a.classification === 'business'",
+  /const\s+homeAccounts\s*=[\s\S]{0,700}?classification[\s\S]{0,80}?===\s*'personal'/m.test(
+    dashboard,
   )
-    && dashboard.includes(
-      'return aGroup - bGroup;',
+    && !dashboard.includes(
+      "a.classification === 'business'",
     ),
-  'Home account carousel includes Personal and Business accounts, with Personal first.',
+  'Personal Home account carousel excludes Business accounts.',
 );
 
 check(
@@ -100,5 +100,5 @@ if (failures.length) {
 }
 
 console.log(
-  'Home Personal-first account verification PASS.',
+  'Home Personal-only account verification PASS.',
 );
