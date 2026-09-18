@@ -48,10 +48,13 @@ check(
 );
 
 check(
-  /const\s+homeAccounts\s*=[\s\S]{0,500}?classification[\s\S]{0,80}?===\s*'personal'/m.test(
-    dashboard,
-  ),
-  'Personal Home displays Personal accounts only.',
+  dashboard.includes(
+    "a.classification === 'business'",
+  )
+    && dashboard.includes(
+      'return aGroup - bGroup;',
+    ),
+  'Home account carousel includes Personal and Business accounts, with Personal first.',
 );
 
 check(
@@ -72,7 +75,7 @@ check(
   dashboard.includes(
     'listTransactionsForOwnerAccount',
   ),
-  'Selected Personal account drives Recent Activity.',
+  'Selected Home account drives Recent Activity.',
 );
 
 check(

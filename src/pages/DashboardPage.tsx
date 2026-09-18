@@ -292,17 +292,27 @@ export function DashboardPage() {
   const homeAccounts =
     useMemo(
       () =>
-        accounts
-          .filter(
-            (account) =>
-              account.classification === 'personal',
-          )
-          .sort(
-            (a, b) =>
-              a.name.localeCompare(
-                b.name,
-              ),
-          ),
+        [...accounts].sort(
+          (a, b) => {
+            const aGroup =
+              a.classification === 'business'
+                ? 1
+                : 0;
+
+            const bGroup =
+              b.classification === 'business'
+                ? 1
+                : 0;
+
+            if (aGroup !== bGroup) {
+              return aGroup - bGroup;
+            }
+
+            return a.name.localeCompare(
+              b.name,
+            );
+          },
+        ),
       [accounts],
     );
 
@@ -1236,12 +1246,18 @@ export function DashboardPage() {
                 const selected =
                   index === activeAccountIndex;
 
-                const subtitle =
+                const subtitle = [
                   account.institution
-                  || account.type.replace(
-                    '_',
-                    ' ',
-                  );
+                    || account.type.replace(
+                      '_',
+                      ' ',
+                    ),
+                  account.classification === 'business'
+                    ? 'Business'
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
 
                 const mark =
                   (
