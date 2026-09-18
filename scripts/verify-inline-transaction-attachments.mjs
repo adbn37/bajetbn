@@ -13,7 +13,7 @@ requireText(page, 'Receipt or document (optional)');
 requireText(page, 'Skip this section when you do not have a receipt.');
 requireText(page, 'type="file" multiple accept="image/*,application/pdf"');
 requireText(page, 'capture="environment"');
-requireText(page, 'Save money activity');
+requireText(page, 'Save transaction');
 requireText(page, 'Save and attach');
 requireText(page, 'uploadTransactionAttachment({ transactionId');
 requireText(page, "outcome.mode === 'queued'");

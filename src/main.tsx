@@ -6,22 +6,6 @@ import './styles/global.css';
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  let reloadingForServiceWorker = false;
-
-  navigator.serviceWorker.addEventListener(
-    'controllerchange',
-    () => {
-      if (reloadingForServiceWorker) return;
-
-      reloadingForServiceWorker = true;
-
-      // A new BajetBN build has taken control. Reload once so the
-      // current tab does not continue running an older lazy chunk or
-      // stylesheet from the previous service-worker generation.
-      window.location.reload();
-    },
-  );
-
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', {
@@ -30,7 +14,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       });
 
       await registration.update();
-
       if (registration.waiting) {
         registration.waiting.postMessage('SKIP_WAITING');
       }
