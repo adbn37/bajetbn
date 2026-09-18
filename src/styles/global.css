@@ -12755,3 +12755,110 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
       repeat(3, minmax(0, 1fr));
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 APPROVED CATEGORY SELECTOR ALIGNMENT
+   Primary selector follows approved reference.
+   Expanded categories live in normal document flow.
+   ========================================================== */
+
+.bajetbn-reference-category-row {
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr)) !important;
+  gap: 0.38rem !important;
+}
+
+.bajetbn-reference-category-item {
+  gap: 0.34rem !important;
+}
+
+.bajetbn-reference-category-item
+.category-icon {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 13px !important;
+}
+
+.bajetbn-reference-category-item
+> span:last-child {
+  min-height: 2.3em;
+  font-size: 0.66rem !important;
+  line-height: 1.08 !important;
+}
+
+.bajetbn-reference-category-more-panel {
+  position: static !important;
+  display: block !important;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: visible !important;
+  z-index: auto !important;
+}
+
+.bajetbn-reference-category-more-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.65rem;
+}
+
+.bajetbn-reference-category-more-heading
+strong {
+  font-size: 0.78rem;
+}
+
+.bajetbn-reference-category-more-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.bajetbn-reference-category-more-item {
+  min-width: 0;
+  min-height: 80px;
+  position: static !important;
+}
+
+.bajetbn-reference-category-more-item
+.category-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.bajetbn-reference-category-more-item
+> span:nth-child(2) {
+  font-size: 0.66rem;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.bajetbn-reference-category-more-item
+> small {
+  font-size: 0.52rem;
+}
+
+.bajetbn-reference-category-more-panel
++ .transaction-label-editor {
+  margin-top: 0.1rem;
+}
+
+@media (max-width: 360px) {
+  .bajetbn-reference-category-item
+  .category-icon {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .bajetbn-reference-category-more-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}

@@ -1549,29 +1549,56 @@ export function MoneyActivityModal({
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
 
   const primaryCategoryOptions = useMemo(() => {
-    if (categoryOptions.length <= 4) {
-      return categoryOptions;
-    }
+    const preferredPersonalExpenseIds = [
+      'expense-groceries',
+      'expense-food',
+      'expense-transport',
+      'expense-utilities',
+    ];
 
-    const firstFour = categoryOptions.slice(0, 4);
+    const preferred =
+      type === 'expense'
+      && scope === 'personal'
+        ? preferredPersonalExpenseIds
+            .map(
+              (id) =>
+                categoryOptions.find(
+                  (category) =>
+                    category.id === id,
+                ),
+            )
+            .filter(
+              (
+                category,
+              ): category is TransactionCategory =>
+                Boolean(category),
+            )
+        : [];
+
+    const base =
+      preferred.length === 4
+        ? preferred
+        : categoryOptions.slice(0, 4);
 
     if (
       selectedCategory
-      && !firstFour.some(
+      && !base.some(
         (category) =>
           category.id === selectedCategory.id,
       )
     ) {
       return [
-        ...categoryOptions.slice(0, 3),
+        ...base.slice(0, 3),
         selectedCategory,
       ];
     }
 
-    return firstFour;
+    return base;
   }, [
     categoryOptions,
+    scope,
     selectedCategory,
+    type,
   ]);
 
   const secondaryCategoryOptions = useMemo(
@@ -2417,43 +2444,61 @@ export function MoneyActivityModal({
           )}
         </div>
 
-        {showAllCategories
-          && secondaryCategoryOptions.length > 0
-          && (
-            <div className="bajetbn-reference-category-more-panel">
-              {secondaryCategoryOptions.map((category) => (
-                <button
-                  type="button"
-                  key={category.id}
-                  className={
-                    `bajetbn-reference-category-more-item ${categoryId === category.id ? 'selected' : ''}`
-                  }
-                  onClick={() => {
-                    setCategoryId(category.id);
-                    setShowAllCategories(false);
-                  }}
-                >
-                  <span
-                    className={
-                      `category-icon category-${category.color}`
-                    }
-                  >
-                    {categoryIconGlyph(category.icon)}
-                  </span>
-
-                  <span>
-                    {category.name}
-                  </span>
-
-                  {!category.isSystem && (
-                    <small>Custom</small>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
       </fieldset>
     )}
+
+    {type !== 'transfer'
+      && showAllCategories
+      && secondaryCategoryOptions.length > 0
+      && (
+        <section className="bajetbn-reference-category-more-panel">
+          <div className="bajetbn-reference-category-more-heading">
+            <strong>More categories</strong>
+
+            <button
+              type="button"
+              className="text-button"
+              onClick={() =>
+                setShowAllCategories(false)
+              }
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="bajetbn-reference-category-more-grid">
+            {secondaryCategoryOptions.map((category) => (
+              <button
+                type="button"
+                key={category.id}
+                className={
+                  `bajetbn-reference-category-more-item ${categoryId === category.id ? 'selected' : ''}`
+                }
+                onClick={() => {
+                  setCategoryId(category.id);
+                  setShowAllCategories(false);
+                }}
+              >
+                <span
+                  className={
+                    `category-icon category-${category.color}`
+                  }
+                >
+                  {categoryIconGlyph(category.icon)}
+                </span>
+
+                <span>
+                  {category.name}
+                </span>
+
+                {!category.isSystem && (
+                  <small>Custom</small>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
     <section className="transaction-label-editor">
       <div className="transaction-label-editor-heading">
