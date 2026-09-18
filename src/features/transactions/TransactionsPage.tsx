@@ -2123,7 +2123,24 @@ export function MoneyActivityModal({
     </label>
 
     <div className="bajetbn-reference-date">
-      <span aria-hidden="true">D</span>
+      <span
+        className="bajetbn-reference-date-icon"
+        aria-hidden="true"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          focusable="false"
+        >
+          <path
+            d="M7 3v3M17 3v3M4.5 8.5h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
       <label>
         Date
         <input
