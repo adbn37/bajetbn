@@ -1444,6 +1444,7 @@ export function MoneyActivityModal({
   timezone,
   online,
   initialType,
+  entryMode = 'activity',
   initialValues,
   lockedSpaceId,
   onCategoriesChanged,
@@ -1458,6 +1459,7 @@ export function MoneyActivityModal({
   timezone: string;
   online: boolean;
   initialType?: PrimaryType;
+  entryMode?: 'activity' | 'move' | 'receipt';
   initialValues?: TransactionInput;
   lockedSpaceId?: string;
   onCategoriesChanged?: () => Promise<TransactionCategory[]>;
@@ -1470,7 +1472,13 @@ export function MoneyActivityModal({
   const maxAttachmentSizeBytes = 10 * 1024 * 1024;
   const chooseFilesRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const [type, setType] = useState<PrimaryType>(initialValues?.type || initialType || 'expense');
+  const [type, setType] = useState<PrimaryType>(
+    entryMode === 'move'
+      ? 'transfer'
+      : entryMode === 'receipt'
+        ? 'expense'
+        : initialValues?.type || initialType || 'expense',
+  );
   const requestedInitialSpaceId = initialValues?.spaceId || lockedSpaceId || '';
   const preferredPersonalSpaceId = spaces.find((space) => space.type === 'personal')?.id || '';
   const initialSpaceId = requestedInitialSpaceId && spaces.some((space) => space.id === requestedInitialSpaceId)
@@ -1533,6 +1541,7 @@ export function MoneyActivityModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
+  const receiptAutoOpenedRef = useRef(false);
 
   const scope = spaceScope(selectedSpace);
   const categoryOptions = localCategories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
@@ -1642,6 +1651,31 @@ export function MoneyActivityModal({
     setPaymentMethod(suggestedPaymentMethod(sourceAccount));
     setPaymentMethodCustom('');
   }, [accountId]);
+  useEffect(() => {
+    if (
+      entryMode !== 'receipt'
+      || initialValues
+      || receiptAutoOpenedRef.current
+      || !online
+    ) {
+      return;
+    }
+
+    receiptAutoOpenedRef.current = true;
+
+    const frame =
+      window.requestAnimationFrame(
+        () => cameraRef.current?.click(),
+      );
+
+    return () =>
+      window.cancelAnimationFrame(frame);
+  }, [
+    entryMode,
+    initialValues,
+    online,
+  ]);
+
   const destinationOptions = compatibleAccounts.filter((account) => account.id !== accountId);
   let amountMinor = 0;
   try { amountMinor = amount ? toMinorUnits(amount) : 0; } catch { amountMinor = 0; }
@@ -1918,9 +1952,155 @@ export function MoneyActivityModal({
   const typeOptions: PrimaryType[] = lockedSpaceId
     ? ['expense', 'income']
     : ['expense', 'income', 'transfer'];
-  return <Modal title={initialValues ? 'Correct money activity' : 'Add money activity'} onClose={closeForm}><form className="transaction-form" onSubmit={submit}>
+
+  if (entryMode === 'move' && !initialValues) {
+    return <Modal title="Move Money" onClose={closeForm}>
+      <form
+        className="transaction-form bajetbn-move-money-form"
+        onSubmit={submit}
+      >
+        {error && <div className="notice error">{error}</div>}
+
+        <section className="bajetbn-move-guide">
+          <strong>Move money between your accounts</strong>
+          <small>
+            Choose a source and destination account.
+          </small>
+        </section>
+
+        <label>
+          From account
+          <select
+            required
+            value={accountId}
+            onChange={(event) => setAccountId(event.target.value)}
+          >
+            {compatibleAccounts.map((account) => (
+              <option value={account.id} key={account.id}>
+                {account.name} · {account.sharedCanViewBalance === false
+                  ? 'Balance hidden'
+                  : formatMoney(account.ledgerBalanceMinor, account.currency)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="bajetbn-transfer-direction" aria-hidden="true">
+          ↓
+        </div>
+
+        <label>
+          To account
+          <select
+            required
+            value={destinationAccountId}
+            onChange={(event) => setDestinationAccountId(event.target.value)}
+          >
+            <option value="">Choose account</option>
+            {destinationOptions.map((account) => (
+              <option value={account.id} key={account.id}>
+                {account.name} · {account.sharedCanViewBalance === false
+                  ? 'Balance hidden'
+                  : formatMoney(account.ledgerBalanceMinor, account.currency)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="bajetbn-reference-amount">
+          Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})
+          <input
+            required
+            autoFocus
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="0.00"
+          />
+        </label>
+
+        <label>
+          Date
+          <input
+            required
+            type="date"
+            value={transactionDate}
+            onChange={(event) => setTransactionDate(event.target.value)}
+          />
+        </label>
+
+        <label>
+          Note (optional)
+          <textarea
+            rows={3}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="E.g. Move to savings"
+            maxLength={500}
+          />
+        </label>
+
+        <div className="modal-actions bajetbn-reference-submit">
+          <button
+            className="button primary"
+            disabled={
+              busy
+              || compatibleAccounts.length < 2
+              || !destinationAccountId
+            }
+          >
+            {busy ? 'Moving money…' : 'Move money'}
+          </button>
+        </div>
+      </form>
+    </Modal>;
+  }
+
+  return <Modal
+    title={
+      initialValues
+        ? 'Correct money activity'
+        : entryMode === 'receipt'
+          ? 'Scan Receipt'
+          : 'Add money activity'
+    }
+    onClose={closeForm}
+  >
+  <form
+    className={
+      `transaction-form bajetbn-reference-activity-form ${entryMode === 'receipt' ? 'bajetbn-receipt-entry-form' : ''}`
+    }
+    onSubmit={submit}
+  >
     {initialValues && <div className="notice warning compact-notice"><strong>Creating a correction</strong><span>The original activity has already been undone. Review every field and save this replacement to finish the correction.</span></div>}
     {error && <div className="notice error">{error}</div>}
+
+    {entryMode === 'receipt' && !initialValues && (
+      <section className="bajetbn-receipt-first-banner">
+        <strong>Receipt first</strong>
+        <span>
+          Take a photo or choose a receipt, then complete the expense details.
+        </span>
+        <div>
+          <button
+            type="button"
+            className="button primary"
+            disabled={!online || busy}
+            onClick={() => cameraRef.current?.click()}
+          >
+            Take photo
+          </button>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={!online || busy}
+            onClick={() => chooseFilesRef.current?.click()}
+          >
+            Choose file
+          </button>
+        </div>
+      </section>
+    )}
     {!online && <div className="notice warning compact-notice"><strong>Saving offline</strong><span>This money activity will stay on this device and sync safely when internet returns.</span></div>}
     <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
       {typeOptions.map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}

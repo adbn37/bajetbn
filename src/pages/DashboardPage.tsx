@@ -200,6 +200,11 @@ export function DashboardPage() {
   ] = useState<'expense' | 'income' | 'transfer'>('expense');
 
   const [
+    quickEntryMode,
+    setQuickEntryMode,
+  ] = useState<'activity' | 'move' | 'receipt'>('activity');
+
+  const [
     assetsVisible,
     setAssetsVisible,
   ] = useState(true);
@@ -497,21 +502,26 @@ export function DashboardPage() {
 
   const openQuickActivity =
     useCallback(async (
-      initialType: 'expense' | 'income' | 'transfer' = 'expense',
+      entryMode: 'activity' | 'move' | 'receipt' = 'activity',
     ) => {
       if (
         loading
         || quickLoading
         || quickAccounts.length === 0
         || (
-          initialType === 'transfer'
+          entryMode === 'move'
           && quickAccounts.length < 2
         )
       ) {
         return;
       }
 
-      setQuickInitialType(initialType);
+      setQuickEntryMode(entryMode);
+      setQuickInitialType(
+        entryMode === 'move'
+          ? 'transfer'
+          : 'expense',
+      );
 
       const ready =
         await loadQuickOptions();
@@ -1194,23 +1204,12 @@ export function DashboardPage() {
         </section>
       )}
 
-      <section className="home-v110-shortcuts bajetbn-reference-actions">
-        <button
-          type="button"
-          onClick={() =>
-            void openQuickActivity('expense')
-          }
-        >
-          <span aria-hidden="true">+</span>
-          <strong>Add</strong>
-          <small>Transaction</small>
-        </button>
-
+      <section className="home-v110-shortcuts bajetbn-reference-actions bajetbn-reference-actions-three">
         <button
           type="button"
           disabled={quickAccounts.length < 2}
           onClick={() =>
-            void openQuickActivity('transfer')
+            void openQuickActivity('move')
           }
         >
           <span aria-hidden="true">M</span>
@@ -1221,12 +1220,12 @@ export function DashboardPage() {
         <button
           type="button"
           onClick={() =>
-            void openQuickActivity('expense')
+            void openQuickActivity('receipt')
           }
         >
           <span aria-hidden="true">R</span>
-          <strong>Receipt</strong>
-          <small>Add expense</small>
+          <strong>Scan</strong>
+          <small>Receipt</small>
         </button>
 
         <Link to="/reports">
@@ -1593,6 +1592,7 @@ export function DashboardPage() {
             }
             online={online}
             initialType={quickInitialType}
+            entryMode={quickEntryMode}
             onClose={
               closeQuickActivity
             }

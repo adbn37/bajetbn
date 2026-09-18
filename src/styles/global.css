@@ -11839,3 +11839,113 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     display: none;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 APPROVED MONEY FLOW ALIGNMENT
+   Bottom navigation intentionally unchanged.
+   ========================================================== */
+
+.bajetbn-reference-actions-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.bajetbn-reference-activity-form,
+.bajetbn-move-money-form {
+  gap: 0.9rem;
+}
+
+.bajetbn-reference-activity-form .transaction-type-picker {
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.bajetbn-reference-activity-form .amount-field input,
+.bajetbn-reference-amount input {
+  min-height: 68px;
+  font-size: clamp(2rem, 7vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.bajetbn-reference-activity-form .category-option-grid {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+}
+
+.bajetbn-reference-activity-form .category-option {
+  flex: 0 0 104px;
+  min-height: 86px;
+  border-radius: 16px;
+}
+
+.bajetbn-move-guide,
+.bajetbn-receipt-first-banner {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.bajetbn-move-guide small,
+.bajetbn-receipt-first-banner span {
+  color: var(--muted);
+}
+
+.bajetbn-transfer-direction {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  margin: -0.1rem auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface);
+  font-weight: 900;
+}
+
+.bajetbn-reference-amount {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bajetbn-reference-amount input {
+  width: 100%;
+}
+
+.bajetbn-reference-submit {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: 0.6rem;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in srgb, var(--surface) 98%, transparent) 25%
+    );
+}
+
+.bajetbn-reference-submit .button.primary {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 15px;
+}
+
+.bajetbn-receipt-first-banner > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+@media (max-width: 720px) {
+  .bajetbn-receipt-first-banner > div {
+    grid-template-columns: 1fr;
+  }
+}
