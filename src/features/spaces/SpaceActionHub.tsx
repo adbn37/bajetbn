@@ -124,6 +124,240 @@ const shortcutStyle: CSSProperties = {
   textAlign: 'left',
 };
 
+function shortcutIcon(
+  label: string,
+) {
+  const value =
+    label.toLowerCase();
+
+  if (
+    value.includes('money')
+    || value.includes('account')
+    || value.includes('fund')
+    || value.includes('balance')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M5 7h12a2 2 0 0 1 2 2v9H6a2 2 0 0 1-2-2V7.5A2.5 2.5 0 0 1 6.5 5H17"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M15 11h5v4h-5a2 2 0 0 1 0-4Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('bill')
+    || value.includes('invoice')
+    || value.includes('rent')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M7 4h10v16l-2-1-2 1-2-1-2 1-2-1V4Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M10 9h4M10 13h4"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('pos')
+    || value.includes('listing')
+    || value.includes('sale')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M5 9h14v10H5V9Zm1-4h12l2 4H4l2-4Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 13h6"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('purchase')
+    || value.includes('buy')
+    || value.includes('shopping')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M4 5h2l2 10h9l2-7H7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="10" cy="19" r="1.2" fill="currentColor" />
+        <circle cx="17" cy="19" r="1.2" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('task')
+    || value.includes('to-do')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M9 6h10M9 12h10M9 18h10M4.5 6l1.2 1.2L7.8 5M4.5 12l1.2 1.2L7.8 11M4.5 18l1.2 1.2L7.8 17"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('member')
+    || value.includes('seller')
+    || value.includes('customer')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <circle
+          cx="9"
+          cy="8"
+          r="3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+        <path
+          d="M4 19c.7-3.2 2.5-5 5-5s4.3 1.8 5 5M15 6.5c2.2.2 3.5 1.5 3.5 3.5s-1.3 3.3-3.5 3.5M16 14.5c2 .7 3.2 2.2 3.7 4.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (value.includes('chat')) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M5 5h14v10H9l-4 4V5Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 9h6M9 12h4"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('report')
+    || value.includes('activity')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M5 19V9M10 19V5M15 19v-7M20 19V8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('setting')
+    || value.includes('setup')
+    || value.includes('admin')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <circle
+          cx="12"
+          cy="12"
+          r="3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+        <path
+          d="M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (
+    value.includes('trip')
+    || value.includes('plan')
+  ) {
+    return (
+      <svg viewBox="0 0 24 24">
+        <path
+          d="m3 13 7-2 3-7 2 1-1 6 6-1 1 2-7 3-2 6-2-1v-5l-5 1-2-3Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24">
+      <rect x="4" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <rect x="14" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <rect x="4" y="14" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <rect x="14" y="14" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
 function ShortcutLink({
   to,
   label,
@@ -144,7 +378,17 @@ function ShortcutLink({
       to={to}
       onClick={onClick}
     >
-      <span>{label}</span>
+      <span
+        className="space-shortcut-icon"
+        aria-hidden="true"
+      >
+        {shortcutIcon(label)}
+      </span>
+
+      <span className="space-shortcut-copy">
+        <strong>{label}</strong>
+      </span>
+
       {badge !== undefined && badge !== null && (
         <span className="type-badge">{badge}</span>
       )}
@@ -170,7 +414,17 @@ function ShortcutButton({
       style={shortcutStyle}
       onClick={onClick}
     >
-      <span>{label}</span>
+      <span
+        className="space-shortcut-icon"
+        aria-hidden="true"
+      >
+        {shortcutIcon(label)}
+      </span>
+
+      <span className="space-shortcut-copy">
+        <strong>{label}</strong>
+      </span>
+
       {badge !== undefined && badge !== null && (
         <span className="type-badge">{badge}</span>
       )}

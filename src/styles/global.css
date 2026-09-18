@@ -14018,3 +14018,116 @@ strong {
     text-align: left;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 SPACE LAUNCHER TILE REDESIGN
+   Compact semantic launcher tiles for Space Home.
+   Routing and permissions remain unchanged.
+   ========================================================== */
+
+.simplified-space-actions {
+  grid-template-columns:
+    repeat(auto-fit, minmax(96px, 1fr)) !important;
+  gap: 0.58rem !important;
+}
+
+.simplified-space-actions
+.button.compact {
+  min-height: 76px !important;
+  padding: 0.68rem 0.58rem !important;
+  display: grid !important;
+  grid-template-columns: 34px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  border-radius: 15px !important;
+  text-align: left !important;
+  text-decoration: none;
+}
+
+.simplified-space-actions
+.button.compact:not(.primary) {
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 96%,
+      transparent
+    );
+  border-color: var(--border);
+}
+
+.space-shortcut-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--accent);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 12%,
+      transparent
+    );
+}
+
+.space-shortcut-icon svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+
+.primary
+.space-shortcut-icon {
+  color: currentColor;
+  background:
+    color-mix(
+      in srgb,
+      currentColor 13%,
+      transparent
+    );
+}
+
+.space-shortcut-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.space-shortcut-copy strong {
+  overflow: hidden;
+  font-size: 0.7rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+}
+
+.simplified-space-actions
+.type-badge {
+  min-width: 22px;
+  justify-self: end;
+}
+
+@media (max-width: 420px) {
+  .simplified-space-actions {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .simplified-space-actions
+  .button.compact {
+    min-height: 70px !important;
+    grid-template-columns:
+      32px minmax(0, 1fr) auto !important;
+    padding: 0.62rem 0.56rem !important;
+  }
+
+  .space-shortcut-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .space-shortcut-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+}
