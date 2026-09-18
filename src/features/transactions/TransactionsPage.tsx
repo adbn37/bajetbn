@@ -6,10 +6,19 @@ import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../compone
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { PaymentMethodField } from '../../components/PaymentMethodField';
-import { paymentMethodLabel, suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
+import {
+  institutionDisplay,
+  paymentMethodLabel,
+  suggestedPaymentMethod,
+} from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import { shareTransactionToWhatsApp, type TransactionShareSnapshot } from '../../services/transactionShare';
+import {
+  accountColorClass,
+  getAccountColor,
+} from '../../services/accountVisualPreferences';
+import { SpaceAvatar } from '../spaces/SpaceAvatar';
 import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
@@ -1687,6 +1696,31 @@ export function MoneyActivityModal({
   const sourceAccount = accounts.find((account) => account.id === accountId);
   const destinationAccount = accounts.find((account) => account.id === destinationAccountId);
 
+  const sourceAccountVisualIndex =
+    sourceAccount
+      ? Math.max(
+          0,
+          accounts.findIndex(
+            (account) =>
+              account.id === sourceAccount.id,
+          ),
+        )
+      : 0;
+
+  const sourceAccountSubtitle =
+    sourceAccount
+      ? [
+          institutionDisplay(sourceAccount),
+          sourceAccount.type === 'e_wallet'
+            ? 'E-wallet'
+            : sourceAccount.type === 'credit_card'
+              ? 'Credit card'
+              : sourceAccount.type === 'cash'
+                ? 'Cash account'
+                : 'Bank account',
+        ].join(' · ')
+      : 'Choose account';
+
   function currentShareSnapshot(
     nextAmountMinor: number,
     transactionId?: string,
@@ -2230,36 +2264,98 @@ export function MoneyActivityModal({
       </label>
     </div>
 
-    <div className="bajetbn-reference-account-row">
-      <div>
+    <div className="bajetbn-reference-account-row bajetbn-identity-field">
+      <div className="bajetbn-identity-field-heading">
         <span>
           {type === 'income'
             ? 'To account'
-            : type === 'expense'
-              ? 'From account'
-              : 'From account'}
+            : 'From account'}
         </span>
         <small>Select account</small>
       </div>
 
-      <select
-        required
-        value={accountId}
-        onChange={(event) =>
-          setAccountId(event.target.value)
-        }
-      >
-        {compatibleAccounts.map((account) => (
-          <option value={account.id} key={account.id}>
-            {account.name} · {account.sharedCanViewBalance === false
+      <div className="bajetbn-identity-card bajetbn-account-identity-card">
+        {sourceAccount ? (
+          <span
+            className={
+              'bajetbn-account-identity-icon '
+              + accountColorClass(
+                  getAccountColor(
+                    user?.uid || '',
+                    sourceAccount.id,
+                    sourceAccountVisualIndex,
+                  ),
+                )
+            }
+            aria-hidden="true"
+          >
+            {sourceAccount.name
+              .trim()
+              .charAt(0)
+              .toUpperCase() || '?'}
+          </span>
+        ) : (
+          <span
+            className="bajetbn-account-identity-icon account-color-slate"
+            aria-hidden="true"
+          >
+            ?
+          </span>
+        )}
+
+        <span className="bajetbn-identity-copy">
+          <strong>
+            {sourceAccount?.name || 'Choose account'}
+          </strong>
+
+          <small>
+            {sourceAccountSubtitle}
+          </small>
+        </span>
+
+        <span className="bajetbn-identity-balance">
+          {sourceAccount
+            ? sourceAccount.sharedCanViewBalance === false
               ? 'Balance hidden'
               : formatMoney(
-                  account.ledgerBalanceMinor,
-                  account.currency,
-                )}
-          </option>
-        ))}
-      </select>
+                  sourceAccount.ledgerBalanceMinor,
+                  sourceAccount.currency,
+                )
+            : ''}
+        </span>
+
+        <span
+          className="bajetbn-identity-chevron"
+          aria-hidden="true"
+        >
+          ›
+        </span>
+
+        <select
+          className="bajetbn-identity-native-select"
+          aria-label={
+            type === 'income'
+              ? 'To account'
+              : 'From account'
+          }
+          required
+          value={accountId}
+          onChange={(event) =>
+            setAccountId(event.target.value)
+          }
+        >
+          {compatibleAccounts.map((account) => (
+            <option value={account.id} key={account.id}>
+              {account.name} · {account.sharedCanViewBalance === false
+                ? 'Balance hidden'
+                : formatMoney(
+                    account.ledgerBalanceMinor,
+                    account.currency,
+                  )}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
 
     {type === 'transfer' && (
@@ -2292,38 +2388,54 @@ export function MoneyActivityModal({
     )}
 
     {lockedSpaceId ? (
-      <div className="locked-space-field bajetbn-reference-space-row">
-        <span>Recorded in</span>
-        <strong>
-          {selectedSpace?.name || 'This Space'}
-        </strong>
-        <small>
-          {selectedSpace
-            ? [
-                spaceTypeLabels[selectedSpace.type],
-                selectedSpace.currency,
-                'Locked to this Space',
-              ].join(' · ')
-            : 'Locked to this Space'}
-        </small>
+      <div className="locked-space-field bajetbn-reference-space-row bajetbn-space-identity-locked">
+        {selectedSpace && (
+          <SpaceAvatar
+            space={selectedSpace}
+          />
+        )}
+
+        <span className="bajetbn-identity-copy">
+          <span>Recorded in</span>
+          <strong>
+            {selectedSpace?.name || 'This Space'}
+          </strong>
+          <small>
+            {selectedSpace
+              ? [
+                  spaceTypeLabels[selectedSpace.type],
+                  selectedSpace.currency,
+                  'Locked to this Space',
+                ].join(' · ')
+              : 'Locked to this Space'}
+          </small>
+        </span>
       </div>
     ) : (
-      <div className="contextual-space-field bajetbn-reference-space-row">
+      <div className="contextual-space-field bajetbn-reference-space-row bajetbn-space-identity-field">
         <div className="contextual-space-summary">
-          <div>
-            <span>Space (optional)</span>
-            <strong>
-              {selectedSpace?.type === 'personal'
-                ? 'Personal'
-                : selectedSpace?.name || 'Choose Space'}
-            </strong>
-            <small>
-              {selectedSpace?.type === 'personal'
-                ? 'No Space selected'
-                : selectedSpace
-                  ? spaceTypeLabels[selectedSpace.type]
-                  : 'Choose where this activity belongs'}
-            </small>
+          <div className="bajetbn-space-identity-main">
+            {selectedSpace && (
+              <SpaceAvatar
+                space={selectedSpace}
+              />
+            )}
+
+            <div className="bajetbn-identity-copy">
+              <span>Space (optional)</span>
+              <strong>
+                {selectedSpace?.type === 'personal'
+                  ? 'Personal'
+                  : selectedSpace?.name || 'Choose Space'}
+              </strong>
+              <small>
+                {selectedSpace?.type === 'personal'
+                  ? 'No Space selected'
+                  : selectedSpace
+                    ? spaceTypeLabels[selectedSpace.type]
+                    : 'Choose where this activity belongs'}
+              </small>
+            </div>
           </div>
 
           {spaces.some(
