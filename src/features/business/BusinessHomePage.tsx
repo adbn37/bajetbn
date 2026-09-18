@@ -13,6 +13,9 @@ import {
   listAccountsForSpace,
 } from '../../repositories/accountRepository';
 import {
+  getBusinessProfile,
+} from '../../repositories/businessAdvancedRepository';
+import {
   getMySmePosAccess,
 } from '../../repositories/smePosRepository';
 import {
@@ -23,6 +26,7 @@ import {
 } from '../../repositories/transactionRepository';
 import type {
   Account,
+  BusinessIndustry,
   FinancialTransaction,
   Space,
   SmePosRole,
@@ -112,6 +116,11 @@ export function BusinessHomePage() {
   const [posRole, setPosRole] =
     useState<SmePosRole | null>(null);
 
+  const [
+    businessIndustry,
+    setBusinessIndustry,
+  ] = useState<BusinessIndustry>('general');
+
   const [loading, setLoading] =
     useState(true);
 
@@ -147,20 +156,57 @@ export function BusinessHomePage() {
         nextSpace.ownerId === user.uid;
 
       const [
-        nextAccounts,
-        nextTransactions,
         nextAccess,
+        nextProfile,
       ] = await Promise.all([
-        listAccountsForSpace(spaceId),
-        listBusinessTransactionsForSpace(
-          spaceId,
-        ),
         isOwner
           ? Promise.resolve(null)
           : getMySmePosAccess(
               spaceId,
               user.uid,
             ).catch(() => null),
+        getBusinessProfile(
+          spaceId,
+        ).catch(() => null),
+      ]);
+
+      const nextRole =
+        nextAccess?.status === 'active'
+          ? nextAccess.role
+          : null;
+
+      setPosRole(nextRole);
+      setBusinessIndustry(
+        nextProfile?.industry
+        || 'general',
+      );
+
+      /*
+       * Financial data is not merely hidden in the UI.
+       * Restricted POS roles do not request it at all.
+       *
+       * This mirrors the existing Business financial rule:
+       * Owner / Manager can see Business financials.
+       * Cashier / Stock Staff / Seller / View Only cannot.
+       */
+      const canReadFinancials =
+        isOwner
+        || nextRole === 'manager';
+
+      if (!canReadFinancials) {
+        setAccounts([]);
+        setTransactions([]);
+        return;
+      }
+
+      const [
+        nextAccounts,
+        nextTransactions,
+      ] = await Promise.all([
+        listAccountsForSpace(spaceId),
+        listBusinessTransactionsForSpace(
+          spaceId,
+        ),
       ]);
 
       setAccounts(
@@ -177,12 +223,6 @@ export function BusinessHomePage() {
             item.status === 'posted'
             && item.type !== 'reversal',
         ),
-      );
-
-      setPosRole(
-        nextAccess?.status === 'active'
-          ? nextAccess.role
-          : null,
       );
     } catch {
       setError(
@@ -310,6 +350,177 @@ export function BusinessHomePage() {
   const currentRole =
     roleLabel(posRole, isOwner);
 
+  const canViewFinancials =
+    isOwner
+    || posRole === 'manager';
+
+  const workspaceTitle =
+    posRole === 'cashier'
+      ? 'Cashier workspace'
+      : posRole === 'stock_staff'
+        ? 'Stock workspace'
+        : posRole === 'seller'
+          ? 'Seller workspace'
+          : posRole === 'viewer'
+            ? 'View-only workspace'
+            : 'Business workspace';
+
+  const workspaceDescription =
+    posRole === 'cashier'
+      ? 'Open the POS and handle customer sales. Business money and account balances stay private.'
+      : posRole === 'stock_staff'
+        ? 'Work with stock and POS tools. Business money and account balances stay private.'
+        : posRole === 'seller'
+          ? 'Use your seller and POS tools. Other Business financial information stays private.'
+          : posRole === 'viewer'
+            ? 'View the operational tools available to your role. Financial information stays private.'
+            : 'Your Business tools are ready.';
+
+  const businessActions: Array<{
+    label: string;
+    icon: string;
+    to: string;
+  }> = [];
+
+  if (
+    posRole === 'cashier'
+    || posRole === 'stock_staff'
+    || posRole === 'seller'
+    || posRole === 'viewer'
+  ) {
+    businessActions.push({
+      label:
+        posRole === 'stock_staff'
+          ? 'Inventory / POS'
+          : posRole === 'seller'
+            ? 'Seller / POS'
+            : posRole === 'viewer'
+              ? 'View POS'
+              : 'POS',
+      icon: '▦',
+      to:
+        '/spaces/'
+        + space.id
+        + '/pos',
+    });
+  } else if (
+    businessIndustry === 'marketplace'
+  ) {
+    businessActions.push(
+      {
+        label: 'POS',
+        icon: '▦',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos',
+      },
+      {
+        label: 'Listings',
+        icon: '▤',
+        to:
+          '/spaces/'
+          + space.id
+          + '?section=marketplace-listings',
+      },
+    );
+
+    if (
+      isOwner
+      || posRole === 'manager'
+    ) {
+      businessActions.push({
+        label: 'Sellers',
+        icon: '♙',
+        to:
+          '/spaces/'
+          + space.id
+          + '?section=marketplace-sellers',
+      });
+    }
+
+    businessActions.push({
+      label: 'Operations',
+      icon: '▦',
+      to:
+        '/spaces/'
+        + space.id
+        + '/business',
+    });
+  } else if (
+    businessIndustry === 'retail'
+  ) {
+    businessActions.push(
+      {
+        label: 'POS',
+        icon: '▦',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos',
+      },
+      {
+        label: 'Operations',
+        icon: '▤',
+        to:
+          '/spaces/'
+          + space.id
+          + '/business',
+      },
+    );
+
+    if (isOwner) {
+      businessActions.push({
+        label: 'Business Setup',
+        icon: '⚙',
+        to:
+          '/spaces/'
+          + space.id
+          + '/business/setup',
+      });
+    }
+  } else {
+    if (
+      isOwner
+      && (
+        businessIndustry === 'service'
+        || businessIndustry === 'rental'
+      )
+    ) {
+      businessActions.push({
+        label:
+          businessIndustry === 'rental'
+            ? 'Rent'
+            : 'Invoices',
+        icon: '▤',
+        to:
+          '/spaces/'
+          + space.id
+          + '/business/invoices',
+      });
+    }
+
+    businessActions.push({
+      label: 'Operations',
+      icon: '▦',
+      to:
+        '/spaces/'
+        + space.id
+        + '/business',
+    });
+
+    if (isOwner) {
+      businessActions.push({
+        label: 'Business Setup',
+        icon: '⚙',
+        to:
+          '/spaces/'
+          + space.id
+          + '/business/setup',
+      });
+    }
+  }
+
   return (
     <main
       className="page business-home-v115"
@@ -349,100 +560,97 @@ export function BusinessHomePage() {
         </div>
       )}
 
-      <section className="business-home-v115-hero">
-        <div className="business-home-v115-hero-heading">
-          <div>
-            <span>Business funds</span>
-            <small>
-              Business accounts only
-            </small>
+      {canViewFinancials ? (
+        <section className="business-home-v115-hero">
+          <div className="business-home-v115-hero-heading">
+            <div>
+              <span>Business funds</span>
+              <small>
+                Business accounts only
+              </small>
+            </div>
+
+            <Link
+              to={
+                '/spaces/'
+                + space.id
+                + '?section=accounts'
+              }
+            >
+              Accounts
+            </Link>
           </div>
 
-          <Link
-            to={
-              '/spaces/'
-              + space.id
-              + '?section=accounts'
-            }
-          >
-            Accounts
-          </Link>
-        </div>
+          <strong>
+            {formatMoney(
+              totalBusinessFunds,
+              space.currency,
+            )}
+          </strong>
 
-        <strong>
-          {formatMoney(
-            totalBusinessFunds,
-            space.currency,
+          <div className="business-home-v115-hero-stats">
+            <div>
+              <span>Money in</span>
+              <strong>
+                {formatMoney(
+                  moneyIn,
+                  space.currency,
+                )}
+              </strong>
+              <small>This month</small>
+            </div>
+
+            <div>
+              <span>Money out</span>
+              <strong>
+                {formatMoney(
+                  moneyOut,
+                  space.currency,
+                )}
+              </strong>
+              <small>This month</small>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="business-home-v115-role-hero">
+          <span className="eyebrow">
+            {currentRole}
+          </span>
+
+          <h2>{workspaceTitle}</h2>
+
+          <p>
+            {workspaceDescription}
+          </p>
+        </section>
+      )}
+
+      {businessActions.length > 0 && (
+        <section
+          className="business-home-v115-actions"
+          aria-label="Business actions"
+        >
+          {businessActions.map(
+            (action) => (
+              <Link
+                key={
+                  action.label
+                  + action.to
+                }
+                to={action.to}
+              >
+                <span>{action.icon}</span>
+                <strong>
+                  {action.label}
+                </strong>
+              </Link>
+            ),
           )}
-        </strong>
+        </section>
+      )}
 
-        <div className="business-home-v115-hero-stats">
-          <div>
-            <span>Money in</span>
-            <strong>
-              {formatMoney(
-                moneyIn,
-                space.currency,
-              )}
-            </strong>
-            <small>This month</small>
-          </div>
-
-          <div>
-            <span>Money out</span>
-            <strong>
-              {formatMoney(
-                moneyOut,
-                space.currency,
-              )}
-            </strong>
-            <small>This month</small>
-          </div>
-        </div>
-      </section>
-
-      <section className="business-home-v115-actions">
-        <Link
-          to={
-            '/spaces/'
-            + space.id
-            + '/business/money'
-          }
-        >
-          <span>↕</span>
-          <strong>Money</strong>
-        </Link>
-
-        <Link
-          to={
-            '/spaces/'
-            + space.id
-            + '?section=accounts'
-          }
-        >
-          <span>▣</span>
-          <strong>Accounts</strong>
-        </Link>
-
-        <Link
-          to={
-            '/spaces/'
-            + space.id
-            + '/business'
-          }
-        >
-          <span>▦</span>
-          <strong>Operations</strong>
-        </Link>
-
-        <Link
-          to={'/spaces/' + space.id}
-        >
-          <span>•••</span>
-          <strong>More</strong>
-        </Link>
-      </section>
-
+      {canViewFinancials && (
       <section className="business-home-v115-section">
         <div className="business-home-v115-section-heading">
           <div>
@@ -512,7 +720,9 @@ export function BusinessHomePage() {
           </p>
         )}
       </section>
+      )}
 
+      {canViewFinancials && (
       <section className="business-home-v115-section">
         <div className="business-home-v115-section-heading">
           <div>
@@ -582,6 +792,7 @@ export function BusinessHomePage() {
           </p>
         )}
       </section>
+      )}
     </main>
   );
 }

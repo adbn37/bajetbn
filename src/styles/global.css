@@ -14791,3 +14791,69 @@ strong {
     justify-self: start;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 ROLE AWARE BUSINESS HOME
+   Role controls Business Home visibility and action surface.
+   Financial data is only rendered for Owner / Manager.
+   ========================================================== */
+
+.business-home-v115-role-hero {
+  padding: 1rem;
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--accent) 42%,
+      var(--border)
+    );
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(
+        in srgb,
+        var(--accent) 12%,
+        var(--surface)
+      ),
+      var(--surface)
+    );
+}
+
+.business-home-v115-role-hero h2 {
+  margin: 0.18rem 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+.business-home-v115-role-hero p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.business-home-v115-actions {
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(86px, 1fr)
+    );
+}
+
+.business-home-v115-actions a {
+  min-height: 76px;
+}
+
+@media (max-width: 520px) {
+  .business-home-v115-actions {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-home-v115-actions a {
+    min-height: 70px;
+  }
+}
