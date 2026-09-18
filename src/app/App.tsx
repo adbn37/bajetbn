@@ -22,6 +22,7 @@ const CollectionInventoryPage = lazy(() => import('../features/collection/Collec
 const CollectionOrganizationPage = lazy(() => import('../features/collection/CollectionOrganizationPage').then((module) => ({ default: module.CollectionOrganizationPage })));
 const CollectionAddItemPage = lazy(() => import('../features/collection/CollectionInventoryPage').then((module) => ({ default: module.CollectionAddItemPage })));
 const CollectionItemDetailsPage = lazy(() => import('../features/collection/CollectionItemDetailsPage').then((module) => ({ default: module.CollectionItemDetailsPage })));
+const BusinessHomePage = lazy(() => import('../features/business/BusinessHomePage').then((module) => ({ default: module.BusinessHomePage })));
 const BusinessAdvancedPage = lazy(() => import('../features/business/BusinessAdvancedPage').then((module) => ({ default: module.BusinessAdvancedPage })));
 const BusinessWizardPage = lazy(() => import('../features/business/BusinessWizardPage').then((module) => ({ default: module.BusinessWizardPage })));
 const BusinessInvoicesPage = lazy(() => import('../features/business/BusinessInvoicesPage').then((module) => ({ default: module.BusinessInvoicesPage })));
@@ -95,6 +96,7 @@ export default function App() {
                   <Route path="spaces/:spaceId/collection/organize" element={<CollectionOrganizationPage />} />
                   <Route path="spaces/:spaceId/collection/add" element={<CollectionAddItemPage />} />
                   <Route path="spaces/:spaceId/collection/items/:itemId" element={<CollectionItemDetailsPage />} />
+                  <Route path="business/:spaceId" element={<BusinessHomePage />} />
                   <Route path="spaces/:spaceId/business" element={<BusinessAdvancedPage />} />
                   <Route path="spaces/:spaceId/business/setup" element={<BusinessWizardPage />} />
                   <Route path="spaces/:spaceId/business/invoices" element={<BusinessInvoicesPage />} />

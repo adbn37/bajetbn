@@ -8,6 +8,7 @@ import { subscribeUserNotifications } from '../repositories/collaborationReposit
 import { listenForForegroundPush } from '../repositories/notificationRepository';
 import { listSpaces } from '../repositories/spaceRepository';
 import type { Space } from '../types/models';
+import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { planLabel } from '../services/entitlements';
 import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
 import {
@@ -191,7 +192,7 @@ export function AppShell() {
       }
 
       if (smeSpaces.length === 1) {
-        navigate(`/spaces/${smeSpaces[0].id}`);
+        navigate(`/business/${smeSpaces[0].id}`);
         return;
       }
 
@@ -210,7 +211,7 @@ export function AppShell() {
   function chooseBusinessSpace(space: Space) {
     setBusinessPickerOpen(false);
     setBusinessPickerError('');
-    navigate(`/spaces/${space.id}`);
+    navigate(`/business/${space.id}`);
   }
   function submitSearch(event: FormEvent) {
     event.preventDefault();
@@ -330,7 +331,12 @@ export function AppShell() {
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
           <button
             type="button"
-            className={businessPickerOpen ? 'active' : ''}
+            className={
+              businessPickerOpen
+              || location.pathname.startsWith('/business/')
+                ? 'active'
+                : ''
+            }
             onClick={() => void openBusinessShortcut()}
             aria-label="Open Business"
             aria-expanded={businessPickerOpen}
@@ -426,12 +432,9 @@ export function AppShell() {
                       className="mobile-business-picker-option"
                       onClick={() => chooseBusinessSpace(space)}
                     >
-                      <span
-                        className="space-icon sme"
-                        aria-hidden="true"
-                      >
-                        B
-                      </span>
+                      <SpaceAvatar
+                        space={space}
+                      />
 
                       <span>
                         <strong>{space.name}</strong>

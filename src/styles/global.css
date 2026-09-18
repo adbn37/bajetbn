@@ -14436,3 +14436,358 @@ strong {
     grid-template-columns: 1fr !important;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 DEDICATED BUSINESS HOME
+   Business Home is intentionally separate from Personal Home.
+   Only Business Space accounts and Business transactions appear here.
+   ========================================================== */
+
+.business-home-v115 {
+  width: min(100%, 920px);
+  margin-inline: auto;
+  padding-bottom: 9.5rem;
+}
+
+.business-home-v115-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.business-home-v115-title {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.business-home-v115-title > div {
+  min-width: 0;
+}
+
+.business-home-v115-title h1 {
+  margin: 0.15rem 0;
+  font-size: clamp(1.65rem, 6vw, 2.35rem);
+  line-height: 1.05;
+}
+
+.business-home-v115-title p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.business-home-v115-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.05rem;
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--accent) 55%,
+      var(--border)
+    );
+  border-radius: 22px;
+  background:
+    radial-gradient(
+      circle at 90% 8%,
+      color-mix(
+        in srgb,
+        var(--accent) 22%,
+        transparent
+      ),
+      transparent 28%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(
+        in srgb,
+        var(--accent) 20%,
+        var(--surface)
+      ),
+      var(--surface)
+    );
+}
+
+.business-home-v115-hero-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.business-home-v115-hero-heading > div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.business-home-v115-hero-heading span {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.business-home-v115-hero-heading small {
+  color: var(--muted);
+  font-size: 0.63rem;
+}
+
+.business-home-v115-hero-heading a {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.business-home-v115-hero > strong {
+  display: block;
+  margin: 1rem 0;
+  font-size: clamp(2rem, 9vw, 3rem);
+  letter-spacing: -0.04em;
+}
+
+.business-home-v115-hero-stats {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.business-home-v115-hero-stats > div {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 80%,
+      transparent
+    );
+}
+
+.business-home-v115-hero-stats span,
+.business-home-v115-hero-stats small {
+  color: var(--muted);
+  font-size: 0.6rem;
+}
+
+.business-home-v115-hero-stats strong {
+  font-size: 0.9rem;
+}
+
+.business-home-v115-actions {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0.9rem 0 1.05rem;
+}
+
+.business-home-v115-actions a {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.72rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  text-align: center;
+}
+
+.business-home-v115-actions a > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--accent);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 12%,
+      transparent
+    );
+}
+
+.business-home-v115-actions strong {
+  font-size: 0.68rem;
+}
+
+.business-home-v115-section {
+  margin-top: 0.85rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.business-home-v115-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.7rem;
+}
+
+.business-home-v115-section-heading > div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.business-home-v115-section-heading span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.business-home-v115-section-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.business-home-v115-section-heading a {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.business-home-v115-account-strip {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.business-home-v115-account-card {
+  display: grid;
+  grid-template-columns:
+    40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.62rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.business-home-v115-account-card > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.business-home-v115-account-card strong,
+.business-home-v115-account-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-home-v115-account-card small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.business-home-v115-account-card > b {
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.business-home-v115-activity-list {
+  display: grid;
+}
+
+.business-home-v115-activity-row {
+  display: grid;
+  grid-template-columns:
+    34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.62rem;
+  padding: 0.65rem 0;
+  color: var(--text);
+  text-decoration: none;
+  border-top: 1px solid var(--border);
+}
+
+.business-home-v115-activity-row:first-child {
+  border-top: 0;
+}
+
+.business-home-v115-activity-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 10%,
+      transparent
+    );
+  font-weight: 900;
+}
+
+.business-home-v115-activity-row > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.business-home-v115-activity-row > span:nth-child(2) strong,
+.business-home-v115-activity-row > span:nth-child(2) small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-home-v115-activity-row > span:nth-child(2) small {
+  color: var(--muted);
+  font-size: 0.6rem;
+}
+
+.business-home-v115-activity-row > b {
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.business-home-v115-activity-row > b.income {
+  color: var(--success, #1d925b);
+}
+
+.business-home-v115-activity-row > b.expense {
+  color: var(--danger, #d55151);
+}
+
+@media (max-width: 520px) {
+  .business-home-v115 {
+    padding-bottom: 10.5rem;
+  }
+
+  .business-home-v115-actions {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .business-home-v115-actions a {
+    padding-inline: 0.2rem;
+  }
+
+  .business-home-v115-account-card {
+    grid-template-columns:
+      38px minmax(0, 1fr);
+  }
+
+  .business-home-v115-account-card > b {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
