@@ -11975,3 +11975,206 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     font-size: 0.66rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 ADD MONEY REFERENCE UI PASS
+   Structural styling only. Existing themes remain authoritative.
+   ========================================================== */
+
+.bajetbn-reference-activity-form {
+  gap: 0.85rem;
+}
+
+.bajetbn-reference-activity-form
+.transaction-type-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.2rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(
+    in srgb,
+    var(--surface) 96%,
+    transparent
+  );
+}
+
+.bajetbn-reference-activity-form
+.transaction-type-picker button {
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+.bajetbn-add-amount {
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(
+        in srgb,
+        var(--surface) 94%,
+        var(--accent) 6%
+      ),
+      var(--surface)
+    );
+}
+
+.bajetbn-add-amount > span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.bajetbn-add-amount input {
+  min-height: 64px;
+  padding-inline: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: clamp(2.2rem, 8vw, 3.15rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+}
+
+.bajetbn-reference-date {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+}
+
+.bajetbn-reference-date > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(
+    in srgb,
+    var(--accent) 12%,
+    var(--surface)
+  );
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.bajetbn-reference-date label {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.bajetbn-reference-date input {
+  min-height: auto;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.bajetbn-reference-account-row {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.bajetbn-reference-account-row > div {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.bajetbn-reference-account-row > div span {
+  font-weight: 750;
+}
+
+.bajetbn-reference-account-row > div small {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.bajetbn-reference-account-row select {
+  min-height: 58px;
+  border-radius: 15px;
+  font-weight: 650;
+}
+
+.bajetbn-reference-space-row {
+  border-radius: 17px !important;
+}
+
+.bajetbn-reference-activity-form
+.category-picker {
+  padding-top: 0.15rem;
+}
+
+.bajetbn-reference-activity-form
+.category-option-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(86px, 1fr));
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+}
+
+.bajetbn-reference-activity-form
+.category-option {
+  min-height: 84px;
+  border-radius: 16px;
+}
+
+.bajetbn-reference-activity-form
+.category-icon {
+  margin-inline: auto;
+}
+
+.bajetbn-reference-activity-form
+.modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  padding-top: 0.7rem;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(
+        in srgb,
+        var(--surface) 98%,
+        transparent
+      ) 26%
+    );
+}
+
+.bajetbn-reference-activity-form
+.modal-actions .button.primary {
+  min-height: 54px;
+  border-radius: 15px;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .bajetbn-reference-activity-form
+  .category-option-grid {
+    grid-template-columns: repeat(
+      5,
+      minmax(78px, 1fr)
+    );
+  }
+
+  .bajetbn-reference-activity-form
+  .category-option {
+    min-width: 82px;
+  }
+}

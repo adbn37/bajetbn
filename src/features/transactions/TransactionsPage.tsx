@@ -1947,7 +1947,7 @@ export function MoneyActivityModal({
       ? 'Save corrected activity'
       : !online ? 'Save on this device'
         : pendingFiles.length > 0 ? `Save and attach ${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'}`
-          : 'Save money activity';
+          : 'Save transaction';
 
   const typeOptions: PrimaryType[] = lockedSpaceId
     ? ['expense', 'income']
@@ -2106,42 +2106,179 @@ export function MoneyActivityModal({
       {typeOptions.map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
     </div>
 
-    <div className="form-grid">
-      <label>Date<input required type="date" value={transactionDate} onChange={(event) => setTransactionDate(event.target.value)} /></label>
-      {lockedSpaceId ? (
-        <div className="locked-space-field">
-          <span>Recorded in</span>
-          <strong>{selectedSpace?.name || 'This Space'}</strong>
-          <small>{selectedSpace ? [spaceTypeLabels[selectedSpace.type], selectedSpace.currency, 'Locked to this Space'].join(' · ') : 'Locked to this Space'}</small>
+    <label className="bajetbn-reference-amount bajetbn-add-amount">
+      <span>
+        Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})
+      </span>
+      <input
+        required
+        autoFocus
+        inputMode="decimal"
+        value={amount}
+        onChange={(event) =>
+          setAmount(event.target.value)
+        }
+        placeholder="0.00"
+      />
+    </label>
+
+    <div className="bajetbn-reference-date">
+      <span aria-hidden="true">D</span>
+      <label>
+        Date
+        <input
+          required
+          type="date"
+          value={transactionDate}
+          onChange={(event) =>
+            setTransactionDate(event.target.value)
+          }
+        />
+      </label>
+    </div>
+
+    <div className="bajetbn-reference-account-row">
+      <div>
+        <span>
+          {type === 'income'
+            ? 'To account'
+            : type === 'expense'
+              ? 'From account'
+              : 'From account'}
+        </span>
+        <small>Select account</small>
+      </div>
+
+      <select
+        required
+        value={accountId}
+        onChange={(event) =>
+          setAccountId(event.target.value)
+        }
+      >
+        {compatibleAccounts.map((account) => (
+          <option value={account.id} key={account.id}>
+            {account.name} · {account.sharedCanViewBalance === false
+              ? 'Balance hidden'
+              : formatMoney(
+                  account.ledgerBalanceMinor,
+                  account.currency,
+                )}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    {type === 'transfer' && (
+      <div className="bajetbn-reference-account-row">
+        <div>
+          <span>To account</span>
+          <small>Select destination</small>
         </div>
-      ) : (
-        <div className="contextual-space-field">
-          <div className="contextual-space-summary">
-            <div>
-              <span>{selectedSpace?.type === 'personal' ? 'Personal money' : 'Recorded in'}</span>
-              <strong>{selectedSpace?.type === 'personal' ? 'BajetBN' : selectedSpace?.name || 'Choose Space'}</strong>
-              <small>{selectedSpace?.type === 'personal' ? 'No Space needed' : selectedSpace ? [spaceTypeLabels[selectedSpace.type], selectedSpace.currency].join(' · ') : 'Choose where this activity belongs'}</small>
-            </div>
-            {spaces.some((space) => space.type !== 'personal') && (
-              <button type="button" className="text-button contextual-space-change" aria-expanded={spaceChooserOpen} onClick={() => setSpaceChooserOpen((current) => !current)}>
-                {spaceChooserOpen ? 'Cancel' : 'Use a Space'}
-              </button>
-            )}
+
+        <select
+          required
+          value={destinationAccountId}
+          onChange={(event) =>
+            setDestinationAccountId(event.target.value)
+          }
+        >
+          <option value="">Choose account</option>
+          {destinationOptions.map((account) => (
+            <option value={account.id} key={account.id}>
+              {account.name} · {account.sharedCanViewBalance === false
+                ? 'Balance hidden'
+                : formatMoney(
+                    account.ledgerBalanceMinor,
+                    account.currency,
+                  )}
+            </option>
+          ))}
+        </select>
+      </div>
+    )}
+
+    {lockedSpaceId ? (
+      <div className="locked-space-field bajetbn-reference-space-row">
+        <span>Recorded in</span>
+        <strong>
+          {selectedSpace?.name || 'This Space'}
+        </strong>
+        <small>
+          {selectedSpace
+            ? [
+                spaceTypeLabels[selectedSpace.type],
+                selectedSpace.currency,
+                'Locked to this Space',
+              ].join(' · ')
+            : 'Locked to this Space'}
+        </small>
+      </div>
+    ) : (
+      <div className="contextual-space-field bajetbn-reference-space-row">
+        <div className="contextual-space-summary">
+          <div>
+            <span>Space (optional)</span>
+            <strong>
+              {selectedSpace?.type === 'personal'
+                ? 'Personal'
+                : selectedSpace?.name || 'Choose Space'}
+            </strong>
+            <small>
+              {selectedSpace?.type === 'personal'
+                ? 'No Space selected'
+                : selectedSpace
+                  ? spaceTypeLabels[selectedSpace.type]
+                  : 'Choose where this activity belongs'}
+            </small>
           </div>
-          {spaceChooserOpen && (
-            <label className="contextual-space-chooser">
-              Space
-              <select required value={spaceId} onChange={(event) => { setSpaceId(event.target.value); setSpaceChooserOpen(false); }}>
-                {spaces.map((space) => <option value={space.id} key={space.id}>{spaceDisplayLabel(space)}</option>)}
-              </select>
-            </label>
+
+          {spaces.some(
+            (space) => space.type !== 'personal',
+          ) && (
+            <button
+              type="button"
+              className="text-button contextual-space-change"
+              aria-expanded={spaceChooserOpen}
+              onClick={() =>
+                setSpaceChooserOpen(
+                  (current) => !current,
+                )
+              }
+            >
+              {spaceChooserOpen
+                ? 'Cancel'
+                : selectedSpace?.type === 'personal'
+                  ? 'Select Space'
+                  : 'Change'}
+            </button>
           )}
         </div>
-      )}
-      <label className={type === 'transfer' ? '' : 'span-2'}>{type === 'income' ? 'Money goes into' : type === 'expense' ? 'Money comes from' : 'Move from account'}<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}>{compatibleAccounts.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.sharedCanViewBalance === false ? 'Balance hidden' : formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>
-      {type === 'transfer' && <label>Move to account<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Choose account</option>{destinationOptions.map((account) => <option value={account.id} key={account.id}>{account.name} · {account.sharedCanViewBalance === false ? 'Balance hidden' : formatMoney(account.ledgerBalanceMinor, account.currency)}</option>)}</select></label>}
-      <label className="span-2 amount-field">Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})<input required autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label>
-    </div>
+
+        {spaceChooserOpen && (
+          <label className="contextual-space-chooser">
+            Space
+            <select
+              required
+              value={spaceId}
+              onChange={(event) => {
+                setSpaceId(event.target.value);
+                setSpaceChooserOpen(false);
+              }}
+            >
+              {spaces.map((space) => (
+                <option
+                  value={space.id}
+                  key={space.id}
+                >
+                  {spaceDisplayLabel(space)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+    )}
 
     {type !== 'transfer' && <fieldset className="category-picker"><legend className="category-picker-legend"><span>Category</span>{canManageCategories && <button type="button" className="text-button" onClick={() => setShowCategoryEditor(true)}>+ Add category</button>}</legend><div className="category-option-grid">
       {categoryOptions.map((category) => <button type="button" key={category.id} className={`category-option ${categoryId === category.id ? 'selected' : ''}`} onClick={() => setCategoryId(category.id)}>
