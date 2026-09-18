@@ -13972,3 +13972,49 @@ strong {
   width: 57%;
   height: 57%;
 }
+
+
+/* ==========================================================
+   BAJETBN V115 SPACE HOME ACCOUNT AVATAR
+   Space Home uses the same AccountAvatar source as Home,
+   Accounts, Add Money and Move Money.
+   ========================================================== */
+
+.space-home-v1147-account {
+  grid-template-columns:
+    40px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.space-home-v115-account-avatar {
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
+  border-radius: 11px;
+}
+
+.space-home-v115-account-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.space-home-v115-account-copy strong,
+.space-home-v115-account-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .space-home-v1147-account {
+    grid-template-columns:
+      38px minmax(0, 1fr);
+  }
+
+  .space-home-v1147-account-balance {
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
+  }
+}

@@ -60,6 +60,7 @@ import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 import type { CollaborationTab } from '../collaboration/CollaborationPage';
 import { DEFAULT_TRANSACTION_CATEGORIES } from '../categories/defaultCategories';
+import { AccountAvatar } from '../accounts/AccountAvatar';
 import { useSpacePresenceHeartbeat } from '../collaboration/useSpacePresence';
 import { SpaceActionHub } from './SpaceActionHub';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
@@ -1806,7 +1807,12 @@ function SpaceHomeOverview({
                   className="space-home-v1147-account"
                   key={account.id}
                 >
-                  <div>
+                  <AccountAvatar
+                    account={account}
+                    className="space-home-v115-account-avatar"
+                  />
+
+                  <div className="space-home-v115-account-copy">
                     <strong>{account.name}</strong>
                     <small className="muted">
                       {account.institution
