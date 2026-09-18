@@ -112,6 +112,13 @@ check(
 );
 
 check(
+  transactions.includes('account={destinationAccount}')
+    && transactions.includes('destinationAccountSubtitle')
+    && transactions.includes('aria-label="To account"'),
+  'Transfer destination uses shared AccountAvatar identity card.',
+);
+
+check(
   accounts.includes(
     '<AccountAvatar',
   )

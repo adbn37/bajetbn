@@ -2606,31 +2606,80 @@ export function MoneyActivityModal({
     </div>
 
     {type === 'transfer' && (
-      <div className="bajetbn-reference-account-row">
-        <div>
+      <div className="bajetbn-reference-account-row bajetbn-identity-field">
+        <div className="bajetbn-identity-field-heading">
           <span>To account</span>
           <small>Select destination</small>
         </div>
 
-        <select
-          required
-          value={destinationAccountId}
-          onChange={(event) =>
-            setDestinationAccountId(event.target.value)
-          }
-        >
-          <option value="">Choose account</option>
-          {destinationOptions.map((account) => (
-            <option value={account.id} key={account.id}>
-              {account.name} · {account.sharedCanViewBalance === false
+        <div className="bajetbn-identity-card bajetbn-account-identity-card">
+          {destinationAccount ? (
+            <AccountAvatar
+              account={destinationAccount}
+              className={
+                'bajetbn-account-identity-icon '
+                + accountColorClass(
+                    getAccountColor(
+                      user?.uid || '',
+                      destinationAccount.id,
+                      destinationAccountVisualIndex,
+                    ),
+                  )
+              }
+            />
+          ) : (
+            <span
+              className="bajetbn-account-identity-icon account-color-slate"
+              aria-hidden="true"
+            >
+              ?
+            </span>
+          )}
+
+          <span className="bajetbn-identity-copy">
+            <strong>
+              {destinationAccount?.name || 'Choose account'}
+            </strong>
+            <small>{destinationAccountSubtitle}</small>
+          </span>
+
+          <span className="bajetbn-identity-balance">
+            {destinationAccount
+              ? destinationAccount.sharedCanViewBalance === false
                 ? 'Balance hidden'
                 : formatMoney(
-                    account.ledgerBalanceMinor,
-                    account.currency,
-                  )}
-            </option>
-          ))}
-        </select>
+                    destinationAccount.ledgerBalanceMinor,
+                    destinationAccount.currency,
+                  )
+              : ''}
+          </span>
+
+          <span className="bajetbn-identity-chevron" aria-hidden="true">
+            ›
+          </span>
+
+          <select
+            className="bajetbn-identity-native-select"
+            aria-label="To account"
+            required
+            value={destinationAccountId}
+            onChange={(event) =>
+              setDestinationAccountId(event.target.value)
+            }
+          >
+            <option value="">Choose account</option>
+            {destinationOptions.map((account) => (
+              <option value={account.id} key={account.id}>
+                {account.name} · {account.sharedCanViewBalance === false
+                  ? 'Balance hidden'
+                  : formatMoney(
+                      account.ledgerBalanceMinor,
+                      account.currency,
+                    )}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     )}
 
