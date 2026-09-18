@@ -34,6 +34,9 @@ import type {
 import { formatMoney } from '../../utils/money';
 import { AccountAvatar } from '../accounts/AccountAvatar';
 import { SpaceAvatar } from '../spaces/SpaceAvatar';
+import {
+  SmeOperationalAttentionPanel,
+} from '../spaces/SmeOperationalAttentionPanel';
 
 function monthPrefix() {
   return new Date()
@@ -648,6 +651,22 @@ export function BusinessHomePage() {
             ),
           )}
         </section>
+      )}
+
+      {canViewFinancials && (
+        <div
+          className="business-home-v115-attention"
+          data-business-home-attention
+        >
+          <SmeOperationalAttentionPanel
+            space={space}
+            role={
+              isOwner
+                ? 'owner'
+                : posRole
+            }
+          />
+        </div>
       )}
 
       {canViewFinancials && (

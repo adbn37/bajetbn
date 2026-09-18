@@ -14857,3 +14857,39 @@ strong {
     min-height: 70px;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS HOME OPERATIONAL ATTENTION
+   Reuses the existing POS / Marketplace attention engine on
+   the dedicated Business Home. Owner/Manager only.
+   ========================================================== */
+
+.business-home-v115-attention {
+  margin-top: 0.85rem;
+}
+
+.business-home-v115-attention
+.sme-pos-operational-attention {
+  margin-top: 0 !important;
+  border-radius: 18px;
+}
+
+.business-home-v115-attention
+.marketplace-space-summary-grid {
+  gap: 0.5rem;
+}
+
+@media (max-width: 520px) {
+  .business-home-v115-attention
+  .marketplace-space-summary-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .business-home-v115-attention
+  .summary-card {
+    min-height: 0;
+    padding: 0.68rem;
+  }
+}
