@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
+import { AccountAvatar } from './AccountAvatar';
+import { AccountAvatarSettings } from './AccountAvatarSettings';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
@@ -486,6 +488,7 @@ export function AccountsPage({
         initial={selected}
         lockedPersonal={!embedded || embeddedSpace?.type === 'personal'}
         onClose={() => setModal(null)}
+        onAvatarSaved={load}
         onSubmit={async (values) => {
           await updateAccount({
             accountId: selected.id,
@@ -613,7 +616,10 @@ function AccountList({
     const sharedLedgerSpaceId = sharedContext?.ledgerSpaceIds[0];
 
     return <article className={`account-card ${accountColorClass(getAccountColor(user?.uid || '', account.id, index))}`} key={account.id}>
-      <span className={`account-symbol large ${account.type}`}>{account.name.charAt(0)}</span>
+      <AccountAvatar
+        account={account}
+        size="large"
+      />
       <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {canManage ? (account.classification === 'personal' ? 'Personal only' : businessNames(account)) : sharedLabel}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div></div>
       <div className="account-balance">
         <span>Current balance</span>
@@ -903,7 +909,23 @@ type AccountFormValues = {
   color: AccountColor;
 };
 
-function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClose, onSubmit }: { currency: string; spaces: Space[]; initial?: Account; lockedPersonal?: boolean; onClose: () => void; onSubmit: (values: AccountFormValues) => Promise<void> }) {
+function AccountForm({
+  currency,
+  spaces,
+  initial,
+  lockedPersonal = false,
+  onClose,
+  onAvatarSaved,
+  onSubmit,
+}: {
+  currency: string;
+  spaces: Space[];
+  initial?: Account;
+  lockedPersonal?: boolean;
+  onClose: () => void;
+  onAvatarSaved?: () => Promise<void>;
+  onSubmit: (values: AccountFormValues) => Promise<void>;
+}) {
   const { user } = useAuth();
   const [name, setName] = useState(initial?.name || '');
   const [color, setColor] = useState<AccountColor>(() =>
@@ -985,6 +1007,12 @@ function AccountForm({ currency, spaces, initial, lockedPersonal = false, onClos
 
   return <Modal title={initial ? 'Edit account' : 'Add account'} onClose={onClose}><form className="form-grid" onSubmit={submit}>
     {error && <div className="notice error span-2">{error}</div>}
+    {initial && onAvatarSaved && (
+      <AccountAvatarSettings
+        account={initial}
+        onSaved={onAvatarSaved}
+      />
+    )}
     <label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label>
     <label>Type<select value={type} onChange={(event) => changeType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label>
     <label>Used for<select value={classification} disabled={lockedPersonal} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>

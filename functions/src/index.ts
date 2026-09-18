@@ -25537,6 +25537,247 @@ export const removeSpaceAvatar = onCall(
   },
 );
 
+
+export const setAccountAvatar = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const accountId =
+      stringValue(
+        request.data?.accountId,
+        'Account ID',
+        120,
+      );
+
+    const storagePath =
+      stringValue(
+        request.data?.storagePath,
+        'Account icon path',
+        500,
+      );
+
+    stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const expectedPrefix =
+      'accounts/'
+      + accountId
+      + '/avatar/';
+
+    if (
+      !storagePath.startsWith(
+        expectedPrefix,
+      )
+      || !storagePath.endsWith(
+        '.jpg',
+      )
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Invalid account icon path.',
+      );
+    }
+
+    const accountRef =
+      db.collection(
+        'accounts',
+      ).doc(
+        accountId,
+      );
+
+    const accountSnapshot =
+      await accountRef.get();
+
+    if (!accountSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Account not found.',
+      );
+    }
+
+    const account =
+      accountSnapshot.data()
+      || {};
+
+    if (account.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the account owner can change its icon.',
+      );
+    }
+
+    const bucket =
+      getStorage().bucket();
+
+    const uploadedFile =
+      bucket.file(
+        storagePath,
+      );
+
+    const [exists] =
+      await uploadedFile.exists();
+
+    if (!exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Uploaded account icon was not found.',
+      );
+    }
+
+    const [metadata] =
+      await uploadedFile.getMetadata();
+
+    if (
+      metadata.contentType
+        !== 'image/jpeg'
+      || Number(
+        metadata.size || 0,
+      ) <= 0
+      || Number(
+        metadata.size || 0,
+      ) >= 700 * 1024
+    ) {
+      await uploadedFile.delete({
+        ignoreNotFound: true,
+      });
+
+      throw new HttpsError(
+        'invalid-argument',
+        'Account icon must be a compressed JPEG smaller than 700 KB.',
+      );
+    }
+
+    const previousPath =
+      typeof account.avatarPath
+        === 'string'
+        ? account.avatarPath
+        : '';
+
+    await accountRef.update({
+      avatarPath: storagePath,
+      updatedAt:
+        FieldValue.serverTimestamp(),
+    });
+
+    if (
+      previousPath
+      && previousPath
+        !== storagePath
+      && previousPath.startsWith(
+        expectedPrefix,
+      )
+    ) {
+      try {
+        await bucket
+          .file(previousPath)
+          .delete({
+            ignoreNotFound: true,
+          });
+      } catch {
+        // New avatar remains linked safely.
+      }
+    }
+
+    return {
+      avatarPath: storagePath,
+    };
+  },
+);
+
+export const removeAccountAvatar = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const accountId =
+      stringValue(
+        request.data?.accountId,
+        'Account ID',
+        120,
+      );
+
+    stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const accountRef =
+      db.collection(
+        'accounts',
+      ).doc(
+        accountId,
+      );
+
+    const accountSnapshot =
+      await accountRef.get();
+
+    if (!accountSnapshot.exists) {
+      throw new HttpsError(
+        'not-found',
+        'Account not found.',
+      );
+    }
+
+    const account =
+      accountSnapshot.data()
+      || {};
+
+    if (account.ownerId !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the account owner can remove its icon.',
+      );
+    }
+
+    const previousPath =
+      typeof account.avatarPath
+        === 'string'
+        ? account.avatarPath
+        : '';
+
+    await accountRef.update({
+      avatarPath: null,
+      updatedAt:
+        FieldValue.serverTimestamp(),
+    });
+
+    if (
+      previousPath
+      && previousPath.startsWith(
+        'accounts/'
+        + accountId
+        + '/avatar/',
+      )
+    ) {
+      try {
+        await getStorage()
+          .bucket()
+          .file(previousPath)
+          .delete({
+            ignoreNotFound: true,
+          });
+      } catch {
+        // Metadata is already safely cleared.
+      }
+    }
+
+    return {
+      removed: true,
+    };
+  },
+);
+
 export const createDebt = onCall(
   { region },
   async (request) => {

@@ -1585,6 +1585,7 @@ export interface Account {
   name: string;
   institution?: string;
   institutionCode?: InstitutionCode | null;
+  avatarPath?: string | null;
   type: AccountType;
   classification: AccountClassification;
   /**

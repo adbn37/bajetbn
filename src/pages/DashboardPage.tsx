@@ -38,6 +38,7 @@ import {
   categoryIconGlyph,
 } from '../features/categories/defaultCategories';
 import { MoneyActivityModal } from '../features/transactions/TransactionsPage';
+import { AccountAvatar } from '../features/accounts/AccountAvatar';
 
 function monthPrefix() {
   return new Date()
@@ -1259,16 +1260,6 @@ export function DashboardPage() {
                   .filter(Boolean)
                   .join(' · ');
 
-                const mark =
-                  (
-                    account.institution
-                    || account.name
-                    || 'B'
-                  )
-                    .trim()
-                    .charAt(0)
-                    .toUpperCase();
-
                 return (
                   <button
                     key={account.id}
@@ -1290,9 +1281,10 @@ export function DashboardPage() {
                     }
                   >
                     <span className="bajetbn-home-account-card-head">
-                      <span className="bajetbn-home-account-mark">
-                        {mark}
-                      </span>
+                      <AccountAvatar
+                        account={account}
+                        className="bajetbn-home-account-mark"
+                      />
 
                       <span>
                         <strong>{account.name}</strong>

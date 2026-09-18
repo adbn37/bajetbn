@@ -24,12 +24,12 @@ const checks = [
   [repo, 'removeSpaceAvatar', 'avatar remove'],
 
   [avatar, 'space.avatarPath', 'avatar renderer'],
-  [avatar, 'fallback', 'letter fallback'],
+  [avatar, 'SpaceFallbackIcon', 'semantic fallback icon'],
 
   [settings, 'Replace icon', 'replace control'],
     [settings, 'onClick={() => void remove()}', 'remove handler'],
   [settings, 'Remove', 'remove control'],
-  [settings, 'capture="environment"', 'mobile camera'],
+  [settings, 'accept="image/*"', 'mobile image picker'],
 
   [spaces, '<SpaceAvatar space={space} size="large" />', 'Space cards'],
 

@@ -19,6 +19,7 @@ import {
   getAccountColor,
 } from '../../services/accountVisualPreferences';
 import { SpaceAvatar } from '../spaces/SpaceAvatar';
+import { AccountAvatar } from '../accounts/AccountAvatar';
 import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
@@ -2276,7 +2277,8 @@ export function MoneyActivityModal({
 
       <div className="bajetbn-identity-card bajetbn-account-identity-card">
         {sourceAccount ? (
-          <span
+          <AccountAvatar
+            account={sourceAccount}
             className={
               'bajetbn-account-identity-icon '
               + accountColorClass(
@@ -2287,13 +2289,7 @@ export function MoneyActivityModal({
                   ),
                 )
             }
-            aria-hidden="true"
-          >
-            {sourceAccount.name
-              .trim()
-              .charAt(0)
-              .toUpperCase() || '?'}
-          </span>
+          />
         ) : (
           <span
             className="bajetbn-account-identity-icon account-color-slate"

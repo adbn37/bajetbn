@@ -54,6 +54,24 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/spaces/$(spaceId)).data.type == 'sme';
     }
 
+    function accountAccessId(accountId, uid) {
+      return accountId + '_' + uid;
+    }
+
+    function isAccountOwner(accountId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/accounts/$(accountId))
+        && firestore.get(/databases/(default)/documents/accounts/$(accountId)).data.ownerId == request.auth.uid;
+    }
+
+    function canReadAccountVisual(accountId) {
+      return isAccountOwner(accountId)
+        || (
+          signedIn()
+          && firestore.exists(/databases/(default)/documents/accountAccess/$(accountAccessId(accountId, request.auth.uid)))
+        );
+    }
+
     function hasActiveSmePosAccess(spaceId) {
       return signedIn()
         && isActiveSpaceMember(spaceId)
@@ -103,6 +121,18 @@ service firebase.storage {
 
       allow update: if false;
       allow delete: if isSpaceOwner(spaceId);
+    }
+
+    match /accounts/{accountId}/avatar/{fileName} {
+      allow read: if canReadAccountVisual(accountId);
+
+      allow create: if isAccountOwner(accountId)
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.size > 0
+        && request.resource.size < 700 * 1024;
+
+      allow update: if false;
+      allow delete: if isAccountOwner(accountId);
     }
 
     match /spaces/{spaceId}/payment-proofs/{assignmentId}/{fileName} {
