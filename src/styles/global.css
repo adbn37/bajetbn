@@ -12264,3 +12264,62 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     max-width: 88px;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 MODAL HORIZONTAL DRIFT FIX
+   The modal itself must never become a horizontal scroll
+   container. Only intentional inner rails may scroll sideways.
+   ========================================================== */
+
+.modal-backdrop {
+  overflow-x: hidden;
+}
+
+.modal {
+  min-width: 0;
+  max-width: min(620px, calc(100vw - 2rem));
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-x: none;
+}
+
+.modal-header,
+.modal > form,
+.modal > div,
+.modal > section {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.modal input,
+.modal select,
+.modal textarea,
+.modal fieldset {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bajetbn-reference-activity-form {
+  contain: inline-size;
+}
+
+.bajetbn-reference-activity-form .category-picker {
+  contain: inline-size;
+}
+
+.bajetbn-reference-activity-form .category-option-grid {
+  touch-action: pan-x pan-y;
+}
+
+@media (max-width: 780px) {
+  .modal-backdrop {
+    padding-inline: 0.65rem;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: calc(100vw - 1.3rem);
+    margin-inline: auto;
+  }
+}
