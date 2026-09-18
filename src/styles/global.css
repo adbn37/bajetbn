@@ -12178,3 +12178,89 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     min-width: 82px;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 MOBILE CATEGORY OVERFLOW FIX
+   Keep the Add Money modal inside the viewport while allowing
+   categories to scroll horizontally.
+   ========================================================== */
+
+.bajetbn-reference-activity-form {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.bajetbn-reference-activity-form > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bajetbn-reference-activity-form .category-picker {
+  width: 100%;
+  min-inline-size: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.bajetbn-reference-activity-form .category-picker-legend {
+  width: 100%;
+  max-width: 100%;
+}
+
+.bajetbn-reference-activity-form .category-option-grid {
+  display: flex !important;
+  grid-template-columns: none !important;
+  grid-auto-flow: initial !important;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.55rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0 0.35rem;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.bajetbn-reference-activity-form .category-option {
+  flex: 0 0 92px;
+  width: 92px;
+  min-width: 92px;
+  max-width: 92px;
+  min-height: 86px;
+  padding-inline: 0.45rem;
+  overflow: hidden;
+}
+
+.bajetbn-reference-activity-form .category-option > span:last-of-type {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+
+.bajetbn-reference-activity-form .transaction-label-editor,
+.bajetbn-reference-activity-form .transaction-inline-attachments,
+.bajetbn-reference-activity-form .contextual-space-field,
+.bajetbn-reference-activity-form .locked-space-field {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .bajetbn-reference-activity-form .category-option {
+    flex-basis: 88px;
+    width: 88px;
+    min-width: 88px;
+    max-width: 88px;
+  }
+}
