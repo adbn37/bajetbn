@@ -49,9 +49,12 @@ check(
     'listTransactionsForOwnerAccount',
   )
     && dashboard.includes(
-      'Activity below follows this account',
+      'Recent Activity',
+    )
+    && dashboard.includes(
+      'bajetbn-home-account-strip',
     ),
-  'Home Money Activity remains tied to the selected Account.',
+  'Home Recent Activity remains tied to the selected Personal Account.',
 );
 
 check(

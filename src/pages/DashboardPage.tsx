@@ -33,13 +33,38 @@ import type {
   TransactionCategory,
 } from '../types/models';
 import { formatMoney } from '../utils/money';
-import { DEFAULT_TRANSACTION_CATEGORIES } from '../features/categories/defaultCategories';
+import {
+  DEFAULT_TRANSACTION_CATEGORIES,
+  categoryIconGlyph,
+} from '../features/categories/defaultCategories';
 import { MoneyActivityModal } from '../features/transactions/TransactionsPage';
 
 function monthPrefix() {
   return new Date()
     .toISOString()
     .slice(0, 7);
+}
+
+function homeGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function profileInitials(name: string) {
+  const parts = name
+    .trim()
+    .split(/s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  return parts.length > 0
+    ? parts
+        .map((part) => part[0]?.toUpperCase() || '')
+        .join('')
+    : 'B';
 }
 
 function transactionLabel(
@@ -258,27 +283,17 @@ export function DashboardPage() {
   const homeAccounts =
     useMemo(
       () =>
-        [...accounts].sort(
-          (a, b) => {
-            const aGroup =
-              a.classification === 'business'
-                ? 1
-                : 0;
-
-            const bGroup =
-              b.classification === 'business'
-                ? 1
-                : 0;
-
-            if (aGroup !== bGroup) {
-              return aGroup - bGroup;
-            }
-
-            return a.name.localeCompare(
-              b.name,
-            );
-          },
-        ),
+        accounts
+          .filter(
+            (account) =>
+              account.classification === 'personal',
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
+          ),
       [accounts],
     );
 
@@ -322,28 +337,53 @@ export function DashboardPage() {
   const personalAssetBreakdown =
     useMemo(
       () => {
-        const groups = new Map<string, number>();
+        let bank = 0;
+        let cash = 0;
+        let savings = 0;
+        let investments = 0;
+        let other = 0;
 
         personalAssetAccounts.forEach(
           (account) => {
-            const label =
-              account.type === 'bank'
-                ? 'Bank'
-                : account.type === 'cash'
-                  ? 'Cash'
-                  : account.type === 'e_wallet'
-                    ? 'E-wallet'
-                    : 'Other';
+            const name =
+              account.name.toLowerCase();
 
-            groups.set(
-              label,
-              (groups.get(label) || 0)
-              + account.ledgerBalanceMinor,
-            );
+            if (/invest|investment/.test(name)) {
+              investments += account.ledgerBalanceMinor;
+              return;
+            }
+
+            if (/saving|savings/.test(name)) {
+              savings += account.ledgerBalanceMinor;
+              return;
+            }
+
+            if (account.type === 'cash') {
+              cash += account.ledgerBalanceMinor;
+              return;
+            }
+
+            if (account.type === 'bank') {
+              bank += account.ledgerBalanceMinor;
+              return;
+            }
+
+            other += account.ledgerBalanceMinor;
           },
         );
 
-        return Array.from(groups.entries());
+        const groups: Array<[string, number]> = [
+          ['Bank', bank],
+          ['Cash', cash],
+          ['Savings', savings],
+          ['Investments', investments],
+        ];
+
+        if (other !== 0) {
+          groups.push(['Other', other]);
+        }
+
+        return groups;
       },
       [personalAssetAccounts],
     );
@@ -691,15 +731,21 @@ export function DashboardPage() {
       accountCarouselRef.current;
 
     if (carousel) {
-      carousel.scrollTo({
-        left:
+      const card =
+        carousel.children[
           boundedIndex
-          * (
-            carousel.clientWidth
-            + 12
+        ] as HTMLElement | undefined;
+
+      if (card) {
+        carousel.scrollTo({
+          left: Math.max(
+            0,
+            card.offsetLeft
+            - carousel.offsetLeft,
           ),
-        behavior,
-      });
+          behavior,
+        });
+      }
     }
   }
 
@@ -714,23 +760,30 @@ export function DashboardPage() {
       return;
     }
 
-    const pageWidth =
-      carousel.clientWidth + 12;
+    const cards =
+      Array.from(
+        carousel.children,
+      ) as HTMLElement[];
 
-    const nextIndex =
-      Math.min(
-        homeAccounts.length - 1,
-        Math.max(
-          0,
-          Math.round(
-            carousel.scrollLeft
-            / Math.max(
-              1,
-              pageWidth,
-            ),
-          ),
-        ),
-      );
+    let nextIndex = 0;
+    let nearestDistance =
+      Number.POSITIVE_INFINITY;
+
+    cards.forEach(
+      (card, index) => {
+        const distance =
+          Math.abs(
+            card.offsetLeft
+            - carousel.offsetLeft
+            - carousel.scrollLeft,
+          );
+
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nextIndex = index;
+        }
+      },
+    );
 
     if (
       nextIndex
@@ -881,24 +934,68 @@ export function DashboardPage() {
 
   return (
     <main className="page home-v110 bajetbn-reference-home">
-      <header className="home-v110-header">
-        <div>
-          <span className="home-v110-kicker">
-            Welcome back
+      <header className="bajetbn-home-profile-header">
+        <div className="bajetbn-home-profile">
+          <span className="bajetbn-home-avatar" aria-hidden="true">
+            {profileInitials(profile?.fullName || firstName)}
           </span>
 
-          <h1>
-            Hi, {firstName}
-          </h1>
+          <div>
+            <small>
+              {homeGreeting()},
+            </small>
+            <strong>
+              {firstName}
+            </strong>
+          </div>
         </div>
 
-        <Link
-          className="home-v110-alert"
-          to="/notifications"
-          aria-label="Open notifications"
-        >
-          ♢
-        </Link>
+        <div className="bajetbn-home-header-actions">
+          <Link
+            to="/search"
+            aria-label="Search BajetBN"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle
+                cx="11"
+                cy="11"
+                r="6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              />
+              <path
+                d="m16 16 4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+          </Link>
+
+          <Link
+            to="/notifications"
+            aria-label="Open notifications"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M6.5 9.5a5.5 5.5 0 0 1 11 0v4.1l1.5 2.4H5l1.5-2.4V9.5Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M10 19h4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+              />
+            </svg>
+          </Link>
+        </div>
       </header>
 
       {welcomeFromOnboarding && (
@@ -923,25 +1020,41 @@ export function DashboardPage() {
       )}
 
       <section
-        className="bajetbn-total-assets-card"
+        className="bajetbn-total-assets-card bajetbn-home-assets-hero"
         aria-label="Personal total assets"
       >
         <div className="bajetbn-total-assets-head">
           <div>
-            <span>Total assets</span>
-            <small>Personal only - Business excluded</small>
+            <span>Total Assets</span>
+            <small>Personal only · Business excluded</small>
           </div>
 
           <button
             type="button"
             className="bajetbn-asset-visibility"
+            aria-label={assetsVisible ? 'Hide total assets' : 'Show total assets'}
             onClick={() =>
               setAssetsVisible(
                 (current) => !current,
               )
             }
           >
-            {assetsVisible ? 'Hide' : 'Show'}
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M3 12s3.4-5 9-5 9 5 9 5-3.4 5-9 5-9-5-9-5Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              />
+              <circle
+                cx="12"
+                cy="12"
+                r="2.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              />
+            </svg>
           </button>
         </div>
 
@@ -951,255 +1064,132 @@ export function DashboardPage() {
                 totalPersonalAssets,
                 currency,
               )
-            : '******'}
+            : '••••••'}
         </strong>
 
+        <div
+          className="bajetbn-home-assets-accent"
+          aria-hidden="true"
+        />
+
         <div className="bajetbn-total-assets-breakdown">
-          {personalAssetBreakdown.length > 0
-            ? personalAssetBreakdown.map(
-                ([label, value]) => (
-                  <div key={label}>
-                    <span>{label}</span>
-                    <strong>
-                      {assetsVisible
-                        ? formatMoney(
-                            value,
-                            currency,
-                          )
-                        : '****'}
-                    </strong>
-                  </div>
-                ),
-              )
-            : (
-              <div>
-                <span>Accounts</span>
-                <strong>No personal assets yet</strong>
+          {personalAssetBreakdown.map(
+            ([label, value]) => (
+              <div key={label}>
+                <span>{label}</span>
+                <strong>
+                  {assetsVisible
+                    ? formatMoney(
+                        value,
+                        currency,
+                      ).replace(
+                        currency + ' ',
+                        '',
+                      )
+                    : '••••'}
+                </strong>
               </div>
-            )}
+            ),
+          )}
         </div>
       </section>
 
       {homeAccounts.length > 0 ? (
-        <section className="home-v110-carousel-section">
+        <section className="bajetbn-home-accounts-section">
+          <div className="bajetbn-home-section-title">
+            <h2>Accounts</h2>
+            <Link to="/accounts">See all</Link>
+          </div>
+
           <div
             ref={accountCarouselRef}
-            className="home-v110-account-carousel"
-            onScroll={
-              handleAccountCarouselScroll
-            }
+            className="bajetbn-home-account-strip"
+            onScroll={handleAccountCarouselScroll}
           >
             {homeAccounts.map(
               (
                 account,
                 index,
               ) => {
-                const accountSubtitle = [
-                  account.institution
-                    || account.type.replace(
-                      '_',
-                      ' ',
-                    ),
-                  account.classification
-                    === 'business'
-                    ? 'Business'
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ');
-
                 const selected =
-                  index
-                    === activeAccountIndex;
+                  index === activeAccountIndex;
 
-                const summary =
-                  selected
-                    ? accountMonthSummary(
-                        account.id,
-                      )
-                    : null;
+                const subtitle =
+                  account.institution
+                  || account.type.replace(
+                    '_',
+                    ' ',
+                  );
+
+                const mark =
+                  (
+                    account.institution
+                    || account.name
+                    || 'B'
+                  )
+                    .trim()
+                    .charAt(0)
+                    .toUpperCase();
 
                 return (
-                  <article
+                  <button
                     key={account.id}
+                    type="button"
                     className={
-                      `home-v110-balance-card home-v110-account-slide ${accountColorClass(
-                        getAccountColor(
-                          user?.uid || '',
-                          account.id,
-                          index,
-                        ),
-                      )}`
+                      'bajetbn-home-account-card '
+                      + accountColorClass(
+                          getAccountColor(
+                            user?.uid || '',
+                            account.id,
+                            index,
+                          ),
+                        )
+                      + (selected ? ' selected' : '')
+                    }
+                    aria-pressed={selected}
+                    onClick={() =>
+                      selectHomeAccount(index)
                     }
                   >
-                    <div className="home-v110-balance-top">
-                      <div>
-                        <span>
-                          {account.name}
-                        </span>
-
-                        <small>
-                          {accountSubtitle}
-                        </small>
-                      </div>
-
-                      <Link to="/accounts">
-                        Accounts
-                      </Link>
-                    </div>
-
-                    <Link
-                      className="home-v110-balance-open"
-                      to={
-                        `/transactions?accountId=${encodeURIComponent(
-                          account.id,
-                        )}`
-                      }
-                      aria-label={
-                        `View ${account.name} activity`
-                      }
-                    >
-                      <small>
-                        Current balance
-                      </small>
-
-                      <strong>
-                        {loading
-                          ? '—'
-                          : formatMoney(
-                              account
-                                .ledgerBalanceMinor,
-                              account.currency,
-                            )}
-                      </strong>
-                    </Link>
-                    {selected && summary && (
-                      <div
-                        className="home-v110-balance-stats home-v111-selected-month-summary"
-                      >
-                        <div>
-                          <span>Money in</span>
-
-                          <strong>
-                            {activityLoading
-                              ? '—'
-                              : formatMoney(
-                                  summary.income,
-                                  account.currency,
-                                )}
-                          </strong>
-
-                          <small>This month</small>
-                        </div>
-
-                        <div>
-                          <span>Money out</span>
-
-                          <strong>
-                            {activityLoading
-                              ? '—'
-                              : formatMoney(
-                                  summary.expenses,
-                                  account.currency,
-                                )}
-                          </strong>
-
-                          <small>This month</small>
-                        </div>
-                      </div>
-                    )}
-
-
-                    <div className="home-v111-account-hint">
-                      <span>
-                        {selected
-                          ? 'Activity below follows this account'
-                          : 'Swipe to select this account'}
+                    <span className="bajetbn-home-account-card-head">
+                      <span className="bajetbn-home-account-mark">
+                        {mark}
                       </span>
 
-                      <strong>
-                        {selected
-                          ? 'Selected'
-                          : account.currency}
-                      </strong>
-                    </div>
-                  </article>
+                      <span>
+                        <strong>{account.name}</strong>
+                        <small>{subtitle}</small>
+                      </span>
+                    </span>
+
+                    <b>
+                      {loading
+                        ? '—'
+                        : formatMoney(
+                            account.ledgerBalanceMinor,
+                            account.currency,
+                          )}
+                    </b>
+                  </button>
                 );
               },
             )}
           </div>
-
-          {homeAccounts.length > 1 && (
-            <div
-              className="home-v110-carousel-dots"
-              aria-label="Choose account"
-            >
-              {homeAccounts.map(
-                (
-                  account,
-                  index,
-                ) => (
-                  <button
-                    type="button"
-                    key={account.id}
-                    className={
-                      index
-                        === activeAccountIndex
-                        ? 'active'
-                        : ''
-                    }
-                    aria-label={
-                      `Show ${account.name}`
-                    }
-                    aria-current={
-                      index
-                        === activeAccountIndex
-                        ? 'true'
-                        : undefined
-                    }
-                    onClick={() =>
-                      selectHomeAccount(
-                        index,
-                      )
-                    }
-                  />
-                ),
-              )}
-            </div>
-          )}
         </section>
       ) : (
-        <section className="home-v110-balance-card home-v110-empty-account-card">
-          <div className="home-v110-balance-top">
-            <div>
-              <span>
-                No account yet
-              </span>
-
-              <small>
-                Add your first money account
-              </small>
-            </div>
-          </div>
-
-          <div className="home-v110-balance-value">
-            <small>
-              Current balance
-            </small>
-
-            <strong>
-              {formatMoney(
-                0,
-                currency,
-              )}
-            </strong>
+        <section className="bajetbn-home-accounts-section">
+          <div className="bajetbn-home-section-title">
+            <h2>Accounts</h2>
           </div>
 
           <Link
-            className="button primary"
+            className="bajetbn-home-empty-account"
             to="/accounts"
           >
-            Add account
+            <strong>Add your first account</strong>
+            <small>
+              Bank, cash and e-wallet accounts appear here.
+            </small>
           </Link>
         </section>
       )}
@@ -1241,29 +1231,20 @@ export function DashboardPage() {
         </Link>
       </section>
 
-      <section className="home-v110-section">
-        <div className="home-v110-section-heading">
-          <div>
-            <span>
-              {activeAccount
-                ? activeAccount.name
-                : 'Selected account'}
-            </span>
-
-            <h2>
-              Money activity
-            </h2>
-          </div>
+      <section className="home-v110-section bajetbn-home-recent-section">
+        <div className="bajetbn-home-section-title">
+          <h2>Recent Activity</h2>
 
           {activeAccount && (
             <Link
               to={
-                `/transactions?accountId=${encodeURIComponent(
-                  activeAccount.id,
-                )}`
+                '/transactions?accountId='
+                + encodeURIComponent(
+                    activeAccount.id,
+                  )
               }
             >
-              View all
+              See all
             </Link>
           )}
         </div>
@@ -1318,17 +1299,23 @@ export function DashboardPage() {
                   >
                     <span
                       className={
-                        `home-v110-activity-icon ${transaction.type}`
+                        'home-v110-activity-icon '
+                        + transaction.type
+                        + ' category-'
+                        + (transaction.categoryColor || 'slate')
                       }
                       aria-hidden="true"
                     >
-                      {transaction.type
-                        === 'income'
-                        ? '↓'
-                        : transaction.type
-                            === 'expense'
-                          ? '↑'
-                          : '↔'}
+                      {categoryIconGlyph(
+                        transaction.categoryIcon
+                        || (
+                          transaction.type === 'transfer'
+                            ? 'transfer'
+                            : transaction.type === 'income'
+                              ? 'wallet'
+                              : 'dots'
+                        ),
+                      )}
                     </span>
 
                     <span className="home-v110-activity-copy">
@@ -1339,34 +1326,39 @@ export function DashboardPage() {
                       </strong>
 
                       <small>
-                        {homeActivityMeta(
-                          transaction,
-                        )}
+                        {[
+                          transaction.category
+                            || transactionLabel(transaction),
+                          activeAccount?.name,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </small>
                     </span>
 
-                    <b
-                      className={
-                        transaction.type
-                      }
-                    >
-                      {transaction.type
-                        === 'expense'
-                        ? '-'
-                        : transaction.type
-                            === 'income'
-                          ? '+'
-                          : ''}
+                    <span className="bajetbn-home-activity-value">
+                      <b className={transaction.type}>
+                        {transaction.type
+                          === 'expense'
+                          ? '-'
+                          : transaction.type === 'income'
+                            ? '+'
+                            : ''}
 
-                      {formatMoney(
-                        transaction
-                          .amountMinor,
-                        transaction.currency
-                          || activeAccount
-                            ?.currency
-                          || currency,
-                      )}
-                    </b>
+                        {formatMoney(
+                          transaction.amountMinor,
+                          transaction.currency
+                            || activeAccount?.currency
+                            || currency,
+                        )}
+                      </b>
+
+                      <small>
+                        {homeActivityDate(
+                          transaction.transactionDate,
+                        )}
+                      </small>
+                    </span>
                   </button>
                 ),
               )}

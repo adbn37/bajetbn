@@ -71,8 +71,8 @@ expect(
 );
 
 expect(
-  dashboard.includes('home-v110-account-carousel'),
-  'Overview account carousel is missing.',
+  dashboard.includes('bajetbn-home-account-strip'),
+  'Home compact account strip is missing.',
 );
 expect(
   !dashboard.includes('home-v110-accounts')

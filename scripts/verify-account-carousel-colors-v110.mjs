@@ -26,18 +26,13 @@ function check(condition, message) {
 }
 
 check(
-  dashboard.includes('home-v110-account-carousel'),
-  'Home account carousel is missing.',
+  dashboard.includes('bajetbn-home-account-strip'),
+  'Home compact account strip is missing.',
 );
 
 check(
-  dashboard.includes('home-v110-account-slide'),
-  'Home account carousel slides are missing.',
-);
-
-check(
-  dashboard.includes('home-v110-carousel-dots'),
-  'Home account carousel indicators are missing.',
+  dashboard.includes('bajetbn-home-account-card'),
+  'Home compact account cards are missing.',
 );
 
 check(
@@ -46,33 +41,29 @@ check(
 );
 
 check(
-  dashboard.includes('Current balance'),
-  'Home account card must show Current balance.',
+  dashboard.includes('getAccountColor')
+    && dashboard.includes('accountColorClass'),
+  'Home account colour preferences are not applied.',
+);
+
+check(
+  dashboard.includes('ledgerBalanceMinor'),
+  'Home account card must show the live balance.',
 );
 
 check(
   dashboard.includes('accountMonthSummary'),
-  'Per-account monthly money summary is missing.',
+  'Per-account monthly money summary helper must remain available.',
 );
 
 check(
   !dashboard.includes('home-v110-accounts'),
-  'Duplicate Your money section still exists.',
+  'Duplicate legacy Your money section still exists.',
 );
 
 check(
   !dashboard.includes('overview-account-grid'),
   'Legacy Home account grid still exists.',
-);
-
-check(
-  !dashboard.includes('add-account-tile'),
-  'Legacy Add account tile still exists on Home.',
-);
-
-check(
-  !dashboard.includes('const primaryAccount'),
-  'Home still contains fixed primary-account logic.',
 );
 
 check(
@@ -104,16 +95,18 @@ check(
 
 check(
   css.includes(
-    'BAJETBN V1.10 ACCOUNT CAROUSEL COLORS',
+    'BAJETBN V115 PERSONAL HOME APPROVED REFERENCE',
   ),
-  'Slice 5 CSS marker is missing.',
+  'v1.15 Home reference CSS marker is missing.',
 );
 
 check(
-  css.includes('scroll-snap-type: x mandatory'),
-  'Account carousel does not use horizontal snap scrolling.',
+  css.includes('scroll-snap-type: x proximity'),
+  'Compact account strip does not use horizontal snap scrolling.',
 );
 
 console.log(
-  `Account carousel and colour checks passed (${checks} checks).`,
+  'Compact Home account strip and colour checks passed ('
+    + checks
+    + ' checks).',
 );
