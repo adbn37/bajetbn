@@ -1204,7 +1204,7 @@ export function DashboardPage() {
         </section>
       )}
 
-      <section className="home-v110-shortcuts bajetbn-reference-actions bajetbn-reference-actions-three">
+      <section className="home-v110-shortcuts bajetbn-reference-actions bajetbn-reference-actions-four">
         <button
           type="button"
           disabled={quickAccounts.length < 2}
@@ -1228,10 +1228,16 @@ export function DashboardPage() {
           <small>Receipt</small>
         </button>
 
-        <Link to="/reports">
-          <span aria-hidden="true">%</span>
-          <strong>Reports</strong>
-          <small>Insights</small>
+        <Link to="/bills">
+          <span aria-hidden="true">B</span>
+          <strong>Bills</strong>
+          <small>Manage</small>
+        </Link>
+
+        <Link to="/debt">
+          <span aria-hidden="true">D</span>
+          <strong>Debt</strong>
+          <small>Owe & owed</small>
         </Link>
       </section>
 

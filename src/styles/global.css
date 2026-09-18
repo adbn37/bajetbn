@@ -11949,3 +11949,29 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] .planning-card {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* BAJETBN V115 HOME SHORTCUTS FOUR */
+.bajetbn-reference-actions-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 520px) {
+  .bajetbn-reference-actions-four {
+    gap: 0.5rem;
+  }
+
+  .bajetbn-reference-actions-four > a,
+  .bajetbn-reference-actions-four > button {
+    min-width: 0;
+    padding-inline: 0.35rem;
+  }
+
+  .bajetbn-reference-actions-four strong {
+    font-size: 0.86rem;
+  }
+
+  .bajetbn-reference-actions-four small {
+    font-size: 0.66rem;
+  }
+}
