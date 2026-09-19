@@ -38,6 +38,9 @@ import { formatMoney } from '../../utils/money';
 import {
   BusinessActivityTimeline,
 } from './BusinessActivityTimeline';
+import {
+  BusinessReportsWorkspace,
+} from './BusinessReportsWorkspace';
 import { AccountAvatar } from '../accounts/AccountAvatar';
 import { AccountsPage } from '../accounts/AccountsPage';
 import { CommitmentsPage } from '../commitments/CommitmentsPage';
@@ -811,6 +814,25 @@ export function BusinessHomePage() {
           </button>
         )}
 
+        {canViewFinancials && (
+          <button
+            type="button"
+            className={
+              workspaceView
+                === 'reports'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setWorkspaceView(
+                'reports',
+              )
+            }
+          >
+            Reports
+          </button>
+        )}
+
         {isOwner && (
           <button
             type="button"
@@ -871,9 +893,7 @@ export function BusinessHomePage() {
                   </button>
                 )}
 
-              {(isOwner
-                || posRole === 'manager'
-                || posRole === 'seller')
+              {posRole === 'seller'
                 && (
                   <button
                     type="button"
@@ -896,7 +916,16 @@ export function BusinessHomePage() {
           )}
       </nav>
 
-      {workspaceView === 'setup'
+      {workspaceView === 'reports'
+        && canViewFinancials
+        ? (
+          <BusinessReportsWorkspace
+            spaceId={space.id}
+            currency={space.currency}
+            businessIndustry={businessIndustry}
+          />
+        )
+        : workspaceView === 'setup'
         && isOwner
         ? (
           <section
