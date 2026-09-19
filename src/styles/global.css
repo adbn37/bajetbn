@@ -14913,3 +14913,230 @@ strong {
 .sme-pos-access-row small {
   overflow-wrap: anywhere;
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS POS REPORT SALES RECEIPT
+   Rich Marketplace reports, detailed POS sales, receipt print.
+   ========================================================== */
+
+.marketplace-report-filter-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: .75rem;
+}
+
+.marketplace-report-row {
+  grid-template-columns:
+    92px minmax(0, 1fr) minmax(160px, auto) !important;
+  align-items: center;
+  gap: 1rem !important;
+  padding-block: .85rem !important;
+}
+
+.sme-pos-item-photo.marketplace-report-thumb {
+  width: 88px !important;
+  height: 88px !important;
+  max-width: 88px !important;
+  border-radius: .85rem !important;
+}
+
+.marketplace-report-item-copy {
+  gap: .35rem !important;
+}
+
+.marketplace-report-item-copy > strong {
+  font-size: .92rem;
+}
+
+.marketplace-report-item-metrics {
+  display: flex;
+  gap: .45rem;
+  flex-wrap: wrap;
+}
+
+.marketplace-report-item-metrics span {
+  min-width: 66px;
+  display: grid;
+  gap: .05rem;
+  padding: .38rem .48rem;
+  border: 1px solid var(--border);
+  border-radius: .55rem;
+  color: var(--muted);
+  font-size: .62rem;
+}
+
+.marketplace-report-item-metrics b {
+  color: var(--text);
+  font-size: .78rem;
+}
+
+.marketplace-report-money {
+  display: grid;
+  justify-items: end;
+  gap: .14rem;
+  text-align: right;
+}
+
+.marketplace-report-money > strong {
+  font-size: 1rem;
+}
+
+.marketplace-report-money > small {
+  color: var(--muted);
+  margin-bottom: .2rem;
+}
+
+.marketplace-report-money > span {
+  color: var(--muted);
+  font-size: .64rem;
+}
+
+.marketplace-report-money b {
+  color: var(--text);
+}
+
+.marketplace-sales-detail-list {
+  gap: .35rem;
+}
+
+.marketplace-sale-detail-row {
+  grid-template-columns:
+    minmax(0, 1fr) auto auto !important;
+  gap: .8rem !important;
+  align-items: center !important;
+  padding: .78rem !important;
+  border: 1px solid transparent !important;
+  border-radius: .75rem !important;
+}
+
+.marketplace-sale-detail-row:hover,
+.marketplace-sale-detail-row:focus-visible {
+  border-color: var(--accent) !important;
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 7%,
+      transparent
+    ) !important;
+  outline: none;
+}
+
+.marketplace-sale-detail-main {
+  display: grid;
+  min-width: 0;
+  gap: .16rem;
+  text-align: left;
+}
+
+.marketplace-sale-detail-main > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketplace-sale-detail-main > small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketplace-sale-detail-amount {
+  min-width: 92px;
+  text-align: right;
+}
+
+.sme-pos-receipt-print header {
+  display: grid;
+  justify-items: center;
+  gap: .18rem;
+  margin-bottom: .8rem;
+  text-align: center;
+}
+
+@media (max-width: 680px) {
+  .marketplace-report-row {
+    grid-template-columns:
+      76px minmax(0, 1fr) !important;
+  }
+
+  .sme-pos-item-photo.marketplace-report-thumb {
+    width: 72px !important;
+    height: 72px !important;
+    max-width: 72px !important;
+  }
+
+  .marketplace-report-money {
+    grid-column: 2;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .marketplace-sale-detail-row {
+    grid-template-columns:
+      minmax(0, 1fr) auto !important;
+  }
+
+  .marketplace-sale-detail-row
+  .status-badge {
+    align-self: start;
+  }
+
+  .marketplace-sale-detail-amount {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .marketplace-report-filter-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 5mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .sme-pos-receipt-print,
+  .sme-pos-receipt-print * {
+    visibility: visible !important;
+  }
+
+  .sme-pos-receipt-print {
+    position: fixed !important;
+    inset: 0 auto auto 0 !important;
+    width: 70mm !important;
+    max-width: 70mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #000 !important;
+    background: #fff !important;
+    font-family:
+      ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Consolas,
+      monospace !important;
+    font-size: 10pt !important;
+  }
+
+  .sme-pos-receipt-print * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .sme-pos-receipt-print
+  .notice {
+    border: 1px solid #000 !important;
+  }
+}

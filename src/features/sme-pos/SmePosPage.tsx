@@ -139,7 +139,7 @@ export function SmePosPage() {
         eyebrow="Business SPACE"
         title={space.name}
         description="Finish setup to open the register."
-        action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>}
+        action={<Link className="button secondary" to={`/business/${space.id}`}>Back to Business</Link>}
       />
       {error && <div className="notice error">{error}</div>}
       <EmptyState
@@ -152,7 +152,7 @@ export function SmePosPage() {
 
   if (accessDenied || !settings || !role) {
     return <main className="page">
-      <PageHeader eyebrow="Business POS" title={space.name} description="You do not have POS access." action={<Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>} />
+      <PageHeader eyebrow="Business POS" title={space.name} description="You do not have POS access." action={<Link className="button secondary" to={`/business/${space.id}`}>Back to Business</Link>} />
       {error && <div className="notice error">{error}</div>}
       <EmptyState title="No POS access yet" description="Ask the Space owner to assign you a POS role." />
     </main>;
@@ -170,7 +170,7 @@ export function SmePosPage() {
           Archived
         </Link>
       )}
-    <Link className="button secondary" to={`/spaces/${space.id}`}>Back</Link>
+    <Link className="button secondary" to={`/business/${space.id}`}>Back to Business</Link>
   </div>;
 
   return <main className={`page sme-pos-page sme-pos-role-${role}`}>

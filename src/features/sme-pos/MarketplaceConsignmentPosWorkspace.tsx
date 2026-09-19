@@ -974,6 +974,220 @@ export function MarketplaceConsignmentPosWorkspace({
       ? sellerStyleFor(selectedSellerReportId)
       : undefined;
 
+  function csvCell(value: string | number) {
+    const text = String(value ?? '');
+
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+
+  function exportSellerReportCsv() {
+    const rows: Array<Array<string | number>> = [
+      [
+        'Business',
+        space.name,
+      ],
+      [
+        'Report',
+        sellerReportTitle,
+      ],
+      [
+        'Period',
+        sellerReportDateWindow.from
+          + ' to '
+          + sellerReportDateWindow.to,
+      ],
+      [],
+      [
+        'Item',
+        'Seller',
+        'Sold',
+        'Returned',
+        'Net quantity',
+        'Gross sales',
+        'Returns',
+        'Net sales',
+        'Commission',
+        'Seller earnings',
+      ],
+      ...sellerReportItems.map(
+        (item) => [
+          item.name,
+          item.sellerName,
+          item.quantity,
+          item.returnedQuantity,
+          Math.max(
+            0,
+            item.quantity
+              - item.returnedQuantity,
+          ),
+          (
+            item.grossMinor / 100
+          ).toFixed(2),
+          (
+            item.returnedMinor / 100
+          ).toFixed(2),
+          (
+            Math.max(
+              0,
+              item.grossMinor
+                - item.returnedMinor,
+            ) / 100
+          ).toFixed(2),
+          (
+            item.commissionMinor / 100
+          ).toFixed(2),
+          (
+            item.sellerEarningsMinor / 100
+          ).toFixed(2),
+        ],
+      ),
+      [],
+      [
+        'Summary',
+        'Value',
+      ],
+      [
+        'Items sold',
+        Math.max(
+          0,
+          sellerReportQuantity
+            - sellerReportReturnedQuantity,
+        ),
+      ],
+      [
+        'Gross sales',
+        (
+          sellerReportGrossMinor / 100
+        ).toFixed(2),
+      ],
+      [
+        'Returns',
+        (
+          sellerReportReturnedMinor / 100
+        ).toFixed(2),
+      ],
+      [
+        'Net sales',
+        (
+          Math.max(
+            0,
+            sellerReportGrossMinor
+              - sellerReportReturnedMinor,
+          ) / 100
+        ).toFixed(2),
+      ],
+      [
+        'Shop commission',
+        (
+          sellerReportCommissionMinor / 100
+        ).toFixed(2),
+      ],
+      [
+        'Seller earnings',
+        (
+          sellerReportEarningsMinor / 100
+        ).toFixed(2),
+      ],
+      [
+        'Payouts',
+        (
+          sellerReportPayoutMinor / 100
+        ).toFixed(2),
+      ],
+    ];
+
+    const csv =
+      rows
+        .map(
+          (row) =>
+            row.map(csvCell).join(','),
+        )
+        .join('\n');
+
+    const blob =
+      new Blob(
+        [csv],
+        {
+          type:
+            'text/csv;charset=utf-8',
+        },
+      );
+
+    const url =
+      URL.createObjectURL(blob);
+
+    const link =
+      document.createElement('a');
+
+    link.href = url;
+    link.download =
+      'bajetbn-'
+      + space.name
+          .toLowerCase()
+          .replace(
+            /[^a-z0-9]+/g,
+            '-',
+          )
+          .replace(
+            /^-|-$/g,
+            '',
+          )
+      + '-seller-report-'
+      + sellerReportDateWindow.from
+      + '-'
+      + sellerReportDateWindow.to
+      + '.csv';
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function saleSummaryTitle(
+    sale: SmePosSale,
+  ) {
+    if (sale.items.length === 1) {
+      const item = sale.items[0];
+
+      return (
+        item.productName
+        + ' ×'
+        + item.quantity
+      );
+    }
+
+    return sale.itemCount + ' items';
+  }
+
+  function salePaymentSummary(
+    sale: SmePosSale,
+  ) {
+    if (sale.payments?.length) {
+      return sale.payments
+        .map(
+          (payment) =>
+            (
+              payment.paymentMethodLabel
+              || payment.paymentMethod
+              || 'Payment'
+            )
+            + ' · '
+            + payment.accountName,
+        )
+        .join(' + ');
+    }
+
+    return [
+      sale.paymentMethodLabel
+        || sale.paymentMethod
+        || '',
+      sale.paymentAccountName,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
   function requireOnline() {
     if (navigator.onLine) return true;
     setError('Connect to the internet to change Marketplace records or complete checkout.');
@@ -3018,7 +3232,21 @@ export function MarketplaceConsignmentPosWorkspace({
             </>}
           </div>
 
-          <small>{sellerReportDateWindow.from} – {sellerReportDateWindow.to}</small>
+          <div className="marketplace-report-filter-footer">
+            <small>
+              {sellerReportDateWindow.from}
+              {' – '}
+              {sellerReportDateWindow.to}
+            </small>
+
+            <button
+              className="button secondary compact"
+              type="button"
+              onClick={exportSellerReportCsv}
+            >
+              Export CSV
+            </button>
+          </div>
         </section>
 
         <div className="summary-grid sme-pos-report-grid marketplace-report-summary" style={sellerReportAccentStyle}>
@@ -3098,18 +3326,73 @@ export function MarketplaceConsignmentPosWorkspace({
 
                 <div className="marketplace-report-item-copy">
                   <strong>{item.name}</strong>
-                  <small className="marketplace-seller-badge">{item.sellerName}</small>
-                  <small>
-                    {item.quantity} sold - {item.returnedQuantity} returned - {Math.max(0, item.quantity - item.returnedQuantity)} net
+
+                  <small className="marketplace-seller-badge">
+                    {item.sellerName}
                   </small>
+
+                  <div className="marketplace-report-item-metrics">
+                    <span>
+                      <b>{item.quantity}</b>
+                      Sold
+                    </span>
+
+                    <span>
+                      <b>{item.returnedQuantity}</b>
+                      Returned
+                    </span>
+
+                    <span>
+                      <b>
+                        {Math.max(
+                          0,
+                          item.quantity
+                            - item.returnedQuantity,
+                        )}
+                      </b>
+                      Net
+                    </span>
+                  </div>
                 </div>
 
-                <strong>{formatMoney(Math.max(0, item.grossMinor - item.returnedMinor), settings.currency)}</strong>
-                <small>
-                  Commission {formatMoney(item.commissionMinor, settings.currency)}
-                  {' - '}
-                  Seller earns {formatMoney(item.sellerEarningsMinor, settings.currency)}
-                </small>
+                <div className="marketplace-report-money">
+                  <strong>
+                    {formatMoney(
+                      Math.max(
+                        0,
+                        item.grossMinor
+                          - item.returnedMinor,
+                      ),
+                      settings.currency,
+                    )}
+                  </strong>
+
+                  <small>
+                    Net sales
+                  </small>
+
+                  <span>
+                    Commission
+                    {' '}
+                    <b>
+                      {formatMoney(
+                        item.commissionMinor,
+                        settings.currency,
+                      )}
+                    </b>
+                  </span>
+
+                  <span>
+                    Seller earns
+                    {' '}
+                    <b>
+                      {formatMoney(
+                        item.sellerEarningsMinor,
+                        settings.currency,
+                      )}
+                    </b>
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -3120,7 +3403,146 @@ export function MarketplaceConsignmentPosWorkspace({
       {tab === 'sales' && canViewSales && <div className="sme-pos-sales-section">
         {canViewReports && <div className="summary-grid sme-pos-report-grid"><article className="summary-card featured"><span>Gross sales today</span><strong>{formatMoney(todayGross, settings.currency)}</strong><small>{today()}</small></article><article className="summary-card"><span>Gross sales this month</span><strong>{formatMoney(monthGross, settings.currency)}</strong><small>{monthPrefix}</small></article><article className="summary-card"><span>Shop commission</span><strong>{formatMoney(monthCommission, settings.currency)}</strong><small>This month</small></article><article className="summary-card"><span>Seller payable</span><strong>{formatMoney(sellerMoneyWaiting, settings.currency)}</strong><small>Across active sellers</small></article><article className="summary-card"><span>Low stock</span><strong>{lowStock}</strong><small>At or below alert level</small></article></div>}
         {canManageReturns && <SmePosBarcodeReturnScanner itemLabel="listing" items={listings} sales={sales.filter((sale) => sale.status !== 'voided')} getSaleItemId={(item) => item.listingId || item.productId} onSelectSale={openReturnForm} />}
-        <section className="panel"><div className="panel-heading"><div><h3>{role === 'cashier' ? 'My register sales' : role === 'seller' || (mySeller && !['owner', 'manager'].includes(role)) ? 'My Sales' : 'Recent Marketplace sales'}</h3><p>{role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? 'Only the part of each sale belonging to your seller profile is shown.' : 'Open a sale to view its receipt or record a return where permitted.'}</p></div></div><div className="sme-pos-sales-list">{(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).map((sale) => <button type="button" key={sale.id} onClick={() => setReceipt(sale)}><div><strong>{sale.receiptNumber}</strong><small>{sale.saleDate} · {sale.customerName || (mySeller ? 'Seller sale' : 'Walk-in customer')} · {sale.itemCount} item(s)</small></div><span className="status-badge posted">{sale.status}</span><strong>{formatMoney(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? (sale.sellerEarningsMinor || 0) : sale.totalMinor - sale.returnedMinor, sale.currency)}</strong></button>)}</div>{!(role === 'seller' || (mySeller && !['owner', 'manager', 'cashier'].includes(role)) ? mySellerSales : sales).length && <div className="empty-inline">No Marketplace sales available.</div>}</section>
+        <section className="panel marketplace-sales-history">
+          <div className="panel-heading">
+            <div>
+              <h3>
+                {role === 'cashier'
+                  ? 'My register sales'
+                  : role === 'seller'
+                    || (
+                      mySeller
+                      && ![
+                        'owner',
+                        'manager',
+                      ].includes(role)
+                    )
+                    ? 'My Sales'
+                    : 'Recent Marketplace sales'}
+              </h3>
+
+              <p>
+                {role === 'seller'
+                  || (
+                    mySeller
+                    && ![
+                      'owner',
+                      'manager',
+                      'cashier',
+                    ].includes(role)
+                  )
+                  ? 'Only the part of each sale belonging to your seller profile is shown.'
+                  : 'Open a sale for the full receipt, payment, items, seller and return details.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="sme-pos-sales-list marketplace-sales-detail-list">
+            {(role === 'seller'
+              || (
+                mySeller
+                && ![
+                  'owner',
+                  'manager',
+                  'cashier',
+                ].includes(role)
+              )
+                ? mySellerSales
+                : sales
+            ).map((sale) => (
+              <button
+                type="button"
+                key={sale.id}
+                className="marketplace-sale-detail-row"
+                onClick={() =>
+                  setReceipt(sale)
+                }
+              >
+                <div className="marketplace-sale-detail-main">
+                  <strong>
+                    {saleSummaryTitle(sale)}
+                  </strong>
+
+                  <small>
+                    {sale.customerName
+                      || (
+                        mySeller
+                          ? 'Seller sale'
+                          : 'Walk-in customer'
+                      )}
+                    {' · '}
+                    {salePaymentSummary(sale)
+                      || 'Payment recorded'}
+                  </small>
+
+                  <small>
+                    {sale.saleDate}
+                    {' · Receipt '}
+                    {sale.receiptNumber}
+                    {' · '}
+                    {sale.itemCount}
+                    {' item(s)'}
+                  </small>
+                </div>
+
+                <span
+                  className={
+                    'status-badge '
+                    + (
+                      sale.status === 'completed'
+                        ? 'posted'
+                        : ''
+                    )
+                  }
+                >
+                  {sale.status
+                    .replace(
+                      /_/g,
+                      ' ',
+                    )}
+                </span>
+
+                <strong className="marketplace-sale-detail-amount">
+                  {formatMoney(
+                    role === 'seller'
+                    || (
+                      mySeller
+                      && ![
+                        'owner',
+                        'manager',
+                        'cashier',
+                      ].includes(role)
+                    )
+                      ? (
+                        sale.sellerEarningsMinor
+                        || 0
+                      )
+                      : sale.totalMinor
+                        - sale.returnedMinor,
+                    sale.currency,
+                  )}
+                </strong>
+              </button>
+            ))}
+          </div>
+
+          {!(role === 'seller'
+            || (
+              mySeller
+              && ![
+                'owner',
+                'manager',
+                'cashier',
+              ].includes(role)
+            )
+              ? mySellerSales
+              : sales
+          ).length && (
+            <div className="empty-inline">
+              No Marketplace sales available.
+            </div>
+          )}
+        </section>
 
       </div>}
     </>}
@@ -3271,8 +3693,21 @@ export function MarketplaceConsignmentPosWorkspace({
     {customerForm && <Modal title={customerForm === 'new' ? 'Add customer' : 'Edit customer'} onClose={() => !busy && setCustomerForm(null)}><form className="form-stack" onSubmit={saveCustomer}><label>Customer name<input name="name" defaultValue={customerForm === 'new' ? '' : customerForm.name} maxLength={100} required /></label><div className="form-grid"><label>Phone<input name="phone" defaultValue={customerForm === 'new' ? '' : customerForm.phone || ''} maxLength={30} /></label><label>Email<input name="email" type="email" defaultValue={customerForm === 'new' ? '' : customerForm.email || ''} maxLength={120} /></label></div><label>Note<textarea name="note" rows={3} defaultValue={customerForm === 'new' ? '' : customerForm.note || ''} maxLength={300} /></label><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setCustomerForm(null)}>Cancel</button><button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save customer'}</button></div></form></Modal>}
 
     {receipt && <Modal title={`Receipt ${receipt.receiptNumber}`} onClose={() => setReceipt(null)}>
-      <div className="sme-pos-receipt">
-        <header><strong>{receipt.receiptName}</strong><span>{receipt.saleDate}</span><small>{receipt.customerName || 'Walk-in customer'}</small></header>
+      <div
+        className="sme-pos-receipt sme-pos-receipt-print"
+        data-print-receipt
+      >
+        <header>
+          <strong>{receipt.receiptName}</strong>
+          <span>
+            Receipt {receipt.receiptNumber}
+          </span>
+          <span>{receipt.saleDate}</span>
+          <small>
+            {receipt.customerName
+              || 'Walk-in customer'}
+          </small>
+        </header>
         {receipt.status === 'voided' && <div className="notice warning"><strong>Voided sale</strong><br />{receipt.voidDate && <span>{receipt.voidDate}</span>}{receipt.voidReason && <span> · {receipt.voidReason}</span>}</div>}
         {receipt.items.map((item, index) => <div className="sme-pos-receipt-line" key={`${item.listingId || item.productId}-${index}`}>
           <span>{item.quantity} × {item.productName}{item.returnedQuantity > 0 ? ` · ${item.returnedQuantity} returned` : ''}</span>
@@ -3291,6 +3726,17 @@ export function MarketplaceConsignmentPosWorkspace({
         {canManageReturns && !['refunded', 'voided'].includes(receipt.status) && <button className="button secondary" type="button" onClick={() => openReturnForm(receipt)}>Return items</button>}
         {canVoidSales && !['refunded', 'voided'].includes(receipt.status) && receipt.totalMinor > receipt.returnedMinor && <button className="button ghost danger" type="button" onClick={() => openVoidForm(receipt)}>Void sale</button>}
         {canDeleteSales && <button className="button ghost danger" type="button" onClick={() => openPermanentDeleteForm(receipt)}>Delete permanently</button>}
+        <button
+          className="button secondary"
+          type="button"
+          onClick={() => {
+            setReceipt(null);
+            setTab('register');
+            setSearch('');
+          }}
+        >
+          New Sale
+        </button>
         <button className="button primary" type="button" onClick={() => setReceipt(null)}>Done</button>
       </div>
     </Modal>}
