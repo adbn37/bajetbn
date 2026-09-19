@@ -865,16 +865,20 @@ export function BusinessHomePage() {
                 </small>
               </Link>
 
-              <article
-                className="business-document-flow-card-v115 pending"
-                aria-disabled="true"
+              <Link
+                className="business-document-flow-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/sales-orders'
+                }
               >
                 <span>2</span>
                 <strong>Sales Orders</strong>
                 <small>
-                  Optional order-confirmation stage. Backend comes in the next document slice.
+                  Confirm accepted customer work before invoicing.
                 </small>
-              </article>
+              </Link>
 
               <Link
                 className="business-document-flow-card-v115"

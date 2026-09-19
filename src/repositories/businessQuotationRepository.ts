@@ -138,6 +138,44 @@ export async function setBusinessQuotationStatus(
   });
 }
 
+export async function convertBusinessQuotationToSalesOrder(
+  quotationId: string,
+  orderDate: string,
+  expectedDate: string,
+): Promise<{
+  salesOrderId: string;
+  salesOrderNumber: string;
+}> {
+  requireOnline();
+
+  const { functions } = requireFirebase();
+
+  const call = httpsCallable<
+    {
+      quotationId: string;
+      orderDate: string;
+      expectedDate: string;
+      idempotencyKey: string;
+    },
+    {
+      salesOrderId: string;
+      salesOrderNumber: string;
+    }
+  >(
+    functions,
+    'convertBusinessQuotationToSalesOrder',
+  );
+
+  const result = await call({
+    quotationId,
+    orderDate,
+    expectedDate,
+    idempotencyKey: key(),
+  });
+
+  return result.data;
+}
+
 export async function convertBusinessQuotationToInvoice(
   quotationId: string,
   issueDate: string,

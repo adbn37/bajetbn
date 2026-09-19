@@ -20,6 +20,7 @@ import {
 } from '../../repositories/businessAdvancedRepository';
 import {
   convertBusinessQuotationToInvoice,
+  convertBusinessQuotationToSalesOrder,
   createBusinessQuotation,
   getBusinessQuotationWorkspace,
   setBusinessQuotationStatus,
@@ -628,6 +629,46 @@ export function BusinessQuotationsPage() {
     }
   };
 
+  const convertToSalesOrder = async (
+    quotation: BusinessQuotation,
+  ) => {
+    setBusy(true);
+    setError('');
+
+    try {
+      const orderDate =
+        localToday();
+
+      const result =
+        await convertBusinessQuotationToSalesOrder(
+          quotation.id,
+          orderDate,
+          plusDays(
+            orderDate,
+            7,
+          ),
+        );
+
+      setFeedback(
+        quotation.quotationNumber
+        + ' converted to '
+        + result.salesOrderNumber
+        + '.',
+      );
+
+      setSelected(null);
+      await load();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const convertToInvoice = async (
     quotation: BusinessQuotation,
   ) => {
@@ -1179,6 +1220,22 @@ export function BusinessQuotationsPage() {
               <p>{selected.notes}</p>
             )}
 
+            {selected.convertedSalesOrderNumber && (
+              <div className="notice success">
+                Converted to
+                {' '}
+                <Link
+                  to={
+                    '/spaces/'
+                    + space.id
+                    + '/business/sales-orders'
+                  }
+                >
+                  {selected.convertedSalesOrderNumber}
+                </Link>
+              </div>
+            )}
+
             {selected.convertedInvoiceNumber && (
               <div className="notice success">
                 Converted to
@@ -1259,18 +1316,33 @@ export function BusinessQuotationsPage() {
             )}
 
             {selected.status === 'accepted' && (
-              <button
-                className="button primary"
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void convertToInvoice(
-                    selected,
-                  )
-                }
-              >
-                Convert to Invoice
-              </button>
+              <>
+                <button
+                  className="button primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void convertToSalesOrder(
+                      selected,
+                    )
+                  }
+                >
+                  Create Sales Order
+                </button>
+
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void convertToInvoice(
+                      selected,
+                    )
+                  }
+                >
+                  Skip Sales Order · Convert to Invoice
+                </button>
+              </>
             )}
 
             {![

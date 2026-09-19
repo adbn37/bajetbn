@@ -725,10 +725,53 @@ export interface BusinessQuotation {
   notes: string;
   convertedInvoiceId?: string | null;
   convertedInvoiceNumber?: string | null;
+  convertedSalesOrderId?: string | null;
+  convertedSalesOrderNumber?: string | null;
   sentAt?: Timestamp | null;
   acceptedAt?: Timestamp | null;
   rejectedAt?: Timestamp | null;
   convertedAt?: Timestamp | null;
+  cancelledAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export type BusinessSalesOrderStatus =
+  | 'draft'
+  | 'confirmed'
+  | 'invoiced'
+  | 'cancelled';
+
+export interface BusinessSalesOrder {
+  id: string;
+  displayId: string;
+  salesOrderNumber: string;
+  ownerId: string;
+  createdBy: string;
+  spaceId: string;
+  sourceQuotationId: string;
+  sourceQuotationNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  customerAddress: string;
+  orderDate: string;
+  expectedDate: string;
+  currency: string;
+  status: BusinessSalesOrderStatus;
+  lines: BusinessInvoiceLine[];
+  subtotalMinor: number;
+  taxEnabled: boolean;
+  taxName: string;
+  taxRateBps: number;
+  taxMinor: number;
+  totalMinor: number;
+  notes: string;
+  convertedInvoiceId?: string | null;
+  convertedInvoiceNumber?: string | null;
+  confirmedAt?: Timestamp | null;
+  invoicedAt?: Timestamp | null;
   cancelledAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

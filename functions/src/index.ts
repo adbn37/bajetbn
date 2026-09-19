@@ -9007,6 +9007,1051 @@ export const convertBusinessQuotationToInvoice = onCall(
   },
 );
 
+export const getBusinessSalesOrderWorkspace = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const context =
+      await requireInvoiceManagerSpace(
+        spaceId,
+        uid,
+      );
+
+    const snapshot =
+      await db.collection(
+        'businessSalesOrders',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get();
+
+    const salesOrders =
+      snapshot.docs
+        .filter(
+          (item) =>
+            item.data()?.ownerId
+            === context.ownerId,
+        )
+        .map(
+          (item) => ({
+            id: item.id,
+            ...item.data(),
+          }),
+        )
+        .sort(
+          (
+            a: DocumentData,
+            b: DocumentData,
+          ) =>
+            String(
+              b.orderDate || '',
+            ).localeCompare(
+              String(
+                a.orderDate || '',
+              ),
+            ),
+        );
+
+    return {
+      spaceId,
+      ownerId:
+        context.ownerId,
+      isOwner:
+        context.isOwner,
+      canManageSalesOrders:
+        true,
+      salesOrders,
+    };
+  },
+);
+
+export const convertBusinessQuotationToSalesOrder = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const quotationId =
+      stringValue(
+        request.data?.quotationId,
+        'Quotation',
+        100,
+      );
+
+    const orderDate =
+      localDate(
+        request.data?.orderDate,
+        'Order date',
+      );
+
+    const expectedDate =
+      localDate(
+        request.data?.expectedDate,
+        'Expected date',
+      );
+
+    if (expectedDate < orderDate) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Expected date cannot be before the order date.',
+      );
+    }
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const quotationRef =
+      db.collection(
+        'businessQuotations',
+      ).doc(
+        quotationId,
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const quotationSnapshot =
+          await transaction.get(
+            quotationRef,
+          );
+
+        if (!quotationSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Quotation not found.',
+          );
+        }
+
+        const quotation =
+          quotationSnapshot.data()
+          || {};
+
+        if (
+          quotation.status !== 'accepted'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Accept the quotation before creating a Sales Order.',
+          );
+        }
+
+        if (
+          quotation.convertedInvoiceId
+          || quotation.convertedSalesOrderId
+        ) {
+          throw new HttpsError(
+            'already-exists',
+            'This quotation has already been converted.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            quotation.spaceId,
+            'Quotation Space',
+            100,
+          );
+
+        const ownerId =
+          stringValue(
+            quotation.ownerId,
+            'Quotation owner',
+            160,
+          );
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+          counterSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            db.collection(
+              'spaces',
+            ).doc(
+              spaceId,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'spaceMembers',
+            ).doc(
+              spaceId
+              + '_'
+              + uid,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'businessSalesOrderCounters',
+            ).doc(
+              spaceId,
+            ),
+          ),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        if (
+          String(space.ownerId || '')
+          !== ownerId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Quotation ownership no longer matches this Business Space.',
+          );
+        }
+
+        const lines =
+          businessInvoiceLines(
+            quotation.lines,
+          );
+
+        const currentNext =
+          counterSnapshot.exists
+          && Number.isSafeInteger(
+            counterSnapshot.data()
+              ?.nextNumber,
+          )
+            ? Number(
+                counterSnapshot.data()
+                  ?.nextNumber,
+              )
+            : 1;
+
+        const nextNumber =
+          Math.max(
+            1,
+            currentNext,
+          );
+
+        const salesOrderNumber =
+          'SO-'
+          + String(
+              nextNumber,
+            ).padStart(
+              5,
+              '0',
+            );
+
+        const salesOrderRef =
+          db.collection(
+            'businessSalesOrders',
+          ).doc();
+
+        const counterRef =
+          db.collection(
+            'businessSalesOrderCounters',
+          ).doc(
+            spaceId,
+          );
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.create(
+          salesOrderRef,
+          {
+            displayId:
+              displayId('SO'),
+            salesOrderNumber,
+            ownerId,
+            createdBy:
+              uid,
+            spaceId,
+            sourceQuotationId:
+              quotationId,
+            sourceQuotationNumber:
+              stringValue(
+                quotation.quotationNumber,
+                'Quotation number',
+                40,
+              ),
+            customerId:
+              stringValue(
+                quotation.customerId,
+                'Customer',
+                100,
+              ),
+            customerName:
+              stringValue(
+                quotation.customerName,
+                'Customer name',
+                120,
+              ),
+            customerPhone:
+              optionalString(
+                quotation.customerPhone,
+                80,
+              ),
+            customerEmail:
+              optionalString(
+                quotation.customerEmail,
+                160,
+              ),
+            customerAddress:
+              optionalString(
+                quotation.customerAddress,
+                500,
+              ),
+            orderDate,
+            expectedDate,
+            currency:
+              stringValue(
+                quotation.currency,
+                'Currency',
+                10,
+              ),
+            status:
+              'draft',
+            lines,
+            subtotalMinor:
+              nonNegativeMoney(
+                quotation.subtotalMinor,
+              ),
+            taxEnabled:
+              quotation.taxEnabled
+                === true,
+            taxName:
+              optionalString(
+                quotation.taxName,
+                80,
+              )
+              || 'Tax',
+            taxRateBps:
+              Number.isSafeInteger(
+                quotation.taxRateBps,
+              )
+                ? Number(
+                    quotation.taxRateBps,
+                  )
+                : 0,
+            taxMinor:
+              nonNegativeMoney(
+                quotation.taxMinor,
+              ),
+            totalMinor:
+              positiveMoney(
+                quotation.totalMinor,
+              ),
+            notes:
+              optionalString(
+                quotation.notes,
+                1000,
+              ),
+            convertedInvoiceId:
+              null,
+            convertedInvoiceNumber:
+              null,
+            confirmedAt:
+              null,
+            invoicedAt:
+              null,
+            cancelledAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.update(
+          quotationRef,
+          {
+            status:
+              'converted',
+            convertedSalesOrderId:
+              salesOrderRef.id,
+            convertedSalesOrderNumber:
+              salesOrderNumber,
+            convertedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.set(
+          counterRef,
+          {
+            nextNumber:
+              nextNumber + 1,
+            updatedAt:
+              now,
+          },
+          { merge: true },
+        );
+
+        const result = {
+          quotationId,
+          salesOrderId:
+            salesOrderRef.id,
+          salesOrderNumber,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'convert_business_quotation_to_sales_order',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const setBusinessSalesOrderStatus = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const salesOrderId =
+      stringValue(
+        request.data?.salesOrderId,
+        'Sales Order',
+        100,
+      );
+
+    const nextStatus =
+      oneOf(
+        request.data?.status,
+        [
+          'confirmed',
+          'cancelled',
+        ] as const,
+        'Sales Order status',
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const orderRef =
+      db.collection(
+        'businessSalesOrders',
+      ).doc(
+        salesOrderId,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const orderSnapshot =
+          await transaction.get(
+            orderRef,
+          );
+
+        if (!orderSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Sales Order not found.',
+          );
+        }
+
+        const order =
+          orderSnapshot.data()
+          || {};
+
+        const spaceId =
+          stringValue(
+            order.spaceId,
+            'Sales Order Space',
+            100,
+          );
+
+        const ownerId =
+          stringValue(
+            order.ownerId,
+            'Sales Order owner',
+            160,
+          );
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            db.collection(
+              'spaces',
+            ).doc(
+              spaceId,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'spaceMembers',
+            ).doc(
+              spaceId
+              + '_'
+              + uid,
+            ),
+          ),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        if (
+          String(space.ownerId || '')
+          !== ownerId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Sales Order ownership no longer matches this Business Space.',
+          );
+        }
+
+        const currentStatus =
+          String(
+            order.status || '',
+          );
+
+        const validTransition =
+          (
+            currentStatus === 'draft'
+            && (
+              nextStatus === 'confirmed'
+              || nextStatus === 'cancelled'
+            )
+          )
+          || (
+            currentStatus === 'confirmed'
+            && nextStatus === 'cancelled'
+          );
+
+        if (!validTransition) {
+          throw new HttpsError(
+            'failed-precondition',
+            'That Sales Order status change is not allowed.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.update(
+          orderRef,
+          {
+            status:
+              nextStatus,
+            confirmedAt:
+              nextStatus === 'confirmed'
+                ? now
+                : order.confirmedAt || null,
+            cancelledAt:
+              nextStatus === 'cancelled'
+                ? now
+                : null,
+            updatedAt:
+              now,
+          },
+        );
+
+        const result = {
+          salesOrderId,
+          status:
+            nextStatus,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'set_business_sales_order_status',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const convertBusinessSalesOrderToInvoice = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const salesOrderId =
+      stringValue(
+        request.data?.salesOrderId,
+        'Sales Order',
+        100,
+      );
+
+    const issueDate =
+      localDate(
+        request.data?.issueDate,
+        'Issue date',
+      );
+
+    const dueDate =
+      localDate(
+        request.data?.dueDate,
+        'Due date',
+      );
+
+    if (dueDate < issueDate) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Due date cannot be before the issue date.',
+      );
+    }
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const orderRef =
+      db.collection(
+        'businessSalesOrders',
+      ).doc(
+        salesOrderId,
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const orderSnapshot =
+          await transaction.get(
+            orderRef,
+          );
+
+        if (!orderSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Sales Order not found.',
+          );
+        }
+
+        const order =
+          orderSnapshot.data()
+          || {};
+
+        if (
+          order.status !== 'confirmed'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Confirm the Sales Order before converting it to an invoice.',
+          );
+        }
+
+        if (
+          order.convertedInvoiceId
+        ) {
+          throw new HttpsError(
+            'already-exists',
+            'This Sales Order has already been invoiced.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            order.spaceId,
+            'Sales Order Space',
+            100,
+          );
+
+        const ownerId =
+          stringValue(
+            order.ownerId,
+            'Sales Order owner',
+            160,
+          );
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+          profileSnapshot,
+          counterSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            db.collection(
+              'spaces',
+            ).doc(
+              spaceId,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'spaceMembers',
+            ).doc(
+              spaceId
+              + '_'
+              + uid,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'businessProfiles',
+            ).doc(
+              spaceId,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'businessInvoiceCounters',
+            ).doc(
+              spaceId,
+            ),
+          ),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        if (
+          String(space.ownerId || '')
+          !== ownerId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Sales Order ownership no longer matches this Business Space.',
+          );
+        }
+
+        const lines =
+          businessInvoiceLines(
+            order.lines,
+          );
+
+        const taxRateBps =
+          Number.isSafeInteger(
+            order.taxRateBps,
+          )
+            ? Number(
+                order.taxRateBps,
+              )
+            : 0;
+
+        const totals =
+          businessInvoiceTotals(
+            lines,
+            taxRateBps,
+          );
+
+        const prefix =
+          optionalString(
+            profileSnapshot.data()
+              ?.invoicePrefix,
+            12,
+          )
+          || 'INV';
+
+        const currentNext =
+          counterSnapshot.exists
+          && Number.isSafeInteger(
+            counterSnapshot.data()
+              ?.nextNumber,
+          )
+            ? Number(
+                counterSnapshot.data()
+                  ?.nextNumber,
+              )
+            : 1;
+
+        const nextNumber =
+          Math.max(
+            1,
+            currentNext,
+          );
+
+        const invoiceNumber =
+          prefix
+          + '-'
+          + String(
+              nextNumber,
+            ).padStart(
+              5,
+              '0',
+            );
+
+        const invoiceRef =
+          db.collection(
+            'businessInvoices',
+          ).doc();
+
+        const counterRef =
+          db.collection(
+            'businessInvoiceCounters',
+          ).doc(
+            spaceId,
+          );
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.create(
+          invoiceRef,
+          {
+            displayId:
+              displayId('INV'),
+            invoiceNumber,
+            ownerId,
+            createdBy:
+              uid,
+            sourceQuotationId:
+              optionalString(
+                order.sourceQuotationId,
+                100,
+              ),
+            sourceQuotationNumber:
+              optionalString(
+                order.sourceQuotationNumber,
+                40,
+              ),
+            sourceSalesOrderId:
+              salesOrderId,
+            sourceSalesOrderNumber:
+              stringValue(
+                order.salesOrderNumber,
+                'Sales Order number',
+                40,
+              ),
+            spaceId,
+            customerId:
+              stringValue(
+                order.customerId,
+                'Customer',
+                100,
+              ),
+            customerName:
+              stringValue(
+                order.customerName,
+                'Customer name',
+                120,
+              ),
+            customerPhone:
+              optionalString(
+                order.customerPhone,
+                80,
+              ),
+            customerEmail:
+              optionalString(
+                order.customerEmail,
+                160,
+              ),
+            customerAddress:
+              optionalString(
+                order.customerAddress,
+                500,
+              ),
+            issueDate,
+            dueDate,
+            currency:
+              stringValue(
+                order.currency,
+                'Currency',
+                10,
+              ),
+            status:
+              'draft',
+            lines,
+            subtotalMinor:
+              totals.subtotalMinor,
+            taxEnabled:
+              order.taxEnabled === true
+              && taxRateBps > 0,
+            taxName:
+              optionalString(
+                order.taxName,
+                80,
+              )
+              || 'Tax',
+            taxRateBps,
+            taxMinor:
+              totals.taxMinor,
+            totalMinor:
+              totals.totalMinor,
+            amountPaidMinor:
+              0,
+            balanceDueMinor:
+              totals.totalMinor,
+            notes:
+              optionalString(
+                order.notes,
+                1000,
+              ),
+            issuedAt:
+              null,
+            cancelledAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.update(
+          orderRef,
+          {
+            status:
+              'invoiced',
+            convertedInvoiceId:
+              invoiceRef.id,
+            convertedInvoiceNumber:
+              invoiceNumber,
+            invoicedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.set(
+          counterRef,
+          {
+            nextNumber:
+              nextNumber + 1,
+            updatedAt:
+              now,
+          },
+          { merge: true },
+        );
+
+        const result = {
+          salesOrderId,
+          invoiceId:
+            invoiceRef.id,
+          invoiceNumber,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'convert_business_sales_order_to_invoice',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
 export const getBusinessInvoiceWorkspace = onCall(
   { region },
   async (request) => {
