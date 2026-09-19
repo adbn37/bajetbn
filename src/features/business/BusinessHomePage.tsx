@@ -7,6 +7,7 @@ import {
 import {
   Link,
   useParams,
+  useSearchParams,
 } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -17,6 +18,7 @@ import {
 } from '../../repositories/businessAdvancedRepository';
 import {
   getMySmePosAccess,
+  getSmePosSettings,
 } from '../../repositories/smePosRepository';
 import {
   getSpace,
@@ -30,6 +32,7 @@ import type {
   FinancialTransaction,
   Space,
   SmePosRole,
+  SmePosSettings,
 } from '../../types/models';
 import { formatMoney } from '../../utils/money';
 import { AccountAvatar } from '../accounts/AccountAvatar';
@@ -37,6 +40,10 @@ import { SpaceAvatar } from '../spaces/SpaceAvatar';
 import {
   SmeOperationalAttentionPanel,
 } from '../spaces/SmeOperationalAttentionPanel';
+import {
+  MarketplaceConsignmentPosWorkspace,
+  type MarketplaceManagementTab,
+} from '../sme-pos/MarketplaceConsignmentPosWorkspace';
 
 function monthPrefix() {
   return new Date()
@@ -103,9 +110,38 @@ function transactionAmount(
   return amount;
 }
 
+type BusinessWorkspaceView =
+  | 'home'
+  | 'inventory'
+  | 'sellers'
+  | 'reports';
+
+function workspaceViewFromSearch(
+  value: string | null,
+): BusinessWorkspaceView {
+  if (
+    value === 'inventory'
+    || value === 'sellers'
+    || value === 'reports'
+  ) {
+    return value;
+  }
+
+  return 'home';
+}
+
 export function BusinessHomePage() {
   const { spaceId = '' } = useParams();
   const { user } = useAuth();
+  const [
+    searchParams,
+    setSearchParams,
+  ] = useSearchParams();
+
+  const workspaceView =
+    workspaceViewFromSearch(
+      searchParams.get('workspace'),
+    );
 
   const [space, setSpace] =
     useState<Space | null>(null);
@@ -118,6 +154,9 @@ export function BusinessHomePage() {
 
   const [posRole, setPosRole] =
     useState<SmePosRole | null>(null);
+
+  const [posSettings, setPosSettings] =
+    useState<SmePosSettings | null>(null);
 
   const [
     customRoleName,
@@ -155,6 +194,7 @@ export function BusinessHomePage() {
         setAccounts([]);
         setTransactions([]);
         setPosRole(null);
+        setPosSettings(null);
         setCustomRoleName('');
         return;
       }
@@ -167,6 +207,7 @@ export function BusinessHomePage() {
       const [
         nextAccess,
         nextProfile,
+        nextPosSettings,
       ] = await Promise.all([
         isOwner
           ? Promise.resolve(null)
@@ -177,6 +218,9 @@ export function BusinessHomePage() {
         getBusinessProfile(
           spaceId,
         ).catch(() => null),
+        getSmePosSettings(
+          spaceId,
+        ).catch(() => null),
       ]);
 
       const nextRole =
@@ -185,6 +229,7 @@ export function BusinessHomePage() {
           : null;
 
       setPosRole(nextRole);
+      setPosSettings(nextPosSettings);
       setCustomRoleName(
         nextAccess?.status === 'active'
           ? nextAccess.customRoleName
@@ -396,6 +441,46 @@ export function BusinessHomePage() {
             ? 'View the operational tools available to your role. Financial information stays private.'
             : 'Your Business tools are ready.';
 
+  const effectivePosRole: SmePosRole =
+    isOwner
+      ? 'owner'
+      : posRole || 'viewer';
+
+  const canUseEmbeddedMarketplace =
+    businessIndustry === 'marketplace'
+    && posSettings?.mode
+      === 'marketplace_consignment';
+
+  const marketplaceWorkspaceTab:
+    MarketplaceManagementTab | null =
+      workspaceView === 'inventory'
+        ? 'listings'
+        : workspaceView === 'sellers'
+          ? 'sellers'
+          : workspaceView === 'reports'
+            ? 'reports'
+            : null;
+
+  const setWorkspaceView = (
+    nextView: BusinessWorkspaceView,
+  ) => {
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    if (nextView === 'home') {
+      next.delete('workspace');
+    } else {
+      next.set(
+        'workspace',
+        nextView,
+      );
+    }
+
+    setSearchParams(next);
+  };
+
   const businessActions: Array<{
     label: string;
     icon: string;
@@ -503,46 +588,13 @@ export function BusinessHomePage() {
   } else if (
     businessIndustry === 'marketplace'
   ) {
-    businessActions.push(
-      {
-        label: 'POS',
-        icon: '▦',
-        to:
-          '/spaces/'
-          + space.id
-          + '/pos',
-      },
-      {
-        label: 'Listings',
-        icon: '▤',
-        to:
-          '/spaces/'
-          + space.id
-          + '?section=marketplace-listings',
-      },
-    );
-
-    if (
-      isOwner
-      || posRole === 'manager'
-    ) {
-      businessActions.push({
-        label: 'Sellers',
-        icon: '♙',
-        to:
-          '/spaces/'
-          + space.id
-          + '?section=marketplace-sellers',
-      });
-    }
-
     businessActions.push({
-      label: 'Operations',
+      label: 'Open POS',
       icon: '▦',
       to:
         '/spaces/'
         + space.id
-        + '/business',
+        + '/pos',
     });
   } else if (
     businessIndustry === 'retail'
@@ -660,6 +712,132 @@ export function BusinessHomePage() {
           {error}
         </div>
       )}
+
+      <nav
+        className="business-workspace-nav-v115"
+        aria-label="Business workspace"
+        data-business-workspace-nav
+      >
+        <button
+          type="button"
+          className={
+            workspaceView === 'home'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setWorkspaceView('home')
+          }
+        >
+          Home
+        </button>
+
+        {posSettings && (
+          <Link
+            to={
+              '/spaces/'
+              + space.id
+              + '/pos'
+            }
+          >
+            POS
+          </Link>
+        )}
+
+        {canUseEmbeddedMarketplace
+          && (
+            <>
+              <button
+                type="button"
+                className={
+                  workspaceView
+                    === 'inventory'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setWorkspaceView(
+                    'inventory',
+                  )
+                }
+              >
+                Products & Stock
+              </button>
+
+              {(isOwner
+                || posRole === 'manager')
+                && (
+                  <button
+                    type="button"
+                    className={
+                      workspaceView
+                        === 'sellers'
+                        ? 'active'
+                        : ''
+                    }
+                    onClick={() =>
+                      setWorkspaceView(
+                        'sellers',
+                      )
+                    }
+                  >
+                    Sellers
+                  </button>
+                )}
+
+              {(isOwner
+                || posRole === 'manager'
+                || posRole === 'seller')
+                && (
+                  <button
+                    type="button"
+                    className={
+                      workspaceView
+                        === 'reports'
+                        ? 'active'
+                        : ''
+                    }
+                    onClick={() =>
+                      setWorkspaceView(
+                        'reports',
+                      )
+                    }
+                  >
+                    Reports
+                  </button>
+                )}
+            </>
+          )}
+      </nav>
+
+      {workspaceView !== 'home'
+        && canUseEmbeddedMarketplace
+        && marketplaceWorkspaceTab
+        ? (
+          <section
+            className="business-workspace-embedded-v115"
+            data-business-workspace-embedded
+          >
+            <MarketplaceConsignmentPosWorkspace
+              space={space}
+              settings={posSettings}
+              inventoryProfile={
+                businessIndustry
+                  === 'marketplace'
+                  ? 'general'
+                  : 'general'
+              }
+              role={effectivePosRole}
+              onChanged={load}
+              embeddedManagementTab={
+                marketplaceWorkspaceTab
+              }
+              hideManagementTabs
+            />
+          </section>
+        )
+        : (
+        <>
 
       {canViewFinancials ? (
         <section className="business-home-v115-hero">
@@ -909,6 +1087,8 @@ export function BusinessHomePage() {
           </p>
         )}
       </section>
+      )}
+        </>
       )}
     </main>
   );

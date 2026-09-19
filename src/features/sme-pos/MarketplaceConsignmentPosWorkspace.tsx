@@ -69,6 +69,7 @@ interface Props {
   onManagementTabChange?: (
     tab: MarketplaceManagementTab,
   ) => void;
+  hideManagementTabs?: boolean;
 }
 
 type MarketplaceTab =
@@ -368,6 +369,7 @@ export function MarketplaceConsignmentPosWorkspace({
   onChanged,
   embeddedManagementTab = null,
   onManagementTabChange,
+  hideManagementTabs = false,
 }: Props) {
   const [searchParams] = useSearchParams();
   const [mySeller, setMySeller] = useState<SmePosSeller | null>(null);
@@ -2088,7 +2090,8 @@ export function MarketplaceConsignmentPosWorkspace({
       </div>
     )}
 
-    {!primaryTabs.includes(tab)
+    {!hideManagementTabs
+      && !primaryTabs.includes(tab)
       && managementTabs.length > 0
       && (
         <div
