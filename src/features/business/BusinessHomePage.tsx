@@ -36,6 +36,8 @@ import type {
 } from '../../types/models';
 import { formatMoney } from '../../utils/money';
 import { AccountAvatar } from '../accounts/AccountAvatar';
+import { AccountsPage } from '../accounts/AccountsPage';
+import { CommitmentsPage } from '../commitments/CommitmentsPage';
 import { SpaceAvatar } from '../spaces/SpaceAvatar';
 import {
   SmeOperationalAttentionPanel,
@@ -114,6 +116,7 @@ type BusinessWorkspaceView =
   | 'home'
   | 'inventory'
   | 'documents'
+  | 'finance'
   | 'sellers'
   | 'reports';
 
@@ -123,6 +126,7 @@ function workspaceViewFromSearch(
   if (
     value === 'inventory'
     || value === 'documents'
+    || value === 'finance'
     || value === 'sellers'
     || value === 'reports'
   ) {
@@ -144,6 +148,12 @@ export function BusinessHomePage() {
     workspaceViewFromSearch(
       searchParams.get('workspace'),
     );
+
+  const financeView =
+    searchParams.get('finance')
+      === 'bills'
+      ? 'bills'
+      : 'accounts';
 
   const [space, setSpace] =
     useState<Space | null>(null);
@@ -463,6 +473,26 @@ export function BusinessHomePage() {
             ? 'reports'
             : null;
 
+  const setFinanceView = (
+    nextView: 'accounts' | 'bills',
+  ) => {
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    next.set(
+      'workspace',
+      'finance',
+    );
+    next.set(
+      'finance',
+      nextView,
+    );
+
+    setSearchParams(next);
+  };
+
   const setWorkspaceView = (
     nextView: BusinessWorkspaceView,
   ) => {
@@ -765,6 +795,25 @@ export function BusinessHomePage() {
           </button>
         )}
 
+        {canViewFinancials && (
+          <button
+            type="button"
+            className={
+              workspaceView
+                === 'finance'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setWorkspaceView(
+                'finance',
+              )
+            }
+          >
+            Finance
+          </button>
+        )}
+
         {canUseEmbeddedMarketplace
           && (
             <>
@@ -831,7 +880,117 @@ export function BusinessHomePage() {
           )}
       </nav>
 
-      {workspaceView === 'documents'
+      {workspaceView === 'finance'
+        && canViewFinancials
+        ? (
+          <section
+            className="business-finance-workspace-v115"
+            data-business-finance-workspace
+          >
+            <div className="business-home-v115-section-heading">
+              <div>
+                <span>Business money</span>
+                <h2>Finance</h2>
+              </div>
+            </div>
+
+            <p className="muted">
+              Accounts remain global financial containers. This Business only sees and uses the Global Business Accounts linked to it.
+            </p>
+
+            <div
+              className="business-finance-nav-v115"
+              aria-label="Business finance"
+            >
+              <button
+                type="button"
+                className={
+                  financeView === 'accounts'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setFinanceView(
+                    'accounts',
+                  )
+                }
+              >
+                Accounts
+              </button>
+
+              <Link
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/money'
+                }
+              >
+                Money Activity
+              </Link>
+
+              <button
+                type="button"
+                className={
+                  financeView === 'bills'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setFinanceView(
+                    'bills',
+                  )
+                }
+              >
+                Bills & Expenses
+              </button>
+
+              <Link
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/accounting'
+                }
+              >
+                Accounting
+              </Link>
+
+              <Link
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/tax'
+                }
+              >
+                Tax
+              </Link>
+
+              <Link
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/payroll'
+                }
+              >
+                Payroll
+              </Link>
+            </div>
+
+            {financeView === 'accounts'
+              ? (
+                <AccountsPage
+                  spaceIdOverride={space.id}
+                  embedded
+                />
+              )
+              : (
+                <CommitmentsPage
+                  spaceIdOverride={space.id}
+                  embedded
+                />
+              )}
+          </section>
+        )
+        : workspaceView === 'documents'
         && canViewFinancials
         ? (
           <section
@@ -945,9 +1104,9 @@ export function BusinessHomePage() {
         <section className="business-home-v115-hero">
           <div className="business-home-v115-hero-heading">
             <div>
-              <span>Business funds</span>
+              <span>Linked account balances</span>
               <small>
-                Business accounts only
+                Actual balances of accounts linked to this Business
               </small>
             </div>
 

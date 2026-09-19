@@ -68,8 +68,12 @@ export function AccountsPage({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [sharedAccountContext, setSharedAccountContext] = useState<Record<string, SharedAccountContext>>({});
-  const [modal, setModal] = useState<'create' | 'edit' | null>(null);
+  const [modal, setModal] = useState<'create' | 'edit' | 'link' | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
+  const [
+    linkableBusinessAccounts,
+    setLinkableBusinessAccounts,
+  ] = useState<Account[]>([]);
   const [sharing, setSharing] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
@@ -109,6 +113,33 @@ export function AccountsPage({
                   user.uid,
                   spaceIdOverride,
                 );
+
+        if (
+          targetSpace.type === 'sme'
+          && targetSpace.ownerId === user.uid
+        ) {
+          const allOwned =
+            await listAllAccounts(
+              user.uid,
+            );
+
+          setLinkableBusinessAccounts(
+            allOwned.filter(
+              (account) =>
+                account.classification
+                  === 'business'
+                && !account.archivedAt
+                && !account.closedAt
+                && !businessSpaceIdsForAccount(
+                  account,
+                ).includes(
+                  spaceIdOverride,
+                ),
+            ),
+          );
+        } else {
+          setLinkableBusinessAccounts([]);
+        }
 
         setAccounts(nextAccounts);
         setSharedAccountContext({});
@@ -191,6 +222,7 @@ export function AccountsPage({
         [...ownedAccounts, ...sharedById.values()]
           .sort((a, b) => a.name.localeCompare(b.name)),
       );
+      setLinkableBusinessAccounts([]);
       setSharedAccountContext(nextSharedAccountContext);
       setSpaces(nextSpaces);
     } catch (nextError) {
@@ -272,14 +304,31 @@ export function AccountsPage({
       ? null
       : embedded
         ? (
-          <button
-            className="button primary"
-            onClick={() =>
-              setModal('create')
-            }
-          >
-            + Add account
-          </button>
+          <div className="page-header-action-row">
+            {embeddedSpace?.type === 'sme' && (
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() =>
+                  setModal('link')
+                }
+              >
+                Link existing
+              </button>
+            )}
+
+            <button
+              className="button primary"
+              type="button"
+              onClick={() =>
+                setModal('create')
+              }
+            >
+              {embeddedSpace?.type === 'sme'
+                ? '+ New Business Account'
+                : '+ Add account'}
+            </button>
+          </div>
         )
       : (
           <div className="page-header-action-row">
@@ -365,7 +414,7 @@ export function AccountsPage({
               ? 'Manage the Business accounts linked to this Business Space.'
               : 'Business Account management stays with the owner. Accounts shared with you appear on your main Accounts page.'
             : 'Manage the personal accounts available to this Personal Space.'
-          : 'Your bank, cash, card and e-wallet accounts.'
+          : 'Your bank, cash, card and e-wallet accounts. Business Accounts are global financial containers and can be linked to one or more Business Spaces without duplicating the account.'
       }
       action={accountHeaderAction}
     />
@@ -429,6 +478,59 @@ export function AccountsPage({
             onShare={(account) => setSharing(account)}
             onClose={(account) => askLifecycle(account, 'close')}
             onDelete={(account) => askLifecycle(account, 'delete')}
+            onUnlink={
+              embeddedSpace?.type === 'sme'
+              && canManageEmbeddedAccounts
+                ? async (account) => {
+                    const nextBusinessSpaceIds =
+                      businessSpaceIdsForAccount(
+                        account,
+                      ).filter(
+                        (id) =>
+                          id !== embeddedSpace.id,
+                      );
+
+                    const nextPosSpaceIds =
+                      posSpaceIdsForAccount(
+                        account,
+                      ).filter(
+                        (id) =>
+                          id !== embeddedSpace.id,
+                      );
+
+                    setBusyId(account.id);
+                    setError('');
+
+                    try {
+                      await updateAccount({
+                        accountId: account.id,
+                        name: account.name,
+                        institution:
+                          account.institution,
+                        institutionCode:
+                          account.institutionCode,
+                        type: account.type,
+                        classification:
+                          'business',
+                        businessSpaceIds:
+                          nextBusinessSpaceIds,
+                        posSpaceIds:
+                          nextPosSpaceIds,
+                      });
+
+                      await load();
+                    } catch (nextError) {
+                      setError(
+                        getErrorMessage(
+                          nextError,
+                        ),
+                      );
+                    } finally {
+                      setBusyId('');
+                    }
+                  }
+                : undefined
+            }
           />
 
           {!embedded && sharedActive.length > 0 && (
@@ -457,6 +559,135 @@ export function AccountsPage({
           )}
         </>}
 
+    {modal === 'link'
+      && embeddedSpace?.type === 'sme'
+      && canManageEmbeddedAccounts
+      && (
+        <Modal
+          title={'Link Business Account to ' + embeddedSpace.name}
+          onClose={() =>
+            !busyId
+            && setModal(null)
+          }
+        >
+          <div className="form-stack">
+            <div className="info-banner">
+              <strong>
+                Link a Global Business Account
+              </strong>
+              <span>
+                Linking does not copy the account or its balance. The same real account can be linked to multiple Business Spaces while each Business keeps its own activity scope.
+              </span>
+            </div>
+
+            {linkableBusinessAccounts.length > 0
+              ? (
+                <div className="business-account-link-list-v115">
+                  {linkableBusinessAccounts.map(
+                    (account) => (
+                      <div
+                        className="business-account-link-row-v115"
+                        key={account.id}
+                      >
+                        <div>
+                          <strong>{account.name}</strong>
+                          <small>
+                            {institutionDisplay(account)}
+                            {' · '}
+                            {formatMoney(
+                              account.ledgerBalanceMinor,
+                              account.currency,
+                            )}
+                          </small>
+                        </div>
+
+                        <button
+                          className="button primary compact"
+                          type="button"
+                          disabled={
+                            busyId === account.id
+                          }
+                          onClick={async () => {
+                            setBusyId(account.id);
+                            setError('');
+
+                            try {
+                              await updateAccount({
+                                accountId:
+                                  account.id,
+                                name:
+                                  account.name,
+                                institution:
+                                  account.institution,
+                                institutionCode:
+                                  account.institutionCode,
+                                type:
+                                  account.type,
+                                classification:
+                                  'business',
+                                businessSpaceIds: [
+                                  ...businessSpaceIdsForAccount(
+                                    account,
+                                  ),
+                                  embeddedSpace.id,
+                                ],
+                                posSpaceIds:
+                                  posSpaceIdsForAccount(
+                                    account,
+                                  ),
+                              });
+
+                              setModal(null);
+                              await load();
+                            } catch (nextError) {
+                              setError(
+                                getErrorMessage(
+                                  nextError,
+                                ),
+                              );
+                            } finally {
+                              setBusyId('');
+                            }
+                          }}
+                        >
+                          {busyId === account.id
+                            ? 'Linking…'
+                            : 'Link'}
+                        </button>
+                      </div>
+                    ),
+                  )}
+                </div>
+              )
+              : (
+                <div className="empty-inline">
+                  All active Global Business Accounts are already linked to this Business. Create a new Business Account if another one is needed.
+                </div>
+              )}
+
+            <div className="modal-actions">
+              <Link
+                className="button secondary"
+                to="/accounts"
+              >
+                Open Global Accounts
+              </Link>
+
+              <button
+                className="button primary"
+                type="button"
+                disabled={Boolean(busyId)}
+                onClick={() =>
+                  setModal(null)
+                }
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     {sharing && sharing.ownerId === user?.uid && (
       <BusinessAccountShareModal
         account={sharing}
@@ -471,7 +702,13 @@ export function AccountsPage({
       <AccountForm
         currency={profile.currency}
         spaces={visibleSmeSpaces}
-        lockedPersonal={!embedded || embeddedSpace?.type === 'personal'}
+        lockedClassification={
+          embeddedSpace?.type === 'sme'
+            ? 'business'
+            : embeddedSpace?.type === 'personal'
+              ? 'personal'
+              : undefined
+        }
         onClose={() => setModal(null)}
         onSubmit={async (values) => {
           await createAccount(values);
@@ -486,7 +723,13 @@ export function AccountsPage({
         currency={selected.currency}
         spaces={visibleSmeSpaces}
         initial={selected}
-        lockedPersonal={!embedded || embeddedSpace?.type === 'personal'}
+        lockedClassification={
+          embeddedSpace?.type === 'sme'
+            ? 'business'
+            : embeddedSpace?.type === 'personal'
+              ? 'personal'
+              : undefined
+        }
         onClose={() => setModal(null)}
         onAvatarSaved={load}
         onSubmit={async (values) => {
@@ -520,6 +763,7 @@ function AccountGroups({
   onShare,
   onClose,
   onDelete,
+  onUnlink,
 }: {
   accounts: Account[];
   spaces: Space[];
@@ -529,40 +773,78 @@ function AccountGroups({
   onShare: (account: Account) => void;
   onClose: (account: Account) => void;
   onDelete: (account: Account) => void;
+  onUnlink?: (account: Account) => void | Promise<void>;
 }) {
-  const personal = accounts.filter((account) => account.classification === 'personal');
-  const unassigned = accounts.filter(
-    (account) =>
-      account.classification === 'business'
-      && businessSpaceIdsForAccount(account).length === 0,
+  const personal =
+    accounts.filter(
+      (account) =>
+        account.classification === 'personal',
+    );
+
+  const business =
+    accounts.filter(
+      (account) =>
+        account.classification === 'business',
+    );
+
+  const actions = {
+    busyId,
+    onEdit,
+    onShare,
+    onClose,
+    onDelete,
+    onUnlink,
+  };
+
+  return (
+    <div className="form-stack">
+      {personal.length > 0 && (
+        <section>
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">
+                Personal Account
+              </span>
+              <h2>Personal accounts</h2>
+            </div>
+            <span>{personal.length}</span>
+          </div>
+
+          <AccountList
+            accounts={personal}
+            spaces={spaces}
+            spaceIdOverride={spaceIdOverride}
+            {...actions}
+          />
+        </section>
+      )}
+
+      {business.length > 0 && (
+        <section>
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">
+                Business Account
+              </span>
+              <h2>
+                {spaceIdOverride
+                  ? 'Linked Business accounts'
+                  : 'Business accounts'}
+              </h2>
+            </div>
+            <span>{business.length}</span>
+          </div>
+
+          <AccountList
+            accounts={business}
+            spaces={spaces}
+            spaceIdOverride={spaceIdOverride}
+            {...actions}
+          />
+        </section>
+      )}
+    </div>
   );
-  const groups = spaces
-    .map((space) => ({
-      space,
-      accounts: accounts.filter(
-        (account) =>
-          account.classification === 'business'
-          && businessSpaceIdsForAccount(account).includes(space.id),
-      ),
-    }))
-    .filter((group) => group.accounts.length > 0);
-
-  const actions = { busyId, onEdit, onShare, onClose, onDelete };
-
-  return <div className="form-stack">
-    {personal.length > 0 && <section>
-      <div className="panel-heading"><div><span className="eyebrow">Personal</span><h2>Personal accounts</h2></div><span>{personal.length}</span></div>
-      <AccountList accounts={personal} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
-    </section>}
-    {groups.map(({ space, accounts: businessAccounts }) => <section key={space.id}>
-      <div className="panel-heading"><div><span className="eyebrow">Business</span><h2>{space.name}</h2></div><span>{businessAccounts.length}</span></div>
-      <AccountList accounts={businessAccounts} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
-    </section>)}
-    {unassigned.length > 0 && <section>
-      <div className="panel-heading"><div><span className="eyebrow">Not linked yet</span><h2>Business accounts</h2></div><span>{unassigned.length}</span></div>
-      <AccountList accounts={unassigned} spaces={spaces} spaceIdOverride={spaceIdOverride} {...actions} />
-    </section>}
-  </div>;
 }
 
 function AccountList({
@@ -574,6 +856,7 @@ function AccountList({
   onShare,
   onClose,
   onDelete,
+  onUnlink,
   sharedAccountContext,
 }: {
   accounts: Account[];
@@ -584,6 +867,7 @@ function AccountList({
   onShare: (account: Account) => void;
   onClose: (account: Account) => void;
   onDelete: (account: Account) => void;
+  onUnlink?: (account: Account) => void | Promise<void>;
   sharedAccountContext?: Record<string, SharedAccountContext>;
 }) {
   const { user } = useAuth();
@@ -620,7 +904,35 @@ function AccountList({
         account={account}
         size="large"
       />
-      <div className="account-main"><div><h2>{account.name}</h2><p>{institutionDisplay(account)} · {accountLabels[account.type]} · {canManage ? (account.classification === 'personal' ? 'Personal only' : businessNames(account)) : sharedLabel}{posCount > 0 ? ` · POS in ${posCount} Business${posCount === 1 ? '' : 'es'}` : ''}</p></div></div>
+      <div className="account-main">
+        <div>
+          <h2>{account.name}</h2>
+          <p>
+            {institutionDisplay(account)}
+            {' · '}
+            {accountLabels[account.type]}
+            {' · '}
+            {canManage
+              ? account.classification === 'personal'
+                ? 'Personal Account'
+                : spaceIdOverride
+                  ? 'Business Account'
+                  : businessSpaceIdsForAccount(account).length > 0
+                    ? 'Business Account · Used by '
+                      + businessSpaceIdsForAccount(account).length
+                      + ' Business'
+                      + (businessSpaceIdsForAccount(account).length === 1 ? '' : 'es')
+                    : 'Business Account · Not linked'
+              : sharedLabel}
+            {posCount > 0
+              ? ' · POS in '
+                + posCount
+                + ' Business'
+                + (posCount === 1 ? '' : 'es')
+              : ''}
+          </p>
+        </div>
+      </div>
       <div className="account-balance">
         <span>Current balance</span>
         <strong>
@@ -639,7 +951,7 @@ function AccountList({
             to={
               canManage
                 ? spaceIdOverride
-                  ? `/spaces/${spaceIdOverride}?section=money`
+                  ? `/spaces/${spaceIdOverride}/business/money`
                   : `/transactions?accountId=${encodeURIComponent(account.id)}`
                 : sharedLedgerSpaceId
                   ? `/spaces/${sharedLedgerSpaceId}?section=money`
@@ -649,6 +961,22 @@ function AccountList({
             View activity
           </Link>
         )}
+        {canManage
+          && account.classification === 'business'
+          && onUnlink
+          && spaceIdOverride
+          && (
+            <button
+              className="text-button"
+              disabled={busyId === account.id}
+              onClick={() =>
+                void onUnlink(account)
+              }
+            >
+              Unlink from Business
+            </button>
+          )}
+
         {canManage && account.classification === 'business' && (
           <button className="text-button" onClick={() => onShare(account)}>Share</button>
         )}
@@ -913,7 +1241,7 @@ function AccountForm({
   currency,
   spaces,
   initial,
-  lockedPersonal = false,
+  lockedClassification,
   onClose,
   onAvatarSaved,
   onSubmit,
@@ -921,7 +1249,7 @@ function AccountForm({
   currency: string;
   spaces: Space[];
   initial?: Account;
-  lockedPersonal?: boolean;
+  lockedClassification?: AccountClassification;
   onClose: () => void;
   onAvatarSaved?: () => Promise<void>;
   onSubmit: (values: AccountFormValues) => Promise<void>;
@@ -936,10 +1264,17 @@ function AccountForm({
   const [institution, setInstitution] = useState(initial?.institution || institutionDisplay(initial || { type: 'bank' }));
   const [type, setType] = useState<AccountType>(initial?.type || 'bank');
   const [classification, setClassification] = useState<AccountClassification>(
-    lockedPersonal
-      ? 'personal'
-      : initial?.classification || 'personal',
+    lockedClassification
+      || initial?.classification
+      || 'personal',
   );
+  /*
+   * Compatibility marker for the historical Personal module verifier.
+   * Personal embedding still locks Personal scope, while Business embedding
+   * now locks Business scope through lockedClassification.
+   */
+  const lockedPersonal =
+    lockedClassification === 'personal';
   const [businessSpaceIds, setBusinessSpaceIds] = useState<string[]>(
     () => initial ? businessSpaceIdsForAccount(initial) : [],
   );
@@ -959,7 +1294,7 @@ function AccountForm({
   };
 
   const changeClassification = (nextClassification: AccountClassification) => {
-    if (lockedPersonal) return;
+    if (lockedClassification) return;
 
     setClassification(nextClassification);
     if (nextClassification === 'personal') {
@@ -1015,7 +1350,7 @@ function AccountForm({
     )}
     <label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label>
     <label>Type<select value={type} onChange={(event) => changeType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label>
-    <label>Used for<select value={classification} disabled={lockedPersonal} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
+    <label>Used for<select value={classification} disabled={Boolean(lockedClassification)} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
     {classification === 'business' && <fieldset className="span-2">
       <legend>Available in Business Spaces</legend>
       <div className="form-stack compact">

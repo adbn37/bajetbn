@@ -15428,3 +15428,99 @@ button.active {
     grid-column: 1 / -1;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS FINANCE GLOBAL ACCOUNTS
+   Global Accounts are canonical. Business Finance links them.
+   ========================================================== */
+
+.business-finance-workspace-v115 {
+  min-width: 0;
+}
+
+.business-finance-nav-v115 {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin: .9rem 0;
+  padding: .35rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.business-finance-nav-v115
+button,
+.business-finance-nav-v115
+a {
+  flex: 0 0 auto;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .45rem .65rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: .7rem;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.business-finance-nav-v115
+button.active,
+.business-finance-nav-v115
+button:hover,
+.business-finance-nav-v115
+a:hover {
+  color: var(--text);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 11%,
+      transparent
+    );
+}
+
+.business-finance-workspace-v115
+.embedded-module-page {
+  padding-inline: 0;
+}
+
+.business-account-link-list-v115 {
+  display: grid;
+  gap: .5rem;
+}
+
+.business-account-link-row-v115 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+}
+
+.business-account-link-row-v115 > div {
+  min-width: 0;
+  display: grid;
+  gap: .1rem;
+}
+
+.business-account-link-row-v115 small {
+  color: var(--muted);
+}
+
+@media (max-width: 620px) {
+  .business-account-link-row-v115 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
