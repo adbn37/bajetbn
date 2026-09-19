@@ -7736,6 +7736,1277 @@ export const reviewFinancialApprovalRequest = onCall(
   },
 );
 
+export const getBusinessQuotationWorkspace = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Business Space',
+        100,
+      );
+
+    const context =
+      await requireInvoiceManagerSpace(
+        spaceId,
+        uid,
+      );
+
+    const snapshot =
+      await db.collection(
+        'businessQuotations',
+      )
+        .where(
+          'spaceId',
+          '==',
+          spaceId,
+        )
+        .get();
+
+    const quotations =
+      snapshot.docs
+        .filter(
+          (item) =>
+            item.data()?.ownerId
+            === context.ownerId,
+        )
+        .map(
+          (item) => ({
+            id: item.id,
+            ...item.data(),
+          }),
+        )
+        .sort(
+          (
+            a: DocumentData,
+            b: DocumentData,
+          ) =>
+            String(
+              b.quoteDate || '',
+            ).localeCompare(
+              String(
+                a.quoteDate || '',
+              ),
+            ),
+        );
+
+    return {
+      spaceId,
+      ownerId:
+        context.ownerId,
+      isOwner:
+        context.isOwner,
+      canManageQuotations:
+        true,
+      quotations,
+    };
+  },
+);
+
+export const createBusinessQuotation = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const spaceId =
+      stringValue(
+        request.data?.spaceId,
+        'Space',
+        100,
+      );
+
+    const customerId =
+      stringValue(
+        request.data?.customerId,
+        'Customer',
+        100,
+      );
+
+    const quoteDate =
+      localDate(
+        request.data?.quoteDate,
+        'Quotation date',
+      );
+
+    const validUntil =
+      localDate(
+        request.data?.validUntil,
+        'Valid-until date',
+      );
+
+    if (validUntil < quoteDate) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Valid-until date cannot be before the quotation date.',
+      );
+    }
+
+    const lines =
+      businessInvoiceLines(
+        request.data?.lines,
+      );
+
+    const notes =
+      optionalString(
+        request.data?.notes,
+        1000,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const spaceRef =
+      db.collection(
+        'spaces',
+      ).doc(spaceId);
+
+    const memberRef =
+      db.collection(
+        'spaceMembers',
+      ).doc(
+        spaceId
+        + '_'
+        + uid,
+      );
+
+    const profileRef =
+      db.collection(
+        'businessProfiles',
+      ).doc(spaceId);
+
+    const customerRef =
+      db.collection(
+        'businessContacts',
+      ).doc(customerId);
+
+    const counterRef =
+      db.collection(
+        'businessQuotationCounters',
+      ).doc(spaceId);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+          profileSnapshot,
+          customerSnapshot,
+          counterSnapshot,
+        ] = await Promise.all([
+          transaction.get(spaceRef),
+          transaction.get(memberRef),
+          transaction.get(profileRef),
+          transaction.get(customerRef),
+          transaction.get(counterRef),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        const ownerId =
+          stringValue(
+            space.ownerId,
+            'Business owner',
+            160,
+          );
+
+        const customer =
+          assertInvoiceCustomer(
+            customerSnapshot.data(),
+            ownerId,
+            spaceId,
+          );
+
+        const tax =
+          invoiceTaxSnapshot(
+            profileSnapshot.data(),
+          );
+
+        const totals =
+          businessInvoiceTotals(
+            lines,
+            tax.taxRateBps,
+          );
+
+        const currentNext =
+          counterSnapshot.exists
+          && Number.isSafeInteger(
+            counterSnapshot.data()
+              ?.nextNumber,
+          )
+            ? Number(
+                counterSnapshot.data()
+                  ?.nextNumber,
+              )
+            : 1;
+
+        const nextNumber =
+          Math.max(
+            1,
+            currentNext,
+          );
+
+        const quotationNumber =
+          'QTN-'
+          + String(
+              nextNumber,
+            ).padStart(
+              5,
+              '0',
+            );
+
+        const quotationRef =
+          db.collection(
+            'businessQuotations',
+          ).doc();
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const result = {
+          quotationId:
+            quotationRef.id,
+          quotationNumber,
+        };
+
+        transaction.create(
+          quotationRef,
+          {
+            displayId:
+              displayId('QTN'),
+            quotationNumber,
+            ownerId,
+            createdBy:
+              uid,
+            spaceId,
+            customerId,
+            customerName:
+              stringValue(
+                customer.name,
+                'Customer name',
+                120,
+              ),
+            customerPhone:
+              optionalString(
+                customer.phone,
+                80,
+              ),
+            customerEmail:
+              optionalString(
+                customer.email,
+                160,
+              ),
+            customerAddress:
+              optionalString(
+                customer.address,
+                500,
+              ),
+            quoteDate,
+            validUntil,
+            currency:
+              stringValue(
+                space.currency,
+                'Space currency',
+                10,
+              ),
+            status:
+              'draft',
+            lines,
+            subtotalMinor:
+              totals.subtotalMinor,
+            taxEnabled:
+              tax.taxEnabled,
+            taxName:
+              tax.taxName,
+            taxRateBps:
+              tax.taxRateBps,
+            taxMinor:
+              totals.taxMinor,
+            totalMinor:
+              totals.totalMinor,
+            notes,
+            convertedInvoiceId:
+              null,
+            convertedInvoiceNumber:
+              null,
+            sentAt:
+              null,
+            acceptedAt:
+              null,
+            rejectedAt:
+              null,
+            convertedAt:
+              null,
+            cancelledAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.set(
+          counterRef,
+          {
+            nextNumber:
+              nextNumber + 1,
+            updatedAt:
+              now,
+          },
+          { merge: true },
+        );
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'create_business_quotation',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const updateBusinessQuotation = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const quotationId =
+      stringValue(
+        request.data?.quotationId,
+        'Quotation',
+        100,
+      );
+
+    const customerId =
+      stringValue(
+        request.data?.customerId,
+        'Customer',
+        100,
+      );
+
+    const quoteDate =
+      localDate(
+        request.data?.quoteDate,
+        'Quotation date',
+      );
+
+    const validUntil =
+      localDate(
+        request.data?.validUntil,
+        'Valid-until date',
+      );
+
+    if (validUntil < quoteDate) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Valid-until date cannot be before the quotation date.',
+      );
+    }
+
+    const lines =
+      businessInvoiceLines(
+        request.data?.lines,
+      );
+
+    const notes =
+      optionalString(
+        request.data?.notes,
+        1000,
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const quotationRef =
+      db.collection(
+        'businessQuotations',
+      ).doc(
+        quotationId,
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const quotationSnapshot =
+          await transaction.get(
+            quotationRef,
+          );
+
+        if (!quotationSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Quotation not found.',
+          );
+        }
+
+        const quotation =
+          quotationSnapshot.data()
+          || {};
+
+        if (
+          quotation.status !== 'draft'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only a draft quotation can be edited.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            quotation.spaceId,
+            'Quotation Space',
+            100,
+          );
+
+        const ownerId =
+          stringValue(
+            quotation.ownerId,
+            'Quotation owner',
+            160,
+          );
+
+        const customerRef =
+          db.collection(
+            'businessContacts',
+          ).doc(customerId);
+
+        const profileRef =
+          db.collection(
+            'businessProfiles',
+          ).doc(spaceId);
+
+        const spaceRef =
+          db.collection(
+            'spaces',
+          ).doc(spaceId);
+
+        const memberRef =
+          db.collection(
+            'spaceMembers',
+          ).doc(
+            spaceId
+            + '_'
+            + uid,
+          );
+
+        const [
+          customerSnapshot,
+          profileSnapshot,
+          spaceSnapshot,
+          memberSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            customerRef,
+          ),
+          transaction.get(
+            profileRef,
+          ),
+          transaction.get(
+            spaceRef,
+          ),
+          transaction.get(
+            memberRef,
+          ),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        if (
+          String(space.ownerId || '')
+          !== ownerId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Quotation ownership no longer matches this Business Space.',
+          );
+        }
+
+        const customer =
+          assertInvoiceCustomer(
+            customerSnapshot.data(),
+            ownerId,
+            spaceId,
+          );
+
+        const tax =
+          invoiceTaxSnapshot(
+            profileSnapshot.data(),
+          );
+
+        const totals =
+          businessInvoiceTotals(
+            lines,
+            tax.taxRateBps,
+          );
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.update(
+          quotationRef,
+          {
+            customerId,
+            customerName:
+              stringValue(
+                customer.name,
+                'Customer name',
+                120,
+              ),
+            customerPhone:
+              optionalString(
+                customer.phone,
+                80,
+              ),
+            customerEmail:
+              optionalString(
+                customer.email,
+                160,
+              ),
+            customerAddress:
+              optionalString(
+                customer.address,
+                500,
+              ),
+            quoteDate,
+            validUntil,
+            lines,
+            subtotalMinor:
+              totals.subtotalMinor,
+            taxEnabled:
+              tax.taxEnabled,
+            taxName:
+              tax.taxName,
+            taxRateBps:
+              tax.taxRateBps,
+            taxMinor:
+              totals.taxMinor,
+            totalMinor:
+              totals.totalMinor,
+            notes,
+            updatedAt:
+              now,
+          },
+        );
+
+        const result = {
+          quotationId,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'update_business_quotation',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const setBusinessQuotationStatus = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const quotationId =
+      stringValue(
+        request.data?.quotationId,
+        'Quotation',
+        100,
+      );
+
+    const nextStatus =
+      oneOf(
+        request.data?.status,
+        [
+          'sent',
+          'accepted',
+          'rejected',
+          'cancelled',
+        ] as const,
+        'quotation status',
+      );
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const quotationRef =
+      db.collection(
+        'businessQuotations',
+      ).doc(
+        quotationId,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const quotationSnapshot =
+          await transaction.get(
+            quotationRef,
+          );
+
+        if (!quotationSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Quotation not found.',
+          );
+        }
+
+        const quotation =
+          quotationSnapshot.data()
+          || {};
+
+        const spaceId =
+          stringValue(
+            quotation.spaceId,
+            'Quotation Space',
+            100,
+          );
+
+        const ownerId =
+          stringValue(
+            quotation.ownerId,
+            'Quotation owner',
+            160,
+          );
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            db.collection(
+              'spaces',
+            ).doc(
+              spaceId,
+            ),
+          ),
+          transaction.get(
+            db.collection(
+              'spaceMembers',
+            ).doc(
+              spaceId
+              + '_'
+              + uid,
+            ),
+          ),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        if (
+          String(space.ownerId || '')
+          !== ownerId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Quotation ownership no longer matches this Business Space.',
+          );
+        }
+
+        const currentStatus =
+          String(
+            quotation.status || '',
+          );
+
+        const validTransition =
+          (
+            currentStatus === 'draft'
+            && (
+              nextStatus === 'sent'
+              || nextStatus
+                === 'cancelled'
+            )
+          )
+          || (
+            currentStatus === 'sent'
+            && (
+              nextStatus === 'accepted'
+              || nextStatus === 'rejected'
+              || nextStatus
+                === 'cancelled'
+            )
+          )
+          || (
+            currentStatus === 'accepted'
+            && nextStatus
+              === 'cancelled'
+          )
+          || (
+            currentStatus === 'rejected'
+            && nextStatus
+              === 'cancelled'
+          );
+
+        if (!validTransition) {
+          throw new HttpsError(
+            'failed-precondition',
+            'That quotation status change is not allowed.',
+          );
+        }
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        const patch:
+          Record<string, unknown> = {
+            status:
+              nextStatus,
+            updatedAt:
+              now,
+          };
+
+        if (nextStatus === 'sent') {
+          patch.sentAt = now;
+        } else if (
+          nextStatus === 'accepted'
+        ) {
+          patch.acceptedAt = now;
+        } else if (
+          nextStatus === 'rejected'
+        ) {
+          patch.rejectedAt = now;
+        } else if (
+          nextStatus === 'cancelled'
+        ) {
+          patch.cancelledAt = now;
+        }
+
+        transaction.update(
+          quotationRef,
+          patch,
+        );
+
+        const result = {
+          quotationId,
+          status:
+            nextStatus,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'set_business_quotation_status',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
+export const convertBusinessQuotationToInvoice = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const quotationId =
+      stringValue(
+        request.data?.quotationId,
+        'Quotation',
+        100,
+      );
+
+    const issueDate =
+      localDate(
+        request.data?.issueDate,
+        'Issue date',
+      );
+
+    const dueDate =
+      localDate(
+        request.data?.dueDate,
+        'Due date',
+      );
+
+    if (dueDate < issueDate) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Due date cannot be before the issue date.',
+      );
+    }
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const quotationRef =
+      db.collection(
+        'businessQuotations',
+      ).doc(
+        quotationId,
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const existing =
+          await transaction.get(
+            commandRef,
+          );
+
+        if (existing.exists) {
+          return existing.data()?.result;
+        }
+
+        const quotationSnapshot =
+          await transaction.get(
+            quotationRef,
+          );
+
+        if (!quotationSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Quotation not found.',
+          );
+        }
+
+        const quotation =
+          quotationSnapshot.data()
+          || {};
+
+        if (
+          quotation.status !== 'accepted'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Accept the quotation before converting it to an invoice.',
+          );
+        }
+
+        if (
+          quotation.convertedInvoiceId
+        ) {
+          throw new HttpsError(
+            'already-exists',
+            'This quotation has already been converted.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            quotation.spaceId,
+            'Quotation Space',
+            100,
+          );
+
+        const ownerId =
+          stringValue(
+            quotation.ownerId,
+            'Quotation owner',
+            160,
+          );
+
+        const spaceRef =
+          db.collection(
+            'spaces',
+          ).doc(
+            spaceId,
+          );
+
+        const memberRef =
+          db.collection(
+            'spaceMembers',
+          ).doc(
+            spaceId
+            + '_'
+            + uid,
+          );
+
+        const profileRef =
+          db.collection(
+            'businessProfiles',
+          ).doc(
+            spaceId,
+          );
+
+        const counterRef =
+          db.collection(
+            'businessInvoiceCounters',
+          ).doc(
+            spaceId,
+          );
+
+        const [
+          spaceSnapshot,
+          memberSnapshot,
+          profileSnapshot,
+          counterSnapshot,
+        ] = await Promise.all([
+          transaction.get(spaceRef),
+          transaction.get(memberRef),
+          transaction.get(profileRef),
+          transaction.get(counterRef),
+        ]);
+
+        const space =
+          assertInvoiceManagerSpace(
+            spaceSnapshot.data(),
+            memberSnapshot.data(),
+            uid,
+          );
+
+        if (
+          String(space.ownerId || '')
+          !== ownerId
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Quotation ownership no longer matches this Business Space.',
+          );
+        }
+
+        const lines =
+          businessInvoiceLines(
+            quotation.lines,
+          );
+
+        const taxRateBps =
+          Number.isSafeInteger(
+            quotation.taxRateBps,
+          )
+            ? Number(
+                quotation.taxRateBps,
+              )
+            : 0;
+
+        const totals =
+          businessInvoiceTotals(
+            lines,
+            taxRateBps,
+          );
+
+        const prefix =
+          optionalString(
+            profileSnapshot.data()
+              ?.invoicePrefix,
+            12,
+          )
+          || 'INV';
+
+        const currentNext =
+          counterSnapshot.exists
+          && Number.isSafeInteger(
+            counterSnapshot.data()
+              ?.nextNumber,
+          )
+            ? Number(
+                counterSnapshot.data()
+                  ?.nextNumber,
+              )
+            : 1;
+
+        const nextNumber =
+          Math.max(
+            1,
+            currentNext,
+          );
+
+        const invoiceNumber =
+          prefix
+          + '-'
+          + String(
+              nextNumber,
+            ).padStart(
+              5,
+              '0',
+            );
+
+        const invoiceRef =
+          db.collection(
+            'businessInvoices',
+          ).doc();
+
+        const now =
+          FieldValue.serverTimestamp();
+
+        transaction.create(
+          invoiceRef,
+          {
+            displayId:
+              displayId('INV'),
+            invoiceNumber,
+            ownerId,
+            createdBy:
+              uid,
+            sourceQuotationId:
+              quotationId,
+            sourceQuotationNumber:
+              stringValue(
+                quotation.quotationNumber,
+                'Quotation number',
+                40,
+              ),
+            spaceId,
+            customerId:
+              stringValue(
+                quotation.customerId,
+                'Customer',
+                100,
+              ),
+            customerName:
+              stringValue(
+                quotation.customerName,
+                'Customer name',
+                120,
+              ),
+            customerPhone:
+              optionalString(
+                quotation.customerPhone,
+                80,
+              ),
+            customerEmail:
+              optionalString(
+                quotation.customerEmail,
+                160,
+              ),
+            customerAddress:
+              optionalString(
+                quotation.customerAddress,
+                500,
+              ),
+            issueDate,
+            dueDate,
+            currency:
+              stringValue(
+                quotation.currency,
+                'Quotation currency',
+                10,
+              ),
+            status:
+              'draft',
+            lines,
+            subtotalMinor:
+              totals.subtotalMinor,
+            taxEnabled:
+              quotation.taxEnabled
+                === true
+                && taxRateBps > 0,
+            taxName:
+              optionalString(
+                quotation.taxName,
+                80,
+              )
+              || 'Tax',
+            taxRateBps,
+            taxMinor:
+              totals.taxMinor,
+            totalMinor:
+              totals.totalMinor,
+            amountPaidMinor:
+              0,
+            balanceDueMinor:
+              totals.totalMinor,
+            notes:
+              optionalString(
+                quotation.notes,
+                1000,
+              ),
+            issuedAt:
+              null,
+            cancelledAt:
+              null,
+            createdAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.update(
+          quotationRef,
+          {
+            status:
+              'converted',
+            convertedInvoiceId:
+              invoiceRef.id,
+            convertedInvoiceNumber:
+              invoiceNumber,
+            convertedAt:
+              now,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.set(
+          counterRef,
+          {
+            nextNumber:
+              nextNumber + 1,
+            updatedAt:
+              now,
+          },
+          { merge: true },
+        );
+
+        const result = {
+          quotationId,
+          invoiceId:
+            invoiceRef.id,
+          invoiceNumber,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'convert_business_quotation_to_invoice',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
 export const getBusinessInvoiceWorkspace = onCall(
   { region },
   async (request) => {

@@ -15251,3 +15251,180 @@ button.active {
     font-size: .68rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS QUOTATIONS
+   Sales & Documents flow and real quotation workflow.
+   ========================================================== */
+
+.business-sales-documents-v115 {
+  min-width: 0;
+}
+
+.business-document-flow-v115 {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+  gap: .75rem;
+  margin-top: 1rem;
+}
+
+.business-document-flow-card-v115 {
+  min-height: 142px;
+  display: grid;
+  align-content: start;
+  gap: .42rem;
+  padding: .9rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.business-document-flow-card-v115 > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 15%,
+      transparent
+    );
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.business-document-flow-card-v115 strong {
+  font-size: .88rem;
+}
+
+.business-document-flow-card-v115 small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.business-document-flow-card-v115:not(.pending):hover {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--accent) 55%,
+      var(--border)
+    );
+}
+
+.business-document-flow-card-v115.pending {
+  opacity: .7;
+}
+
+.business-document-list-v115 {
+  display: grid;
+  gap: .4rem;
+}
+
+.business-document-row-v115 {
+  width: 100%;
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: .75rem;
+  padding: .8rem;
+  border: 1px solid transparent;
+  border-radius: .75rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.business-document-row-v115:hover,
+.business-document-row-v115:focus-visible {
+  border-color: var(--border);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 6%,
+      transparent
+    );
+  outline: none;
+}
+
+.business-document-row-v115 > div {
+  min-width: 0;
+  display: grid;
+  gap: .15rem;
+}
+
+.business-document-row-v115 small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-quotation-lines-v115 {
+  display: grid;
+  gap: .65rem;
+}
+
+.business-quotation-line-v115 {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) 90px 120px auto;
+  align-items: end;
+  gap: .55rem;
+}
+
+.business-quotation-preview-v115 header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+@media (max-width: 820px) {
+  .business-document-flow-v115 {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (max-width: 620px) {
+  .business-document-flow-v115 {
+    grid-template-columns:
+      minmax(0, 1fr);
+  }
+
+  .business-document-row-v115 {
+    grid-template-columns:
+      minmax(0, 1fr) auto;
+  }
+
+  .business-document-row-v115
+  > strong {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .business-quotation-line-v115 {
+    grid-template-columns:
+      minmax(0, 1fr) 80px;
+  }
+
+  .business-quotation-line-v115
+  label:first-child {
+    grid-column: 1 / -1;
+  }
+}

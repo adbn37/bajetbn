@@ -691,6 +691,49 @@ export interface BusinessContact {
   updatedAt?: Timestamp;
 }
 
+export type BusinessQuotationStatus =
+  | 'draft'
+  | 'sent'
+  | 'accepted'
+  | 'rejected'
+  | 'converted'
+  | 'cancelled';
+
+export interface BusinessQuotation {
+  id: string;
+  displayId: string;
+  quotationNumber: string;
+  ownerId: string;
+  createdBy: string;
+  spaceId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  customerAddress: string;
+  quoteDate: string;
+  validUntil: string;
+  currency: string;
+  status: BusinessQuotationStatus;
+  lines: BusinessInvoiceLine[];
+  subtotalMinor: number;
+  taxEnabled: boolean;
+  taxName: string;
+  taxRateBps: number;
+  taxMinor: number;
+  totalMinor: number;
+  notes: string;
+  convertedInvoiceId?: string | null;
+  convertedInvoiceNumber?: string | null;
+  sentAt?: Timestamp | null;
+  acceptedAt?: Timestamp | null;
+  rejectedAt?: Timestamp | null;
+  convertedAt?: Timestamp | null;
+  cancelledAt?: Timestamp | null;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export type BusinessInvoiceStatus =
   | 'draft'
   | 'issued'

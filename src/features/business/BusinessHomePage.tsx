@@ -113,6 +113,7 @@ function transactionAmount(
 type BusinessWorkspaceView =
   | 'home'
   | 'inventory'
+  | 'documents'
   | 'sellers'
   | 'reports';
 
@@ -121,6 +122,7 @@ function workspaceViewFromSearch(
 ): BusinessWorkspaceView {
   if (
     value === 'inventory'
+    || value === 'documents'
     || value === 'sellers'
     || value === 'reports'
   ) {
@@ -744,6 +746,25 @@ export function BusinessHomePage() {
           </Link>
         )}
 
+        {canViewFinancials && (
+          <button
+            type="button"
+            className={
+              workspaceView
+                === 'documents'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setWorkspaceView(
+                'documents',
+              )
+            }
+          >
+            Sales & Documents
+          </button>
+        )}
+
         {canUseEmbeddedMarketplace
           && (
             <>
@@ -810,7 +831,84 @@ export function BusinessHomePage() {
           )}
       </nav>
 
-      {workspaceView !== 'home'
+      {workspaceView === 'documents'
+        && canViewFinancials
+        ? (
+          <section
+            className="business-sales-documents-v115"
+            data-business-sales-documents
+          >
+            <div className="business-home-v115-section-heading">
+              <div>
+                <span>Commercial flow</span>
+                <h2>Sales & Documents</h2>
+              </div>
+            </div>
+
+            <p className="muted">
+              Move from quotation to invoice and payment without retyping customer or line-item details.
+            </p>
+
+            <div className="business-document-flow-v115">
+              <Link
+                className="business-document-flow-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/quotations'
+                }
+              >
+                <span>1</span>
+                <strong>Quotations</strong>
+                <small>
+                  Draft, send, accept and convert customer quotations.
+                </small>
+              </Link>
+
+              <article
+                className="business-document-flow-card-v115 pending"
+                aria-disabled="true"
+              >
+                <span>2</span>
+                <strong>Sales Orders</strong>
+                <small>
+                  Optional order-confirmation stage. Backend comes in the next document slice.
+                </small>
+              </article>
+
+              <Link
+                className="business-document-flow-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/invoices'
+                }
+              >
+                <span>3</span>
+                <strong>Invoices</strong>
+                <small>
+                  Issue invoices, track receivables and record payments.
+                </small>
+              </Link>
+
+              <Link
+                className="business-document-flow-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/invoices'
+                }
+              >
+                <span>4</span>
+                <strong>Payments</strong>
+                <small>
+                  Post invoice payments into linked Business Accounts.
+                </small>
+              </Link>
+            </div>
+          </section>
+        )
+        : workspaceView !== 'home'
         && canUseEmbeddedMarketplace
         && marketplaceWorkspaceTab
         ? (
