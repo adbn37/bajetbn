@@ -15617,3 +15617,137 @@ a:hover {
       minmax(0, 1fr);
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS ACTIVITY TIMELINE
+   Rich operational activity across POS, documents and money.
+   ========================================================== */
+
+.business-activity-intro-v115 {
+  margin: -.25rem 0 .6rem;
+  font-size: .68rem;
+}
+
+.business-activity-timeline-v115 {
+  display: grid;
+}
+
+.business-activity-timeline-row-v115 {
+  min-width: 0;
+  display: grid;
+  grid-template-columns:
+    38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .7rem;
+  padding: .72rem 0;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.business-activity-timeline-row-v115:first-child {
+  border-top: 0;
+}
+
+.business-activity-timeline-row-v115:hover
+.business-activity-timeline-copy-v115 > strong,
+.business-activity-timeline-row-v115:focus-visible
+.business-activity-timeline-copy-v115 > strong {
+  color: var(--accent);
+}
+
+.business-activity-timeline-row-v115:focus-visible {
+  outline: 2px solid
+    color-mix(
+      in srgb,
+      var(--accent) 45%,
+      transparent
+    );
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.business-activity-timeline-icon-v115 {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 10%,
+      transparent
+    );
+  color: var(--accent);
+  font-size: .62rem;
+  font-weight: 900;
+}
+
+.business-activity-timeline-row-v115.income
+.business-activity-timeline-icon-v115 {
+  color: var(--success, #1d925b);
+}
+
+.business-activity-timeline-row-v115.expense
+.business-activity-timeline-icon-v115,
+.business-activity-timeline-row-v115.warning
+.business-activity-timeline-icon-v115 {
+  color: var(--danger, #d55151);
+}
+
+.business-activity-timeline-copy-v115 {
+  min-width: 0;
+  display: grid;
+  gap: .08rem;
+}
+
+.business-activity-timeline-copy-v115 > strong,
+.business-activity-timeline-copy-v115 > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-activity-timeline-copy-v115 > strong {
+  font-size: .74rem;
+}
+
+.business-activity-timeline-copy-v115 > small,
+.business-activity-timeline-copy-v115 > time {
+  color: var(--muted);
+  font-size: .58rem;
+}
+
+.business-activity-timeline-row-v115 > b {
+  font-size: .7rem;
+  white-space: nowrap;
+}
+
+.business-activity-timeline-row-v115.income > b {
+  color: var(--success, #1d925b);
+}
+
+.business-activity-timeline-row-v115.expense > b {
+  color: var(--danger, #d55151);
+}
+
+@media (max-width: 620px) {
+  .business-activity-timeline-row-v115 {
+    grid-template-columns:
+      34px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .business-activity-timeline-icon-v115 {
+    width: 34px;
+    height: 34px;
+  }
+
+  .business-activity-timeline-row-v115 > b {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: .12rem;
+  }
+}

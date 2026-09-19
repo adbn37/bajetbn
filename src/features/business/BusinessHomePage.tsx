@@ -35,6 +35,9 @@ import type {
   SmePosSettings,
 } from '../../types/models';
 import { formatMoney } from '../../utils/money';
+import {
+  BusinessActivityTimeline,
+} from './BusinessActivityTimeline';
 import { AccountAvatar } from '../accounts/AccountAvatar';
 import { AccountsPage } from '../accounts/AccountsPage';
 import { CommitmentsPage } from '../commitments/CommitmentsPage';
@@ -378,14 +381,6 @@ export function BusinessHomePage() {
           0,
         ),
       [visibleBalanceAccounts],
-    );
-
-  const recentRows =
-    useMemo(
-      () =>
-        transactions
-          .slice(0, 5),
-      [transactions],
     );
 
   if (loading) {
@@ -1410,7 +1405,10 @@ export function BusinessHomePage() {
       )}
 
       {canViewFinancials && (
-      <section className="business-home-v115-section">
+      <section
+        className="business-home-v115-section"
+        data-business-activity-section
+      >
         <div className="business-home-v115-section-heading">
           <div>
             <span>Recent</span>
@@ -1424,60 +1422,19 @@ export function BusinessHomePage() {
               + '/business/money'
             }
           >
-            See all
+            Money activity
           </Link>
         </div>
 
-        {recentRows.length > 0 ? (
-          <div className="business-home-v115-activity-list">
-            {recentRows.map(
-              (item) => (
-                <Link
-                  key={item.id}
-                  className="business-home-v115-activity-row"
-                  to={
-                    '/spaces/'
-                    + space.id
-                    + '/business/money'
-                  }
-                >
-                  <span
-                    className={
-                      'business-home-v115-activity-icon '
-                      + item.type
-                    }
-                    aria-hidden="true"
-                  >
-                    {item.type === 'income'
-                      ? '↓'
-                      : item.type
-                          === 'expense'
-                        ? '↑'
-                        : '↔'}
-                  </span>
+        <p className="muted business-activity-intro-v115">
+          Sales, documents, bookings, payouts and money movements in one timeline.
+        </p>
 
-                  <span>
-                    <strong>
-                      {transactionTitle(item)}
-                    </strong>
-                    <small>
-                      {item.category
-                        || item.transactionDate}
-                    </small>
-                  </span>
-
-                  <b className={item.type}>
-                    {transactionAmount(item)}
-                  </b>
-                </Link>
-              ),
-            )}
-          </div>
-        ) : (
-          <p className="muted">
-            No Business money activity yet.
-          </p>
-        )}
+        <BusinessActivityTimeline
+          spaceId={space.id}
+          businessIndustry={businessIndustry}
+          transactions={transactions}
+        />
       </section>
       )}
         </>
