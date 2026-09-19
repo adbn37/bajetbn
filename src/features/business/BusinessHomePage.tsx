@@ -385,27 +385,104 @@ export function BusinessHomePage() {
     to: string;
   }> = [];
 
-  if (
-    posRole === 'cashier'
-    || posRole === 'stock_staff'
-    || posRole === 'seller'
-    || posRole === 'viewer'
-  ) {
+  if (posRole === 'cashier') {
+    businessActions.push(
+      {
+        label: 'Open Register',
+        icon: '▦',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab=register',
+      },
+      {
+        label: 'Customers',
+        icon: '♙',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab=customers',
+      },
+      {
+        label: 'Bookings',
+        icon: '▤',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab=bookings',
+      },
+      {
+        label: 'My Sales',
+        icon: '↗',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab=sales',
+      },
+    );
+  } else if (posRole === 'stock_staff') {
     businessActions.push({
       label:
-        posRole === 'stock_staff'
-          ? 'Inventory / POS'
-          : posRole === 'seller'
-            ? 'Seller / POS'
-            : posRole === 'viewer'
-              ? 'View POS'
-              : 'POS',
-      icon: '▦',
+        businessIndustry === 'marketplace'
+          ? 'Listings & Stock'
+          : 'Products & Stock',
+      icon: '▤',
       to:
         '/spaces/'
         + space.id
-        + '/pos',
+        + '/pos?tab='
+        + (
+          businessIndustry === 'marketplace'
+            ? 'listings'
+            : 'products'
+        ),
     });
+  } else if (posRole === 'seller') {
+    businessActions.push(
+      {
+        label: 'My Balance',
+        icon: '▦',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab=balance',
+      },
+      {
+        label: 'My Reports',
+        icon: '▤',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab=reports',
+      },
+    );
+  } else if (posRole === 'viewer') {
+    businessActions.push(
+      {
+        label:
+          businessIndustry === 'marketplace'
+            ? 'View Listings'
+            : 'View Products',
+        icon: '▤',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab='
+          + (
+            businessIndustry === 'marketplace'
+              ? 'listings'
+              : 'products'
+          ),
+      },
+      {
+        label: 'View Customers',
+        icon: '♙',
+        to:
+          '/spaces/'
+          + space.id
+          + '/pos?tab=customers',
+      },
+    );
   } else if (
     businessIndustry === 'marketplace'
   ) {

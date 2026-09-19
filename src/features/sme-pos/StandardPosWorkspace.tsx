@@ -1,5 +1,8 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Link,
+  useSearchParams,
+} from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { Modal } from '../../components/Modal';
 import { SmePosBarcodeInventoryPanel } from '../../components/SmePosBarcodeInventoryPanel';
@@ -119,8 +122,27 @@ function initialTab(role: SmePosRole): WorkspaceTab {
 }
 
 export function StandardPosWorkspace({ space, settings, role, onChanged }: Props) {
-  const availableTabs = useMemo(() => tabsForRole(role), [role]);
-  const [tab, setTab] = useState<WorkspaceTab>(() => initialTab(role));
+  const [searchParams] = useSearchParams();
+
+  const availableTabs =
+    useMemo(
+      () => tabsForRole(role),
+      [role],
+    );
+
+  const requestedTab =
+    searchParams.get('tab') as WorkspaceTab | null;
+
+  const [tab, setTab] =
+    useState<WorkspaceTab>(
+      () =>
+        requestedTab
+        && tabsForRole(role).includes(
+          requestedTab,
+        )
+          ? requestedTab
+          : initialTab(role),
+    );
   const [products, setProducts] = useState<SmePosProduct[]>([]);
   const [customers, setCustomers] = useState<SmePosCustomer[]>([]);
   const [sales, setSales] = useState<SmePosSale[]>([]);
@@ -211,8 +233,26 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
 
   useEffect(() => { void load(); }, [space.id, role]);
   useEffect(() => {
-    if (!availableTabs.includes(tab)) setTab(initialTab(role));
-  }, [availableTabs, role, tab]);
+    if (
+      requestedTab
+      && availableTabs.includes(
+        requestedTab,
+      )
+      && requestedTab !== tab
+    ) {
+      setTab(requestedTab);
+      return;
+    }
+
+    if (!availableTabs.includes(tab)) {
+      setTab(initialTab(role));
+    }
+  }, [
+    availableTabs,
+    requestedTab,
+    role,
+    tab,
+  ]);
   useEffect(() => {
     if (!settings.defaultPaymentAccountId) return;
     setPaymentRows((current) => current.map((row, index) => index === 0 && !row.accountId ? { ...row, accountId: settings.defaultPaymentAccountId || '' } : row));
