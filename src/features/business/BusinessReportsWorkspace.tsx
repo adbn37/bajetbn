@@ -5,6 +5,10 @@ import {
 } from 'react';
 
 import {
+  Link,
+} from 'react-router-dom';
+
+import {
   getBusinessInvoiceWorkspace,
 } from '../../repositories/businessInvoiceRepository';
 
@@ -302,6 +306,13 @@ export function BusinessReportsWorkspace({
     setCustomEnd,
   ] = useState('');
 
+  const [sellerFilter, setSellerFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [itemFilter, setItemFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('');
+  const [accountFilter, setAccountFilter] = useState('');
+  const [documentStatusFilter, setDocumentStatusFilter] = useState('');
+
   const [
     sales,
     setSales,
@@ -461,18 +472,221 @@ export function BusinessReportsWorkspace({
       ],
     );
 
+  const catalogByItemId =
+    useMemo(
+      () => {
+        const map = new Map<
+          string,
+          { category: string; sellerId: string }
+        >();
+
+        for (const product of products) {
+          map.set(product.id, {
+            category: product.category || '',
+            sellerId: '',
+          });
+        }
+
+        for (const listing of listings) {
+          map.set(listing.id, {
+            category: listing.category || '',
+            sellerId: listing.sellerId,
+          });
+        }
+
+        return map;
+      },
+      [listings, products],
+    );
+
+  const sellerOptions =
+    useMemo(
+      () =>
+        sellers
+          .filter((item) => !item.deletedAt)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+          }))
+          .sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
+      [sellers],
+    );
+
+  const categoryOptions =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            [
+              ...products.map(
+                (item) => item.category || '',
+              ),
+              ...listings.map(
+                (item) => item.category || '',
+              ),
+            ].filter(Boolean),
+          ),
+        ).sort(),
+      [listings, products],
+    );
+
+  const itemOptions =
+    useMemo(
+      () => {
+        const values = new Map<string, string>();
+
+        for (const sale of sales) {
+          for (const item of sale.items) {
+            const id =
+              item.listingId || item.productId;
+
+            if (id) {
+              values.set(id, item.productName);
+            }
+          }
+        }
+
+        return Array.from(values.entries())
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) =>
+            a.name.localeCompare(b.name),
+          );
+      },
+      [sales],
+    );
+
+  const paymentOptions =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            sales
+              .map(
+                (sale) =>
+                  sale.paymentMethodLabel
+                  || sale.paymentMethod
+                  || '',
+              )
+              .filter(Boolean),
+          ),
+        ).sort(),
+      [sales],
+    );
+
+  const accountOptions =
+    useMemo(
+      () =>
+        Array.from(
+          new Map(
+            sales
+              .filter(
+                (sale) => sale.paymentAccountId,
+              )
+              .map(
+                (sale) => [
+                  sale.paymentAccountId,
+                  sale.paymentAccountName,
+                ],
+              ),
+          ).entries(),
+        )
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
+      [sales],
+    );
+
   const filteredSales =
     useMemo(
       () =>
         sales.filter(
-          (sale) =>
-            inWindow(
-              sale.saleDate,
-              window,
-            ),
+          (sale) => {
+            if (
+              !inWindow(
+                sale.saleDate,
+                window,
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              paymentFilter
+              && (
+                sale.paymentMethodLabel
+                || sale.paymentMethod
+                || ''
+              ) !== paymentFilter
+            ) {
+              return false;
+            }
+
+            if (
+              accountFilter
+              && sale.paymentAccountId
+                !== accountFilter
+            ) {
+              return false;
+            }
+
+            if (
+              itemFilter
+              && !sale.items.some(
+                (item) =>
+                  (
+                    item.listingId
+                    || item.productId
+                  ) === itemFilter,
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              sellerFilter
+              && !sale.items.some(
+                (item) =>
+                  item.sellerId === sellerFilter,
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              categoryFilter
+              && !sale.items.some(
+                (item) => {
+                  const id =
+                    item.listingId
+                    || item.productId;
+
+                  return (
+                    id
+                    && catalogByItemId
+                      .get(id)
+                      ?.category
+                      === categoryFilter
+                  );
+                },
+              )
+            ) {
+              return false;
+            }
+
+            return true;
+          },
         ),
       [
+        accountFilter,
+        catalogByItemId,
+        categoryFilter,
+        itemFilter,
+        paymentFilter,
         sales,
+        sellerFilter,
         window,
       ],
     );
@@ -501,9 +715,15 @@ export function BusinessReportsWorkspace({
             inWindow(
               item.quoteDate,
               window,
+            )
+            && (
+              !documentStatusFilter
+              || item.status
+                === documentStatusFilter
             ),
         ),
       [
+        documentStatusFilter,
         quotations,
         window,
       ],
@@ -517,9 +737,15 @@ export function BusinessReportsWorkspace({
             inWindow(
               item.orderDate,
               window,
+            )
+            && (
+              !documentStatusFilter
+              || item.status
+                === documentStatusFilter
             ),
         ),
       [
+        documentStatusFilter,
         salesOrders,
         window,
       ],
@@ -533,9 +759,15 @@ export function BusinessReportsWorkspace({
             inWindow(
               item.issueDate,
               window,
+            )
+            && (
+              !documentStatusFilter
+              || item.status
+                === documentStatusFilter
             ),
         ),
       [
+        documentStatusFilter,
         invoices,
         window,
       ],
@@ -773,6 +1005,12 @@ export function BusinessReportsWorkspace({
                   ),
             }),
           )
+          .filter(
+            (item) =>
+              !sellerFilter
+              || item.sellerId
+                === sellerFilter,
+          )
           .sort(
             (a, b) =>
               b.salesMinor
@@ -782,6 +1020,7 @@ export function BusinessReportsWorkspace({
       [
         filteredPayouts,
         filteredSales,
+        sellerFilter,
       ],
     );
 
@@ -836,6 +1075,31 @@ export function BusinessReportsWorkspace({
               };
             },
           )
+          .filter(
+            (item) =>
+              (
+                !categoryFilter
+                || item.category
+                  === categoryFilter
+              )
+              && (
+                !itemFilter
+                || item.id
+                  === itemFilter
+              )
+              && (
+                !sellerFilter
+                || (
+                  businessIndustry
+                    === 'marketplace'
+                  && listings.find(
+                    (listing) =>
+                      listing.id === item.id,
+                  )?.sellerId
+                    === sellerFilter
+                )
+              ),
+          )
           .sort(
             (a, b) =>
               b.soldQuantity
@@ -844,8 +1108,11 @@ export function BusinessReportsWorkspace({
       },
       [
         businessIndustry,
+        categoryFilter,
+        itemFilter,
         listings,
         products,
+        sellerFilter,
         soldByItem,
       ],
     );
@@ -1226,6 +1493,174 @@ export function BusinessReportsWorkspace({
       </div>
 
       <div
+        className="business-report-filters-v115"
+        data-business-report-filters
+      >
+        {businessIndustry === 'marketplace' && (
+          <label>
+            Seller
+            <select
+              value={sellerFilter}
+              onChange={(event) =>
+                setSellerFilter(event.target.value)
+              }
+            >
+              <option value="">All sellers</option>
+              {sellerOptions.map((item) => (
+                <option
+                  key={item.id}
+                  value={item.id}
+                >
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <label>
+          Category
+          <select
+            value={categoryFilter}
+            onChange={(event) =>
+              setCategoryFilter(
+                event.target.value,
+              )
+            }
+          >
+            <option value="">
+              All categories
+            </option>
+            {categoryOptions.map((item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Item
+          <select
+            value={itemFilter}
+            onChange={(event) =>
+              setItemFilter(event.target.value)
+            }
+          >
+            <option value="">All items</option>
+            {itemOptions.map((item) => (
+              <option
+                key={item.id}
+                value={item.id}
+              >
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Payment
+          <select
+            value={paymentFilter}
+            onChange={(event) =>
+              setPaymentFilter(
+                event.target.value,
+              )
+            }
+          >
+            <option value="">
+              All payment methods
+            </option>
+            {paymentOptions.map((item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Account
+          <select
+            value={accountFilter}
+            onChange={(event) =>
+              setAccountFilter(
+                event.target.value,
+              )
+            }
+          >
+            <option value="">All accounts</option>
+            {accountOptions.map((item) => (
+              <option
+                key={item.id}
+                value={item.id}
+              >
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Document status
+          <select
+            value={documentStatusFilter}
+            onChange={(event) =>
+              setDocumentStatusFilter(
+                event.target.value,
+              )
+            }
+          >
+            <option value="">All statuses</option>
+            {Array.from(
+              new Set([
+                ...quotations.map(
+                  (item) => item.status,
+                ),
+                ...salesOrders.map(
+                  (item) => item.status,
+                ),
+                ...invoices.map(
+                  (item) => item.status,
+                ),
+              ]),
+            )
+              .sort()
+              .map((status) => (
+                <option
+                  key={status}
+                  value={status}
+                >
+                  {status.replace(/_/g, ' ')}
+                </option>
+              ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="button secondary compact"
+          onClick={() => {
+            setSellerFilter('');
+            setCategoryFilter('');
+            setItemFilter('');
+            setPaymentFilter('');
+            setAccountFilter('');
+            setDocumentStatusFilter('');
+          }}
+        >
+          Clear filters
+        </button>
+      </div>
+
+      <div
         className="business-report-tabs-v115"
         aria-label="Business report sections"
       >
@@ -1284,9 +1719,14 @@ export function BusinessReportsWorkspace({
             {filteredSales.length
               ? filteredSales.map(
                   (sale) => (
-                    <div
+                    <Link
                       key={sale.id}
                       className="business-report-row-v115"
+                      to={
+                        '/spaces/'
+                        + spaceId
+                        + '/pos?tab=sales'
+                      }
                     >
                       <div>
                         <strong>
@@ -1316,7 +1756,7 @@ export function BusinessReportsWorkspace({
                           sale.currency,
                         )}
                       </b>
-                    </div>
+                    </Link>
                   ),
                 )
               : (
@@ -1333,9 +1773,20 @@ export function BusinessReportsWorkspace({
           {stockRows.length
             ? stockRows.map(
                 (item) => (
-                  <div
+                  <Link
                     key={item.id}
                     className="business-report-row-v115"
+                    to={
+                      '/spaces/'
+                      + spaceId
+                      + '/pos?tab='
+                      + (
+                        businessIndustry
+                          === 'marketplace'
+                          ? 'listings'
+                          : 'products'
+                      )
+                    }
                   >
                     <div>
                       <strong>
@@ -1367,7 +1818,7 @@ export function BusinessReportsWorkspace({
                         currency,
                       )}
                     </b>
-                  </div>
+                  </Link>
                 ),
               )
             : (
@@ -1413,9 +1864,14 @@ export function BusinessReportsWorkspace({
             {sellerRows.length
               ? sellerRows.map(
                   (item) => (
-                    <div
+                    <Link
                       key={item.sellerId}
                       className="business-report-row-v115"
+                      to={
+                        '/spaces/'
+                        + spaceId
+                        + '/pos?tab=sellers'
+                      }
                     >
                       <div>
                         <strong>
@@ -1449,7 +1905,7 @@ export function BusinessReportsWorkspace({
                           currency,
                         )}
                       </b>
-                    </div>
+                    </Link>
                   ),
                 )
               : (
@@ -1504,6 +1960,11 @@ export function BusinessReportsWorkspace({
                     item.status,
                   total:
                     item.totalMinor,
+                  to:
+                    '/spaces/'
+                    + spaceId
+                    + '/business/quotations?quotationId='
+                    + item.id,
                 }),
               ),
               ...filteredSalesOrders.map(
@@ -1522,6 +1983,11 @@ export function BusinessReportsWorkspace({
                     item.status,
                   total:
                     item.totalMinor,
+                  to:
+                    '/spaces/'
+                    + spaceId
+                    + '/business/sales-orders?salesOrderId='
+                    + item.id,
                 }),
               ),
               ...filteredInvoices.map(
@@ -1540,6 +2006,11 @@ export function BusinessReportsWorkspace({
                     item.status,
                   total:
                     item.totalMinor,
+                  to:
+                    '/spaces/'
+                    + spaceId
+                    + '/business/invoices?invoiceId='
+                    + item.id,
                 }),
               ),
             ]
@@ -1551,9 +2022,10 @@ export function BusinessReportsWorkspace({
               )
               .map(
                 (item) => (
-                  <div
+                  <Link
                     key={item.id}
                     className="business-report-row-v115"
+                    to={item.to}
                   >
                     <div>
                       <strong>
@@ -1580,7 +2052,7 @@ export function BusinessReportsWorkspace({
                         currency,
                       )}
                     </b>
-                  </div>
+                  </Link>
                 ),
               )}
           </div>

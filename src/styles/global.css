@@ -15933,3 +15933,85 @@ a:hover {
     grid-row: 1 / span 2;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS REPORT FILTERS
+   Cross-report filters and clickable drill-down rows.
+   ========================================================== */
+
+.business-report-filters-v115 {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(145px, 1fr)
+    );
+  gap: .5rem;
+  align-items: end;
+  margin-bottom: .8rem;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.business-report-filters-v115 label {
+  min-width: 0;
+  display: grid;
+  gap: .24rem;
+  color: var(--muted);
+  font-size: .61rem;
+}
+
+.business-report-filters-v115 select {
+  min-width: 0;
+  min-height: 36px;
+}
+
+.business-report-filters-v115 .button {
+  min-height: 36px;
+}
+
+a.business-report-row-v115 {
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    background .14s ease,
+    border-color .14s ease;
+}
+
+a.business-report-row-v115:hover,
+a.business-report-row-v115:focus-visible {
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 5%,
+      transparent
+    );
+  outline: none;
+}
+
+a.business-report-row-v115:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--accent) 45%,
+      transparent
+    );
+}
+
+@media (max-width: 620px) {
+  .business-report-filters-v115 {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-report-filters-v115 .button {
+    grid-column: 1 / -1;
+  }
+}

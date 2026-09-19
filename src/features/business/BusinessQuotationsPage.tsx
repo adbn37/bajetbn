@@ -9,6 +9,7 @@ import {
 import {
   Link,
   useParams,
+  useSearchParams,
 } from 'react-router-dom';
 
 import { Modal } from '../../components/Modal';
@@ -273,6 +274,9 @@ function statusLabel(
 export function BusinessQuotationsPage() {
   const { user } = useAuth();
   const { spaceId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedQuotationId =
+    searchParams.get('quotationId');
 
   const [space, setSpace] =
     useState<Space | null>(null);
@@ -362,6 +366,17 @@ export function BusinessQuotationsPage() {
         setQuotations(
           workspace.quotations,
         );
+
+        if (requestedQuotationId) {
+          setSelected(
+            workspace.quotations.find(
+              (item) =>
+                item.id
+                  === requestedQuotationId,
+            ) || null,
+          );
+        }
+
         setCanManage(
           workspace.canManageQuotations
             === true,
@@ -377,6 +392,7 @@ export function BusinessQuotationsPage() {
       }
     },
     [
+      requestedQuotationId,
       spaceId,
       user,
     ],

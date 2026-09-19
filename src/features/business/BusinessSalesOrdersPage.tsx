@@ -8,6 +8,7 @@ import {
 import {
   Link,
   useParams,
+  useSearchParams,
 } from 'react-router-dom';
 
 import { Modal } from '../../components/Modal';
@@ -92,6 +93,9 @@ function statusLabel(
 export function BusinessSalesOrdersPage() {
   const { user } = useAuth();
   const { spaceId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedSalesOrderId =
+    searchParams.get('salesOrderId');
 
   const [space, setSpace] =
     useState<Space | null>(null);
@@ -149,6 +153,16 @@ export function BusinessSalesOrdersPage() {
           workspace.salesOrders,
         );
 
+        if (requestedSalesOrderId) {
+          setSelected(
+            workspace.salesOrders.find(
+              (item) =>
+                item.id
+                  === requestedSalesOrderId,
+            ) || null,
+          );
+        }
+
         setCanManage(
           workspace.canManageSalesOrders
             === true,
@@ -164,6 +178,7 @@ export function BusinessSalesOrdersPage() {
       }
     },
     [
+      requestedSalesOrderId,
       spaceId,
       user,
     ],

@@ -9,6 +9,7 @@ import {
 import {
   Link,
   useParams,
+  useSearchParams,
 } from 'react-router-dom';
 
 import { PageHeader } from '../../components/PageHeader';
@@ -322,6 +323,11 @@ export function BusinessInvoicesPage() {
   const { spaceId = '' } =
     useParams();
 
+  const [searchParams] = useSearchParams();
+
+  const requestedInvoiceId =
+    searchParams.get('invoiceId');
+
   const [space, setSpace] =
     useState<Space | null>(null);
 
@@ -463,6 +469,26 @@ export function BusinessInvoicesPage() {
             workspace.invoices,
           );
 
+          if (requestedInvoiceId) {
+            const target =
+              workspace.invoices.find(
+                (item) =>
+                  item.id
+                    === requestedInvoiceId,
+              )
+              || null;
+
+            setSelectedInvoice(target);
+
+            if (target) {
+              setPayments(
+                await listBusinessInvoicePayments(
+                  target.id,
+                ),
+              );
+            }
+          }
+
           setCanManageInvoices(
             workspace.canManageInvoices === true,
           );
@@ -477,6 +503,7 @@ export function BusinessInvoicesPage() {
         }
       },
       [
+        requestedInvoiceId,
         spaceId,
         user,
       ],
