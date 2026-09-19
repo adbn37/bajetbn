@@ -86,6 +86,7 @@ export interface SmePosAccess {
   spaceId: string;
   uid: string;
   role: SmePosRole;
+  customRoleName?: string | null;
   status: 'active' | 'removed';
   displayName?: string;
   email?: string;

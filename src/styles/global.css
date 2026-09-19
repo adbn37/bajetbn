@@ -14893,3 +14893,23 @@ strong {
     padding: 0.68rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 CUSTOM BUSINESS ROLES
+   Custom labels use existing server-enforced access templates.
+   ========================================================== */
+
+.custom-business-role-editor {
+  min-width: min(420px, 100%);
+}
+
+.custom-business-role-editor > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sme-pos-access-row small {
+  overflow-wrap: anywhere;
+}

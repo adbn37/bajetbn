@@ -139,6 +139,7 @@ export async function setSmePosAccessRole(input: {
   memberUid: string;
   role: Exclude<SmePosRole, 'owner'>;
   active: boolean;
+  customRoleName?: string | null;
 }) {
   const { functions } = requireFirebase();
   const call = httpsCallable(functions, 'setSmePosAccessRole');

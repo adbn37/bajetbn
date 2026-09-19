@@ -12079,6 +12079,11 @@ export const setSmePosAccessRole = onCall({ region }, async (request) => {
   const spaceId = stringValue(request.data?.spaceId, 'Space ID', 80);
   const memberUid = stringValue(request.data?.memberUid, 'Member ID', 128);
   const role = oneOf(request.data?.role, smePosRoles, 'POS role');
+  const customRoleName =
+    optionalString(
+      request.data?.customRoleName,
+      60,
+    );
   const active = request.data?.active === true;
   const key = stringValue(request.data?.idempotencyKey, 'Idempotency key', 64);
   const { space, member } = await requireSmeSpaceOwner(spaceId, uid);
@@ -12102,11 +12107,25 @@ export const setSmePosAccessRole = onCall({ region }, async (request) => {
     const command = await transaction.get(commandRef);
     if (command.exists) return command.data()?.result;
     const now = FieldValue.serverTimestamp();
-    const result = { spaceId, memberUid, role, active };
+    const result = {
+      spaceId,
+      memberUid,
+      role,
+      active,
+      customRoleName:
+        active && customRoleName
+          ? customRoleName
+          : null,
+    };
+
     transaction.set(accessRef, {
       spaceId,
       uid: memberUid,
       role,
+      customRoleName:
+        active && customRoleName
+          ? customRoleName
+          : null,
       status: active ? 'active' : 'removed',
       displayName: targetMember.data()?.displayName || '',
       email: targetMember.data()?.email || '',
@@ -12121,7 +12140,10 @@ export const setSmePosAccessRole = onCall({ region }, async (request) => {
       action: active ? 'pos_access_added' : 'pos_access_removed',
       targetType: 'member',
       targetId: memberUid,
-      summary: active ? `Added ${targetMember.data()?.displayName || targetMember.data()?.email || 'a member'} as POS ${role}.` : 'Removed POS access for a member.',
+      summary:
+        active
+          ? `Added ${targetMember.data()?.displayName || targetMember.data()?.email || 'a member'} as ${customRoleName || ('POS ' + role)}.`
+          : 'Removed POS access for a member.',
       now,
     });
     transaction.create(commandRef, { uid, kind: 'set_sme_pos_access', idempotencyKey: key, result, createdAt: now });

@@ -77,6 +77,48 @@ export function SmePosSettingsPage() {
   const [confirm, setConfirm] = useState<ActionConfirmState<ConfirmPayload> | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  type StaffPosRole =
+    Exclude<SmePosRole, 'owner'>;
+
+  function staffRoleFromAccess(
+    item: SmePosAccess | undefined,
+  ): StaffPosRole {
+    switch (item?.role) {
+      case 'manager':
+      case 'cashier':
+      case 'stock_staff':
+      case 'seller':
+      case 'viewer':
+        return item.role;
+      default:
+        return 'viewer';
+    }
+  }
+
+  function staffRoleFromValue(
+    value: string,
+  ): StaffPosRole {
+    switch (value) {
+      case 'manager':
+      case 'cashier':
+      case 'stock_staff':
+      case 'seller':
+      case 'viewer':
+        return value;
+      default:
+        return 'viewer';
+    }
+  }
+
+  const [
+    customRoleEditor,
+    setCustomRoleEditor,
+  ] = useState<{
+    member: SpaceMember;
+    name: string;
+    baseRole: StaffPosRole;
+  } | null>(null);
+
   const [mode, setMode] = useState<SmePosMode>('standard');
   const [shopName, setShopName] = useState('');
   const [receiptName, setReceiptName] = useState('');
@@ -257,7 +299,10 @@ export function SmePosSettingsPage() {
     }
   }
 
-  async function changeRole(member: SpaceMember, role: Exclude<SmePosRole, 'owner'> | '') {
+  async function changeRole(
+    member: SpaceMember,
+    role: StaffPosRole | '',
+  ) {
     if (!space || !checkOnline()) return;
     setBusy(true);
     setError('');
@@ -268,11 +313,66 @@ export function SmePosSettingsPage() {
         memberUid: member.uid,
         role: role || 'viewer',
         active: Boolean(role),
+        customRoleName: null,
       });
       setSuccess(role ? `${member.displayName || member.email || 'Member'} can now use the POS as ${roleLabels[role]}.` : 'POS access removed.');
       await load();
     } catch (nextError) {
       setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCustomRole() {
+    if (
+      !space
+      || !customRoleEditor
+      || !checkOnline()
+    ) {
+      return;
+    }
+
+    const name =
+      customRoleEditor.name.trim();
+
+    if (!name) {
+      setError(
+        'Enter a name for this custom role.',
+      );
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await setSmePosAccessRole({
+        spaceId: space.id,
+        memberUid:
+          customRoleEditor.member.uid,
+        role:
+          customRoleEditor.baseRole,
+        active: true,
+        customRoleName: name,
+      });
+
+      setSuccess(
+        (customRoleEditor.member.displayName
+          || customRoleEditor.member.email
+          || 'Member')
+        + ' now uses the custom role '
+        + name
+        + '.',
+      );
+
+      setCustomRoleEditor(null);
+      await load();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(nextError),
+      );
     } finally {
       setBusy(false);
     }
@@ -363,11 +463,107 @@ export function SmePosSettingsPage() {
       <p>This uses the same Business invitation as the Members page. Choose the person's business role once; BajetBN applies their Space membership and POS access together.</p>
       <div className="sme-pos-access-list">
         {members.filter((member) => (member.status || 'active') === 'active').map((member) => {
-          const current = member.uid === space.ownerId ? 'owner' : accessByUid.get(member.uid)?.role || '';
-          return <div className="sme-pos-access-row" key={member.uid}>
-            <div><strong>{member.displayName || member.email || 'Space member'}</strong><small>{member.email || member.role}</small></div>
-            {member.uid === space.ownerId ? <span className="type-badge">POS owner</span> : <label><span className="sr-only">POS role</span><select value={current} disabled={busy} onChange={(event) => void changeRole(member, event.target.value as Exclude<SmePosRole, 'owner'> | '')}><option value="">No POS access</option><option value="manager">Manager</option><option value="cashier">Cashier</option><option value="stock_staff">Stock staff</option>{settings.mode === 'marketplace_consignment' && <option value="seller">Seller</option>}<option value="viewer">View only</option></select></label>}
-          </div>;
+          const currentAccess =
+            accessByUid.get(member.uid);
+
+          const current =
+            member.uid === space.ownerId
+              ? 'owner'
+              : currentAccess?.customRoleName
+                ? 'custom'
+                : currentAccess?.role
+                  || '';
+
+          return (
+            <div
+              className="sme-pos-access-row"
+              key={member.uid}
+            >
+              <div>
+                <strong>
+                  {member.displayName
+                    || member.email
+                    || 'Space member'}
+                </strong>
+
+                <small>
+                  {currentAccess?.customRoleName
+                    ? currentAccess.customRoleName
+                      + ' · '
+                      + roleLabels[
+                        currentAccess.role
+                      ]
+                    : member.email
+                      || member.role}
+                </small>
+              </div>
+
+              {member.uid === space.ownerId ? (
+                <span className="type-badge">
+                  POS owner
+                </span>
+              ) : (
+                <label>
+                  <span className="sr-only">
+                    POS role
+                  </span>
+
+                  <select
+                    value={current}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const value =
+                        event.target.value;
+
+                      if (value === 'custom') {
+                        setCustomRoleEditor({
+                          member,
+                          name:
+                            currentAccess
+                              ?.customRoleName
+                            || '',
+                          baseRole:
+                            staffRoleFromAccess(
+                              currentAccess,
+                            ),
+                        });
+                        return;
+                      }
+
+                      void changeRole(
+                        member,
+                        value
+                          ? staffRoleFromValue(
+                              value,
+                            )
+                          : '',
+                      );
+                    }}
+                  >
+                    <option value="">
+                      No POS access
+                    </option>
+                    <option value="manager">
+                      Manager
+                    </option>
+                    <option value="cashier">
+                      Cashier
+                    </option>
+                    <option value="stock_staff">
+                      Stock staff
+                    </option>
+                    {settings.mode === 'marketplace_consignment' && <option value="seller">Seller</option>}
+                    <option value="viewer">
+                      View only
+                    </option>
+                    <option value="custom">
+                      Custom role…
+                    </option>
+                  </select>
+                </label>
+              )}
+            </div>
+          );
         })}
         {pendingPosInvitations.map((invitation) => <div className="sme-pos-access-row" key={invitation.id}>
           <div><strong>{invitation.email || 'WhatsApp / secure link invite'}</strong><small>Waiting for this person to join</small></div>
@@ -378,6 +574,132 @@ export function SmePosSettingsPage() {
     </section>}
 
     {confirm && <ActionConfirmModal state={confirm} busy={busy} error={error} onClose={() => { setConfirm(null); setError(''); }} onConfirm={() => void confirmAction()} />}
+
+    {customRoleEditor && (
+      <Modal
+        title="Custom business role"
+        onClose={() => {
+          if (!busy) {
+            setCustomRoleEditor(null);
+            setError('');
+          }
+        }}
+      >
+        <div
+          className="form-stack custom-business-role-editor"
+          data-custom-business-role-editor
+        >
+          <p>
+            Give this role your own name, then choose
+            the secure access template it should use.
+            BajetBN still enforces the selected template
+            on the server.
+          </p>
+
+          {error && (
+            <div className="notice error">
+              {error}
+            </div>
+          )}
+
+          <label>
+            Role name
+            <input
+              value={customRoleEditor.name}
+              maxLength={60}
+              placeholder="Example: Senior Cashier"
+              onChange={(event) =>
+                setCustomRoleEditor(
+                  (current) =>
+                    current
+                      ? {
+                          ...current,
+                          name:
+                            event.target.value,
+                        }
+                      : current,
+                )}
+            />
+          </label>
+
+          <label>
+            Access template
+            <select
+              value={
+                customRoleEditor.baseRole
+              }
+              onChange={(event) =>
+                setCustomRoleEditor(
+                  (current) =>
+                    current
+                      ? {
+                          ...current,
+                          baseRole:
+                            staffRoleFromValue(
+                              event.target.value,
+                            ),
+                        }
+                      : current,
+                )}
+            >
+              <option value="manager">
+                Manager
+              </option>
+              <option value="cashier">
+                Cashier
+              </option>
+              <option value="stock_staff">
+                Stock staff
+              </option>
+              {settings?.mode
+                === 'marketplace_consignment'
+                && (
+                  <option value="seller">
+                    Seller
+                  </option>
+                )}
+              <option value="viewer">
+                View only
+              </option>
+            </select>
+
+            <small>
+              The template controls the real permissions.
+              The custom name changes how the role appears
+              in this Business.
+            </small>
+          </label>
+
+          <div className="button-row">
+            <button
+              className="button primary"
+              type="button"
+              disabled={
+                busy
+                || !customRoleEditor.name.trim()
+              }
+              onClick={() =>
+                void saveCustomRole()}
+            >
+              {busy
+                ? 'Saving…'
+                : 'Save custom role'}
+            </button>
+
+            <button
+              className="button secondary"
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                setCustomRoleEditor(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
+    )}
+
     {inviteOpen && settings && <Modal title={`Invite person to ${space.name}`} onClose={() => setInviteOpen(false)}><InviteForm space={space} canAssignPosRole defaultPosRole="cashier" onSaved={async () => { setInviteOpen(false); await load(); }} /></Modal>}
   </main>;
 }

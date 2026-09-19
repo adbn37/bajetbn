@@ -120,6 +120,11 @@ export function BusinessHomePage() {
     useState<SmePosRole | null>(null);
 
   const [
+    customRoleName,
+    setCustomRoleName,
+  ] = useState('');
+
+  const [
     businessIndustry,
     setBusinessIndustry,
   ] = useState<BusinessIndustry>('general');
@@ -150,6 +155,7 @@ export function BusinessHomePage() {
         setAccounts([]);
         setTransactions([]);
         setPosRole(null);
+        setCustomRoleName('');
         return;
       }
 
@@ -179,6 +185,12 @@ export function BusinessHomePage() {
           : null;
 
       setPosRole(nextRole);
+      setCustomRoleName(
+        nextAccess?.status === 'active'
+          ? nextAccess.customRoleName
+            || ''
+          : '',
+      );
       setBusinessIndustry(
         nextProfile?.industry
         || 'general',
@@ -351,14 +363,19 @@ export function BusinessHomePage() {
     space.ownerId === user?.uid;
 
   const currentRole =
-    roleLabel(posRole, isOwner);
+    isOwner
+      ? 'Owner'
+      : customRoleName
+        || roleLabel(posRole, false);
 
   const canViewFinancials =
     isOwner
     || posRole === 'manager';
 
   const workspaceTitle =
-    posRole === 'cashier'
+    customRoleName
+      ? customRoleName + ' workspace'
+      : posRole === 'cashier'
       ? 'Cashier workspace'
       : posRole === 'stock_staff'
         ? 'Stock workspace'
