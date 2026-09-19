@@ -118,7 +118,8 @@ type BusinessWorkspaceView =
   | 'documents'
   | 'finance'
   | 'sellers'
-  | 'reports';
+  | 'reports'
+  | 'setup';
 
 function workspaceViewFromSearch(
   value: string | null,
@@ -129,6 +130,7 @@ function workspaceViewFromSearch(
     || value === 'finance'
     || value === 'sellers'
     || value === 'reports'
+    || value === 'setup'
   ) {
     return value;
   }
@@ -814,6 +816,25 @@ export function BusinessHomePage() {
           </button>
         )}
 
+        {isOwner && (
+          <button
+            type="button"
+            className={
+              workspaceView
+                === 'setup'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setWorkspaceView(
+                'setup',
+              )
+            }
+          >
+            Business Setup
+          </button>
+        )}
+
         {canUseEmbeddedMarketplace
           && (
             <>
@@ -880,7 +901,117 @@ export function BusinessHomePage() {
           )}
       </nav>
 
-      {workspaceView === 'finance'
+      {workspaceView === 'setup'
+        && isOwner
+        ? (
+          <section
+            className="business-setup-workspace-v115"
+            data-business-setup-workspace
+          >
+            <div className="business-home-v115-section-heading">
+              <div>
+                <span>Owner controls</span>
+                <h2>Business Setup</h2>
+              </div>
+            </div>
+
+            <p className="muted">
+              Configure this Business without mixing setup tools into the day-to-day workspace. Existing owner-only security remains unchanged.
+            </p>
+
+            <div className="business-setup-grid-v115">
+              <Link
+                className="business-setup-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/pos/settings'
+                }
+              >
+                <span>01</span>
+                <div>
+                  <strong>Staff & Roles</strong>
+                  <small>
+                    Invite staff, assign secure role templates and manage custom role labels.
+                  </small>
+                </div>
+              </Link>
+
+              <Link
+                className="business-setup-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/setup'
+                }
+              >
+                <span>02</span>
+                <div>
+                  <strong>Business Profile</strong>
+                  <small>
+                    Business identity, contact details, industry, invoice settings and tax defaults.
+                  </small>
+                </div>
+              </Link>
+
+              <Link
+                className="business-setup-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/pos/settings'
+                }
+              >
+                <span>03</span>
+                <div>
+                  <strong>POS Settings</strong>
+                  <small>
+                    POS mode, payment account, receipt details, staff access and operational settings.
+                  </small>
+                </div>
+              </Link>
+
+              <Link
+                className="business-setup-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business'
+                }
+              >
+                <span>04</span>
+                <div>
+                  <strong>Workflow</strong>
+                  <small>
+                    Open the existing Business operations workspace for advanced workflow configuration.
+                  </small>
+                </div>
+              </Link>
+
+              <Link
+                className="business-setup-card-v115"
+                to={
+                  '/spaces/'
+                  + space.id
+                  + '/business/guide'
+                }
+              >
+                <span>05</span>
+                <div>
+                  <strong>Staff Guide</strong>
+                  <small>
+                    Practical instructions for staff using Business, inventory and POS tools.
+                  </small>
+                </div>
+              </Link>
+            </div>
+
+            <div className="notice">
+              Custom role names still use the existing secure access templates. Granular combined permissions remain a separate future security redesign.
+            </div>
+          </section>
+        )
+        : workspaceView === 'finance'
         && canViewFinancials
         ? (
           <section
