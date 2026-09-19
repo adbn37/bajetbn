@@ -16015,3 +16015,313 @@ a.business-report-row-v115:focus-visible {
     grid-column: 1 / -1;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 DETAILED SALES REPORT
+   Compact expandable sales details with optional item photos.
+   ========================================================== */
+
+.business-sales-detail-list-v115 {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.business-sale-detail-v115 {
+  border-bottom: 1px solid var(--border);
+}
+
+.business-sale-detail-v115 > summary {
+  list-style: none;
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 1fr)
+    minmax(92px, auto)
+    minmax(80px, auto)
+    minmax(100px, auto);
+  align-items: center;
+  gap: .7rem;
+  min-height: 62px;
+  padding: .55rem .1rem;
+  cursor: pointer;
+}
+
+.business-sale-detail-v115 > summary::-webkit-details-marker {
+  display: none;
+}
+
+.business-sale-detail-v115 > summary:hover,
+.business-sale-detail-v115[open] > summary {
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 4%,
+      transparent
+    );
+}
+
+.business-sale-detail-v115 > summary > span {
+  color: var(--muted);
+  font-size: .62rem;
+}
+
+.business-sale-detail-v115 > summary > b {
+  justify-self: end;
+  font-size: .74rem;
+  white-space: nowrap;
+}
+
+.business-sale-summary-main-v115 {
+  min-width: 0;
+  display: grid;
+  gap: .06rem;
+}
+
+.business-sale-summary-main-v115 > strong {
+  font-size: .82rem;
+}
+
+.business-sale-summary-main-v115 > small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .58rem;
+}
+
+.business-sale-expanded-v115 {
+  display: grid;
+  gap: .7rem;
+  padding: .2rem .1rem .9rem;
+}
+
+.business-sale-meta-grid-v115 {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(125px, 1fr)
+    );
+  gap: .45rem;
+}
+
+.business-sale-meta-grid-v115 > div {
+  min-width: 0;
+  display: grid;
+  gap: .1rem;
+  padding: .48rem .55rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.business-sale-meta-grid-v115 span,
+.business-sale-payment-splits-v115 > span,
+.business-sale-note-v115 > span {
+  color: var(--muted);
+  font-size: .55rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.business-sale-meta-grid-v115 strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .64rem;
+}
+
+.business-sale-items-v115 {
+  display: grid;
+  gap: .35rem;
+}
+
+.business-sale-item-v115 {
+  min-width: 0;
+  display: grid;
+  grid-template-columns:
+    42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .55rem;
+  padding: .48rem .52rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 94%,
+      transparent
+    );
+}
+
+.business-sale-item-photo-v115 {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: .48rem;
+}
+
+.business-report-sale-photo-v115 {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.business-sale-item-copy-v115 {
+  min-width: 0;
+  display: grid;
+  gap: .07rem;
+}
+
+.business-sale-item-copy-v115 > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .68rem;
+}
+
+.business-sale-item-copy-v115 > small,
+.business-sale-item-money-v115 > small {
+  color: var(--muted);
+  font-size: .55rem;
+}
+
+.business-sale-item-money-v115 {
+  display: grid;
+  justify-items: end;
+  gap: .04rem;
+  white-space: nowrap;
+}
+
+.business-sale-item-money-v115 > strong {
+  font-size: .66rem;
+}
+
+.business-sale-payment-splits-v115 {
+  display: grid;
+  gap: .2rem;
+  padding: .58rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.business-sale-payment-splits-v115 > div {
+  display: flex;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.business-sale-payment-splits-v115 small {
+  color: var(--muted);
+  font-size: .58rem;
+}
+
+.business-sale-payment-splits-v115 strong {
+  font-size: .62rem;
+}
+
+.business-sale-totals-v115 {
+  justify-self: end;
+  width: min(330px, 100%);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .24rem .8rem;
+  padding: .58rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: .61rem;
+}
+
+.business-sale-totals-v115 > span {
+  color: var(--muted);
+}
+
+.business-sale-totals-v115 > strong {
+  text-align: right;
+}
+
+.business-sale-net-v115 {
+  color: var(--accent);
+  font-size: .72rem;
+}
+
+.business-sale-note-v115 {
+  padding: .55rem .62rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.business-sale-note-v115 p {
+  margin: .2rem 0 0;
+  color: var(--text);
+  font-size: .62rem;
+  line-height: 1.45;
+}
+
+.business-sale-detail-actions-v115 {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 680px) {
+  .business-sale-detail-v115 > summary {
+    grid-template-columns:
+      minmax(0, 1fr) auto;
+    gap: .25rem .55rem;
+    padding: .55rem 0;
+  }
+
+  .business-sale-detail-v115
+  > summary
+  > span:nth-of-type(1) {
+    grid-column: 1;
+  }
+
+  .business-sale-detail-v115
+  > summary
+  > span:nth-of-type(2) {
+    grid-column: 1;
+  }
+
+  .business-sale-detail-v115 > summary > b {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
+  }
+
+  .business-sale-meta-grid-v115 {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-sale-item-v115 {
+    grid-template-columns:
+      38px minmax(0, 1fr);
+  }
+
+  .business-sale-item-photo-v115 {
+    width: 38px;
+    height: 38px;
+  }
+
+  .business-sale-item-money-v115 {
+    grid-column: 2;
+    justify-items: start;
+  }
+
+  .business-sale-detail-actions-v115 .button {
+    width: 100%;
+  }
+}

@@ -9,6 +9,10 @@ import {
 } from 'react-router-dom';
 
 import {
+  SmePosItemPhoto,
+} from '../../components/SmePosItemPhoto';
+
+import {
   getBusinessInvoiceWorkspace,
 } from '../../repositories/businessInvoiceRepository';
 
@@ -277,6 +281,47 @@ function netSale(
   );
 }
 
+function humanizeSaleStatus(
+  value: string,
+) {
+  return value
+    .replace(/_/g, ' ')
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase(),
+    );
+}
+
+function salePaymentSummary(
+  sale: SmePosSale,
+) {
+  if (sale.payments?.length) {
+    return sale.payments
+      .map(
+        (payment) =>
+          [
+            payment.paymentMethodLabel
+              || payment.paymentMethod
+              || 'Payment',
+            payment.accountName,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+      )
+      .join(' + ');
+  }
+
+  return [
+    sale.paymentMethodLabel
+      || sale.paymentMethod
+      || '',
+    sale.paymentAccountName,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 export function BusinessReportsWorkspace({
   spaceId,
   currency,
@@ -497,6 +542,54 @@ export function BusinessReportsWorkspace({
         return map;
       },
       [listings, products],
+    );
+
+  const catalogDetailByItemId =
+    useMemo(
+      () => {
+        const map =
+          new Map<
+            string,
+            {
+              photoPath?: string | null;
+              category: string;
+              sellerName: string;
+            }
+          >();
+
+        for (const product of products) {
+          map.set(
+            product.id,
+            {
+              photoPath:
+                product.photoPath,
+              category:
+                product.category || '',
+              sellerName: '',
+            },
+          );
+        }
+
+        for (const listing of listings) {
+          map.set(
+            listing.id,
+            {
+              photoPath:
+                listing.photoPath,
+              category:
+                listing.category || '',
+              sellerName:
+                listing.sellerName,
+            },
+          );
+        }
+
+        return map;
+      },
+      [
+        listings,
+        products,
+      ],
     );
 
   const sellerOptions =
@@ -1715,48 +1808,380 @@ export function BusinessReportsWorkspace({
             </article>
           </div>
 
-          <div className="business-report-table-v115">
+          <div
+            className="business-sales-detail-list-v115"
+            data-business-sales-detail-list
+          >
             {filteredSales.length
               ? filteredSales.map(
                   (sale) => (
-                    <Link
+                    <details
                       key={sale.id}
-                      className="business-report-row-v115"
-                      to={
-                        '/spaces/'
-                        + spaceId
-                        + '/pos?tab=sales'
-                      }
+                      className="business-sale-detail-v115"
                     >
-                      <div>
-                        <strong>
-                          {sale.receiptNumber}
-                        </strong>
-                        <small>
-                          {sale.customerName
-                            || 'Walk-in Customer'}
-                        </small>
-                      </div>
+                      <summary>
+                        <div className="business-sale-summary-main-v115">
+                          <strong>
+                            {sale.receiptNumber}
+                          </strong>
+                          <small>
+                            {sale.customerName
+                              || 'Walk-in Customer'}
+                          </small>
+                          <small>
+                            {salePaymentSummary(
+                              sale,
+                            )}
+                          </small>
+                        </div>
 
-                      <span>
-                        {sale.saleDate}
-                      </span>
+                        <span>
+                          {sale.saleDate}
+                        </span>
 
-                      <span>
-                        {sale.itemCount}
-                        {' item'}
-                        {sale.itemCount === 1
-                          ? ''
-                          : 's'}
-                      </span>
+                        <span>
+                          {sale.itemCount}
+                          {' item'}
+                          {sale.itemCount === 1
+                            ? ''
+                            : 's'}
+                        </span>
 
-                      <b>
-                        {formatMoney(
-                          netSale(sale),
-                          sale.currency,
+                        <b>
+                          {formatMoney(
+                            netSale(sale),
+                            sale.currency,
+                          )}
+                        </b>
+                      </summary>
+
+                      <div className="business-sale-expanded-v115">
+                        <div className="business-sale-meta-grid-v115">
+                          <div>
+                            <span>Status</span>
+                            <strong>
+                              {humanizeSaleStatus(
+                                sale.status,
+                              )}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Customer</span>
+                            <strong>
+                              {sale.customerName
+                                || 'Walk-in Customer'}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Sale date</span>
+                            <strong>
+                              {sale.saleDate}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Source</span>
+                            <strong>
+                              {sale.sourceMode
+                                .replace(
+                                  /_/g,
+                                  ' ',
+                                )}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Payment</span>
+                            <strong>
+                              {salePaymentSummary(
+                                sale,
+                              )
+                                || 'Not recorded'}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Account</span>
+                            <strong>
+                              {sale.paymentAccountName
+                                || 'Not recorded'}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="business-sale-items-v115">
+                          {sale.items.map(
+                            (
+                              item,
+                              index,
+                            ) => {
+                              const itemId =
+                                item.listingId
+                                || item.productId;
+
+                              const catalog =
+                                catalogDetailByItemId.get(
+                                  itemId,
+                                );
+
+                              const netLine =
+                                Math.max(
+                                  0,
+                                  (
+                                    item.netLineMinor
+                                    ?? item.lineTotalMinor
+                                  )
+                                  - (
+                                    item.returnedMinor
+                                    || 0
+                                  ),
+                                );
+
+                              return (
+                                <article
+                                  key={
+                                    (
+                                      itemId
+                                      || item.productName
+                                    )
+                                    + '-'
+                                    + index
+                                  }
+                                  className="business-sale-item-v115"
+                                >
+                                  <div className="business-sale-item-photo-v115">
+                                    {catalog?.photoPath
+                                      ? (
+                                        <SmePosItemPhoto
+                                          photoPath={
+                                            catalog.photoPath
+                                          }
+                                          name={
+                                            item.productName
+                                          }
+                                          className="business-report-sale-photo-v115"
+                                        />
+                                      )
+                                      : (
+                                        <span aria-hidden="true">
+                                          IMG
+                                        </span>
+                                      )}
+                                  </div>
+
+                                  <div className="business-sale-item-copy-v115">
+                                    <strong>
+                                      {item.productName}
+                                    </strong>
+
+                                    <small>
+                                      {[
+                                        item.sku
+                                          ? 'SKU ' + item.sku
+                                          : '',
+                                        item.barcode
+                                          ? 'Barcode ' + item.barcode
+                                          : '',
+                                        catalog?.category,
+                                        item.sellerName
+                                          || catalog?.sellerName,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </small>
+
+                                    <small>
+                                      Qty {item.quantity}
+                                      {' × '}
+                                      {formatMoney(
+                                        item.unitPriceMinor,
+                                        sale.currency,
+                                      )}
+                                      {item.returnedQuantity > 0
+                                        ? ' · Returned '
+                                          + item.returnedQuantity
+                                        : ''}
+                                    </small>
+                                  </div>
+
+                                  <div className="business-sale-item-money-v115">
+                                    <strong>
+                                      {formatMoney(
+                                        netLine,
+                                        sale.currency,
+                                      )}
+                                    </strong>
+
+                                    {(item.discountShareMinor || 0) > 0 && (
+                                      <small>
+                                        Discount{' '}
+                                        {formatMoney(
+                                          item.discountShareMinor || 0,
+                                          sale.currency,
+                                        )}
+                                      </small>
+                                    )}
+
+                                    {(item.returnedMinor || 0) > 0 && (
+                                      <small>
+                                        Refunded{' '}
+                                        {formatMoney(
+                                          item.returnedMinor || 0,
+                                          sale.currency,
+                                        )}
+                                      </small>
+                                    )}
+                                  </div>
+                                </article>
+                              );
+                            },
+                          )}
+                        </div>
+
+                        {sale.payments
+                          && sale.payments.length > 1
+                          && (
+                            <div className="business-sale-payment-splits-v115">
+                              <span>Payment split</span>
+                              {sale.payments.map(
+                                (
+                                  payment,
+                                  index,
+                                ) => (
+                                  <div
+                                    key={
+                                      payment.transactionId
+                                      || index
+                                    }
+                                  >
+                                    <small>
+                                      {payment.paymentMethodLabel
+                                        || payment.paymentMethod
+                                        || 'Payment'}
+                                      {' · '}
+                                      {payment.accountName}
+                                    </small>
+                                    <strong>
+                                      {formatMoney(
+                                        payment.amountMinor
+                                        - payment.returnedMinor,
+                                        sale.currency,
+                                      )}
+                                    </strong>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          )}
+
+                        <div className="business-sale-totals-v115">
+                          <span>Subtotal</span>
+                          <strong>
+                            {formatMoney(
+                              sale.subtotalMinor,
+                              sale.currency,
+                            )}
+                          </strong>
+
+                          <span>Discount</span>
+                          <strong>
+                            -{formatMoney(
+                              sale.discountMinor,
+                              sale.currency,
+                            )}
+                          </strong>
+
+                          {sale.returnedMinor > 0 && (
+                            <>
+                              <span>Refunded</span>
+                              <strong>
+                                -{formatMoney(
+                                  sale.returnedMinor,
+                                  sale.currency,
+                                )}
+                              </strong>
+                            </>
+                          )}
+
+                          {(sale.voidedMinor || 0) > 0 && (
+                            <>
+                              <span>Voided</span>
+                              <strong>
+                                -{formatMoney(
+                                  sale.voidedMinor || 0,
+                                  sale.currency,
+                                )}
+                              </strong>
+                            </>
+                          )}
+
+                          <span>Net sale</span>
+                          <strong className="business-sale-net-v115">
+                            {formatMoney(
+                              netSale(sale),
+                              sale.currency,
+                            )}
+                          </strong>
+
+                          <span>Cost</span>
+                          <strong>
+                            {formatMoney(
+                              sale.costMinor,
+                              sale.currency,
+                            )}
+                          </strong>
+
+                          <span>Profit</span>
+                          <strong>
+                            {formatMoney(
+                              sale.profitMinor,
+                              sale.currency,
+                            )}
+                          </strong>
+
+                          {businessIndustry
+                            === 'marketplace'
+                            && (
+                              <>
+                                <span>Commission</span>
+                                <strong>
+                                  {formatMoney(
+                                    sale.marketplaceCommissionMinor
+                                    || 0,
+                                    sale.currency,
+                                  )}
+                                </strong>
+
+                                <span>Seller earnings</span>
+                                <strong>
+                                  {formatMoney(
+                                    sale.sellerEarningsMinor
+                                    || 0,
+                                    sale.currency,
+                                  )}
+                                </strong>
+                              </>
+                            )}
+                        </div>
+
+                        {sale.note && (
+                          <div className="business-sale-note-v115">
+                            <span>Note</span>
+                            <p>{sale.note}</p>
+                          </div>
                         )}
-                      </b>
-                    </Link>
+
+                        <div className="business-sale-detail-actions-v115">
+                          <Link
+                            className="button secondary compact"
+                            to={
+                              '/spaces/'
+                              + spaceId
+                              + '/pos?tab=sales'
+                            }
+                          >
+                            Open in POS
+                          </Link>
+                        </div>
+                      </div>
+                    </details>
                   ),
                 )
               : (
