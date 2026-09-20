@@ -18574,3 +18574,312 @@ a.business-report-row-v115:focus-visible {
 > .button-row:first-child {
   display: none !important;
 }
+
+
+/* ==========================================================
+   BAJETBN V1.15 GLOBAL PERSONAL / BUSINESS HOME
+   Individual Business Homes are transaction-based only.
+   Account balances remain under Finance -> Accounts.
+   ========================================================== */
+
+.bajetbn-home-mode-switch-v115 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 360px);
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.bajetbn-home-mode-switch-v115 button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.bajetbn-home-mode-switch-v115 button.active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.global-business-home-v115 {
+  display: grid;
+  gap: 1rem;
+}
+
+.global-business-total-v115 {
+  padding: 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--accent) 17%, transparent), transparent 44%),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--accent) 6%), var(--surface));
+}
+
+.global-business-total-head-v115 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.global-business-total-head-v115 > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.global-business-total-head-v115 span {
+  font-weight: 800;
+}
+
+.global-business-total-head-v115 small,
+.global-business-section-v115 .bajetbn-home-section-title small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.global-business-total-head-v115 a,
+.global-business-card-head-v115 a {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.global-business-total-v115 > strong {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: clamp(1.9rem, 5vw, 2.8rem);
+  letter-spacing: -0.05em;
+}
+
+.global-business-total-meta-v115,
+.global-business-other-currencies-v115 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.global-business-total-meta-v115 span,
+.global-business-other-currencies-v115 span {
+  padding: 0.38rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.global-business-month-v115 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.global-business-month-v115 article {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.global-business-month-v115 span,
+.global-business-month-v115 small,
+.global-business-card-stats-v115 span,
+.global-business-card-total-label-v115 {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.global-business-month-v115 strong {
+  font-size: 0.9rem;
+}
+
+.global-business-section-v115 {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.global-business-section-v115 .bajetbn-home-section-title > div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.global-business-grid-v115 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.global-business-card-v115 {
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.global-business-card-head-v115 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.global-business-card-head-v115 > div {
+  min-width: 0;
+}
+
+.global-business-card-head-v115 span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.global-business-card-head-v115 h3 {
+  overflow: hidden;
+  margin: 0.12rem 0 0;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-business-card-total-label-v115 {
+  display: block;
+  margin-top: 0.8rem;
+}
+
+.global-business-card-total-v115 {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.3rem;
+}
+
+.global-business-card-stats-v115 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+}
+
+.global-business-card-stats-v115 > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.global-business-card-stats-v115 strong {
+  overflow: hidden;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-business-activity-v115 {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.global-business-activity-row-v115 {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.68rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.global-business-activity-row-v115:first-child {
+  border-top: 0;
+}
+
+.global-business-activity-icon-v115 {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  font-weight: 900;
+}
+
+.global-business-activity-row-v115 > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.global-business-activity-row-v115 strong,
+.global-business-activity-row-v115 small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-business-activity-row-v115 small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.global-business-activity-row-v115 > b {
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.global-business-activity-row-v115 > b.income {
+  color: var(--success, #1d925b);
+}
+
+.global-business-activity-row-v115 > b.expense {
+  color: var(--danger, #d55151);
+}
+
+.business-home-v115-hero-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .global-business-grid-v115 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 460px) {
+  .bajetbn-home-mode-switch-v115 {
+    width: 100%;
+  }
+
+  .global-business-month-v115 {
+    gap: 0.4rem;
+  }
+
+  .global-business-month-v115 article {
+    padding: 0.7rem 0.55rem;
+  }
+
+  .global-business-month-v115 strong {
+    font-size: 0.78rem;
+  }
+
+  .global-business-card-stats-v115 {
+    gap: 0.3rem;
+  }
+}

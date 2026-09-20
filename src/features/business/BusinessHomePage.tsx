@@ -11,9 +11,6 @@ import {
 } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  listAccountsForSpace,
-} from '../../repositories/accountRepository';
-import {
   getBusinessProfile,
 } from '../../repositories/businessAdvancedRepository';
 import {
@@ -27,7 +24,6 @@ import {
   listBusinessTransactionsForSpace,
 } from '../../repositories/transactionRepository';
 import type {
-  Account,
   BusinessIndustry,
   FinancialTransaction,
   Space,
@@ -41,7 +37,6 @@ import {
 import {
   BusinessReportsWorkspace,
 } from './BusinessReportsWorkspace';
-import { AccountAvatar } from '../accounts/AccountAvatar';
 import { AccountsPage } from '../accounts/AccountsPage';
 import { CommitmentsPage } from '../commitments/CommitmentsPage';
 import { SpaceAvatar } from '../spaces/SpaceAvatar';
@@ -169,9 +164,6 @@ export function BusinessHomePage() {
   const [space, setSpace] =
     useState<Space | null>(null);
 
-  const [accounts, setAccounts] =
-    useState<Account[]>([]);
-
   const [transactions, setTransactions] =
     useState<FinancialTransaction[]>([]);
 
@@ -214,7 +206,6 @@ export function BusinessHomePage() {
         || nextSpace.type !== 'sme'
       ) {
         setSpace(null);
-        setAccounts([]);
         setTransactions([]);
         setPosRole(null);
         setPosSettings(null);
@@ -277,28 +268,14 @@ export function BusinessHomePage() {
         || nextRole === 'manager';
 
       if (!canReadFinancials) {
-        setAccounts([]);
         setTransactions([]);
         return;
       }
 
-      const [
-        nextAccounts,
-        nextTransactions,
-      ] = await Promise.all([
-        listAccountsForSpace(spaceId),
-        listBusinessTransactionsForSpace(
+      const nextTransactions =
+        await listBusinessTransactionsForSpace(
           spaceId,
-        ),
-      ]);
-
-      setAccounts(
-        nextAccounts.filter(
-          (item) =>
-            !item.archivedAt
-            && !item.closedAt,
-        ),
-      );
+        );
 
       setTransactions(
         nextTransactions.filter(
@@ -366,28 +343,44 @@ export function BusinessHomePage() {
       [monthlyRows],
     );
 
-  const visibleBalanceAccounts =
+  const allTimeMoneyIn =
     useMemo(
       () =>
-        accounts.filter(
-          (item) =>
-            item.sharedCanViewBalance
-              !== false,
-        ),
-      [accounts],
+        transactions
+          .filter(
+            (item) =>
+              item.type === 'income',
+          )
+          .reduce(
+            (sum, item) =>
+              sum + item.amountMinor,
+            0,
+          ),
+      [transactions],
     );
 
-  const totalBusinessFunds =
+  const allTimeMoneyOut =
     useMemo(
       () =>
-        visibleBalanceAccounts.reduce(
-          (sum, item) =>
-            sum
-            + item.ledgerBalanceMinor,
-          0,
-        ),
-      [visibleBalanceAccounts],
+        transactions
+          .filter(
+            (item) =>
+              item.type === 'expense',
+          )
+          .reduce(
+            (sum, item) =>
+              sum + item.amountMinor,
+            0,
+          ),
+      [transactions],
     );
+
+  const businessTransactionTotal =
+    allTimeMoneyIn
+    - allTimeMoneyOut;
+
+  const monthNet =
+    moneyIn - moneyOut;
 
   if (loading) {
     return (
@@ -1279,9 +1272,9 @@ export function BusinessHomePage() {
         <section className="business-home-v115-hero">
           <div className="business-home-v115-hero-heading">
             <div>
-              <span>Linked account balances</span>
+              <span>All-time Business total</span>
               <small>
-                Actual balances of accounts linked to this Business
+                Posted money in minus money out in this Business only
               </small>
             </div>
 
@@ -1289,16 +1282,16 @@ export function BusinessHomePage() {
               to={
                 '/spaces/'
                 + space.id
-                + '?section=accounts'
+                + '/business/money'
               }
             >
-              Accounts
+              Money activity
             </Link>
           </div>
 
           <strong>
             {formatMoney(
-              totalBusinessFunds,
+              businessTransactionTotal,
               space.currency,
             )}
           </strong>
@@ -1320,6 +1313,17 @@ export function BusinessHomePage() {
               <strong>
                 {formatMoney(
                   moneyOut,
+                  space.currency,
+                )}
+              </strong>
+              <small>This month</small>
+            </div>
+
+            <div>
+              <span>Net</span>
+              <strong>
+                {formatMoney(
+                  monthNet,
                   space.currency,
                 )}
               </strong>
@@ -1379,78 +1383,6 @@ export function BusinessHomePage() {
             }
           />
         </div>
-      )}
-
-      {canViewFinancials && (
-      <section className="business-home-v115-section">
-        <div className="business-home-v115-section-heading">
-          <div>
-            <span>Accounts</span>
-            <h2>Business accounts</h2>
-          </div>
-
-          <Link
-            to={
-              '/spaces/'
-              + space.id
-              + '?section=accounts'
-            }
-          >
-            See all
-          </Link>
-        </div>
-
-        {accounts.length > 0 ? (
-          <div className="business-home-v115-account-strip">
-            {accounts.map(
-              (account) => (
-                <article
-                  key={account.id}
-                  className="business-home-v115-account-card"
-                >
-                  <AccountAvatar
-                    account={account}
-                  />
-
-                  <div>
-                    <strong>
-                      {account.name}
-                    </strong>
-
-                    <small>
-                      {account.institution
-                        || (
-                          account.type
-                            === 'cash'
-                            ? 'Cash'
-                            : account.type
-                                .replace(
-                                  /_/g,
-                                  ' ',
-                                )
-                        )}
-                    </small>
-                  </div>
-
-                  <b>
-                    {account.sharedCanViewBalance
-                      === false
-                      ? 'Hidden'
-                      : formatMoney(
-                          account.ledgerBalanceMinor,
-                          account.currency,
-                        )}
-                  </b>
-                </article>
-              ),
-            )}
-          </div>
-        ) : (
-          <p className="muted">
-            No Business account is linked yet.
-          </p>
-        )}
-      </section>
       )}
 
       {canViewFinancials && (

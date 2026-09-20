@@ -39,6 +39,7 @@ import {
 } from '../features/categories/defaultCategories';
 import { MoneyActivityModal } from '../features/transactions/TransactionsPage';
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
+import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
 
 function monthPrefix() {
   return new Date()
@@ -175,6 +176,11 @@ export function DashboardPage() {
 
   const welcomeFromOnboarding =
     searchParams.get('welcome') === '1';
+
+  const homeMode =
+    searchParams.get('home') === 'business'
+      ? 'business'
+      : 'personal';
 
   const [
     accounts,
@@ -668,7 +674,8 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (
-      searchParams.get('quick')
+      homeMode !== 'personal'
+      || searchParams.get('quick')
         !== '1'
       || loading
       || showMoneyActivity
@@ -679,6 +686,7 @@ export function DashboardPage() {
 
     void openQuickActivity();
   }, [
+    homeMode,
     loading,
     openQuickActivity,
     quickLoading,
@@ -1048,6 +1056,34 @@ export function DashboardPage() {
         )
       : undefined;
 
+  function selectHomeMode(
+    nextMode: 'personal' | 'business',
+  ) {
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    if (nextMode === 'business') {
+      next.set(
+        'home',
+        'business',
+      );
+    } else {
+      next.delete('home');
+    }
+
+    next.delete('quick');
+
+    setSelectedActivity(null);
+    setShowMoneyActivity(false);
+
+    setSearchParams(
+      next,
+      { replace: true },
+    );
+  }
+
   const firstName =
     profile?.fullName
       ?.trim()
@@ -1133,7 +1169,7 @@ export function DashboardPage() {
         </div>
       )}
 
-      {dataUnavailable && (
+      {homeMode === 'personal' && dataUnavailable && (
         <div className="notice">
           We cannot load your accounts.
           Check your internet connection
@@ -1141,6 +1177,49 @@ export function DashboardPage() {
         </div>
       )}
 
+
+      <nav
+        className="bajetbn-home-mode-switch-v115"
+        data-home-mode-switch-v115
+        aria-label="Home view"
+      >
+        <button
+          type="button"
+          className={
+            homeMode === 'personal'
+              ? 'active'
+              : ''
+          }
+          aria-pressed={
+            homeMode === 'personal'
+          }
+          onClick={() =>
+            selectHomeMode('personal')
+          }
+        >
+          Personal
+        </button>
+
+        <button
+          type="button"
+          className={
+            homeMode === 'business'
+              ? 'active'
+              : ''
+          }
+          aria-pressed={
+            homeMode === 'business'
+          }
+          onClick={() =>
+            selectHomeMode('business')
+          }
+        >
+          Business
+        </button>
+      </nav>
+
+      {homeMode === 'personal' ? (
+        <>
       <section
         className="bajetbn-total-assets-card bajetbn-home-assets-hero"
         aria-label="Personal total assets"
@@ -1752,6 +1831,14 @@ export function DashboardPage() {
             }}
           />
         )}
+        </>
+      ) : (
+        <GlobalBusinessOverview
+          userId={user?.uid || ''}
+          currency={currency}
+        />
+      )}
+
     </main>
   );
 }
