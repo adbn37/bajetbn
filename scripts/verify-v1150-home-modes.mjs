@@ -46,12 +46,36 @@ assert.equal(
   'Personal Home must remain an explicit Home mode.',
 );
 
+assert.equal(
+  dashboard.includes(
+    'carousel.scrollWidth\n        <= carousel.clientWidth + 1',
+  ),
+  true,
+  'Desktop non-scrollable account grids must bypass carousel dragging.',
+);
+
+assert.equal(
+  dashboard.includes(
+    'A normal mouse click must remain a button click.',
+  ),
+  true,
+  'Account dragging must defer pointer capture until real movement.',
+);
+
+assert.equal(
+  dashboard.includes(
+    'Math.abs(delta) > 4\n      && !drag.moved',
+  ),
+  true,
+  'Mouse dragging must start only after the movement threshold.',
+);
+
 for (const marker of [
   'data-global-business-home',
   "space.type === 'sme'",
   'space.ownerId === userId',
   'listTransactionsForOwnerSpace(',
-  'All Business total',
+  'All-time Business net',
   'All-time money in minus money out across Businesses you own',
   'Each card uses transactions from that Business Space only.',
   'allBusinessTotal',

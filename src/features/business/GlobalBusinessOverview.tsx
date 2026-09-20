@@ -505,7 +505,7 @@ export function GlobalBusinessOverview({
       >
         <div className="global-business-total-head-v115">
           <div>
-            <span>All Business total</span>
+            <span>All-time Business net</span>
             <small>
               All-time money in minus money out across Businesses you own
             </small>

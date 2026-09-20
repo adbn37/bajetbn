@@ -780,10 +780,19 @@ export function DashboardPage() {
       !carousel
       || homeAccounts.length <= 1
       || event.pointerType === 'touch'
+      || (
+        carousel.scrollWidth
+        <= carousel.clientWidth + 1
+      )
     ) {
       return;
     }
 
+    /*
+     * Do not capture the pointer or enable .dragging yet.
+     * A normal mouse click must remain a button click.
+     * Drag mode starts only after real horizontal movement.
+     */
     accountDragRef.current = {
       active: true,
       pointerId: event.pointerId,
@@ -791,14 +800,6 @@ export function DashboardPage() {
       startScrollLeft: carousel.scrollLeft,
       moved: false,
     };
-
-    carousel.setPointerCapture(
-      event.pointerId,
-    );
-
-    carousel.classList.add(
-      'dragging',
-    );
   }
 
   function handleAccountDragMove(
@@ -821,8 +822,29 @@ export function DashboardPage() {
     const delta =
       event.clientX - drag.startX;
 
-    if (Math.abs(delta) > 4) {
+    if (
+      Math.abs(delta) > 4
+      && !drag.moved
+    ) {
       drag.moved = true;
+
+      if (
+        !carousel.hasPointerCapture(
+          event.pointerId,
+        )
+      ) {
+        carousel.setPointerCapture(
+          event.pointerId,
+        );
+      }
+
+      carousel.classList.add(
+        'dragging',
+      );
+    }
+
+    if (!drag.moved) {
+      return;
     }
 
     carousel.scrollLeft =
