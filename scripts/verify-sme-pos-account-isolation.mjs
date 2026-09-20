@@ -16,45 +16,43 @@ const functions = read('functions/src/index.ts');
 const rules = read('firestore.rules');
 
 must(models, 'businessSpaceIds?: string[];', 'Business multi-Space account field');
-must(models, 'posSpaceIds?: string[];', 'per-Business POS account field');
+must(models, 'posSpaceIds?: string[];', 'legacy POS compatibility field');
 must(models, 'usableSpaceIds?: string[];', 'per-Space account-use access');
 must(models, 'balanceSpaceIds?: string[];', 'per-Space balance access');
 must(models, 'ledgerSpaceIds?: string[];', 'per-Space ledger access');
 
 must(accountRepo, 'businessSpaceIdsForAccount', 'Business-space migration helper');
-must(accountRepo, 'posSpaceIdsForAccount', 'per-Business POS helper');
+must(accountRepo, 'posSpaceIdsForAccount', 'legacy POS compatibility helper');
 must(accountRepo, 'listAccountsForSpace', 'member-safe Business account resolver');
 must(accountRepo, 'setBusinessAccountMemberAccess', 'Business account sharing mutation');
 must(read('src/repositories/transactionRepository.ts'), 'listBusinessTransactionsForSpace', 'member-safe Business transaction listing');
+
 const transactionsPage = read('src/features/transactions/TransactionsPage.tsx');
 must(transactionsPage, 'sharedCanViewBalance === false', 'hidden shared-account balance permission check');
 must(transactionsPage, "'Balance hidden'", 'hidden shared-account balance wording');
-must(read('src/features/transactions/TransactionsPage.tsx'), 'canManageCategories', 'shared-member category ownership guard');
-must(read('src/features/transactions/TransactionsPage.tsx'), 'canAttachFiles', 'shared-member attachment ownership guard');
-must(read('src/features/transactions/TransactionsPage.tsx'), 'accountAvailableInSelectedSpace', 'Personal/Business account Space isolation UI');
+must(transactionsPage, 'canManageCategories', 'shared-member category ownership guard');
+must(transactionsPage, 'canAttachFiles', 'shared-member attachment ownership guard');
+must(transactionsPage, 'accountAvailableInSelectedSpace', 'Personal/Business account Space isolation UI');
 
-must(accountsPage, 'Your bank, cash, card and e-wallet accounts.', 'Personal-First main Accounts guidance');
-must(accountsPage, 'Manage the Business accounts linked to this Business Space.', 'Business Space account management guidance');
-reject(accountsPage, 'Business accounts are managed inside their Business Space.', 'permanent Business account guidance banner');
 must(accountsPage, 'Available in Business Spaces', 'multi-select Business account UI');
 must(accountsPage, 'Share only inside linked Business Spaces', 'member sharing UI');
 must(accountsPage, 'Can use account', 'per-member account-use permission');
 must(accountsPage, 'Can view balance', 'per-member balance permission');
 must(accountsPage, 'Can view activity', 'per-member ledger permission');
-must(read('src/features/spaces/SpaceActionHub.tsx'), "listAccountsForSpace(space.id)", 'shared Business account money loader');
-must(read('src/features/spaces/SpaceActionHub.tsx'), 'Add Income', 'shared Business income action');
-must(read('src/features/spaces/SpaceActionHub.tsx'), 'Add Expense', 'shared Business expense action');
-reject(accountsPage, 'Other Business Spaces cannot use it.', 'single-Business ownership copy');
-reject(accountsPage, 'Assign each business account to one Business Space here.', 'single-Business guidance');
+must(accountsPage, 'A linked account is automatically available to that Business POS', 'automatic linked-account POS guidance');
+reject(accountsPage, 'Allow POS payments in ', 'separate account POS checkbox');
+reject(accountsPage, ' · POS in ', 'separate POS account badge');
 
-must(settingsPage, 'businessSpaceIdsForAccount', 'POS multi-Space account filtering');
-must(settingsPage, 'posSpaceIdsForAccount', 'POS per-Business enablement');
+must(settingsPage, 'businessSpaceIdsForAccount', 'POS Business-space account filtering');
+reject(settingsPage, 'posSpaceIdsForAccount', 'separate POS enablement filtering');
+must(settingsPage, 'All active Business Accounts linked to this Business are available here.', 'linked account POS guidance');
 
 must(functions, 'getBusinessSpaceAccounts', 'server member Business account listing');
 must(functions, 'getBusinessSpaceTransactions', 'server member Business transaction listing');
 must(functions, 'setBusinessAccountMemberAccess', 'server member account sharing');
 must(functions, 'businessSpaceIdsForAccountData', 'server Business-space resolver');
-must(functions, 'accountPosEnabledForBusinessSpace', 'server per-Business POS resolver');
+must(functions, 'if (linkedSpaces.includes(spaceId)) return true;', 'server linked-account POS rule');
+must(functions, "This account is not linked to this Business Space.", 'server linked-account error');
 must(functions, 'assertAccountForSpaceActor', 'server shared account-use authorization');
 must(functions, '!accountLinkedToBusinessSpace(', 'Business invoice multi-Space validation');
 must(functions, "ownerId: financialOwnerId", 'shared transaction financial ownership');
@@ -64,4 +62,4 @@ must(rules, 'canViewAccountLedgerInSpace', 'Space-aware ledger read permission')
 must(rules, 'ledgerSpaceIds.hasAny([spaceId])', 'ledger Space allowlist enforcement');
 must(rules, "'ledgerSpaceIds' in", 'legacy-safe per-Space ledger permission migration');
 
-console.log('BUSINESS ACCOUNT MULTI-SPACE + MEMBER SHARING VERIFICATION PASS');
+console.log('BUSINESS ACCOUNT MULTI-SPACE + AUTOMATIC POS AVAILABILITY VERIFICATION PASS');

@@ -16,7 +16,6 @@ import {
   listAllPersonalAccounts,
   listAccountsForOwnerSpace,
   listAccountsForSpace,
-  posSpaceIdsForAccount,
   setBusinessAccountMemberAccess,
   updateAccount,
 } from '../../repositories/accountRepository';
@@ -490,14 +489,6 @@ export function AccountsPage({
                           id !== embeddedSpace.id,
                       );
 
-                    const nextPosSpaceIds =
-                      posSpaceIdsForAccount(
-                        account,
-                      ).filter(
-                        (id) =>
-                          id !== embeddedSpace.id,
-                      );
-
                     setBusyId(account.id);
                     setError('');
 
@@ -515,7 +506,7 @@ export function AccountsPage({
                         businessSpaceIds:
                           nextBusinessSpaceIds,
                         posSpaceIds:
-                          nextPosSpaceIds,
+                          nextBusinessSpaceIds,
                       });
 
                       await load();
@@ -631,10 +622,12 @@ export function AccountsPage({
                                   ),
                                   embeddedSpace.id,
                                 ],
-                                posSpaceIds:
-                                  posSpaceIdsForAccount(
+                                posSpaceIds: [
+                                  ...businessSpaceIdsForAccount(
                                     account,
                                   ),
+                                  embeddedSpace.id,
+                                ],
                               });
 
                               setModal(null);
@@ -880,9 +873,6 @@ function AccountList({
   };
 
   return <section className="account-list">{accounts.map((account, index) => {
-    const posCount = account.classification === 'business'
-      ? posSpaceIdsForAccount(account).length
-      : 0;
     const canManage = account.ownerId === user?.uid;
     const canViewBalance =
       canManage
@@ -924,12 +914,6 @@ function AccountList({
                       + (businessSpaceIdsForAccount(account).length === 1 ? '' : 'es')
                     : 'Business Account · Not linked'
               : sharedLabel}
-            {posCount > 0
-              ? ' · POS in '
-                + posCount
-                + ' Business'
-                + (posCount === 1 ? '' : 'es')
-              : ''}
           </p>
         </div>
       </div>
@@ -1132,7 +1116,7 @@ function BusinessAccountShareModal({
     <div className="form-stack">
       <div className="info-banner">
         <strong>Share only inside linked Business Spaces</strong>
-        <span>The account keeps one real balance. Permissions below are separate for each Business Space. POS checkout access still follows that Business's POS role and POS-enabled account setting.</span>
+        <span>The account keeps one real balance. Permissions below are separate for each Business Space. Linked Business accounts are automatically available to that Business POS; staff still need the correct POS role.</span>
       </div>
       {error && <div className="notice error">{error}</div>}
       {linkedSpaces.length === 0 && <div className="notice">Link this Business account to at least one Business Space from Edit account first.</div>}
@@ -1278,9 +1262,6 @@ function AccountForm({
   const [businessSpaceIds, setBusinessSpaceIds] = useState<string[]>(
     () => initial ? businessSpaceIdsForAccount(initial) : [],
   );
-  const [posSpaceIds, setPosSpaceIds] = useState<string[]>(
-    () => initial ? posSpaceIdsForAccount(initial) : [],
-  );
   const [opening, setOpening] = useState(initial ? String(initial.openingBalanceMinor / 100) : '0.00');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -1299,22 +1280,11 @@ function AccountForm({
     setClassification(nextClassification);
     if (nextClassification === 'personal') {
       setBusinessSpaceIds([]);
-      setPosSpaceIds([]);
     }
   };
 
   const toggleBusinessSpace = (spaceId: string, enabled: boolean) => {
     setBusinessSpaceIds((current) =>
-      enabled
-        ? Array.from(new Set([...current, spaceId]))
-        : current.filter((id) => id !== spaceId));
-    if (!enabled) {
-      setPosSpaceIds((current) => current.filter((id) => id !== spaceId));
-    }
-  };
-
-  const togglePosSpace = (spaceId: string, enabled: boolean) => {
-    setPosSpaceIds((current) =>
       enabled
         ? Array.from(new Set([...current, spaceId]))
         : current.filter((id) => id !== spaceId));
@@ -1331,7 +1301,7 @@ function AccountForm({
         type,
         classification,
         businessSpaceIds: classification === 'business' ? businessSpaceIds : [],
-        posSpaceIds: classification === 'business' ? posSpaceIds : [],
+        posSpaceIds: classification === 'business' ? businessSpaceIds : [],
         currency,
         openingBalanceMinor: initial ? initial.openingBalanceMinor : toMinorUnits(opening),
         color,
@@ -1356,7 +1326,6 @@ function AccountForm({
       <div className="form-stack compact">
         {spaces.map((space) => {
           const linked = businessSpaceIds.includes(space.id);
-          const posEnabledHere = posSpaceIds.includes(space.id);
           return <div className="panel" key={space.id}>
             <label className="checkbox-field">
               <input
@@ -1370,22 +1339,10 @@ function AccountForm({
                 <small>Make this Business account available inside this Business Space.</small>
               </span>
             </label>
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={posEnabledHere}
-                disabled={!linked || Boolean(space.archivedAt)}
-                onChange={(event) => togglePosSpace(space.id, event.target.checked)}
-              />
-              <span>
-                <strong>Allow POS payments in {space.name}</strong>
-                <small>Cashiers can use it only when their POS role allows checkout. This does not automatically reveal the account balance.</small>
-              </span>
-            </label>
           </div>;
         })}
       </div>
-      <small>A Business account is independent from a Space. Link the same account to as many of your Business Spaces as needed. You can also leave it unlinked and connect it later.</small>
+      <small>Link the same account to as many Business Spaces as needed. A linked account is automatically available to that Business POS; staff access still follows their POS role and account permissions.</small>
     </fieldset>}
     {classification === 'business' && !spaces.some((space) => !space.archivedAt) && <div className="notice span-2">Create or restore an Business Space before adding a business account.</div>}
     <label className="span-2">Institution or provider

@@ -586,11 +586,6 @@ function accountLinkedToBusinessSpace(account: DocumentData, spaceId: string): b
   return businessSpaceIdsForAccountData(account).includes(spaceId);
 }
 
-function accountPosEnabledForBusinessSpace(account: DocumentData, spaceId: string): boolean {
-  return accountLinkedToBusinessSpace(account, spaceId)
-    && posSpaceIdsForAccountData(account).includes(spaceId);
-}
-
 function accountAccessDocumentId(accountId: string, uid: string): string {
   return accountId + '_' + uid;
 }
@@ -15088,8 +15083,8 @@ function configuredSmePosPaymentAccountIds(settings: DocumentData): string[] | n
 }
 
 function isSmePosPaymentAccountForSpace(settings: DocumentData, account: DocumentData, accountId: string, spaceId: string): boolean {
-  if (accountPosEnabledForBusinessSpace(account, spaceId)) return true;
   const linkedSpaces = businessSpaceIdsForAccountData(account);
+  if (linkedSpaces.includes(spaceId)) return true;
   if (linkedSpaces.length > 0) return false;
   const legacyIds = configuredSmePosPaymentAccountIds(settings);
   return Boolean(legacyIds?.includes(accountId));
@@ -15097,7 +15092,7 @@ function isSmePosPaymentAccountForSpace(settings: DocumentData, account: Documen
 
 function requireSmePosPaymentAccountForSpace(settings: DocumentData, account: DocumentData, accountId: string, spaceId: string) {
   if (!isSmePosPaymentAccountForSpace(settings, account, accountId, spaceId)) {
-    throw new HttpsError('failed-precondition', 'This account is not enabled for POS payments in this Business Space. Link it from Accounts and enable POS for this Business first.');
+    throw new HttpsError('failed-precondition', 'This account is not linked to this Business Space.');
   }
 }
 

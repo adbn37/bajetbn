@@ -9,7 +9,6 @@ import { InviteForm } from '../collaboration/CollaborationPage';
 import {
   businessSpaceIdsForAccount,
   listAccounts,
-  posSpaceIdsForAccount,
 } from '../../repositories/accountRepository';
 import {
   listSpaceInvitations,
@@ -132,8 +131,7 @@ export function SmePosSettingsPage() {
     return accounts.filter((item) => item.classification === 'business'
       && item.currency === (space?.currency || 'BND')
       && (
-        (businessSpaceIdsForAccount(item).includes(space?.id || '')
-          && posSpaceIdsForAccount(item).includes(space?.id || ''))
+        businessSpaceIdsForAccount(item).includes(space?.id || '')
         || (businessSpaceIdsForAccount(item).length === 0 && legacyIds.has(item.id))
       ));
   }, [accounts, settings?.paymentAccountIds, space?.currency, space?.id]);
@@ -173,8 +171,7 @@ export function SmePosSettingsPage() {
         const nextEligibleAccounts = nextAccounts.filter((item) => item.classification === 'business'
           && item.currency === nextSpace.currency
           && (
-            (businessSpaceIdsForAccount(item).includes(nextSpace.id)
-              && posSpaceIdsForAccount(item).includes(nextSpace.id))
+            businessSpaceIdsForAccount(item).includes(nextSpace.id)
             || (businessSpaceIdsForAccount(item).length === 0 && legacyIds.has(item.id))
           ));
         setDefaultPaymentAccountId(
@@ -219,11 +216,11 @@ export function SmePosSettingsPage() {
       return;
     }
     if (!eligiblePaymentAccounts.length) {
-      setError(`Add or edit a business account in Accounts, assign it to ${space?.name || 'this Business'}, and enable POS payments first.`);
+      setError(`Add or edit a business account in Accounts, link it to ${space?.name || 'this Business'} first.`);
       return;
     }
     if (defaultPaymentAccountId && !eligiblePaymentAccounts.some((item) => item.id === defaultPaymentAccountId)) {
-      setError('The default payment account must be linked to this Business and be enabled for POS payments.');
+      setError('The default payment account must be linked to this Business.');
       return;
     }
     if (!settings || settings.mode === mode || settings.status === 'draft') {
@@ -425,7 +422,7 @@ export function SmePosSettingsPage() {
           <label className="span-2">Receipt message<textarea value={receiptFooter} onChange={(event) => setReceiptFooter(event.target.value)} rows={3} maxLength={240} placeholder="Thank you for shopping with us." /></label>
           <fieldset className="span-2">
             <legend>Payment accounts</legend>
-            <small>Account ownership and POS availability are managed from Accounts by the Business owner. Managers and cashiers cannot attach another account here.</small>
+            <small>All active Business Accounts linked to this Business are available here. Managers and cashiers cannot attach another account.</small>
             <div className="form-stack compact">
               {eligiblePaymentAccounts.map((account) => <div key={account.id}>
                 <strong>{account.name}</strong> · {account.type.replace('_', ' ')} · {account.currency}
@@ -435,10 +432,10 @@ export function SmePosSettingsPage() {
             </div>
             <Link className="text-button" to="/accounts">Manage business accounts →</Link>
           </fieldset>
-          <label className="span-2">Default payment account<select value={defaultPaymentAccountId} onChange={(event) => setDefaultPaymentAccountId(event.target.value)}><option value="">Choose during checkout</option>{eligiblePaymentAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select><small>Optional. The account must belong to {space.name} and be enabled for POS payments from Accounts.</small></label>
+          <label className="span-2">Default payment account<select value={defaultPaymentAccountId} onChange={(event) => setDefaultPaymentAccountId(event.target.value)}><option value="">Choose during checkout</option>{eligiblePaymentAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}</select><small>Optional. The account must be linked to {space.name}.</small></label>
         </div>
 
-        {!eligiblePaymentAccounts.length && <div className="notice">No POS payment account is linked to {space.name}. Open Accounts, edit a business account, link it to this Business, and enable POS payments.</div>}
+        {!eligiblePaymentAccounts.length && <div className="notice">No payment account is linked to {space.name}. Open Accounts and link a Business Account to this Business.</div>}
         <div className="button-row">
           <button className="button primary" type="submit" disabled={busy}>{busy ? 'Saving…' : settings ? 'Save POS settings' : 'Save POS setup'}</button>
           {settings?.status === 'draft' && <button className="button secondary" type="button" disabled={busy} onClick={() => askStatus('active')}>Activate POS</button>}
