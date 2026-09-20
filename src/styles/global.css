@@ -17836,3 +17836,191 @@ a.business-report-row-v115:focus-visible {
       );
   }
 }
+
+/* ==========================================================
+   BAJETBN V115 DESKTOP HOME CANVAS CORRECTION
+   True wide-desktop Home canvas. Overrides the previous audit
+   that was still constrained by the global .page max-width and
+   by mobile-oriented !important account-card sizing.
+   Desktop only; mobile/tablet remains unchanged.
+   ========================================================== */
+
+@media (min-width: 1240px) {
+  .page.bajetbn-reference-home {
+    width: auto;
+    max-width: none;
+    margin-inline: 0;
+    padding:
+      1.5rem
+      clamp(1.5rem, 2.1vw, 2.75rem)
+      3.5rem;
+    grid-template-columns:
+      repeat(
+        12,
+        minmax(0, 1fr)
+      );
+    column-gap: 1rem;
+    row-gap: 0;
+  }
+
+  .page.bajetbn-reference-home
+  > .bajetbn-home-profile-header,
+  .page.bajetbn-reference-home
+  > .notice,
+  .page.bajetbn-reference-home
+  > .bajetbn-total-assets-card {
+    grid-column: 1 / -1;
+  }
+
+  .page.bajetbn-reference-home
+  > .bajetbn-total-assets-card {
+    margin-bottom: .35rem;
+    padding: 1rem 1.15rem;
+  }
+
+  .bajetbn-total-assets-breakdown {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+    gap: .7rem;
+  }
+
+  .page.bajetbn-reference-home
+  > .bajetbn-home-accounts-section {
+    order: 4;
+    grid-column: 1 / span 8;
+    min-width: 0;
+  }
+
+  .page.bajetbn-reference-home
+  > .home-v110-shortcuts {
+    order: 4;
+    grid-column: 9 / -1;
+    align-self: start;
+    margin-top: 1rem;
+  }
+
+  .bajetbn-home-account-strip {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        auto-fit,
+        minmax(220px, 1fr)
+      );
+    gap: .75rem;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .bajetbn-home-account-card {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  .home-v110-shortcuts.bajetbn-reference-actions-four {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      ) !important;
+    gap: .7rem !important;
+    height: auto;
+    align-content: start;
+  }
+
+  .bajetbn-reference-actions
+  > a,
+  .bajetbn-reference-actions
+  > button {
+    min-height: 84px;
+    padding: .72rem .55rem !important;
+  }
+
+  .page.bajetbn-reference-home
+  > .bajetbn-home-recent-section {
+    order: 6;
+    grid-column: 1 / span 8;
+    min-width: 0;
+    margin-top: .9rem;
+  }
+
+  .page.bajetbn-reference-home
+  > .home-v110-secondary-grid {
+    order: 6;
+    grid-column: 9 / -1;
+    align-self: start;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+    gap: .7rem;
+    margin-top: .9rem;
+  }
+
+  .home-v110-secondary-grid
+  > a {
+    min-height: 82px;
+    display: grid;
+    align-content: center;
+    gap: .18rem;
+    padding: .9rem 1rem;
+  }
+
+  .bajetbn-home-recent-section
+  .home-v110-activity-list {
+    width: 100%;
+  }
+
+  .bajetbn-home-recent-section
+  .home-v110-activity-row {
+    grid-template-columns:
+      38px
+      minmax(220px, 1fr)
+      minmax(132px, auto);
+    min-height: 58px;
+    gap: .8rem;
+    padding: .68rem .85rem;
+  }
+
+  .bajetbn-home-recent-section
+  .home-v110-activity-copy {
+    justify-self: stretch;
+    text-align: left;
+  }
+
+  .bajetbn-home-recent-section
+  .bajetbn-home-activity-value {
+    min-width: 132px;
+    justify-items: end;
+    text-align: right;
+  }
+
+  .bajetbn-home-section-title h2 {
+    font-size: 1.05rem;
+  }
+
+  .bajetbn-home-section-title a {
+    font-size: .74rem;
+  }
+}
+
+@media (min-width: 1760px) {
+  .page.bajetbn-reference-home {
+    padding-inline:
+      clamp(
+        2rem,
+        2.4vw,
+        3.25rem
+      );
+  }
+
+  .bajetbn-home-account-strip {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+}
