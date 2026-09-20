@@ -18538,3 +18538,39 @@ a.business-report-row-v115:focus-visible {
     overflow: visible !important;
   }
 }
+
+
+
+/* ==========================================================
+   BAJETBN V115 SPACE REFINEMENT V5
+   Direct Trip workspaces + cleaner Household task/shop pages.
+   ========================================================== */
+
+.trip-plan-direct-v115 {
+  width: 100%;
+  min-width: 0;
+}
+
+.trip-plan-direct-v115
+.trip-planning-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+.trip-plan-direct-v115
+.trip-planning-grid {
+  grid-template-columns:
+    minmax(0, 1fr) !important;
+}
+
+.trip-plan-direct-v115
+.trip-planning-section {
+  width: 100%;
+  min-width: 0;
+}
+
+.household-inline-section-v1147
+.space-work-panel
+> .button-row:first-child {
+  display: none !important;
+}

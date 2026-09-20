@@ -207,13 +207,13 @@ const HouseholdCommandCentre = lazy(
   },
 );
 
-const TripCommandCentre = lazy(
+const TripPlanningPanel = lazy(
   async () => {
     const module =
-      await import('./TripCommandCentre');
+      await import('./TripPlanningPanel');
 
     return {
-      default: module.TripCommandCentre,
+      default: module.TripPlanningPanel,
     };
   },
 );
@@ -1142,6 +1142,24 @@ export function SpaceDetailsPage() {
         />
       )}
 
+    {space.type === 'trip'
+      && activeTab === 'overview'
+      && requestedSection === 'budgets'
+      && (
+        <Suspense
+          fallback={
+            <div className="loading-panel">
+              Loading Budget...
+            </div>
+          }
+        >
+          <EmbeddedBudgetsPage
+            embedded
+            spaceIdOverride={space.id}
+          />
+        </Suspense>
+      )}
+
     {space.type === 'household'
       && activeTab === 'overview'
       && householdInlineSection
@@ -1303,52 +1321,21 @@ export function SpaceDetailsPage() {
         />
       )}
 
-    {detailedOverviewRequested && activeTab === 'overview' && space.type === 'trip' && (
-      <details
-        open={detailedOverviewRequested}
-        onToggle={(event) => {
-          const next =
-            new URLSearchParams(searchParams);
-
-          if (event.currentTarget.open) {
-            next.set('details', '1');
-          } else {
-            next.delete('details');
-          }
-
-          setSearchParams(
-            next,
-            { replace: true },
-          );
-        }}
-        className="space-home-secondary-details"
-        style={{ marginTop: '0.75rem' }}
-      >
-        <summary
-          style={{
-            cursor: 'pointer',
-            fontWeight: 600,
-            padding: '0.5rem 0',
-          }}
+    {detailedOverviewRequested
+      && activeTab === 'overview'
+      && space.type === 'trip'
+      && (
+        <section
+          className="panel trip-plan-direct-v115"
+          data-trip-plan-direct
         >
-          Detailed Trip overview
-        </summary>
-
-        <div style={{ marginTop: '0.75rem' }}>
-          {detailedOverviewRequested && (
-            <TripCommandCentre
-              space={space}
-              budgets={budgets}
-              members={members}
-              currentMember={currentMember}
-              sharedExpenses={sharedExpenses}
-              onOpenTab={(tab) => chooseTab(tab)}
-            />
-          )}
-        </div>
-      </details>
-    )}
-
+          <TripPlanningPanel
+            space={space}
+            members={members}
+            currentMember={currentMember}
+          />
+        </section>
+      )}
 
     {showDetailedSpaceOverviews() && activeTab === 'overview' && space.type === 'household' && (
       <details
@@ -1462,6 +1449,14 @@ export function SpaceDetailsPage() {
     {activeTab === 'overview' ? (
       householdInlineSection
       || marketplaceInlineSection
+      || (
+        space.type === 'trip'
+        && requestedSection === 'budgets'
+      )
+      || (
+        space.type === 'trip'
+        && detailedOverviewRequested
+      )
         ? null
         : <SpaceOverview
       space={space}
