@@ -165,7 +165,7 @@ export function GoalsPage({
   return <main className={embedded ? 'page embedded-module-page' : 'page'}><PageHeader
       eyebrow={embedded ? 'Personal Space' : 'Planning'}
       title="Savings goals"
-      description="Track money you plan to save for emergencies, school, travel, equipment, or anything else."
+      description="Track savings targets and progress."
       action={
         embedded
           ? (

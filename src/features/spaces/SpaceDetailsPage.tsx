@@ -352,18 +352,18 @@ function tabFromSearch(value: string | null, shared: boolean): SpaceDetailsTab {
 
 function spaceDescription(space: Space) {
   if (space.description) return space.description;
-  if (space.type === 'personal') return 'Your private place for personal money.';
-  if (space.type === 'household') return 'Manage household money, members, and shared bills together.';
-  if (space.type === 'trip') return 'Keep trip spending, members, and shared payments in one place.';
-  if (space.type === 'sme') return 'Keep business money separate from personal money.';
-  if (space.type === 'goal') return 'Track money for a shared goal or project.';
-  if (space.type === 'collection') return 'Organise collectibles, quantities, barcodes, labels, and storage locations.';
-  if (space.type === 'vehicle') return 'Track fuel, servicing, insurance, repairs and other vehicle costs.';
-  if (space.type === 'property') return 'Track rent, utilities, maintenance and other property money in one place.';
-  if (space.type === 'project') return 'Keep project budgets, shared costs, goals and important dates together.';
-  if (space.type === 'event') return 'Plan an event budget, shared contributions, spending and important dates together.';
-  if (space.type === 'asset') return 'Track ownership costs, maintenance and spending connected to this asset.';
-  return 'A separate place for this money activity.';
+  if (space.type === 'personal') return 'Personal money.';
+  if (space.type === 'household') return 'Household money and planning.';
+  if (space.type === 'trip') return 'Trip money and planning.';
+  if (space.type === 'sme') return 'Business money.';
+  if (space.type === 'goal') return 'Shared goal.';
+  if (space.type === 'collection') return 'Collection tracking.';
+  if (space.type === 'vehicle') return 'Vehicle costs.';
+  if (space.type === 'property') return 'Property money.';
+  if (space.type === 'project') return 'Project money and planning.';
+  if (space.type === 'event') return 'Event money and planning.';
+  if (space.type === 'asset') return 'Asset costs.';
+  return 'Space money activity.';
 }
 
 export function SpaceDetailsPage() {
@@ -1742,9 +1742,7 @@ function SpaceHomeOverview({
 
             <h2>This month</h2>
 
-            <p className="muted">
-              Money activity belonging to {space.name}.
-            </p>
+
           </div>
         </div>
 
@@ -1774,7 +1772,7 @@ function SpaceHomeOverview({
           <article className="summary-card">
             <span>Net</span>
             <strong>{netText()}</strong>
-            <small>Money in minus money out</small>
+            <small>This month</small>
           </article>
 
           <article className="summary-card">
@@ -1804,9 +1802,7 @@ function SpaceHomeOverview({
             <span className="eyebrow">Accounts</span>
             <h2>{accountHeading}</h2>
             <p className="muted">
-              Only your accounts used by this Space are shown.
-              Balances are full account balances,
-              not the Space fund balance.
+              Full account balance shown, not this Space's share.
             </p>
           </div>
 
@@ -1868,8 +1864,7 @@ function SpaceHomeOverview({
           </div>
         ) : (
           <p className="muted space-home-v1147-empty">
-            No account is currently connected through
-            this Space's money activity.
+            No account used yet.
           </p>
         )}
       </section>
@@ -1880,9 +1875,7 @@ function SpaceHomeOverview({
           <div>
             <span className="eyebrow">Recent</span>
             <h2>Money activity</h2>
-            <p className="muted">
-              Latest records saved in {space.name}.
-            </p>
+
           </div>
 
           <Link
@@ -1946,8 +1939,7 @@ function SpaceHomeOverview({
           </div>
         ) : (
           <p className="muted space-home-v1147-empty">
-            No money activity has been recorded in this
-            Space yet.
+            No money activity yet.
           </p>
         )}
       </section>
@@ -1957,9 +1949,7 @@ function SpaceHomeOverview({
           <div>
             <span className="eyebrow">Attention</span>
             <h2>Needs attention</h2>
-            <p className="muted">
-              Open payments and shared items for this Space.
-            </p>
+
           </div>
         </div>
 

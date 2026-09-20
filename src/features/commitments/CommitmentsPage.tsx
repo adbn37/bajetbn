@@ -316,7 +316,7 @@ export function CommitmentsPage({
             ? 'Instalments'
             : 'Bills & instalments'
       }
-      description="Track what is due, then record payments from the account you used."
+      description="Track what is due and record payments."
       action={
         embedded
           ? canManageCurrentSpace

@@ -175,7 +175,7 @@ export function BudgetsPage({
           : 'Planning'
       }
       title="Budget"
-      description="Set how much you plan to spend. Saved expenses update the matching budget automatically."
+      description="Plan spending. Saved expenses update budgets automatically."
       action={
         embedded
           ? (

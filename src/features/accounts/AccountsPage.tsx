@@ -411,10 +411,10 @@ export function AccountsPage({
         embedded
           ? embeddedSpace?.type === 'sme'
             ? canManageEmbeddedAccounts
-              ? 'Manage the Business accounts linked to this Business Space.'
+              ? 'Accounts linked to this Business Space.'
               : 'Business Account management stays with the owner. Accounts shared with you appear on your main Accounts page.'
-            : 'Manage the personal accounts available to this Personal Space.'
-          : 'Your bank, cash, card and e-wallet accounts. Business Accounts are global financial containers and can be linked to one or more Business Spaces without duplicating the account.'
+            : 'Accounts available to this Personal Space.'
+          : 'One account can be used across multiple Spaces.'
       }
       action={accountHeaderAction}
     />

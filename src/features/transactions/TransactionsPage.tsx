@@ -973,7 +973,7 @@ export function TransactionsPage() {
       <PageHeader
         eyebrow="Money records"
         title="Money activity"
-        description="View your Personal money activity. Business money stays inside its Business Space."
+        description="Personal money activity."
         action={<div className="header-actions">
           <Link className="button secondary" to="/linked-money">Linked money</Link>
           <Link className="button secondary" to="/recurring">Recurring money</Link>

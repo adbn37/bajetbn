@@ -373,7 +373,7 @@ export function CalendarPage() {
   if (loading) return <main className="page"><div className="panel">Loading your calendar…</div></main>;
 
   return <main className="page calendar-page">
-    <PageHeader eyebrow="Plan ahead" title="Calendar & reminders" description="See what is late, due today, or coming soon." />
+    <PageHeader eyebrow="Plan ahead" title="Calendar & reminders" description="Due dates and reminders." />
     {error && <div className="notice error">{error}</div>}
     {success && <div className="notice success">{success}</div>}
 
