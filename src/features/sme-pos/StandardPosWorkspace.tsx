@@ -52,6 +52,7 @@ interface Props {
   settings: SmePosSettings;
   role: SmePosRole;
   onChanged: () => Promise<void> | void;
+  embeddedManagementTab?: 'products' | null;
 }
 
 type WorkspaceTab = 'products' | 'customers' | 'register' | 'bookings' | 'sales';
@@ -121,7 +122,13 @@ function initialTab(role: SmePosRole): WorkspaceTab {
   return 'register';
 }
 
-export function StandardPosWorkspace({ space, settings, role, onChanged }: Props) {
+export function StandardPosWorkspace({
+  space,
+  settings,
+  role,
+  onChanged,
+  embeddedManagementTab = null,
+}: Props) {
   const [searchParams] = useSearchParams();
 
   const availableTabs =
@@ -131,7 +138,10 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     );
 
   const requestedTab =
-    searchParams.get('tab') as WorkspaceTab | null;
+    embeddedManagementTab
+    ?? (
+      searchParams.get('tab') as WorkspaceTab | null
+    );
 
   const [tab, setTab] =
     useState<WorkspaceTab>(
@@ -249,6 +259,7 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     }
   }, [
     availableTabs,
+    embeddedManagementTab,
     requestedTab,
     role,
     tab,
@@ -822,7 +833,13 @@ export function StandardPosWorkspace({ space, settings, role, onChanged }: Props
     return <section className="panel"><span className="eyebrow">Seller access</span><h2>Marketplace seller workspace</h2><p>Seller listings, balances, and payouts are added in the Marketplace Consignment POS phase.</p></section>;
   }
 
-  return <section className="sme-standard-pos-workspace">
+  return <section
+    className={
+      embeddedManagementTab
+        ? 'sme-standard-pos-workspace embedded-management'
+        : 'sme-standard-pos-workspace'
+    }
+  >
     <div className="pos-workspace-heading">
       <div><span className="eyebrow">Shop tools</span><h2>{role === 'cashier' ? 'Register' : 'Point of sale'}</h2><p>{role === 'cashier' ? 'Search products, take payment, and issue the receipt.' : 'Use the tools available for your assigned POS role.'}</p></div>
       {canManageProducts && <Link className="button secondary" to={`/spaces/${space.id}/pos/archived`}>Archived POS records</Link>}

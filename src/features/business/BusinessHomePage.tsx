@@ -52,6 +52,9 @@ import {
   MarketplaceConsignmentPosWorkspace,
   type MarketplaceManagementTab,
 } from '../sme-pos/MarketplaceConsignmentPosWorkspace';
+import {
+  StandardPosWorkspace,
+} from '../sme-pos/StandardPosWorkspace';
 
 function monthPrefix() {
   return new Date()
@@ -463,6 +466,30 @@ export function BusinessHomePage() {
     && posSettings?.mode
       === 'marketplace_consignment';
 
+  const canUseEmbeddedStandard =
+    Boolean(posSettings)
+    && !canUseEmbeddedMarketplace;
+
+  const canAccessInventoryWorkspace =
+    Boolean(posSettings)
+    && (
+      isOwner
+      || posRole === 'manager'
+      || posRole === 'stock_staff'
+      || posRole === 'viewer'
+      || (
+        canUseEmbeddedMarketplace
+        && posRole === 'cashier'
+      )
+    );
+
+  const canAccessSellersWorkspace =
+    canUseEmbeddedMarketplace
+    && (
+      isOwner
+      || posRole === 'manager'
+    );
+
   const marketplaceWorkspaceTab:
     MarketplaceManagementTab | null =
       workspaceView === 'inventory'
@@ -776,6 +803,25 @@ export function BusinessHomePage() {
           </Link>
         )}
 
+        {canAccessInventoryWorkspace && (
+          <button
+            type="button"
+            className={
+              workspaceView
+                === 'inventory'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setWorkspaceView(
+                'inventory',
+              )
+            }
+          >
+            Products & Stock
+          </button>
+        )}
+
         {canViewFinancials && (
           <button
             type="button"
@@ -792,6 +838,25 @@ export function BusinessHomePage() {
             }
           >
             Sales & Documents
+          </button>
+        )}
+
+        {canAccessSellersWorkspace && (
+          <button
+            type="button"
+            className={
+              workspaceView
+                === 'sellers'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setWorkspaceView(
+                'sellers',
+              )
+            }
+          >
+            Sellers
           </button>
         )}
 
@@ -814,24 +879,29 @@ export function BusinessHomePage() {
           </button>
         )}
 
-        {canViewFinancials && (
-          <button
-            type="button"
-            className={
-              workspaceView
-                === 'reports'
-                ? 'active'
-                : ''
-            }
-            onClick={() =>
-              setWorkspaceView(
-                'reports',
-              )
-            }
-          >
-            Reports
-          </button>
-        )}
+        {(canViewFinancials
+          || (
+            canUseEmbeddedMarketplace
+            && posRole === 'seller'
+          ))
+          && (
+            <button
+              type="button"
+              className={
+                workspaceView
+                  === 'reports'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setWorkspaceView(
+                  'reports',
+                )
+              }
+            >
+              Reports
+            </button>
+          )}
 
         {isOwner && (
           <button
@@ -851,69 +921,6 @@ export function BusinessHomePage() {
             Business Setup
           </button>
         )}
-
-        {canUseEmbeddedMarketplace
-          && (
-            <>
-              <button
-                type="button"
-                className={
-                  workspaceView
-                    === 'inventory'
-                    ? 'active'
-                    : ''
-                }
-                onClick={() =>
-                  setWorkspaceView(
-                    'inventory',
-                  )
-                }
-              >
-                Products & Stock
-              </button>
-
-              {(isOwner
-                || posRole === 'manager')
-                && (
-                  <button
-                    type="button"
-                    className={
-                      workspaceView
-                        === 'sellers'
-                        ? 'active'
-                        : ''
-                    }
-                    onClick={() =>
-                      setWorkspaceView(
-                        'sellers',
-                      )
-                    }
-                  >
-                    Sellers
-                  </button>
-                )}
-
-              {posRole === 'seller'
-                && (
-                  <button
-                    type="button"
-                    className={
-                      workspaceView
-                        === 'reports'
-                        ? 'active'
-                        : ''
-                    }
-                    onClick={() =>
-                      setWorkspaceView(
-                        'reports',
-                      )
-                    }
-                  >
-                    Reports
-                  </button>
-                )}
-            </>
-          )}
       </nav>
 
       {workspaceView === 'reports'
@@ -1224,6 +1231,31 @@ export function BusinessHomePage() {
                 </small>
               </Link>
             </div>
+          </section>
+        )
+        : workspaceView === 'inventory'
+        && canUseEmbeddedStandard
+        && canAccessInventoryWorkspace
+        && posSettings
+        ? (
+          <section
+            className="business-workspace-embedded-v115 business-standard-inventory-v115"
+            data-business-standard-inventory
+          >
+            <div className="business-home-v115-section-heading">
+              <div>
+                <span>Inventory</span>
+                <h2>Products & Stock</h2>
+              </div>
+            </div>
+
+            <StandardPosWorkspace
+              space={space}
+              settings={posSettings}
+              role={effectivePosRole}
+              onChanged={load}
+              embeddedManagementTab="products"
+            />
           </section>
         )
         : workspaceView !== 'home'

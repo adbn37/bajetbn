@@ -16352,3 +16352,47 @@ a.business-report-row-v115:focus-visible {
     padding-inline: .35rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 FINAL BUSINESS WORKSPACE SHELL
+   Final module order and embedded Standard Products & Stock.
+   ========================================================== */
+
+.business-standard-inventory-v115
+.sme-standard-pos-workspace {
+  margin-top: 0;
+}
+
+.business-standard-inventory-v115
+.sme-standard-pos-workspace.embedded-management {
+  display: grid;
+  gap: .65rem;
+}
+
+.business-standard-inventory-v115
+.sme-standard-pos-workspace.embedded-management
+.pos-workspace-heading,
+.business-standard-inventory-v115
+.sme-standard-pos-workspace.embedded-management
+.sme-pos-workspace-tabs {
+  display: none;
+}
+
+.business-standard-inventory-v115
+.sme-pos-module-panel {
+  margin-top: 0;
+}
+
+@media (max-width: 620px) {
+  .business-workspace-nav-v115 {
+    scroll-snap-type: x proximity;
+  }
+
+  .business-workspace-nav-v115
+  > button,
+  .business-workspace-nav-v115
+  > a {
+    scroll-snap-align: start;
+  }
+}
