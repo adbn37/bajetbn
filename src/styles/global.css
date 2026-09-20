@@ -16811,3 +16811,331 @@ a.business-report-row-v115:focus-visible {
       );
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 CORE DESKTOP PAGE REFINEMENT
+   Page-specific desktop composition for everyday screens.
+   Mobile and tablet behaviour remains unchanged.
+   ========================================================== */
+
+@media (min-width: 1240px) {
+  /* Personal Home */
+  .bajetbn-reference-home {
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1.28fr)
+      minmax(340px, .72fr);
+    column-gap: 1.2rem;
+    align-items: start;
+  }
+
+  .bajetbn-reference-home
+  > .bajetbn-home-profile-header,
+  .bajetbn-reference-home
+  > .notice,
+  .bajetbn-reference-home
+  > .bajetbn-total-assets-card {
+    grid-column: 1 / -1;
+  }
+
+  .bajetbn-reference-home
+  > .bajetbn-home-accounts-section {
+    grid-column: 1;
+  }
+
+  .bajetbn-reference-home
+  > .home-v110-shortcuts {
+    grid-column: 2;
+    align-self: start;
+    margin-top: 1rem;
+  }
+
+  .bajetbn-reference-home
+  > .bajetbn-home-recent-section {
+    grid-column: 1;
+  }
+
+  .bajetbn-reference-home
+  > .home-v110-secondary-grid {
+    grid-column: 2;
+    align-self: start;
+  }
+
+  .bajetbn-home-account-strip {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+    overflow: visible;
+    gap: .75rem;
+  }
+
+  .bajetbn-home-account-card {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .bajetbn-home-recent-section
+  .home-v110-activity-row {
+    grid-template-columns:
+      minmax(0, 1fr)
+      auto;
+    padding: .9rem 1rem;
+  }
+
+  .home-v110-secondary-grid {
+    grid-template-columns: 1fr;
+    margin-top: 1rem;
+  }
+
+  /* Accounts */
+  .accounts-page:not(.embedded-module-page) {
+    width: min(
+      calc(100% - 3rem),
+      1520px
+    );
+    max-width: none;
+  }
+
+  .accounts-page
+  .account-summary {
+    grid-template-columns:
+      minmax(0, 2fr)
+      minmax(180px, .7fr)
+      minmax(180px, .7fr);
+  }
+
+  .accounts-page
+  .account-card {
+    grid-template-columns:
+      auto
+      minmax(0, 1fr)
+      minmax(190px, .32fr)
+      auto;
+    padding: 1rem 1.15rem;
+  }
+
+  .accounts-page
+  .account-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .4rem;
+  }
+
+  .accounts-page
+  .shared-account-section,
+  .accounts-page
+  .business-account-link-list-v115 {
+    max-width: none;
+  }
+
+  /* Money Activity */
+  .transaction-toolbar-expanded {
+    display: grid;
+    grid-template-columns:
+      auto
+      minmax(300px, 1fr);
+    align-items: center;
+    gap: .9rem 1rem;
+  }
+
+  .transaction-toolbar-expanded
+  > .transaction-search {
+    width: 100%;
+    max-width: 520px;
+    justify-self: end;
+    margin-left: 0;
+  }
+
+  .transaction-filter-grid {
+    grid-column: 1 / -1;
+    grid-template-columns:
+      repeat(
+        5,
+        minmax(150px, 1fr)
+      );
+  }
+
+  .transaction-row {
+    grid-template-columns:
+      auto
+      minmax(240px, 1.35fr)
+      minmax(190px, .8fr)
+      minmax(150px, .45fr)
+      minmax(110px, auto);
+    gap: 1rem 1.15rem;
+  }
+
+  .transaction-list {
+    gap: .6rem;
+  }
+
+  /* Spaces */
+  .spaces-card-grid.card-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+    gap: 1rem;
+  }
+
+  .spaces-card-grid
+  .space-card {
+    min-height: 210px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .spaces-card-grid
+  .space-card-actions-footer {
+    margin-top: auto;
+  }
+
+  .incoming-invitations-panel {
+    margin-bottom: 1rem;
+  }
+
+  .incoming-invitation-list {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+    gap: .75rem;
+  }
+
+  /* Reports */
+  .reports-v110-summary {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+    gap: .85rem;
+  }
+
+  .reports-v110-period-tabs {
+    width: fit-content;
+    min-width: 420px;
+  }
+
+  .reports-v110-period-nav {
+    max-width: 620px;
+  }
+
+  .financial-health-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .health-detail-grid,
+  .reports-grid,
+  .planning-report-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+    gap: 1rem;
+  }
+
+  .planning-report-grid
+  > .report-panel:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /* Settings */
+  .settings-page {
+    width: min(
+      calc(100% - 3rem),
+      1320px
+    );
+    max-width: none;
+  }
+
+  .settings-form {
+    display: grid;
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .settings-form
+  > .settings-section {
+    min-width: 0;
+  }
+
+  .settings-form
+  > .settings-save-bar {
+    grid-column: 1 / -1;
+  }
+
+  .settings-form
+  .settings-data-tools {
+    grid-column: 1 / -1;
+  }
+
+  .settings-form
+  .data-tool-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+
+  .settings-form
+  .preference-toggle-list {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (min-width: 1540px) {
+  .bajetbn-reference-home {
+    grid-template-columns:
+      minmax(0, 1.4fr)
+      minmax(380px, .6fr);
+  }
+
+  .bajetbn-home-account-strip {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .spaces-card-grid.card-grid {
+    grid-template-columns:
+      repeat(
+        5,
+        minmax(0, 1fr)
+      );
+  }
+
+  .transaction-filter-grid {
+    grid-template-columns:
+      repeat(
+        5,
+        minmax(170px, 1fr)
+      );
+  }
+}
