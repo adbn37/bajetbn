@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -492,6 +493,11 @@ export function SpaceActionHub({
   const [businessIndustry, setBusinessIndustry] =
     useState<BusinessIndustry>('general');
 
+  const mobileNavigationRef =
+    useRef<HTMLDivElement | null>(
+      null,
+    );
+
   useEffect(() => {
     if (space.type !== 'sme') {
       return;
@@ -701,6 +707,58 @@ export function SpaceActionHub({
                         ? null
                         : 'home';
 
+  useEffect(
+    () => {
+      const navigation =
+        mobileNavigationRef.current;
+
+      if (
+        !navigation
+        || typeof window === 'undefined'
+        || !window.matchMedia(
+          '(max-width: 620px)',
+        ).matches
+      ) {
+        return;
+      }
+
+      const active =
+        navigation.querySelector<HTMLElement>(
+          '.primary-action',
+        );
+
+      if (!active) {
+        return;
+      }
+
+      const frame =
+        window.requestAnimationFrame(
+          () => {
+            active.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest',
+              inline: 'center',
+            });
+          },
+        );
+
+      return () => {
+        window.cancelAnimationFrame(
+          frame,
+        );
+      };
+    },
+    [
+      activeSection,
+      activeTabTarget,
+      businessIndustry,
+      householdNavigationTarget,
+      searchParams,
+      space.id,
+      space.type,
+    ],
+  );
+
   return (
     <>
       <section
@@ -749,6 +807,7 @@ export function SpaceActionHub({
 
         {simplifiedSpaceNavigation && (
           <div
+            ref={mobileNavigationRef}
             className="space-action-buttons simplified-space-actions"
             data-simplified-space-navigation
             data-space-launcher={space.type}
