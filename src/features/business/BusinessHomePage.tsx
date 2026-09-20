@@ -752,19 +752,7 @@ export function BusinessHomePage() {
               {currentRole} · Business
             </p>
           </div>
-        </div>
-
-        <Link
-          className="button secondary compact"
-          to={
-            '/spaces/'
-            + space.id
-            + '?details=1'
-          }
-        >
-          Tools
-        </Link>
-      </header>
+        </div>      </header>
 
       {error && (
         <div className="notice error">
