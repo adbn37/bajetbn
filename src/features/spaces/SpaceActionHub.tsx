@@ -722,7 +722,17 @@ export function SpaceActionHub({
             <strong>{accessRoleLabel}</strong>
           </div>
 
-          <small className="muted">{space.type === 'sme' ? 'Business' : 'Shared Space'}</small>
+          <small className="muted">
+            {space.type === 'sme'
+              ? 'Business'
+              : space.type === 'household'
+                ? 'Household'
+                : space.type === 'trip'
+                  ? 'Trip'
+                  : space.type === 'personal'
+                    ? 'Personal'
+                    : 'Shared Space'}
+          </small>
         </div>
 
         {feedback && (
@@ -847,11 +857,45 @@ export function SpaceActionHub({
             </>}
 
             {space.type === 'trip' && <>
-              <ShortcutButton label="Plan" primary onClick={() => setTool('trip_planning')} />
-              <ShortcutButton label="Fund" onClick={() => setTool('fund')} />
-              <ShortcutButton label="Expenses" onClick={() => setTool('expenses')} />
-              <ShortcutButton label="Settle" onClick={() => setTool('balances')} />
-              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+              <ShortcutLink
+                to={`/spaces/${space.id}`}
+                label="Home"
+                primary={
+                  tool === null
+                  && !spaceMoreOpen
+                  && !activeSection
+                }
+              />
+
+              <ShortcutButton
+                label="Plan"
+                primary={tool === 'trip_planning'}
+                onClick={() => setTool('trip_planning')}
+              />
+
+              <ShortcutButton
+                label="Fund"
+                primary={tool === 'fund'}
+                onClick={() => setTool('fund')}
+              />
+
+              <ShortcutButton
+                label="Expenses"
+                primary={tool === 'expenses'}
+                onClick={() => setTool('expenses')}
+              />
+
+              <ShortcutButton
+                label="Settle"
+                primary={tool === 'balances'}
+                onClick={() => setTool('balances')}
+              />
+
+              <ShortcutButton
+                label="More"
+                primary={spaceMoreOpen}
+                onClick={() => setSpaceMoreOpen(true)}
+              />
             </>}
 
             {space.type === 'household' && <>
@@ -921,19 +965,71 @@ export function SpaceActionHub({
             </>}
 
             {space.type === 'personal' && <>
-              <ShortcutLink to="/accounts" label="Accounts" primary />
-              <ShortcutLink to="/transactions" label="Money" />
-              <ShortcutLink to="/bills" label="Bills" />
-              <ShortcutButton label="More" onClick={() => setSpaceMoreOpen(true)} />
+              <ShortcutLink
+                to={`/spaces/${space.id}`}
+                label="Home"
+                primary={
+                  !activeSection
+                  && !spaceMoreOpen
+                }
+              />
+
+              <ShortcutLink
+                to="/accounts"
+                label="Accounts"
+              />
+
+              <ShortcutLink
+                to="/transactions"
+                label="Money"
+              />
+
+              <ShortcutLink
+                to="/bills"
+                label="Bills"
+              />
+
+              <ShortcutButton
+                label="More"
+                primary={spaceMoreOpen}
+                onClick={() => setSpaceMoreOpen(true)}
+              />
             </>}
 
             {!['sme', 'trip', 'household', 'personal'].includes(space.type) && <>
+              <ShortcutLink
+                to={`/spaces/${space.id}`}
+                label="Home"
+                primary={
+                  tool === null
+                  && !spaceMoreOpen
+                  && !activeSection
+                }
+              />
+
               {supportsGroupFund && (
-                <ShortcutButton label={fundLabel} primary onClick={() => setTool('fund')} />
+                <ShortcutButton
+                  label={fundLabel}
+                  primary={tool === 'fund'}
+                  onClick={() => setTool('fund')}
+                />
               )}
-              <ShortcutButton label="Expenses" onClick={() => setTool('expenses')} />
-              <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" />
-              <ShortcutLink to={`/spaces/${space.id}?tab=chat`} label="Chat" />
+
+              <ShortcutButton
+                label="Expenses"
+                primary={tool === 'expenses'}
+                onClick={() => setTool('expenses')}
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=members`}
+                label="Members"
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=chat`}
+                label="Chat"
+              />
             </>}
           </div>
         )}

@@ -18090,3 +18090,379 @@ a.business-report-row-v115:focus-visible {
     display: grid !important;
   }
 }
+
+
+
+/* ==========================================================
+   BAJETBN V115 UNIFIED SPACE DESKTOP HOME
+   Gives non-Business Spaces the same desktop hierarchy and
+   workspace language as Business Home.
+   Mobile behaviour remains unchanged.
+   ========================================================== */
+
+@media (min-width: 1240px) {
+
+  /*
+   * Keep the existing Space identity/header, but scale it to
+   * the same desktop hierarchy as Business Home.
+   */
+  .space-details-page.bajetbn-reference-space
+  > .page-header {
+    margin-bottom: .9rem;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  > .page-header h1 {
+    font-size:
+      clamp(
+        1.8rem,
+        2.2vw,
+        2.6rem
+      );
+  }
+
+  /*
+   * The access strip remains useful for permissions but becomes
+   * a subtle context line instead of a large standalone block.
+   */
+  .space-details-page.bajetbn-reference-space
+  .space-home-access {
+    min-height: 32px;
+    margin-bottom: .55rem !important;
+    padding: .35rem .55rem !important;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /*
+   * Convert existing Space launcher actions into the same
+   * horizontal workspace navigation used by Business Home.
+   */
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+
+    width: 100%;
+    display: flex !important;
+    grid-template-columns: none !important;
+    flex-wrap: nowrap !important;
+
+    gap: .35rem !important;
+    margin: 0 0 1rem;
+    padding: .35rem !important;
+
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+
+    background:
+      color-mix(
+        in srgb,
+        var(--surface) 92%,
+        transparent
+      );
+
+    backdrop-filter: blur(14px);
+    scrollbar-width: thin;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .button.compact {
+    flex: 0 0 auto;
+
+    width: auto !important;
+    min-width: 76px !important;
+    min-height: 38px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: .5rem .72rem !important;
+
+    border: 0 !important;
+    border-radius: 10px !important;
+
+    background: transparent !important;
+    box-shadow: none !important;
+
+    color: var(--muted);
+    white-space: nowrap !important;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .button.compact:hover,
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .button.compact:focus-visible {
+    color: var(--text);
+
+    background:
+      color-mix(
+        in srgb,
+        var(--accent) 8%,
+        transparent
+      ) !important;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .button.compact.primary-action {
+    color: var(--text);
+
+    background:
+      color-mix(
+        in srgb,
+        var(--accent) 16%,
+        var(--surface)
+      ) !important;
+
+    box-shadow:
+      inset 0 0 0 1px
+      color-mix(
+        in srgb,
+        var(--accent) 35%,
+        transparent
+      ) !important;
+  }
+
+  /*
+   * Business workspace tabs are text-first. Hide launcher icons
+   * on desktop only; mobile keeps the existing icon cards.
+   */
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .space-shortcut-icon {
+    display: none !important;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .space-shortcut-copy {
+    min-width: 0;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .space-shortcut-copy strong {
+    display: block;
+    overflow: visible;
+
+    font-size: .72rem;
+    line-height: 1.2;
+
+    white-space: nowrap !important;
+    text-overflow: clip;
+
+    -webkit-line-clamp: unset;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions
+  .type-badge {
+    display: none;
+  }
+
+  /*
+   * Business Home uses strong full-width sections at normal
+   * desktop widths. Do the same for Space Home instead of
+   * squeezing Accounts and Activity into small columns.
+   */
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147 {
+    display: block !important;
+  }
+
+  /*
+   * Monthly summary becomes the Space equivalent of the
+   * Business linked-balance hero.
+   */
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-summary-panel {
+    position: relative;
+    overflow: hidden;
+
+    width: 100%;
+    margin-bottom: .9rem;
+
+    padding: 1.15rem 1.25rem !important;
+
+    border:
+      1px solid
+      color-mix(
+        in srgb,
+        var(--accent) 55%,
+        var(--border)
+      );
+
+    border-radius: 22px;
+
+    background:
+      radial-gradient(
+        circle at 90% 8%,
+        color-mix(
+          in srgb,
+          var(--accent) 20%,
+          transparent
+        ),
+        transparent 30%
+      ),
+      linear-gradient(
+        145deg,
+        color-mix(
+          in srgb,
+          var(--accent) 18%,
+          var(--surface)
+        ),
+        var(--surface)
+      );
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-summary {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      ) !important;
+
+    gap: .65rem !important;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-summary
+  .summary-card {
+    padding: .7rem .75rem !important;
+
+    background:
+      color-mix(
+        in srgb,
+        var(--surface) 82%,
+        transparent
+      );
+  }
+
+  /*
+   * Standard Space sections now use the same card language and
+   * vertical rhythm as Business accounts/activity sections.
+   */
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-section {
+    width: 100%;
+    margin-top: .85rem;
+
+    padding: .95rem 1rem;
+
+    border: 1px solid var(--border);
+    border-radius: 18px;
+
+    background: var(--surface);
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-account-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      ) !important;
+
+    gap: .65rem;
+  }
+
+  /*
+   * Recent activity becomes a full-width Business-style list,
+   * not a collection of small dashboard tiles.
+   */
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-activity {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+
+    gap: 0 !important;
+
+    overflow: hidden;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-activity-row {
+    width: 100%;
+
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(120px, auto) !important;
+
+    align-items: center;
+    gap: .8rem;
+
+    min-height: 54px;
+    padding: .65rem .75rem;
+
+    border: 0 !important;
+    border-top:
+      1px solid var(--border) !important;
+
+    border-radius: 0 !important;
+
+    background: transparent !important;
+
+    text-align: left;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-activity-row:first-child {
+    border-top: 0 !important;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-activity-row
+  > strong:last-child {
+    justify-self: end;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-attention-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      ) !important;
+
+    gap: .65rem;
+  }
+
+  /*
+   * Embedded Household tools should also occupy the desktop
+   * workspace cleanly rather than inheriting narrow cards.
+   */
+  .space-details-page.bajetbn-reference-space
+  .household-inline-section-v1147 {
+    width: 100%;
+    margin-top: .85rem;
+  }
+}
+
+@media (min-width: 1540px) {
+  .space-details-page.bajetbn-reference-space
+  .space-home-v1147-account-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      ) !important;
+  }
+}
