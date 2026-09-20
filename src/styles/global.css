@@ -18466,3 +18466,75 @@ a.business-report-row-v115:focus-visible {
       ) !important;
   }
 }
+
+
+
+/* ==========================================================
+   BAJETBN V115 DOWNLOAD INLINE SPACE WORKSPACES
+   Permanent workspace navigation + inline Space sections.
+   ========================================================== */
+
+.space-details-page.bajetbn-reference-space
+.space-details-tabs {
+  display: none !important;
+}
+
+.space-inline-workspace-v115 {
+  width: 100%;
+  margin-top: .85rem;
+  padding: .95rem 1rem;
+
+  border: 1px solid var(--border);
+  border-radius: 18px;
+
+  background: var(--surface);
+}
+
+.space-inline-workspace-heading-v115 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 1rem;
+  margin-bottom: .85rem;
+}
+
+.space-inline-workspace-heading-v115 h2 {
+  margin: .12rem 0 0;
+}
+
+.bajetbn-reference-space-trip
+.space-home-secondary-details {
+  border: 0;
+}
+
+.bajetbn-reference-space-trip
+.space-home-secondary-details > summary {
+  display: none;
+}
+
+@media (min-width: 1240px) {
+  .space-details-page.bajetbn-reference-space
+  .space-action-buttons.simplified-space-actions {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+
+    flex-wrap: nowrap !important;
+
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-inline-workspace-v115 {
+    min-width: 0;
+  }
+
+  .space-details-page.bajetbn-reference-space
+  .space-inline-workspace-v115
+  .space-scoped-modal {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}

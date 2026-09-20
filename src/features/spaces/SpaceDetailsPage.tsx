@@ -1107,18 +1107,16 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
-    {(activeTab === 'overview' || space.type === 'sme') && (
-      <SpaceActionHub
-        space={space}
-        members={members}
-        currentMember={currentMember || null}
-        supportsGroupFund={supportsGroupFund}
-        fundLabel={fundTabLabel}
-        smePosRole={smePosRole}
-        canViewSmeFinancials={canViewSmeFinancials}
-        onRefresh={load}
-      />
-    )}
+    <SpaceActionHub
+      space={space}
+      members={members}
+      currentMember={currentMember || null}
+      supportsGroupFund={supportsGroupFund}
+      fundLabel={fundTabLabel}
+      smePosRole={smePosRole}
+      canViewSmeFinancials={canViewSmeFinancials}
+      onRefresh={load}
+    />
 
     {activeTab === 'overview'
       && space.type === 'sme'
@@ -1285,6 +1283,7 @@ export function SpaceDetailsPage() {
     {activeTab === 'overview'
       && compactActionHome
       && !requestedSection
+      && !detailedOverviewRequested
       && (
         <SpaceHomeOverview
           space={space}
@@ -1304,7 +1303,7 @@ export function SpaceDetailsPage() {
         />
       )}
 
-    {showDetailedSpaceOverviews() && activeTab === 'overview' && space.type === 'trip' && (
+    {detailedOverviewRequested && activeTab === 'overview' && space.type === 'trip' && (
       <details
         open={detailedOverviewRequested}
         onToggle={(event) => {
@@ -2551,7 +2550,21 @@ function SpaceOverview({
       </section>
     )}
 
-    {section && canViewFinancials && <Modal title={`${space.name} — ${sectionTitle[section]}`} onClose={closeOverviewSection}>
+    {section && canViewFinancials && <section className="space-inline-workspace-v115">
+      <div className="space-inline-workspace-heading-v115">
+        <div>
+          <span className="eyebrow">{space.name}</span>
+          <h2>{sectionTitle[section]}</h2>
+        </div>
+
+        <button
+          type="button"
+          className="button secondary compact"
+          onClick={closeOverviewSection}
+        >
+          Home
+        </button>
+      </div>
       <div className="space-scoped-modal">
         <div className="space-scoped-context">
           <strong>{space.name}</strong>
@@ -3027,7 +3040,7 @@ function SpaceOverview({
           </article>) : <EmptyState title="Nothing scheduled in this Space" description="Add a bill, Budget period, or goal target to give this Space something to schedule." />}
         </div>}
       </div>
-    </Modal>}
+    </section>}
 
     {requestedTransaction && (
       <SpaceMoneyActivityDeepLinkModal

@@ -668,6 +668,9 @@ export function SpaceActionHub({
   const activeSection =
     searchParams.get('section');
 
+  const activeTabTarget =
+    searchParams.get('tab');
+
   const householdNavigationTarget =
     space.type !== 'household'
       ? null
@@ -861,41 +864,93 @@ export function SpaceActionHub({
                 to={`/spaces/${space.id}`}
                 label="Home"
                 primary={
-                  tool === null
-                  && !spaceMoreOpen
-                  && !activeSection
+                  !activeSection
+                  && !activeTabTarget
+                  && searchParams.get('details') !== '1'
                 }
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?details=1`}
                 label="Plan"
-                primary={tool === 'trip_planning'}
-                onClick={() => setTool('trip_planning')}
+                primary={
+                  searchParams.get('details') === '1'
+                }
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=trip_money`}
                 label="Fund"
-                primary={tool === 'fund'}
-                onClick={() => setTool('fund')}
+                primary={
+                  activeTabTarget === 'trip_money'
+                }
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=expenses`}
                 label="Expenses"
-                primary={tool === 'expenses'}
-                onClick={() => setTool('expenses')}
+                primary={
+                  activeTabTarget === 'expenses'
+                }
               />
 
-              <ShortcutButton
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=balances`}
                 label="Settle"
-                primary={tool === 'balances'}
-                onClick={() => setTool('balances')}
+                primary={
+                  activeTabTarget === 'balances'
+                }
               />
 
-              <ShortcutButton
-                label="More"
-                primary={spaceMoreOpen}
-                onClick={() => setSpaceMoreOpen(true)}
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=budgets`}
+                label="Budget"
+                primary={
+                  activeSection === 'budgets'
+                }
               />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=bills`}
+                label="Bills"
+                primary={
+                  activeTabTarget === 'bills'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=members`}
+                label="Members"
+                primary={
+                  activeTabTarget === 'members'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=chat`}
+                label="Chat"
+                primary={
+                  activeTabTarget === 'chat'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=activity`}
+                label="Activity"
+                primary={
+                  activeTabTarget === 'activity'
+                }
+              />
+
+              {currentMember?.role === 'owner' && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}?tab=settings`}
+                  label="Settings"
+                  primary={
+                    activeTabTarget === 'settings'
+                  }
+                />
+              )}
             </>}
 
             {space.type === 'household' && <>
@@ -904,6 +959,7 @@ export function SpaceActionHub({
                 label="Home"
                 primary={
                   householdNavigationTarget === 'home'
+                  && !activeTabTarget
                 }
               />
 
@@ -932,6 +988,14 @@ export function SpaceActionHub({
               />
 
               <ShortcutLink
+                to={`/spaces/${space.id}?tab=balances`}
+                label="Settle"
+                primary={
+                  activeTabTarget === 'balances'
+                }
+              />
+
+              <ShortcutLink
                 to={`/spaces/${space.id}?section=todo`}
                 label="To-Do"
                 primary={
@@ -948,6 +1012,22 @@ export function SpaceActionHub({
               />
 
               <ShortcutLink
+                to={`/spaces/${space.id}?section=budgets`}
+                label="Budget"
+                primary={
+                  activeSection === 'budgets'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=members`}
+                label="Members"
+                primary={
+                  activeSection === 'members'
+                }
+              />
+
+              <ShortcutLink
                 to={`/spaces/${space.id}?section=chat`}
                 label="Chat"
                 primary={
@@ -955,13 +1035,23 @@ export function SpaceActionHub({
                 }
               />
 
-              <ShortcutButton
-                label="More"
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=activity`}
+                label="Activity"
                 primary={
-                  householdNavigationTarget === 'more'
+                  activeSection === 'activity'
                 }
-                onClick={() => setSpaceMoreOpen(true)}
               />
+
+              {currentMember?.role === 'owner' && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}?section=settings`}
+                  label="Settings"
+                  primary={
+                    activeSection === 'settings'
+                  }
+                />
+              )}
             </>}
 
             {space.type === 'personal' && <>
@@ -970,29 +1060,80 @@ export function SpaceActionHub({
                 label="Home"
                 primary={
                   !activeSection
-                  && !spaceMoreOpen
+                  && !activeTabTarget
                 }
               />
 
               <ShortcutLink
-                to="/accounts"
+                to={`/spaces/${space.id}?section=accounts`}
                 label="Accounts"
+                primary={
+                  activeSection === 'accounts'
+                }
               />
 
               <ShortcutLink
-                to="/transactions"
+                to={`/spaces/${space.id}?section=money`}
                 label="Money"
+                primary={
+                  activeSection === 'money'
+                }
               />
 
               <ShortcutLink
-                to="/bills"
-                label="Bills"
+                to={`/spaces/${space.id}?section=budgets`}
+                label="Budget"
+                primary={
+                  activeSection === 'budgets'
+                }
               />
 
-              <ShortcutButton
-                label="More"
-                primary={spaceMoreOpen}
-                onClick={() => setSpaceMoreOpen(true)}
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=goals`}
+                label="Goals"
+                primary={
+                  activeSection === 'goals'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=bills`}
+                label="Bills"
+                primary={
+                  activeSection === 'bills'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=instalments`}
+                label="Instalments"
+                primary={
+                  activeSection === 'instalments'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=reports`}
+                label="Reports"
+                primary={
+                  activeSection === 'reports'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=calendar`}
+                label="Calendar"
+                primary={
+                  activeSection === 'calendar'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=settings`}
+                label="Settings"
+                primary={
+                  activeTabTarget === 'settings'
+                }
               />
             </>}
 
@@ -1001,35 +1142,130 @@ export function SpaceActionHub({
                 to={`/spaces/${space.id}`}
                 label="Home"
                 primary={
-                  tool === null
-                  && !spaceMoreOpen
-                  && !activeSection
+                  !activeSection
+                  && !activeTabTarget
                 }
               />
 
-              {supportsGroupFund && (
-                <ShortcutButton
-                  label={fundLabel}
-                  primary={tool === 'fund'}
-                  onClick={() => setTool('fund')}
+              {space.type === 'collection' && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}/collection`}
+                  label="Collection"
                 />
               )}
 
-              <ShortcutButton
+              {supportsGroupFund && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}?tab=group_fund`}
+                  label={fundLabel}
+                  primary={
+                    activeTabTarget === 'group_fund'
+                  }
+                />
+              )}
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=expenses`}
                 label="Expenses"
-                primary={tool === 'expenses'}
-                onClick={() => setTool('expenses')}
+                primary={
+                  activeTabTarget === 'expenses'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=balances`}
+                label="Settle"
+                primary={
+                  activeTabTarget === 'balances'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=bills`}
+                label="Bills"
+                primary={
+                  activeTabTarget === 'bills'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=money`}
+                label="Money"
+                primary={
+                  activeSection === 'money'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=budgets`}
+                label="Budget"
+                primary={
+                  activeSection === 'budgets'
+                }
+              />
+
+              {(space.type === 'goal'
+                || space.type === 'project'
+                || space.type === 'event'
+                || space.type === 'custom') && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}?section=goals`}
+                  label="Goals"
+                  primary={
+                    activeSection === 'goals'
+                  }
+                />
+              )}
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=reports`}
+                label="Reports"
+                primary={
+                  activeSection === 'reports'
+                }
+              />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?section=calendar`}
+                label="Calendar"
+                primary={
+                  activeSection === 'calendar'
+                }
               />
 
               <ShortcutLink
                 to={`/spaces/${space.id}?tab=members`}
                 label="Members"
+                primary={
+                  activeTabTarget === 'members'
+                }
               />
 
               <ShortcutLink
                 to={`/spaces/${space.id}?tab=chat`}
                 label="Chat"
+                primary={
+                  activeTabTarget === 'chat'
+                }
               />
+
+              <ShortcutLink
+                to={`/spaces/${space.id}?tab=activity`}
+                label="Activity"
+                primary={
+                  activeTabTarget === 'activity'
+                }
+              />
+
+              {currentMember?.role === 'owner' && (
+                <ShortcutLink
+                  to={`/spaces/${space.id}?tab=settings`}
+                  label="Settings"
+                  primary={
+                    activeTabTarget === 'settings'
+                  }
+                />
+              )}
             </>}
           </div>
         )}
