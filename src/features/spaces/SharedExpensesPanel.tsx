@@ -272,7 +272,7 @@ export function SharedExpensesPanel({
         </div>
       </div>
       {error && <div className="notice error">{error}</div>}
-      <div className="info-banner"><strong>Record who paid and split the amount</strong><span>Choose equal shares, different amounts, or percentages. Member repayments are kept separate from bank account balances.</span></div>
+      <div className="info-banner"><strong>Spend first or plan first.</strong><span>No budget is required. Record what was paid, select who shares it, and BajetBN keeps the running member balance.</span></div>
       <div className="shared-expense-grid">
         {expenses.length === 0 ? <p>No shared expenses yet.</p> : expenses.map((expense) => {
           const expenseShares = sharesByExpense.get(expense.id) || [];
@@ -281,7 +281,7 @@ export function SharedExpensesPanel({
           const payer = memberMap.get(expense.paidByUid);
           return <article className={`shared-expense-card status-${expense.status}`} key={expense.id}>
             <div className="planning-card-head"><div><span className="eyebrow">{expense.paidFromGroupFund || expense.paidFromTripMoney ? (space.type === 'trip' ? 'Paid using Trip money' : space.type === 'household' ? 'Paid using Household fund' : 'Paid using Group fund') : expense.status === 'paid' ? 'Everyone paid' : 'Payment still open'}</span><h3>{expense.title}</h3></div><strong>{formatMoney(expense.totalMinor, expense.currency)}</strong></div>
-            <div className="planning-meta"><span>Paid by {memberLabel(payer)}</span><span>{expense.expenseDate}</span><span>{expense.splitMode === 'equal' ? 'Split equally' : expense.splitMode === 'custom' ? 'Different amounts' : 'By percentage'}</span></div>
+            <div className="planning-meta"><span>Paid by {memberLabel(payer)}</span><span>{expense.expenseDate}</span><span>{expenseShares.length} {expenseShares.length === 1 ? 'person' : 'people'} Â· {expense.splitMode === 'equal' ? 'Split equally' : expense.splitMode === 'custom' ? 'Different amounts' : 'By percentage'}</span></div>
             <div className="transaction-preview"><div><span>Paid back</span><strong>{formatMoney(expense.totalSettledMinor, expense.currency)}</strong></div><div><span>Still to pay</span><strong>{formatMoney(expense.amountLeftMinor, expense.currency)}</strong></div></div>
             {expense.note && <p>{expense.note}</p>}
             <div className="expense-share-list">{expenseShares.map((share) => <span className={`expense-share-chip status-${share.status}`} key={share.id}>{share.memberName || share.memberEmail || 'Member'} · {formatMoney(share.shareMinor, share.currency)}{share.amountLeftMinor > 0 ? ` · ${formatMoney(share.amountLeftMinor, share.currency)} left` : ' · paid'}</span>)}</div>
@@ -292,7 +292,7 @@ export function SharedExpensesPanel({
           </article>;
         })}
       </div>
-      {createOpen && <Modal title="Add shared expense" onClose={() => setCreateOpen(false)}><SharedExpenseForm space={space} members={activeMembers} onSaved={async () => { setCreateOpen(false); await load(); }} /></Modal>}
+      {createOpen && <Modal title="Add expense" onClose={() => setCreateOpen(false)}><SharedExpenseForm space={space} members={activeMembers} onSaved={async () => { setCreateOpen(false); await load(); }} /></Modal>}
       {paying && <Modal title={paying.title} onClose={() => setPaying(null)}><SharedExpensePaymentForm space={space} payment={paying} onSaved={async () => { setPaying(null); await load(); }} /></Modal>}
 
       {inviteOpen && (
@@ -566,7 +566,24 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
   const selectedMembers = members.filter((item) => selected[item.uid]);
+  const payer = members.find((item) => item.uid === paidByUid);
+  const numericTotal = Number(total);
+  const previewTotalMinor = Number.isFinite(numericTotal) && numericTotal > 0
+    ? Math.round(numericTotal * 100)
+    : 0;
+  const equalShareMinor = selectedMembers.length > 0
+    ? Math.floor(previewTotalMinor / selectedMembers.length)
+    : 0;
+
+  const selectEveryone = () => {
+    setSelected(Object.fromEntries(members.map((item) => [item.uid, true])));
+  };
+
+  const clearEveryone = () => {
+    setSelected(Object.fromEntries(members.map((item) => [item.uid, false])));
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
@@ -583,24 +600,153 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
     finally { setBusy(false); }
   };
 
-  return <form className="form-stack" onSubmit={submit}>
+  return <form className="form-stack shared-expense-simple-form" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
-    <label>What was paid for?<input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Dinner, fuel, groceries…" /></label>
-    <label>Total amount (BND)<input required inputMode="decimal" value={total} onChange={(event) => setTotal(event.target.value)} /></label>
-    <label>Date<input type="date" required value={expenseDate} onChange={(event) => setExpenseDate(event.target.value)} /></label>
-    <label>Who paid first?<select required value={paidByUid} onChange={(event) => setPaidByUid(event.target.value)}>{members.map((member) => <option key={member.uid} value={member.uid}>{memberLabel(member)}</option>)}</select></label>
-    {(space.type === 'trip' || space.type === 'household' || space.type === 'custom') && <label className="checkbox-label"><input type="checkbox" checked={paidFromGroupFund} onChange={(event) => setPaidFromGroupFund(event.target.checked)} /> {space.type === 'trip' ? 'Paid using collected Trip money' : space.type === 'household' ? 'Paid using collected Household fund' : 'Paid using collected Group fund'}</label>}
-    <label>How should it be split?<select value={splitMode} onChange={(event) => setSplitMode(event.target.value as SharedExpenseSplitMode)}><option value="equal">Split equally</option><option value="custom">Enter different amounts</option><option value="percentage">Split by percentage</option></select></label>
-    <fieldset className="member-split-editor"><legend>Who should pay?</legend>{members.map((member) => <div className="member-split-row" key={member.uid}>
-      <label className="checkbox-label"><input type="checkbox" checked={Boolean(selected[member.uid])} onChange={(event) => setSelected((current) => ({ ...current, [member.uid]: event.target.checked }))} /> {memberLabel(member)}</label>
-      {selected[member.uid] && splitMode === 'custom' && <input aria-label={`${memberLabel(member)} amount`} inputMode="decimal" placeholder="BND" value={amounts[member.uid] || ''} onChange={(event) => setAmounts((current) => ({ ...current, [member.uid]: event.target.value }))} />}
-      {selected[member.uid] && splitMode === 'percentage' && <input aria-label={`${memberLabel(member)} percentage`} inputMode="decimal" placeholder="%" value={percentages[member.uid] || ''} onChange={(event) => setPercentages((current) => ({ ...current, [member.uid]: event.target.value }))} />}
-    </div>)}</fieldset>
-    <label>Note<textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} /></label>
-    <button className="button primary full" disabled={busy}>{busy ? 'Saving…' : 'Save shared expense'}</button>
+
+    <div className="info-banner">
+      <strong>No budget needed.</strong>
+      <span>Add what was paid, choose who shares it, and BajetBN works out the split.</span>
+    </div>
+
+    <label>
+      What was it for?
+      <input
+        autoFocus
+        required
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        placeholder="Food, groceries, taxi, hotelâ€¦"
+      />
+    </label>
+
+    <label>
+      Amount ({space.currency})
+      <input
+        required
+        inputMode="decimal"
+        value={total}
+        onChange={(event) => setTotal(event.target.value)}
+        placeholder="0.00"
+      />
+    </label>
+
+    <label>
+      Who paid?
+      <select required value={paidByUid} onChange={(event) => setPaidByUid(event.target.value)}>
+        {members.map((member) => <option key={member.uid} value={member.uid}>{memberLabel(member)}</option>)}
+      </select>
+    </label>
+
+    <fieldset className="member-split-editor">
+      <legend>Who shares this?</legend>
+
+      <div className="button-row">
+        <button className="text-button" type="button" onClick={selectEveryone}>Everyone</button>
+        <button className="text-button" type="button" onClick={clearEveryone}>Clear</button>
+      </div>
+
+      {members.map((member) => <div className="member-split-row" key={member.uid}>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={Boolean(selected[member.uid])}
+            onChange={(event) => setSelected((current) => ({ ...current, [member.uid]: event.target.checked }))}
+          />
+          {memberLabel(member)}
+        </label>
+
+        {selected[member.uid] && splitMode === 'custom' && (
+          <input
+            aria-label={`${memberLabel(member)} amount`}
+            inputMode="decimal"
+            placeholder={space.currency}
+            value={amounts[member.uid] || ''}
+            onChange={(event) => setAmounts((current) => ({ ...current, [member.uid]: event.target.value }))}
+          />
+        )}
+
+        {selected[member.uid] && splitMode === 'percentage' && (
+          <input
+            aria-label={`${memberLabel(member)} percentage`}
+            inputMode="decimal"
+            placeholder="%"
+            value={percentages[member.uid] || ''}
+            onChange={(event) => setPercentages((current) => ({ ...current, [member.uid]: event.target.value }))}
+          />
+        )}
+      </div>)}
+    </fieldset>
+
+    {selectedMembers.length > 0 && previewTotalMinor > 0 && (
+      <div className="transaction-preview">
+        <div>
+          <span>{splitMode === 'equal' ? 'Automatic split' : 'Shared by'}</span>
+          <strong>
+            {selectedMembers.length} {selectedMembers.length === 1 ? 'person' : 'people'}
+          </strong>
+        </div>
+
+        {splitMode === 'equal' && (
+          <div>
+            <span>Each person</span>
+            <strong>â‰ˆ {formatMoney(equalShareMinor, space.currency)}</strong>
+          </div>
+        )}
+
+        <small>
+          {memberLabel(payer)} paid {formatMoney(previewTotalMinor, space.currency)}.
+          {splitMode === 'equal'
+            ? ' BajetBN will track each selected personâ€™s share automatically.'
+            : ' BajetBN will track the split you enter below.'}
+        </small>
+      </div>
+    )}
+
+    <details className="shared-expense-more-options">
+      <summary>More options</summary>
+
+      <div className="form-stack">
+        <label>
+          How should it be split?
+          <select value={splitMode} onChange={(event) => setSplitMode(event.target.value as SharedExpenseSplitMode)}>
+            <option value="equal">Split equally</option>
+            <option value="custom">Enter different amounts</option>
+            <option value="percentage">Split by percentage</option>
+          </select>
+        </label>
+
+        <label>
+          Date
+          <input type="date" required value={expenseDate} onChange={(event) => setExpenseDate(event.target.value)} />
+        </label>
+
+        {(space.type === 'trip' || space.type === 'household' || space.type === 'custom') && (
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={paidFromGroupFund}
+              onChange={(event) => setPaidFromGroupFund(event.target.checked)}
+            />
+            {space.type === 'trip'
+              ? 'Paid using collected Trip money'
+              : space.type === 'household'
+                ? 'Paid using collected Household fund'
+                : 'Paid using collected Group fund'}
+          </label>
+        )}
+
+        <label>
+          Note
+          <textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} />
+        </label>
+      </div>
+    </details>
+
+    <button className="button primary full" disabled={busy || selectedMembers.length === 0}>
+      {busy ? 'Savingâ€¦' : 'Save expense'}
+    </button>
   </form>;
 }
-
 function SharedExpensePaymentForm({ space, payment, onSaved }: { space: Space; payment: { toUid: string; amountMinor: number; expenseId?: string }; onSaved: () => Promise<void> }) {
   const [amount, setAmount] = useState(String(payment.amountMinor / 100));
   const [paymentDate, setPaymentDate] = useState(today());
