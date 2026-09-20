@@ -18883,3 +18883,97 @@ a.business-report-row-v115:focus-visible {
     gap: 0.3rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V1.15 HOME MODE DESKTOP GRID FIX
+   New Home-mode children must participate in the existing
+   12-column desktop Home composition.
+   Mobile/tablet layout remains unchanged.
+   ========================================================== */
+
+@media (min-width: 1240px) {
+  .page.bajetbn-reference-home
+  > .bajetbn-home-profile-header {
+    order: 1;
+    grid-column: 1 / -1;
+  }
+
+  .page.bajetbn-reference-home
+  > .bajetbn-home-mode-switch-v115 {
+    order: 2;
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: min(100%, 420px);
+    min-width: 320px;
+    margin:
+      0
+      0
+      .9rem;
+  }
+
+  .page.bajetbn-reference-home
+  > .notice {
+    order: 2;
+    grid-column: 1 / -1;
+  }
+
+  .page.bajetbn-reference-home
+  > .bajetbn-total-assets-card {
+    order: 3;
+    grid-column: 1 / -1;
+  }
+
+  .page.bajetbn-reference-home
+  > .global-business-home-v115 {
+    order: 3;
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .global-business-home-v115 {
+    grid-template-columns:
+      repeat(
+        12,
+        minmax(0, 1fr)
+      );
+    column-gap: 1rem;
+    row-gap: 1rem;
+  }
+
+  .global-business-total-v115 {
+    grid-column: 1 / -1;
+  }
+
+  .global-business-month-v115 {
+    grid-column: 1 / -1;
+  }
+
+  .global-business-section-v115 {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .global-business-grid-v115 {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .global-business-activity-v115 {
+    width: 100%;
+  }
+}
+
+@media (min-width: 1540px) {
+  .global-business-grid-v115 {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+}

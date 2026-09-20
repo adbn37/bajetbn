@@ -112,6 +112,11 @@ for (const marker of [
   '.global-business-total-v115',
   '.global-business-card-v115',
   '.business-home-v115-hero-stats',
+  '.page.bajetbn-reference-home\n  > .bajetbn-home-mode-switch-v115',
+  '.page.bajetbn-reference-home\n  > .global-business-home-v115',
+  'grid-column: 1 / -1;',
+  'order: 2;',
+  'order: 3;',
 ]) {
   assert.equal(
     css.includes(marker),
