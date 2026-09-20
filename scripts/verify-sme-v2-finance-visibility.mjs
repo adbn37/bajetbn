@@ -92,16 +92,25 @@ expect(
 );
 
 expect(
-  settings.includes('posSpaceIdsForAccount')
-    && settings.includes("posSpaceIdsForAccount(item).includes(space?.id || '')")
-    && settings.includes('paymentAccountIds'),
-  'POS account compatibility must remain intact.',
+  settings.includes('businessSpaceIdsForAccount')
+    && !settings.includes('posSpaceIdsForAccount')
+    && settings.includes('paymentAccountIds')
+    && settings.includes(
+      'All active Business Accounts linked to this Business are available here.',
+    ),
+  'POS payment accounts must follow active Business links while legacy paymentAccountIds compatibility remains available.',
 );
 
 expect(
   functions.includes('accountLinkedToBusinessSpace')
-    && functions.includes('posSpaceIdsForAccountData'),
-  'Backend multi-Space Business account enforcement must remain intact.',
+    && functions.includes('posSpaceIdsForAccountData')
+    && functions.includes(
+      'if (linkedSpaces.includes(spaceId)) return true;',
+    )
+    && functions.includes(
+      'This account is not linked to this Business Space.',
+    ),
+  'Backend multi-Space enforcement must use the Business link for POS availability while retaining legacy POS-field compatibility.',
 );
 
 expect(

@@ -80,7 +80,7 @@ for (
     "space.type === 'personal'",
     'setWritableAccounts(',
     'if (!cancelled) void load();',
-    'View your Personal money activity. Business money stays inside its Business Space.',
+    'Personal money activity.',
     'Personal money only.',
     'Business activity is kept inside its specific Business Space.',
   ]
@@ -121,7 +121,7 @@ for (
   of [
     'listBusinessTransactionsForSpace(',
     'listTransactionsForOwnerSpace(',
-    "if (space.type === 'sme') return 'Keep business money separate from personal money.';",
+    "if (space.type === 'sme') return 'Business money.';",
     '?section=money',
     "'reports'",
   ]

@@ -270,7 +270,7 @@ const deferredModules = [
   "./SpaceFundPanel",
   "./SpaceWorkPanel",
   "./HouseholdCommandCentre",
-  "./TripCommandCentre",
+  "./TripPlanningPanel",
   "./CollectionCommandCentre",
   "./SmeOperationsCommandCentre",
   "./MarketplaceSpaceManagementSection",
@@ -406,7 +406,7 @@ check(
 
 check(
   tripVerifier.includes(
-    `"import('./TripCommandCentre')"`,
+    `"import('./TripPlanningPanel')"`,
   )
     && householdVerifier.includes(
       `"import('./HouseholdCommandCentre')"`,
@@ -415,7 +415,7 @@ check(
       `"import('./SmeOperationsCommandCentre')"`,
     )
     && !tripVerifier.includes(
-      `"import { TripCommandCentre } from './TripCommandCentre';"`,
+      `"import { TripPlanningPanel } from './TripPlanningPanel';"`,
     )
     && !householdVerifier.includes(
       `"import { HouseholdCommandCentre } from './HouseholdCommandCentre';"`,
@@ -423,7 +423,7 @@ check(
     && !smeVerifier.includes(
       `"import { SmeOperationsCommandCentre } from './SmeOperationsCommandCentre';"`,
     ),
-  'Historical command-centre verifiers accept the v1.14.18 dynamic load path.',
+  'Historical Space verifiers accept the current dynamic load paths.',
 );
 
 check(

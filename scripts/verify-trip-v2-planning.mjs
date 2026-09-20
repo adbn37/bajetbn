@@ -1,21 +1,38 @@
 import fs from 'node:fs';
 
-const read = (file) => fs.readFileSync(file, 'utf8');
+const read = (file) =>
+  fs.readFileSync(file, 'utf8')
+    .replace(/\r\n?/g, '\n');
 
-const models = read('src/types/models.ts');
-const repo = read('src/repositories/tripPlanningRepository.ts');
-const panel = read('src/features/spaces/TripPlanningPanel.tsx');
-const command = read('src/features/spaces/TripCommandCentre.tsx');
-const details = read('src/features/spaces/SpaceDetailsPage.tsx');
-const rules = read('firestore.rules');
-const functions = read('functions/src/index.ts');
-const css = read('src/styles/global.css');
+const models =
+  read('src/types/models.ts');
+
+const repo =
+  read('src/repositories/tripPlanningRepository.ts');
+
+const panel =
+  read('src/features/spaces/TripPlanningPanel.tsx');
+
+const details =
+  read('src/features/spaces/SpaceDetailsPage.tsx');
+
+const rules =
+  read('firestore.rules');
+
+const functions =
+  read('functions/src/index.ts');
+
+const css =
+  read('src/styles/global.css');
 
 const checks = [];
 
 function need(condition, label) {
   checks.push(label);
-  if (!condition) throw new Error(label);
+
+  if (!condition) {
+    throw new Error(label);
+  }
 }
 
 for (const token of [
@@ -24,7 +41,10 @@ for (const token of [
   'export interface TripBooking',
   "export type TripTaskStatus = 'open' | 'completed'",
 ]) {
-  need(models.includes(token), `Missing Trip planning model: ${token}`);
+  need(
+    models.includes(token),
+    `Missing Trip planning model: ${token}`,
+  );
 }
 
 for (const token of [
@@ -36,11 +56,16 @@ for (const token of [
   'setTripTaskStatus',
   'saveTripBooking',
 ]) {
-  need(repo.includes(token), `Missing Trip planning repository contract: ${token}`);
+  need(
+    repo.includes(token),
+    `Missing Trip planning repository contract: ${token}`,
+  );
 }
 
 need(
-  !repo.includes('smePosReservations'),
+  !repo.includes(
+    'smePosReservations',
+  ),
   'Trip planning must not reuse SME POS reservations.',
 );
 
@@ -54,32 +79,58 @@ for (const text of [
   'No tasks yet.',
   'No bookings yet.',
 ]) {
-  need(panel.includes(text), `Missing Trip planning UI text: ${text}`);
+  need(
+    panel.includes(text),
+    `Missing Trip planning UI text: ${text}`,
+  );
 }
 
 need(
-  panel.includes("['owner', 'admin', 'contributor']"),
+  panel.includes(
+    "['owner', 'admin', 'contributor']",
+  ),
   'Trip planning UI must reuse existing Space roles.',
 );
 
 need(
-  panel.includes("task.assigneeUid === currentMember?.uid"),
+  panel.includes(
+    "task.assigneeUid === currentMember?.uid",
+  ),
   'Assigned members must be able to update their own Task status.',
 );
 
 need(
-  command.includes("import { TripPlanningPanel } from './TripPlanningPanel';"),
-  'Trip command centre must import TripPlanningPanel.',
+  details.includes(
+    "import('./TripPlanningPanel')",
+  )
+    && details.includes(
+      'default: module.TripPlanningPanel',
+    ),
+  'SpaceDetailsPage must directly lazy-load TripPlanningPanel.',
 );
 
 need(
-  command.includes('<TripPlanningPanel'),
-  'Trip planning must live inside the Trip Space.',
+  details.includes(
+    '<TripPlanningPanel',
+  )
+    && details.includes(
+      'data-trip-plan-direct',
+    ),
+  'Trip planning must render directly inside the Trip Space.',
 );
 
 need(
-  details.includes('currentMember={currentMember}'),
+  details.includes(
+    'currentMember={currentMember}',
+  ),
   'SpaceDetailsPage must pass the current Space member.',
+);
+
+need(
+  !details.includes(
+    "import('./TripCommandCentre')",
+  ),
+  'Trip planning must not regress to the old TripCommandCentre wrapper.',
 );
 
 for (const collection of [
@@ -88,13 +139,17 @@ for (const collection of [
   'tripBookings',
 ]) {
   need(
-    rules.includes(`match /${collection}/`),
+    rules.includes(
+      `match /${collection}/`,
+    ),
     `Missing Firestore rule for ${collection}.`,
   );
 }
 
 need(
-  rules.includes('allow create, update, delete: if false;'),
+  rules.includes(
+    'allow create, update, delete: if false;',
+  ),
   'Trip planning writes must remain server controlled.',
 );
 
@@ -114,17 +169,26 @@ for (const callable of [
 }
 
 need(
-  functions.includes("['owner', 'admin', 'contributor']"),
+  functions.includes(
+    "['owner', 'admin', 'contributor']",
+  ),
   'Backend Trip planning must reuse Space roles.',
 );
 
 need(
-  functions.includes("type: 'trip_task_assigned'"),
+  functions.includes(
+    "type: 'trip_task_assigned'",
+  ),
   'Task assignment notification is missing.',
 );
 
 need(
-  functions.includes("'trip_task_completed'") && functions.includes("'trip_task_reopened'"),
+  functions.includes(
+    "'trip_task_completed'",
+  )
+    && functions.includes(
+      "'trip_task_reopened'",
+    ),
   'Trip Task completion activity is missing.',
 );
 
@@ -150,17 +214,39 @@ need(
 );
 
 need(
-  css.includes('/* Trip v2 Slice 2 - planning */'),
+  css.includes(
+    '/* Trip v2 Slice 2 - planning */',
+  ),
   'Trip planning CSS is missing.',
 );
 
 need(
-  !panel.includes('window.confirm(') && !panel.includes('window.alert('),
+  css.includes(
+    '.trip-plan-direct-v115',
+  ),
+  'Direct Trip Plan layout CSS is missing.',
+);
+
+need(
+  !panel.includes(
+    'window.confirm(',
+  )
+    && !panel.includes(
+      'window.alert(',
+    ),
   'Browser-native confirmation must not remain in Trip planning.',
 );
 
 need(
-  panel.includes('archiveRequest') && panel.includes('confirmArchive'),
+  panel.includes(
+    'archiveRequest',
+  )
+    && panel.includes(
+      'confirmArchive',
+    ),
   'Trip planning must use the in-app archive confirmation flow.',
 );
-console.log(`Trip v2 Slice 2 planning checks passed (${checks.length} checks).`);
+
+console.log(
+  `Trip v2 Slice 2 direct-planning checks passed (${checks.length} checks).`,
+);
