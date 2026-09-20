@@ -270,6 +270,110 @@ function downloadCsv(
   URL.revokeObjectURL(url);
 }
 
+function htmlCell(
+  value: string | number,
+) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function rowsToHtmlTable(
+  rows: Array<Array<string | number>>,
+) {
+  const [header, ...body] = rows;
+
+  return (
+    '<table><thead><tr>'
+    + header
+      .map(
+        (cell) =>
+          '<th>' + htmlCell(cell) + '</th>',
+      )
+      .join('')
+    + '</tr></thead><tbody>'
+    + body
+      .map(
+        (row) =>
+          '<tr>'
+          + row
+            .map(
+              (cell) =>
+                '<td>' + htmlCell(cell) + '</td>',
+            )
+            .join('')
+          + '</tr>',
+      )
+      .join('')
+    + '</tbody></table>'
+  );
+}
+
+function downloadExcelHtml(
+  name: string,
+  title: string,
+  rows: Array<Array<string | number>>,
+) {
+  const html =
+    '<!doctype html><html><head><meta charset="utf-8">'
+    + '<style>body{font-family:Arial,sans-serif;font-size:12px}'
+    + 'h1{font-size:18px;margin:0 0 12px}'
+    + 'table{border-collapse:collapse;width:100%}'
+    + 'th,td{border:1px solid #ccc;padding:5px 7px;text-align:left}'
+    + 'th{background:#eee;font-weight:700}</style>'
+    + '</head><body><h1>' + htmlCell(title) + '</h1>'
+    + rowsToHtmlTable(rows)
+    + '</body></html>';
+
+  const blob = new Blob(
+    ['\ufeff' + html],
+    { type: 'application/vnd.ms-excel;charset=utf-8' },
+  );
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function printReportHtml(
+  title: string,
+  subtitle: string,
+  rows: Array<Array<string | number>>,
+) {
+  const popup = window.open('', '_blank', 'noopener,noreferrer');
+
+  if (!popup) {
+    throw new Error(
+      'Allow pop-ups to print or save this report as PDF.',
+    );
+  }
+
+  popup.document.write(
+    '<!doctype html><html><head><meta charset="utf-8">'
+    + '<title>' + htmlCell(title) + '</title>'
+    + '<style>@page{size:A4 landscape;margin:10mm}'
+    + 'body{font-family:Arial,sans-serif;color:#111;margin:0;font-size:10px}'
+    + 'header{margin-bottom:12px}h1{font-size:18px;margin:0 0 4px}'
+    + 'p{margin:0;color:#555;font-size:10px}'
+    + 'table{border-collapse:collapse;width:100%;table-layout:auto}'
+    + 'th,td{border-bottom:1px solid #ddd;padding:5px 6px;vertical-align:top}'
+    + 'th{background:#f2f2f2;text-align:left;font-size:9px}'
+    + 'td{font-size:9px}tr{break-inside:avoid}</style>'
+    + '</head><body><header><h1>' + htmlCell(title) + '</h1>'
+    + '<p>' + htmlCell(subtitle) + '</p></header>'
+    + rowsToHtmlTable(rows)
+    + '<script>window.addEventListener("load",()=>window.print());<\/script>'
+    + '</body></html>',
+  );
+
+  popup.document.close();
+}
+
 function netSale(
   sale: SmePosSale,
 ) {
@@ -1210,234 +1314,234 @@ export function BusinessReportsWorkspace({
       ],
     );
 
-  const exportCurrent =
-    () => {
-      const prefix =
-        'bajetbn-business-'
-        + tab
-        + '-'
-        + window.start
-        + '-'
-        + window.end
-        + '.csv';
-
+  const reportRows =
+    (): Array<Array<string | number>> => {
       if (tab === 'sales') {
-        downloadCsv(
-          prefix,
+        return [
           [
-            [
-              'Date',
-              'Receipt',
-              'Customer',
-              'Items',
-              'Net sales',
-              'Refunded / voided',
-              'Payment account',
-            ],
-            ...filteredSales.map(
-              (sale) => [
-                sale.saleDate,
-                sale.receiptNumber,
-                sale.customerName
-                || 'Walk-in Customer',
-                sale.itemCount,
-                (
-                  netSale(sale)
-                  / 100
-                ).toFixed(2),
-                (
-                  (
-                    sale.returnedMinor
-                    + (
-                      sale.voidedMinor
-                      || 0
-                    )
-                  )
-                  / 100
-                ).toFixed(2),
-                sale.paymentAccountName,
-              ],
-            ),
+            'Date',
+            'Receipt',
+            'Status',
+            'Customer',
+            'Payment',
+            'Account',
+            'Item',
+            'SKU',
+            'Barcode',
+            'Category',
+            'Seller',
+            'Qty',
+            'Unit Price',
+            'Item Discount',
+            'Returned Qty',
+            'Item Refund',
+            'Net Line',
+            'Sale Subtotal',
+            'Sale Discount',
+            'Sale Refund / Void',
+            'Net Sale',
+            'Cost',
+            'Profit',
+            'Commission',
+            'Seller Earnings',
+            'Note',
           ],
-        );
+          ...filteredSales.flatMap(
+            (sale) =>
+              sale.items.map(
+                (item) => {
+                  const itemId =
+                    item.listingId
+                    || item.productId;
 
-        return;
+                  const catalog =
+                    catalogDetailByItemId.get(
+                      itemId,
+                    );
+
+                  const netLine =
+                    Math.max(
+                      0,
+                      (
+                        item.netLineMinor
+                        ?? item.lineTotalMinor
+                      )
+                      - (
+                        item.returnedMinor
+                        || 0
+                      ),
+                    );
+
+                  return [
+                    sale.saleDate,
+                    sale.receiptNumber,
+                    humanizeSaleStatus(sale.status),
+                    sale.customerName || 'Walk-in Customer',
+                    salePaymentSummary(sale),
+                    sale.paymentAccountName,
+                    item.productName,
+                    item.sku || '',
+                    item.barcode || '',
+                    catalog?.category || '',
+                    item.sellerName
+                      || catalog?.sellerName
+                      || '',
+                    item.quantity,
+                    (item.unitPriceMinor / 100).toFixed(2),
+                    ((item.discountShareMinor || 0) / 100).toFixed(2),
+                    item.returnedQuantity,
+                    ((item.returnedMinor || 0) / 100).toFixed(2),
+                    (netLine / 100).toFixed(2),
+                    (sale.subtotalMinor / 100).toFixed(2),
+                    (sale.discountMinor / 100).toFixed(2),
+                    ((sale.returnedMinor + (sale.voidedMinor || 0)) / 100).toFixed(2),
+                    (netSale(sale) / 100).toFixed(2),
+                    (sale.costMinor / 100).toFixed(2),
+                    (sale.profitMinor / 100).toFixed(2),
+                    ((sale.marketplaceCommissionMinor || 0) / 100).toFixed(2),
+                    ((sale.sellerEarningsMinor || 0) / 100).toFixed(2),
+                    sale.note || '',
+                  ];
+                },
+              ),
+          ),
+        ];
       }
 
       if (tab === 'stock') {
-        downloadCsv(
-          prefix,
-          [
-            [
-              'Item',
-              'Category',
-              'Seller',
-              'On hand',
-              'Low stock level',
-              'Sold in period',
-              'Revenue in period',
+        return [
+          ['Item','Category','Seller','On hand','Low stock level','Sold in period','Revenue in period'],
+          ...stockRows.map(
+            (item) => [
+              item.name,
+              item.category,
+              item.sellerName,
+              item.quantityOnHand,
+              item.lowStockLevel,
+              item.soldQuantity,
+              (item.revenueMinor / 100).toFixed(2),
             ],
-            ...stockRows.map(
-              (item) => [
-                item.name,
-                item.category,
-                item.sellerName,
-                item.quantityOnHand,
-                item.lowStockLevel,
-                item.soldQuantity,
-                (
-                  item.revenueMinor
-                  / 100
-                ).toFixed(2),
-              ],
-            ),
-          ],
-        );
-
-        return;
+          ),
+        ];
       }
 
       if (tab === 'sellers') {
-        downloadCsv(
-          prefix,
-          [
-            [
-              'Seller',
-              'Sold quantity',
-              'Gross sales',
-              'Commission',
-              'Seller earnings',
-              'Payouts',
+        return [
+          ['Seller','Sold quantity','Gross sales','Commission','Seller earnings','Payouts'],
+          ...sellerRows.map(
+            (item) => [
+              item.sellerName,
+              item.soldQuantity,
+              (item.salesMinor / 100).toFixed(2),
+              (item.commissionMinor / 100).toFixed(2),
+              (item.sellerEarningsMinor / 100).toFixed(2),
+              (item.payoutMinor / 100).toFixed(2),
             ],
-            ...sellerRows.map(
-              (item) => [
-                item.sellerName,
-                item.soldQuantity,
-                (
-                  item.salesMinor
-                  / 100
-                ).toFixed(2),
-                (
-                  item.commissionMinor
-                  / 100
-                ).toFixed(2),
-                (
-                  item.sellerEarningsMinor
-                  / 100
-                ).toFixed(2),
-                (
-                  item.payoutMinor
-                  / 100
-                ).toFixed(2),
-              ],
-            ),
-          ],
-        );
-
-        return;
+          ),
+        ];
       }
 
       if (tab === 'documents') {
-        downloadCsv(
-          prefix,
-          [
-            [
-              'Type',
-              'Number',
-              'Date',
-              'Customer',
-              'Status',
-              'Total',
+        return [
+          ['Type','Number','Date','Customer','Status','Total'],
+          ...filteredQuotations.map(
+            (item) => [
+              'Quotation',
+              item.quotationNumber,
+              item.quoteDate,
+              item.customerName,
+              item.status,
+              (item.totalMinor / 100).toFixed(2),
             ],
-            ...filteredQuotations.map(
-              (item) => [
-                'Quotation',
-                item.quotationNumber,
-                item.quoteDate,
-                item.customerName,
-                item.status,
-                (
-                  item.totalMinor
-                  / 100
-                ).toFixed(2),
-              ],
-            ),
-            ...filteredSalesOrders.map(
-              (item) => [
-                'Sales Order',
-                item.salesOrderNumber,
-                item.orderDate,
-                item.customerName,
-                item.status,
-                (
-                  item.totalMinor
-                  / 100
-                ).toFixed(2),
-              ],
-            ),
-            ...filteredInvoices.map(
-              (item) => [
-                'Invoice',
-                item.invoiceNumber,
-                item.issueDate,
-                item.customerName,
-                item.status,
-                (
-                  item.totalMinor
-                  / 100
-                ).toFixed(2),
-              ],
-            ),
-          ],
-        );
-
-        return;
+          ),
+          ...filteredSalesOrders.map(
+            (item) => [
+              'Sales Order',
+              item.salesOrderNumber,
+              item.orderDate,
+              item.customerName,
+              item.status,
+              (item.totalMinor / 100).toFixed(2),
+            ],
+          ),
+          ...filteredInvoices.map(
+            (item) => [
+              'Invoice',
+              item.invoiceNumber,
+              item.issueDate,
+              item.customerName,
+              item.status,
+              (item.totalMinor / 100).toFixed(2),
+            ],
+          ),
+        ];
       }
 
+      return [
+        ['Metric','Amount'],
+        ['Net sales',(salesTotal / 100).toFixed(2)],
+        ['Cost',(costTotal / 100).toFixed(2)],
+        ['Refunds / voids',(refundTotal / 100).toFixed(2)],
+        ['Profit',(profitTotal / 100).toFixed(2)],
+        ['Marketplace commission',(commissionTotal / 100).toFixed(2)],
+        ['Seller payouts',(payoutTotal / 100).toFixed(2)],
+      ];
+    };
+
+  const reportFileStem =
+    'bajetbn-business-'
+    + tab
+    + '-'
+    + window.start
+    + '-'
+    + window.end;
+
+  const reportTitle =
+    'BajetBN Business Report · '
+    + (
+      tab === 'stock'
+        ? 'Products / Stock'
+        : tab === 'documents'
+          ? 'Quotations / Invoices'
+          : tab === 'profit'
+            ? (
+                businessIndustry === 'marketplace'
+                  ? 'Profit / Commission'
+                  : 'Profit'
+              )
+            : tab.charAt(0).toUpperCase()
+              + tab.slice(1)
+    );
+
+  const reportSubtitle =
+    window.start
+    + ' to '
+    + window.end
+    + ' · Active report filters are applied';
+
+  const exportCurrent =
+    () => {
       downloadCsv(
-        prefix,
-        [
-          [
-            'Metric',
-            'Amount',
-          ],
-          [
-            'Net sales',
-            (
-              salesTotal / 100
-            ).toFixed(2),
-          ],
-          [
-            'Cost',
-            (
-              costTotal / 100
-            ).toFixed(2),
-          ],
-          [
-            'Refunds / voids',
-            (
-              refundTotal / 100
-            ).toFixed(2),
-          ],
-          [
-            'Profit',
-            (
-              profitTotal / 100
-            ).toFixed(2),
-          ],
-          [
-            'Marketplace commission',
-            (
-              commissionTotal / 100
-            ).toFixed(2),
-          ],
-          [
-            'Seller payouts',
-            (
-              payoutTotal / 100
-            ).toFixed(2),
-          ],
-        ],
+        reportFileStem + '.csv',
+        reportRows(),
+      );
+    };
+
+  const exportExcel =
+    () => {
+      downloadExcelHtml(
+        reportFileStem + '.xls',
+        reportTitle,
+        reportRows(),
+      );
+    };
+
+  const printCurrent =
+    () => {
+      printReportHtml(
+        reportTitle,
+        reportSubtitle,
+        reportRows(),
       );
     };
 
@@ -1501,13 +1605,31 @@ export function BusinessReportsWorkspace({
           <h2>Reports</h2>
         </div>
 
-        <button
-          className="button secondary compact"
-          type="button"
-          onClick={exportCurrent}
-        >
-          Export CSV
-        </button>
+        <div className="business-report-export-actions-v115">
+          <button
+            className="button secondary compact"
+            type="button"
+            onClick={exportCurrent}
+          >
+            CSV
+          </button>
+
+          <button
+            className="button secondary compact"
+            type="button"
+            onClick={exportExcel}
+          >
+            Excel
+          </button>
+
+          <button
+            className="button secondary compact"
+            type="button"
+            onClick={printCurrent}
+          >
+            Print / PDF
+          </button>
+        </div>
       </div>
 
       <div className="business-report-range-v115">
@@ -2549,7 +2671,7 @@ export function BusinessReportsWorkspace({
       )}
 
       <p className="muted business-report-export-note-v115">
-        CSV export is available for the selected report and period. PDF and Excel export are not included in this slice.
+        CSV, Excel-compatible .xls and Print / PDF use the selected report, period and active filters.
       </p>
     </section>
   );

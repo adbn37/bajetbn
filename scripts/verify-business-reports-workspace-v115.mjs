@@ -34,13 +34,15 @@ const checks = [
   [reports, 'Sellers', 'Seller report exists'],
   [reports, 'Quotations / Invoices', 'Document report exists'],
   [reports, 'Profit / Commission', 'Marketplace profit / commission report exists'],
-  [reports, 'Export CSV', 'CSV export exists'],
+  [reports, 'onClick={exportCurrent}', 'CSV export exists'],
+  [reports, 'onClick={exportExcel}', 'Excel export exists'],
+  [reports, 'onClick={printCurrent}', 'Print/PDF export exists'],
   [reports, 'getSmePosStaffWorkspace', 'Standard POS report data is reused'],
   [reports, 'getMarketplacePosWorkspace', 'Marketplace report data is reused'],
   [reports, 'getBusinessQuotationWorkspace', 'Quotation report data is reused'],
   [reports, 'getBusinessSalesOrderWorkspace', 'Sales Order report data is reused'],
   [reports, 'getBusinessInvoiceWorkspace', 'Invoice report data is reused'],
-  [reports, 'PDF and Excel export are not included in this slice.', 'Unsupported exports are stated honestly'],
+  [reports, 'CSV, Excel-compatible .xls and Print / PDF use the selected report, period and active filters.', 'Supported exports are stated accurately'],
   [css, 'BAJETBN V115 BUSINESS REPORTS WORKSPACE', 'Reports styles exist'],
 ];
 

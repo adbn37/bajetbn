@@ -16325,3 +16325,30 @@ a.business-report-row-v115:focus-visible {
     width: 100%;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS REPORT EXPORTS
+   ========================================================== */
+
+.business-report-export-actions-v115 {
+  display: flex;
+  gap: .35rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 620px) {
+  .business-report-export-actions-v115 {
+    width: 100%;
+    display: grid;
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+
+  .business-report-export-actions-v115 .button {
+    width: 100%;
+    padding-inline: .35rem;
+  }
+}
