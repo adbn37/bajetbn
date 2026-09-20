@@ -16396,3 +16396,418 @@ a.business-report-row-v115:focus-visible {
     scroll-snap-align: start;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 GLOBAL DESKTOP LAYOUT FOUNDATION
+   Desktop-only composition layer.
+   Mobile and tablet remain unchanged below these breakpoints.
+   ========================================================== */
+
+@media (min-width: 1180px) {
+  :root {
+    --desktop-content-max: 1540px;
+    --desktop-content-wide: 1680px;
+    --desktop-gap: 1.15rem;
+  }
+
+  .page {
+    width: min(
+      calc(100% - 3rem),
+      var(--desktop-content-max)
+    );
+    max-width: none;
+    padding:
+      2rem
+      clamp(1.5rem, 2.2vw, 2.75rem)
+      4.5rem;
+  }
+
+  .page-header {
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .page-header > div:first-child {
+    max-width: 920px;
+  }
+
+  .summary-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+    gap: var(--desktop-gap);
+  }
+
+  .dashboard-grid {
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(320px, .65fr);
+    gap: var(--desktop-gap);
+  }
+
+  .card-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+    gap: var(--desktop-gap);
+  }
+
+  .space-chip-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+
+  .panel {
+    padding: 1.15rem 1.25rem;
+  }
+
+  .panel-heading {
+    align-items: center;
+  }
+
+  .form-grid {
+    column-gap: 1rem;
+    row-gap: .85rem;
+  }
+
+  .business-home-v115 {
+    width: min(
+      100%,
+      var(--desktop-content-max)
+    );
+    max-width: none;
+    padding-bottom: 5rem;
+  }
+
+  .business-home-v115-header {
+    margin-bottom: 1rem;
+  }
+
+  .business-home-v115-title h1 {
+    font-size:
+      clamp(
+        1.8rem,
+        2.2vw,
+        2.6rem
+      );
+  }
+
+  .business-workspace-nav-v115 {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    margin-bottom: 1rem;
+    backdrop-filter: blur(14px);
+    background:
+      color-mix(
+        in srgb,
+        var(--surface) 92%,
+        transparent
+      );
+  }
+
+  .business-home-v115 > .business-home-v115-hero,
+  .business-home-v115 > .business-home-v115-role-hero {
+    margin-bottom: 1rem;
+  }
+
+  .business-home-v115-actions {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-home-v115-account-strip {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-home-v115-hero {
+    padding: 1.25rem 1.35rem;
+  }
+
+  .business-home-v115-hero-stats {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-report-summary-v115 {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-report-filters-v115 {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(150px, 1fr)
+      );
+    align-items: end;
+  }
+
+  .business-document-flow-v115 {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-setup-grid-v115 {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+
+  .business-finance-nav-v115 {
+    overflow-x: visible;
+    flex-wrap: wrap;
+  }
+
+  .reports-page {
+    width: min(
+      calc(100% - 3rem),
+      var(--desktop-content-max)
+    );
+  }
+
+  .reports-v110-header {
+    align-items: center;
+  }
+
+  .reports-v110-filters,
+  .report-filter-panel {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .reports-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+    gap: var(--desktop-gap);
+  }
+
+  .sme-health-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .collection-page {
+    max-width:
+      var(--desktop-content-max);
+  }
+
+  .collection-item-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .incoming-invitation-row {
+    grid-template-columns:
+      minmax(0, 1fr)
+      auto;
+    align-items: center;
+  }
+
+  .spaces-card-grid,
+  .space-card-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .transaction-history-layout,
+  .money-activity-layout {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(280px, .34fr);
+    align-items: start;
+  }
+
+  .transaction-filter-bar,
+  .transaction-history-filters {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(150px, 1fr)
+      );
+    align-items: end;
+  }
+
+  .account-grid,
+  .accounts-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+
+  .sme-pos-product-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .sme-pos-workspace-tabs {
+    overflow-x: visible;
+    flex-wrap: wrap;
+  }
+
+  .business-sale-detail-v115 > summary {
+    grid-template-columns:
+      minmax(300px, 1.35fr)
+      minmax(120px, .35fr)
+      minmax(100px, .28fr)
+      minmax(130px, .35fr);
+  }
+
+  .business-sale-meta-grid-v115 {
+    grid-template-columns:
+      repeat(
+        6,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (min-width: 1440px) {
+  .page {
+    width: min(
+      calc(100% - 4rem),
+      var(--desktop-content-wide)
+    );
+  }
+
+  .business-home-v115,
+  .reports-page,
+  .collection-page {
+    width: min(
+      100%,
+      var(--desktop-content-wide)
+    );
+  }
+
+  .business-home-v115 {
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(360px, .65fr);
+    column-gap: 1.15rem;
+    align-items: start;
+  }
+
+  .business-home-v115-header,
+  .business-workspace-nav-v115,
+  .business-home-v115 > .notice,
+  .business-home-v115 >
+  .business-reports-workspace-v115,
+  .business-home-v115 >
+  .business-setup-workspace-v115,
+  .business-home-v115 >
+  .business-finance-workspace-v115,
+  .business-home-v115 >
+  .business-sales-documents-v115,
+  .business-home-v115 >
+  .business-workspace-embedded-v115,
+  .business-home-v115 >
+  .business-standard-inventory-v115 {
+    grid-column: 1 / -1;
+  }
+
+  .business-home-v115 >
+  .business-home-v115-hero,
+  .business-home-v115 >
+  .business-home-v115-role-hero {
+    grid-column: 1 / -1;
+  }
+
+  .business-home-v115 >
+  .business-home-v115-actions {
+    grid-column: 1 / -1;
+  }
+
+  .business-home-v115 >
+  .business-home-v115-attention {
+    grid-column: 2;
+    grid-row: span 2;
+    align-self: start;
+  }
+
+  .business-home-v115 >
+  .business-home-v115-section {
+    grid-column: 1;
+  }
+
+  .business-home-v115 >
+  .business-home-v115-section:last-of-type {
+    grid-column: 1 / -1;
+  }
+
+  .summary-grid {
+    gap: 1.2rem;
+  }
+
+  .card-grid,
+  .spaces-card-grid,
+  .space-card-grid {
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(0, 1fr)
+      );
+  }
+
+  .sme-pos-product-grid {
+    grid-template-columns:
+      repeat(
+        5,
+        minmax(0, 1fr)
+      );
+  }
+
+  .collection-item-grid {
+    grid-template-columns:
+      repeat(
+        5,
+        minmax(0, 1fr)
+      );
+  }
+}
