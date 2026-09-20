@@ -158,7 +158,7 @@ function homeActivityMeta(
     ),
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(' Â· ');
 }
 
 export function DashboardPage() {
@@ -1148,7 +1148,7 @@ export function DashboardPage() {
         <div className="bajetbn-total-assets-head">
           <div>
             <span>Total Assets</span>
-            <small>Personal only · Business excluded</small>
+            <small>Personal only Â· Business excluded</small>
           </div>
 
           <button
@@ -1186,7 +1186,7 @@ export function DashboardPage() {
                 totalPersonalAssets,
                 currency,
               )
-            : '••••••'}
+            : 'â€¢â€¢â€¢â€¢â€¢â€¢'}
         </strong>
 
         <div
@@ -1208,7 +1208,7 @@ export function DashboardPage() {
                         currency + ' ',
                         '',
                       )
-                    : '••••'}
+                    : 'â€¢â€¢â€¢â€¢'}
                 </strong>
               </div>
             ),
@@ -1251,7 +1251,7 @@ export function DashboardPage() {
                     : null,
                 ]
                   .filter(Boolean)
-                  .join(' · ');
+                  .join(' Â· ');
 
                 return (
                   <button
@@ -1287,7 +1287,7 @@ export function DashboardPage() {
 
                     <b>
                       {loading
-                        ? '—'
+                        ? 'â€”'
                         : formatMoney(
                             account.ledgerBalanceMinor,
                             account.currency,
@@ -1392,7 +1392,7 @@ export function DashboardPage() {
         ) : activityLoading ? (
           <div className="home-v110-empty">
             <span aria-hidden="true">
-              …
+              â€¦
             </span>
 
             <strong>
@@ -1455,7 +1455,7 @@ export function DashboardPage() {
                           activeAccount?.name,
                         ]
                           .filter(Boolean)
-                          .join(' · ')}
+                          .join(' Â· ')}
                       </small>
                     </span>
 
@@ -1490,7 +1490,7 @@ export function DashboardPage() {
         ) : (
           <div className="home-v110-empty">
             <span aria-hidden="true">
-              ◎
+              â—Ž
             </span>
 
             <strong>
@@ -1518,7 +1518,7 @@ export function DashboardPage() {
               }
             >
               {quickLoading
-                ? 'Loading…'
+                ? 'Loadingâ€¦'
                 : 'Add income or expense'}
             </button>
           </div>
@@ -1539,6 +1539,22 @@ export function DashboardPage() {
         <Link to="/subscription">
           <span>Your plan</span>
           <strong>View</strong>
+        </Link>
+
+        <Link
+          to="/bills"
+          className="bajetbn-desktop-side-extra"
+        >
+          <span>Upcoming bills</span>
+          <strong>Review</strong>
+        </Link>
+
+        <Link
+          to="/inbox"
+          className="bajetbn-desktop-side-extra"
+        >
+          <span>Needs attention</span>
+          <strong>Open</strong>
         </Link>
       </section>
 
@@ -1589,7 +1605,7 @@ export function DashboardPage() {
                 <dt>Space</dt>
                 <dd>
                   {activityDetailLoading
-                    ? 'Loading…'
+                    ? 'Loadingâ€¦'
                     : selectedActivitySpaceName
                       || 'Unknown Space'}
                 </dd>
@@ -1601,7 +1617,7 @@ export function DashboardPage() {
                   {selectedActivitySource?.name
                     || 'Unknown Account'}
                   {selectedActivityDestination
-                    ? ` → ${selectedActivityDestination.name}`
+                    ? ` â†’ ${selectedActivityDestination.name}`
                     : ''}
                 </dd>
               </div>

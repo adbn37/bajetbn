@@ -1688,7 +1688,7 @@ code { background: #070c0e; }
 @media(max-width:680px){.sme-standard-pos-workspace>.panel-heading{align-items:flex-start;flex-direction:column}.sme-standard-pos-workspace>.panel-heading .button{width:100%}.sme-pos-product-grid,.sme-pos-checkout-product-grid,.sme-pos-report-grid{grid-template-columns:1fr}.sme-pos-customer-row,.sme-pos-archive-list>div{align-items:flex-start;flex-direction:column}.sme-pos-customer-row .button-row{width:100%}.sme-pos-customer-row .button{flex:1}.sme-pos-cart-lines>div{grid-template-columns:minmax(0,1fr) 68px}.sme-pos-cart-lines>div>strong{grid-column:1/-1;text-align:right}.sme-pos-sales-list button{grid-template-columns:minmax(0,1fr) auto}.sme-pos-sales-list button>strong:last-child{grid-column:1/-1;text-align:right}}
 @media print{body *{visibility:hidden}.modal,.modal *{visibility:visible}.modal{position:absolute;inset:0;width:100%;max-height:none;border:0;box-shadow:none}.modal-header,.modal-actions{display:none!important}.sme-pos-receipt{color:#000;background:#fff}}
 
-/* v0.11.14 Alpha 2 — staff register and owner-only POS settings */
+/* v0.11.14 Alpha 2 â€” staff register and owner-only POS settings */
 .pos-page-actions{justify-content:flex-end;flex-wrap:wrap}.pos-status-strip{display:flex;align-items:center;gap:.7rem;min-height:44px;padding:.65rem .8rem;border:1px solid var(--border);border-radius:12px;background:var(--surface-soft);color:var(--muted)}.pos-status-strip>a{margin-left:auto;color:var(--accent-2);font-weight:800}.pos-workspace-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem}.pos-workspace-heading h2{margin:.25rem 0}.pos-workspace-heading p{margin:0;color:var(--muted)}.sme-pos-checkout-product-grid button.out-of-stock,.sme-pos-product-card.out-of-stock{opacity:.72}.sme-pos-checkout-product-grid button.out-of-stock{cursor:not-allowed;border-style:dashed}.stock-danger{color:var(--danger)!important;font-weight:850}.stock-warning{color:var(--warning)!important;font-weight:800}.pos-complete-sale{width:100%;min-height:52px;font-size:1rem}.pos-item-type-fieldset{border:0;padding:0;margin:0;display:grid;gap:.65rem}.pos-item-type-fieldset legend{font-weight:850;margin-bottom:.1rem}.pos-item-type-option{display:grid!important;grid-template-columns:auto minmax(0,1fr);gap:.7rem;align-items:start;padding:.85rem;border:1px solid var(--border);border-radius:12px;background:var(--surface-soft);cursor:pointer}.pos-item-type-option.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,212,191,.09)}.pos-item-type-option input{width:auto;min-height:auto;margin-top:.2rem}.pos-item-type-option strong,.pos-item-type-option small{display:block}.pos-item-type-option small{margin-top:.2rem;color:var(--muted);line-height:1.45}:root[data-theme='light'] .pos-status-strip,:root[data-theme='light'] .pos-item-type-option{background:#fff}
 @media(max-width:680px){.pos-page-actions{width:100%}.pos-page-actions .button{flex:1}.pos-status-strip{align-items:flex-start;flex-wrap:wrap}.pos-status-strip>a{width:100%;margin-left:0}.pos-workspace-heading{align-items:flex-start;flex-direction:column}.pos-workspace-heading .button{width:100%}.sme-pos-workspace-tabs button{flex:1}.sme-pos-cart{padding-bottom:calc(1rem + env(safe-area-inset-bottom))}}
 
@@ -9380,7 +9380,7 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 .transaction-account-filter summary::after {
-  content: '⌄';
+  content: 'âŒ„';
   position: absolute;
   right: .75rem;
   color: var(--muted);
@@ -9393,7 +9393,7 @@ html[data-theme*=contrast][data-theme-wallpaper=custom] body::after {
 }
 
 .transaction-account-filter details[open] summary::after {
-  content: '⌃';
+  content: 'âŒƒ';
 }
 
 .transaction-account-filter-popover {
@@ -18022,5 +18022,69 @@ a.business-report-row-v115:focus-visible {
         4,
         minmax(0, 1fr)
       );
+  }
+}
+
+
+/* ==========================================================
+   BAJETBN V115 DESKTOP HOME FINAL BALANCE
+   Desktop dashboard refinement only.
+   Mobile and backend behaviour remain unchanged.
+   ========================================================== */
+
+.bajetbn-desktop-side-extra {
+  display: none;
+}
+
+@media (min-width: 1240px) {
+  .page.bajetbn-reference-home
+  > .bajetbn-total-assets-card {
+    padding: .85rem 1.05rem;
+  }
+
+  .bajetbn-reference-home
+  .bajetbn-total-assets-value {
+    margin-top: .55rem;
+    font-size:
+      clamp(
+        1.65rem,
+        2.3vw,
+        2.2rem
+      );
+  }
+
+  .bajetbn-reference-home
+  .bajetbn-total-assets-breakdown {
+    margin-top: .65rem;
+  }
+
+  .bajetbn-reference-home
+  .bajetbn-total-assets-breakdown
+  > div {
+    padding: .55rem .65rem;
+  }
+
+  .bajetbn-home-recent-section
+  .home-v110-activity-row {
+    min-height: 52px;
+    padding: .56rem .78rem;
+  }
+
+  .bajetbn-home-recent-section
+  .home-v110-activity-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Desktop Home shows latest 8.
+     Mobile still receives the existing 20-item source. */
+  .bajetbn-home-recent-section
+  .home-v110-activity-row:nth-child(n + 9) {
+    display: none;
+  }
+
+  .home-v110-secondary-grid
+  > .bajetbn-desktop-side-extra {
+    display: grid;
   }
 }
