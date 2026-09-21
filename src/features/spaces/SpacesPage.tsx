@@ -18,7 +18,7 @@ const labels: Record<SpaceType, string> = {
   household: 'Household',
   sme: 'Business',
   trip: 'Trip',
-  goal: 'Goal',
+  goal: 'Plan',
   collection: 'Collection',
   vehicle: 'Vehicle',
   property: 'Property',
@@ -35,7 +35,7 @@ function spaceDefaultDescription(type: SpaceType) {
     household: 'Shared household money, bills, shopping, tasks and members.',
     sme: 'One business environment. Its operational tools adapt to the type of business you set up.',
     trip: 'Trip budget, contributions, expenses, bookings, tasks and settlements.',
-    goal: 'Keep money and activity for one goal separate and easy to follow.',
+    goal: 'Plan a saving target, debt payoff, purchase, emergency fund or dream in one focused Space.',
     collection: 'Organise a collection, its items, values and related activity.',
     vehicle: 'Keep one vehicle\'s costs, records and related money together.',
     property: 'Keep one property\'s money, records and responsibilities together.',
@@ -377,6 +377,7 @@ function SpaceForm({
           <option value="sme">Business</option>
           <option value="trip">Trip with others</option>
           <option value="household">Household / family</option>
+          <option value="goal">Plan / saving / debt payoff</option>
           <option value="project">Project / group</option>
           <option value="event">Event / group</option>
           <option value="custom">Other shared Space</option>

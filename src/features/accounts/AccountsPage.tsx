@@ -934,8 +934,10 @@ function AccountList({
             className="text-button account-view-activity"
             to={
               canManage
-                ? spaceIdOverride
-                  ? `/spaces/${spaceIdOverride}/business/money`
+                ? account.classification === 'business'
+                  ? (spaceIdOverride || businessSpaceIdsForAccount(account)[0])
+                    ? `/spaces/${spaceIdOverride || businessSpaceIdsForAccount(account)[0]}/business/money?accountId=${encodeURIComponent(account.id)}`
+                    : '/accounts'
                   : `/transactions?accountId=${encodeURIComponent(account.id)}`
                 : sharedLedgerSpaceId
                   ? `/spaces/${sharedLedgerSpaceId}?section=money`

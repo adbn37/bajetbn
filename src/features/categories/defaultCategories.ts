@@ -62,3 +62,33 @@ export function categoryIconGlyph(icon: string): string {
   };
   return glyphs[icon] || '•';
 }
+
+export function suggestedCategoryIcon(name: string, fallback = 'dots'): string {
+  const value = name.trim().toLowerCase();
+  const rules: Array<[RegExp, string]> = [
+    [/hotel|motel|resort|stay|room|rent|house|home/, 'home'],
+    [/electric|electricity|power|water|utility|utilities/, 'bill'],
+    [/internet|wifi|mobile|phone|telco|dst|progresif|imagine/, 'phone'],
+    [/cloud|hosting|server|software|computer|tech/, 'laptop'],
+    [/diy|hardware|repair|workshop|tool/, 'tools'],
+    [/grocery|groceries|supermarket|market/, 'cart'],
+    [/food|drink|restaurant|cafe|coffee|meal/, 'food'],
+    [/fuel|petrol|diesel|gas station/, 'fuel'],
+    [/car|vehicle|auto|motor|tyre/, 'car'],
+    [/bus|train|transport|taxi|dart/, 'bus'],
+    [/school|education|tuition|course|book/, 'school'],
+    [/clinic|hospital|doctor|health|medical/, 'health'],
+    [/family|child|children|parent/, 'family'],
+    [/charity|donation|zakat|gift/, 'heart'],
+    [/travel|flight|airline|holiday|trip/, 'plane'],
+    [/bank|fee|charge|finance/, 'bank'],
+    [/salary|payroll|wage|allowance/, 'wallet'],
+    [/shopping|shop|store|retail/, 'bag'],
+    [/game|movie|entertainment/, 'game'],
+    [/subscription|monthly|membership/, 'repeat'],
+    [/office|staff|employee/, 'staff'],
+    [/business|supplier|vendor|work/, 'briefcase'],
+  ];
+  for (const [pattern, icon] of rules) if (pattern.test(value)) return icon;
+  return CATEGORY_ICONS.includes(fallback as (typeof CATEGORY_ICONS)[number]) ? fallback : 'dots';
+}

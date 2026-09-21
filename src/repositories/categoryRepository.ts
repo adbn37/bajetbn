@@ -19,8 +19,12 @@ export async function createCategory(input: {
   color: string;
 }) {
   const { functions } = requireFirebase();
-  const call = httpsCallable(functions, 'createCategory');
-  return call({ ...input, idempotencyKey: crypto.randomUUID() });
+  const call = httpsCallable<
+    typeof input & { idempotencyKey: string },
+    { categoryId?: string }
+  >(functions, 'createCategory');
+  const result = await call({ ...input, idempotencyKey: crypto.randomUUID() });
+  return String(result.data?.categoryId || '');
 }
 
 export async function updateCategory(input: {

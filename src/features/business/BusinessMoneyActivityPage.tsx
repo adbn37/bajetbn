@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
@@ -32,7 +32,7 @@ import {
   DEFAULT_TRANSACTION_CATEGORIES,
   categoryIconGlyph,
 } from '../categories/defaultCategories';
-import { MoneyActivityModal } from '../transactions/TransactionsPage';
+import { MoneyActivityModal, MoneyScopeSwitch } from '../transactions/TransactionsPage';
 
 type PrimaryType = 'income' | 'expense' | 'transfer';
 type TypeFilter = 'all' | PrimaryType;
@@ -215,6 +215,8 @@ export function BusinessMoneyActivityPage() {
   const { user, profile } = useAuth();
   const { online } = useOfflineSync();
   const { spaceId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedAccountId = searchParams.get('accountId') || 'all';
 
   const [space, setSpace] = useState<Space | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -233,7 +235,7 @@ export function BusinessMoneyActivityPage() {
     useState<StatusFilter>('all');
   const [periodFilter, setPeriodFilter] =
     useState<PeriodFilter>('current_month');
-  const [accountFilter, setAccountFilter] = useState('all');
+  const [accountFilter, setAccountFilter] = useState(requestedAccountId);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [labelFilter, setLabelFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -359,6 +361,10 @@ export function BusinessMoneyActivityPage() {
       cancelled = true;
     };
   }, [load]);
+
+  useEffect(() => {
+    if (requestedAccountId !== 'all') setAccountFilter(requestedAccountId);
+  }, [requestedAccountId]);
 
   const allCategories = useMemo(() => {
     const map =
@@ -804,6 +810,8 @@ export function BusinessMoneyActivityPage() {
           </div>
         }
       />
+
+      <MoneyScopeSwitch mode="business" businessSpaces={[space]} currentBusinessId={space.id} />
 
       {error && (
         <div className="notice error">
@@ -1262,6 +1270,7 @@ export function BusinessMoneyActivityPage() {
           labelSuggestions={availableLabels}
           timezone={timezone}
           online={online}
+          scopeControls={<MoneyScopeSwitch mode="business" businessSpaces={[space]} currentBusinessId={space.id} compact />}
           lockedSpaceId={space.id}
           onClose={() =>
             setShowAdd(false)

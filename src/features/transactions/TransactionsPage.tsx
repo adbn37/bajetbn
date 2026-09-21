@@ -26,6 +26,7 @@ import {
   DEFAULT_TRANSACTION_CATEGORIES,
   categoryApplies,
   categoryIconGlyph,
+  suggestedCategoryIcon,
 } from '../categories/defaultCategories';
 import {
   businessSpaceIdsForAccount,
@@ -34,6 +35,7 @@ import {
 import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
 import { createCategory, listAllCustomCategories, updateCategory } from '../../repositories/categoryRepository';
 import { manageCategory } from '../../repositories/lifecycleRepository';
+import { CATEGORY_VISUAL_EVENT, getCategoryCustomIcon, prepareCategoryCustomIcon, removeCategoryCustomIcon, setCategoryCustomIcon } from '../../services/categoryVisualPreferences';
 import { listSpaces } from '../../repositories/spaceRepository';
 import {
   getTransactionAttachmentUrl,
@@ -107,7 +109,7 @@ const spaceTypeLabels: Record<Space['type'], string> = {
   household: 'Household',
   sme: 'Business',
   trip: 'Trip',
-  goal: 'Goal',
+  goal: 'Plan',
   collection: 'Collection',
   vehicle: 'Vehicle',
   property: 'Property',
@@ -120,6 +122,14 @@ const spaceTypeLabels: Record<Space['type'], string> = {
 function spaceDisplayLabel(space: Space): string {
   if (space.type === 'personal') return 'Personal money (no Space)';
   return [space.name, spaceTypeLabels[space.type], space.currency].join(' · ');
+}
+
+export function MoneyScopeSwitch({ mode, businessSpaces, currentBusinessId, compact = false }: { mode: 'personal' | 'business'; businessSpaces: Space[]; currentBusinessId?: string; compact?: boolean; }) {
+  const activeBusiness = businessSpaces.find((space) => space.id === currentBusinessId) || businessSpaces[0];
+  return <div className={'money-scope-switch' + (compact ? ' compact' : '')} aria-label="Money Activity scope">
+    <Link className={mode === 'personal' ? 'active' : ''} to="/transactions">Personal</Link>
+    {businessSpaces.length === 0 ? <span className="money-scope-disabled" title="Create or join a Business Space to use Business Money Activity.">Business</span> : businessSpaces.length === 1 ? <Link className={mode === 'business' ? 'active' : ''} to={'/spaces/' + businessSpaces[0].id + '/business/money'}>{mode === 'business' ? businessSpaces[0].name : 'Business'}</Link> : <details className={mode === 'business' ? 'active' : ''}><summary>{mode === 'business' && activeBusiness ? activeBusiness.name : 'Business'}</summary><div className="money-scope-business-list">{businessSpaces.map((space) => <Link key={space.id} className={space.id === currentBusinessId ? 'active' : ''} to={'/spaces/' + space.id + '/business/money'}>{space.name}</Link>)}</div></details>}
+  </div>;
 }
 
 function transactionTimestampMillis(value: unknown): number {
@@ -275,6 +285,7 @@ export function TransactionsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [writableAccounts, setWritableAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [businessSpaces, setBusinessSpaces] = useState<Space[]>([]);
   const [customCategories, setCustomCategories] = useState<TransactionCategory[]>([]);
   const [transactionAttachmentCounts, setTransactionAttachmentCounts] = useState<Record<string, number>>({});
   const [approvalRequests, setApprovalRequests] = useState<FinancialApprovalRequest[]>([]);
@@ -440,10 +451,17 @@ export function TransactionsPage() {
         },
       );
 
-      const personalSpaces =
+      const personalMoneySpaces =
         nextSpaces.filter(
           (space) =>
-            space.type === 'personal'
+            space.type !== 'sme'
+            && !space.archivedAt,
+        );
+
+      const nextBusinessSpaces =
+        nextSpaces.filter(
+          (space) =>
+            space.type === 'sme'
             && !space.archivedAt,
         );
 
@@ -477,7 +495,11 @@ export function TransactionsPage() {
       );
 
       setSpaces(
-        personalSpaces,
+        personalMoneySpaces,
+      );
+
+      setBusinessSpaces(
+        nextBusinessSpaces,
       );
 
       setCustomCategories(
@@ -993,9 +1015,10 @@ export function TransactionsPage() {
           <button className="button primary" onClick={() => setShowForm(true)} disabled={!activeWritableAccounts.length || !writableSpaces.length}>+ Add money activity</button>
         </div>}
       />
+      <MoneyScopeSwitch mode="personal" businessSpaces={businessSpaces} />
       {error && <div className="notice error">{error}</div>}
       {feedback && <div className="notice success">{feedback} {feedback.includes('device') && <Link to="/offline-sync">View Offline & sync</Link>}</div>}
-      <div className="info-banner"><strong>Personal money only.</strong><span>Business activity is kept inside its specific Business Space.</span></div>
+      <div className="info-banner"><strong>Personal money only.</strong><span>Business activity is kept inside its specific Business Space. You can still assign Personal money activity to Household, Trip, Plan or another non-Business Space without duplicating the transaction.</span></div>
 
       <section className="transaction-summary">
         <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
@@ -1103,7 +1126,7 @@ export function TransactionsPage() {
             const isIncome = item.type === 'income';
             const category = item.categoryId ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item) : transactionCategorySnapshot(item);
             return <article className={`transaction-row ${item.status === 'reversed' ? 'reversed' : ''}`} key={item.id}>
-              <span className={`category-icon category-${category.color}`}>{categoryIconGlyph(category.icon)}</span>
+              <CategoryIconVisual category={category} />
               <div className="transaction-main">
                 <div>
                   <h2>{item.category || typeLabels[item.type]}</h2>
@@ -1156,6 +1179,7 @@ export function TransactionsPage() {
         onCategoriesChanged={refreshCategories}
         timezone={profile.timezone}
         online={online}
+        scopeControls={<MoneyScopeSwitch mode="personal" businessSpaces={businessSpaces} compact />}
         onClose={() => setShowForm(false)}
         onSubmit={postTransaction}
         onComplete={async (message, refresh) => {
@@ -1442,8 +1466,19 @@ export function TransactionsPage() {
   );
 }
 
+function CategoryIconVisual({ category, className = '' }: { category: TransactionCategory; className?: string; }) {
+  const { user } = useAuth();
+  const [customIcon, setCustomIcon] = useState('');
+  useEffect(() => {
+    const refresh = () => setCustomIcon(user ? getCategoryCustomIcon(user.uid, category.id) : '');
+    refresh(); window.addEventListener(CATEGORY_VISUAL_EVENT, refresh);
+    return () => window.removeEventListener(CATEGORY_VISUAL_EVENT, refresh);
+  }, [category.id, user]);
+  return <span className={`category-icon category-${category.color}` + (className ? ` ${className}` : '')}>{customIcon ? <img src={customIcon} alt="" /> : categoryIconGlyph(category.icon)}</span>;
+}
+
 function CategoryBadge({ category }: { category: TransactionCategory }) {
-  return <span className="category-badge"><span className={`category-icon small category-${category.color}`}>{categoryIconGlyph(category.icon)}</span><span>{category.name}</span></span>;
+  return <span className="category-badge"><CategoryIconVisual category={category} className="small" /><span>{category.name}</span></span>;
 }
 
 export function MoneyActivityModal({
@@ -1457,6 +1492,7 @@ export function MoneyActivityModal({
   entryMode = 'activity',
   initialValues,
   lockedSpaceId,
+  scopeControls,
   onCategoriesChanged,
   onClose,
   onSubmit,
@@ -1472,6 +1508,7 @@ export function MoneyActivityModal({
   entryMode?: 'activity' | 'move' | 'receipt';
   initialValues?: TransactionInput;
   lockedSpaceId?: string;
+  scopeControls?: ReactNode;
   onCategoriesChanged?: () => Promise<TransactionCategory[]>;
   onClose: () => void;
   onSubmit: (values: TransactionInput) => Promise<PostTransactionOutcome>;
@@ -2434,6 +2471,7 @@ export function MoneyActivityModal({
     }
     onSubmit={submit}
   >
+    {scopeControls && <div className="money-entry-scope-controls">{scopeControls}</div>}
     {initialValues && <div className="notice warning compact-notice"><strong>Creating a correction</strong><span>The original activity has already been undone. Review every field and save this replacement to finish the correction.</span></div>}
     {error && <div className="notice error">{error}</div>}
 
@@ -2811,13 +2849,7 @@ export function MoneyActivityModal({
                 setCategoryId(category.id)
               }
             >
-              <span
-                className={
-                  `category-icon category-${category.color}`
-                }
-              >
-                {categoryIconGlyph(category.icon)}
-              </span>
+              <CategoryIconVisual category={category} />
 
               <span>
                 {category.name}
@@ -2887,13 +2919,7 @@ export function MoneyActivityModal({
                   setShowAllCategories(false);
                 }}
               >
-                <span
-                  className={
-                    `category-icon category-${category.color}`
-                  }
-                >
-                  {categoryIconGlyph(category.icon)}
-                </span>
+                <CategoryIconVisual category={category} />
 
                 <span>
                   {category.name}
@@ -3490,44 +3516,29 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
 }
 
 function CategoryEditor({ category, defaultKind, defaultScope, onClose, onSaved }: {
-  category: TransactionCategory | null;
-  defaultKind?: CategoryKind;
-  defaultScope?: CategoryScope;
-  onClose: () => void;
-  onSaved: (savedName?: string) => Promise<void>;
+  category: TransactionCategory | null; defaultKind?: CategoryKind; defaultScope?: CategoryScope; onClose: () => void; onSaved: (savedName?: string) => Promise<void>;
 }) {
-  const [name, setName] = useState(category?.name || '');
-  const [kind, setKind] = useState<CategoryKind>(category?.kind || defaultKind || 'expense');
-  const [scope, setScope] = useState<CategoryScope>(category?.scope || defaultScope || 'both');
-  const [icon, setIcon] = useState(category?.icon || 'dots');
-  const [color, setColor] = useState(category?.color || 'teal');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      if (!name.trim()) throw new Error('Category name is required.');
-      if (category) await updateCategory({ categoryId: category.id, name, kind, scope, icon, color });
-      else await createCategory({ name, kind, scope, icon, color });
-      await onSaved(name.trim());
-    } catch (nextError) {
-      setError(getErrorMessage(nextError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  const { user } = useAuth();
+  const [name,setName]=useState(category?.name || '');
+  const [kind,setKind]=useState<CategoryKind>(category?.kind || defaultKind || 'expense');
+  const [scope,setScope]=useState<CategoryScope>(category?.scope || defaultScope || 'both');
+  const [icon,setIcon]=useState(category?.icon || 'dots');
+  const [color,setColor]=useState(category?.color || 'teal');
+  const [customIconPreview,setCustomIconPreview]=useState(user && category ? getCategoryCustomIcon(user.uid,category.id) : '');
+  const [customIconTouched,setCustomIconTouched]=useState(false);
+  const [iconBusy,setIconBusy]=useState(false); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
+  const iconInputRef=useRef<HTMLInputElement>(null);
+  const suggestion=suggestedCategoryIcon(name,icon);
+  const chooseBuiltInIcon=(value:string)=>{ setIcon(value); setCustomIconPreview(''); setCustomIconTouched(true); };
+  const chooseCustomIcon=async(file:File|null)=>{ if(!file)return; setIconBusy(true); setError(''); try{ setCustomIconPreview(await prepareCategoryCustomIcon(file)); setCustomIconTouched(true); }catch(nextError){ setError(getErrorMessage(nextError)); }finally{ setIconBusy(false); } };
+  const submit=async(event:FormEvent)=>{ event.preventDefault(); if(busy||iconBusy)return; setBusy(true); setError(''); try{ if(!name.trim())throw new Error('Category name is required.'); let savedCategoryId=category?.id || ''; if(category){ await updateCategory({categoryId:category.id,name,kind,scope,icon,color}); }else{ savedCategoryId=await createCategory({name,kind,scope,icon,color}); } if(customIconTouched&&user&&savedCategoryId){ if(customIconPreview)setCategoryCustomIcon(user.uid,savedCategoryId,customIconPreview); else removeCategoryCustomIcon(user.uid,savedCategoryId); } await onSaved(name.trim()); }catch(nextError){ setError(getErrorMessage(nextError)); }finally{ setBusy(false); } };
   return <Modal title={category ? 'Edit custom category' : 'Create custom category'} onClose={onClose}><form className="category-editor" onSubmit={submit}>
     {error && <div className="notice error">{error}</div>}
-    <label>Name<input required value={name} onChange={(event) => setName(event.target.value)} maxLength={60} placeholder="Example: School allowance" /></label>
-    <div className="form-grid"><label>Type<select value={kind} onChange={(event) => setKind(event.target.value as CategoryKind)}><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Available for<select value={scope} onChange={(event) => setScope(event.target.value as CategoryScope)}><option value="both">Personal and Business</option><option value="personal">Personal only</option><option value="business">Business only</option></select></label></div>
-    <fieldset className="category-picker"><legend>Icon</legend><div className="icon-option-grid">{CATEGORY_ICONS.map((value) => <button type="button" aria-label={value} title={value} className={`category-icon category-${color} ${icon === value ? 'selected' : ''}`} key={value} onClick={() => setIcon(value)}>{categoryIconGlyph(value)}</button>)}</div></fieldset>
-    <fieldset className="category-picker"><legend>Colour</legend><div className="color-option-grid">{CATEGORY_COLORS.map((value) => <button type="button" aria-label={value} title={value} className={`color-swatch category-${value} ${color === value ? 'selected' : ''}`} key={value} onClick={() => setColor(value)} />)}</div></fieldset>
-    <div className="category-preview"><span>Preview</span><CategoryBadge category={{ id: 'preview', ownerId: null, name: name || 'Category name', kind, scope, icon, color, isSystem: false, archivedAt: null }} /></div>
-    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save category'}</button></div>
+    <label>Name<input required value={name} onChange={(event)=>setName(event.target.value)} maxLength={60} placeholder="Example: School allowance" /></label>
+    <div className="form-grid"><label>Type<select value={kind} onChange={(event)=>setKind(event.target.value as CategoryKind)}><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Available for<select value={scope} onChange={(event)=>setScope(event.target.value as CategoryScope)}><option value="both">Personal and Business</option><option value="personal">Personal only</option><option value="business">Business only</option></select></label></div>
+    <fieldset className="category-picker category-icon-editor-v115"><legend>Icon</legend><div className="category-icon-actions-v115"><button type="button" className="button secondary compact" onClick={()=>chooseBuiltInIcon(suggestedCategoryIcon(name,'dots'))}>Use suggested</button><button type="button" className="button secondary compact" disabled={iconBusy} onClick={()=>iconInputRef.current?.click()}>{iconBusy ? 'Preparing...' : 'Upload image'}</button><button type="button" className="text-button" onClick={()=>{setCustomIconPreview('');setCustomIconTouched(true);setIcon(suggestedCategoryIcon(name,'dots'));}}>Reset</button><input ref={iconInputRef} className="visually-hidden" type="file" accept="image/*" onChange={(event)=>void chooseCustomIcon(event.target.files?.[0] || null)} /></div><small className="muted">Suggested: {suggestion}. Uploaded images are saved on this device; built-in icon and colour remain synced.</small><div className="icon-option-grid">{CATEGORY_ICONS.map((value)=><button type="button" aria-label={value} title={value} className={`category-icon category-${color} ${!customIconPreview && icon===value ? 'selected' : ''}`} key={value} onClick={()=>chooseBuiltInIcon(value)}>{categoryIconGlyph(value)}</button>)}</div></fieldset>
+    <fieldset className="category-picker"><legend>Colour</legend><div className="color-option-grid">{CATEGORY_COLORS.map((value)=><button type="button" aria-label={value} title={value} className={`color-swatch category-${value} ${color===value ? 'selected' : ''}`} key={value} onClick={()=>setColor(value)} />)}</div></fieldset>
+    <div className="category-preview"><span>Preview</span><span className="category-badge"><span className={`category-icon small category-${color}`}>{customIconPreview ? <img src={customIconPreview} alt="" /> : categoryIconGlyph(icon)}</span><span>{name || 'Category name'}</span></span></div>
+    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy||iconBusy}>{busy ? 'Saving...' : 'Save category'}</button></div>
   </form></Modal>;
 }

@@ -313,7 +313,7 @@ const spaceTypeLabel: Record<SpaceType, string> = {
   household: 'Household',
   sme: 'Business',
   trip: 'Trip',
-  goal: 'Goal',
+  goal: 'Plan',
   collection: 'Collection',
   vehicle: 'Vehicle',
   property: 'Property',
@@ -356,7 +356,7 @@ function spaceDescription(space: Space) {
   if (space.type === 'household') return 'Household money and planning.';
   if (space.type === 'trip') return 'Trip money and planning.';
   if (space.type === 'sme') return 'Business money.';
-  if (space.type === 'goal') return 'Shared goal.';
+  if (space.type === 'goal') return 'Plan progress, money and activity.';
   if (space.type === 'collection') return 'Collection tracking.';
   if (space.type === 'vehicle') return 'Vehicle costs.';
   if (space.type === 'property') return 'Property money.';
@@ -1222,7 +1222,6 @@ export function SpaceDetailsPage() {
               <EmbeddedCommitmentsPage
                 embedded
                 spaceIdOverride={space.id}
-                typeOverride="bill"
               />
             </Suspense>
           )}
@@ -2651,7 +2650,11 @@ function SpaceOverview({
               <EmbeddedCommitmentsPage
                 embedded
                 spaceIdOverride={space.id}
-                typeOverride="bill"
+                typeOverride={
+                  space.type === 'personal'
+                    ? 'bill'
+                    : undefined
+                }
               />
             </Suspense>
           )}

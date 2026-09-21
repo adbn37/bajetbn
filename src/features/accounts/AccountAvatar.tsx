@@ -61,9 +61,21 @@ function inferredInstitutionCode(
 
 function AccountFallbackIcon({
   account,
+  institutionCode,
 }: {
   account: Account;
+  institutionCode: InstitutionCode | 'other';
 }) {
+  const bankMark =
+    institutionCode === 'baiduri' ? 'B'
+      : institutionCode === 'bibd' ? 'BIBD'
+        : institutionCode === 'taib' ? 'TAIB'
+          : institutionCode === 'standard_chartered_brunei' ? 'SC'
+            : '';
+
+  if (account.type === 'bank' && bankMark) {
+    return <span className="account-bank-mark">{bankMark}</span>;
+  }
   if (account.type === 'cash') {
     return (
       <svg viewBox="0 0 24 24">
@@ -237,6 +249,7 @@ export function AccountAvatar({
       ) : (
         <AccountFallbackIcon
           account={account}
+          institutionCode={visualCode}
         />
       )}
     </span>
