@@ -261,6 +261,19 @@ export function BusinessMoneyActivityPage() {
     useState<ActionConfirmState<FinancialTransaction> | null>(null);
   const [reverseBusy, setReverseBusy] = useState(false);
 
+  const writableAccounts =
+    useMemo(
+      () =>
+        accounts.filter(
+          (account) =>
+            !account.archivedAt
+            && !account.closedAt
+            && account.sharedCanUseAccount
+              !== false,
+        ),
+      [accounts],
+    );
+
   const load = useCallback(async () => {
     if (!user || !spaceId) return;
 
@@ -391,6 +404,7 @@ export function BusinessMoneyActivityPage() {
       searchParams.get('quick') !== '1'
       || loading
       || !canManage
+      || writableAccounts.length === 0
     ) {
       return;
     }
@@ -413,6 +427,7 @@ export function BusinessMoneyActivityPage() {
     loading,
     searchParams,
     setSearchParams,
+    writableAccounts.length,
   ]);
 
   const allCategories = useMemo(() => {
@@ -812,13 +827,6 @@ export function BusinessMoneyActivityPage() {
     );
   }
 
-  const activeAccounts =
-    accounts.filter(
-      (account) =>
-        !account.archivedAt
-        && !account.closedAt,
-    );
-
   return (
     <main className="page">
       <PageHeader
@@ -847,7 +855,7 @@ export function BusinessMoneyActivityPage() {
                 type="button"
                 disabled={
                   !online
-                  || activeAccounts.length === 0
+                  || writableAccounts.length === 0
                 }
                 onClick={() =>
                   setShowAdd(true)
@@ -873,6 +881,15 @@ export function BusinessMoneyActivityPage() {
           {feedback}
         </div>
       )}
+
+      {canManage
+        && accounts.length > 0
+        && writableAccounts.length === 0
+        && (
+          <div className="notice warning">
+            You can view Business accounts here, but none are shared with permission to post money activity. Ask the Business owner to enable Can use account for at least one account.
+          </div>
+        )}
 
       <div className="info-banner">
         <strong>
@@ -1143,7 +1160,7 @@ export function BusinessMoneyActivityPage() {
           description="Change the filters or add a new Business money record."
           action={
             canManage
-            && activeAccounts.length > 0
+            && writableAccounts.length > 0
               ? (
                 <button
                   className="button primary"
@@ -1313,7 +1330,7 @@ export function BusinessMoneyActivityPage() {
 
       {showAdd && (
         <MoneyActivityModal
-          accounts={activeAccounts}
+          accounts={writableAccounts}
           spaces={[space]}
           categories={allCategories}
           labelSuggestions={availableLabels}
@@ -1340,7 +1357,7 @@ export function BusinessMoneyActivityPage() {
 
       {correctionDraft && (
         <MoneyActivityModal
-          accounts={activeAccounts}
+          accounts={writableAccounts}
           spaces={[space]}
           categories={allCategories}
           labelSuggestions={availableLabels}

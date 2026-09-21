@@ -2231,11 +2231,16 @@ export function MoneyActivityModal({
         : pendingFiles.length > 0 ? `Save and attach ${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'}`
           : 'Save transaction';
 
+  const canTransferBetweenAccounts =
+    compatibleAccounts.length >= 2;
+
   const typeOptions: PrimaryType[] =
     lockedSpaceId
     && selectedSpace?.type !== 'sme'
       ? ['expense', 'income']
-      : ['expense', 'income', 'transfer'];
+      : canTransferBetweenAccounts
+        ? ['expense', 'income', 'transfer']
+        : ['expense', 'income'];
 
   if (entryMode === 'move' && !initialValues) {
     return <Modal title="Move Money" onClose={closeForm}>
