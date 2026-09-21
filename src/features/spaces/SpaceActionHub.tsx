@@ -677,6 +677,52 @@ export function SpaceActionHub({
   const activeTabTarget =
     searchParams.get('tab');
 
+  const explicitTripSheet =
+    searchParams.get('sheet');
+
+  const activeTripSheet =
+    space.type !== 'trip'
+      ? null
+      : [
+          'overview',
+          'itinerary',
+          'tasks',
+          'bookings',
+          'budget',
+          'expenses',
+          'fund',
+          'settle',
+        ].includes(
+          explicitTripSheet || '',
+        )
+        ? explicitTripSheet
+        : searchParams.get('details') === '1'
+          ? 'itinerary'
+          : activeSection === 'budgets'
+            ? 'budget'
+            : activeTabTarget === 'expenses'
+              ? 'expenses'
+              : activeTabTarget === 'trip_money'
+                ? 'fund'
+                : activeTabTarget === 'balances'
+                  ? 'settle'
+                  : !activeSection
+                    && !activeTabTarget
+                    ? 'overview'
+                    : null;
+
+  const tripSupportActive =
+    space.type === 'trip'
+    && [
+      'bills',
+      'members',
+      'chat',
+      'activity',
+      'settings',
+    ].includes(
+      activeTabTarget || '',
+    );
+
   const householdNavigationTarget =
     space.type !== 'household'
       ? null
@@ -816,7 +862,16 @@ export function SpaceActionHub({
                 ? businessIndustry
                 : undefined
             }
-            style={shortcutGridStyle}
+            data-trip-workbook-tabs={
+              space.type === 'trip'
+                ? 'true'
+                : undefined
+            }
+            style={
+              space.type === 'trip'
+                ? undefined
+                : shortcutGridStyle
+            }
           >
             {space.type === 'sme' && businessIndustry === 'marketplace' && <>
               <ShortcutLink
@@ -920,96 +975,60 @@ export function SpaceActionHub({
 
             {space.type === 'trip' && <>
               <ShortcutLink
-                to={`/spaces/${space.id}`}
-                label="Home"
-                primary={
-                  !activeSection
-                  && !activeTabTarget
-                  && searchParams.get('details') !== '1'
-                }
+                to={`/spaces/${space.id}?sheet=overview`}
+                label="Overview"
+                primary={activeTripSheet === 'overview'}
               />
 
               <ShortcutLink
-                to={`/spaces/${space.id}?details=1`}
-                label="Plan"
-                primary={
-                  searchParams.get('details') === '1'
-                }
+                to={`/spaces/${space.id}?sheet=itinerary`}
+                label="Itinerary"
+                primary={activeTripSheet === 'itinerary'}
               />
 
               <ShortcutLink
-                to={`/spaces/${space.id}?tab=trip_money`}
-                label="Fund"
-                primary={
-                  activeTabTarget === 'trip_money'
-                }
+                to={`/spaces/${space.id}?sheet=tasks`}
+                label="Tasks"
+                primary={activeTripSheet === 'tasks'}
               />
 
               <ShortcutLink
-                to={`/spaces/${space.id}?tab=expenses`}
-                label="Expenses"
-                primary={
-                  activeTabTarget === 'expenses'
-                }
+                to={`/spaces/${space.id}?sheet=bookings`}
+                label="Bookings"
+                primary={activeTripSheet === 'bookings'}
               />
 
               <ShortcutLink
-                to={`/spaces/${space.id}?tab=balances`}
-                label="Settle"
-                primary={
-                  activeTabTarget === 'balances'
-                }
-              />
-
-              <ShortcutLink
-                to={`/spaces/${space.id}?section=budgets`}
+                to={`/spaces/${space.id}?sheet=budget`}
                 label="Budget"
-                primary={
-                  activeSection === 'budgets'
-                }
+                primary={activeTripSheet === 'budget'}
               />
 
               <ShortcutLink
-                to={`/spaces/${space.id}?tab=bills`}
-                label="Bills"
-                primary={
-                  activeTabTarget === 'bills'
-                }
+                to={`/spaces/${space.id}?sheet=expenses`}
+                label="Expenses"
+                primary={activeTripSheet === 'expenses'}
               />
 
               <ShortcutLink
-                to={`/spaces/${space.id}?tab=members`}
-                label="Members"
-                primary={
-                  activeTabTarget === 'members'
-                }
+                to={`/spaces/${space.id}?sheet=fund`}
+                label="Fund"
+                primary={activeTripSheet === 'fund'}
               />
 
               <ShortcutLink
-                to={`/spaces/${space.id}?tab=chat`}
-                label="Chat"
-                primary={
-                  activeTabTarget === 'chat'
-                }
+                to={`/spaces/${space.id}?sheet=settle`}
+                label="Settle"
+                primary={activeTripSheet === 'settle'}
               />
 
-              <ShortcutLink
-                to={`/spaces/${space.id}?tab=activity`}
-                label="Activity"
-                primary={
-                  activeTabTarget === 'activity'
+              <ShortcutButton
+                label="More"
+                primary={tripSupportActive}
+                onClick={() =>
+                  setSpaceMoreOpen(true)
                 }
               />
-
-              {currentMember?.role === 'owner' && (
-                <ShortcutLink
-                  to={`/spaces/${space.id}?tab=settings`}
-                  label="Settings"
-                  primary={
-                    activeTabTarget === 'settings'
-                  }
-                />
-              )}
             </>}
 
             {space.type === 'household' && <>
@@ -1646,11 +1665,32 @@ export function SpaceActionHub({
                 </>}
 
                 {space.type === 'trip' && <>
-                  <ShortcutLink to={`/spaces/${space.id}?section=budgets`} label="Budget" onClick={() => setSpaceMoreOpen(false)} />
-                  <ShortcutLink to={`/spaces/${space.id}?tab=members`} label="Members" onClick={() => setSpaceMoreOpen(false)} />
-                  <ShortcutLink to={`/spaces/${space.id}?tab=chat`} label="Chat" onClick={() => setSpaceMoreOpen(false)} />
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=bills`}
+                    label="Bills"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=members`}
+                    label="Members"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=chat`}
+                    label="Chat"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
+                  <ShortcutLink
+                    to={`/spaces/${space.id}?tab=activity`}
+                    label="Activity"
+                    onClick={() => setSpaceMoreOpen(false)}
+                  />
                   {currentMember?.role === 'owner' && (
-                    <ShortcutLink to={`/spaces/${space.id}?tab=settings`} label="Settings" onClick={() => setSpaceMoreOpen(false)} />
+                    <ShortcutLink
+                      to={`/spaces/${space.id}?tab=settings`}
+                      label="Settings"
+                      onClick={() => setSpaceMoreOpen(false)}
+                    />
                   )}
                 </>}
 

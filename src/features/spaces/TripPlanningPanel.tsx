@@ -762,10 +762,15 @@ export function TripPlanningPanel({
   space,
   members,
   currentMember,
+  initialView = 'itinerary',
 }: {
   space: Space;
   members: SpaceMember[];
   currentMember?: SpaceMember | null;
+  initialView?:
+    | 'itinerary'
+    | 'tasks'
+    | 'bookings';
 }) {
   const [itinerary, setItinerary] =
     useState<TripItineraryItem[]>([]);
@@ -781,7 +786,11 @@ export function TripPlanningPanel({
       'itinerary'
       | 'tasks'
       | 'bookings'
-    >('itinerary');
+    >(initialView);
+
+  useEffect(() => {
+    setPlanningView(initialView);
+  }, [initialView]);
 
   const [newItinerary, setNewItinerary] =
     useState<ItineraryDraft>(

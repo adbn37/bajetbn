@@ -20,6 +20,7 @@ export function TripCommandCentre({
   sharedExpenses,
   currentMember,
   onOpenTab,
+  showPlanning = true,
 }: {
   space: Space;
   budgets: Budget[];
@@ -27,6 +28,7 @@ export function TripCommandCentre({
   sharedExpenses: SharedExpense[];
   currentMember?: SpaceMember | null;
   onOpenTab: (tab: TripTab) => void;
+  showPlanning?: boolean;
 }) {
   const [fund, setFund] = useState<SpaceFund | null>(null);
   const [loadingFund, setLoadingFund] = useState(true);
@@ -542,11 +544,13 @@ export function TripCommandCentre({
           handled separately.
         </span>
       </div>
-      <TripPlanningPanel
-        space={space}
-        members={members}
-        currentMember={currentMember}
-      />
+      {showPlanning && (
+        <TripPlanningPanel
+          space={space}
+          members={members}
+          currentMember={currentMember}
+        />
+      )}
     </section>
   );
 }

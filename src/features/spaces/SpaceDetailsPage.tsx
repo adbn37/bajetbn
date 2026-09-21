@@ -298,6 +298,64 @@ const SpaceAvatarSettings = lazy(
 
 type SpaceDetailsTab = 'overview' | CollaborationTab | 'expenses' | 'balances' | 'trip_money' | 'group_fund' | 'chat';
 type SpaceOverviewSection = 'accounts' | 'income' | 'expenses' | 'money' | 'budgets' | 'goals' | 'bills' | 'instalments' | 'reports' | 'calendar';
+type TripWorkbookSheet =
+  | 'overview'
+  | 'itinerary'
+  | 'tasks'
+  | 'bookings'
+  | 'budget'
+  | 'expenses'
+  | 'fund'
+  | 'settle';
+
+const TRIP_WORKBOOK_SHEETS: TripWorkbookSheet[] = [
+  'overview',
+  'itinerary',
+  'tasks',
+  'bookings',
+  'budget',
+  'expenses',
+  'fund',
+  'settle',
+];
+
+function tripWorkbookSheetFromSearch(
+  searchParams: URLSearchParams,
+): TripWorkbookSheet {
+  const explicit =
+    searchParams.get('sheet');
+
+  if (
+    explicit
+    && TRIP_WORKBOOK_SHEETS.includes(
+      explicit as TripWorkbookSheet,
+    )
+  ) {
+    return explicit as TripWorkbookSheet;
+  }
+
+  if (searchParams.get('details') === '1') {
+    return 'itinerary';
+  }
+
+  if (searchParams.get('section') === 'budgets') {
+    return 'budget';
+  }
+
+  if (searchParams.get('tab') === 'expenses') {
+    return 'expenses';
+  }
+
+  if (searchParams.get('tab') === 'trip_money') {
+    return 'fund';
+  }
+
+  if (searchParams.get('tab') === 'balances') {
+    return 'settle';
+  }
+
+  return 'overview';
+}
 type SpaceReportRange = 'day' | 'week' | 'month' | 'year' | 'custom';
 
 function localIsoDate(value: Date) {
@@ -1559,7 +1617,31 @@ export function SpaceDetailsPage() {
           : 'Member';
 
   function chooseTab(tab: SpaceDetailsTab) {
-    setSearchParams(tab === 'overview' ? {} : { tab });
+    if (space?.type === 'trip') {
+      const tripSheet =
+        tab === 'overview'
+          ? 'overview'
+          : tab === 'trip_money'
+            ? 'fund'
+            : tab === 'expenses'
+              ? 'expenses'
+              : tab === 'balances'
+                ? 'settle'
+                : null;
+
+      if (tripSheet) {
+        setSearchParams({
+          sheet: tripSheet,
+        });
+        return;
+      }
+    }
+
+    setSearchParams(
+      tab === 'overview'
+        ? {}
+        : { tab },
+    );
   }
 
   if (loading) return <main className="page"><div className="loading-panel">Loading Space…</div></main>;
@@ -1571,6 +1653,22 @@ export function SpaceDetailsPage() {
       <Link className="button primary" to="/spaces">Back to Spaces</Link>
     </main>;
   }
+
+  const tripWorkbookSheet =
+    space.type === 'trip'
+      ? tripWorkbookSheetFromSearch(
+          searchParams,
+        )
+      : null;
+
+  const tripWorkbookActive =
+    space.type === 'trip'
+    && (
+      activeTab === 'overview'
+      || activeTab === 'trip_money'
+      || activeTab === 'expenses'
+      || activeTab === 'balances'
+    );
 
   /*
    * A Business Space now has one canonical landing page:
@@ -1767,6 +1865,87 @@ export function SpaceDetailsPage() {
       />
     )}
 
+    {tripWorkbookActive
+      && tripWorkbookSheet
+      && (
+        <div
+          className="trip-workbook-v115"
+          data-trip-workbook
+          data-trip-sheet={tripWorkbookSheet}
+        >
+          {tripWorkbookSheet === 'overview' && (
+            <TripCommandCentre
+              space={space}
+              budgets={budgets}
+              members={members}
+              sharedExpenses={sharedExpenses}
+              currentMember={currentMember || null}
+              onOpenTab={chooseTab}
+              showPlanning={false}
+            />
+          )}
+
+          {(
+            tripWorkbookSheet === 'itinerary'
+            || tripWorkbookSheet === 'tasks'
+            || tripWorkbookSheet === 'bookings'
+          ) && (
+            <section
+              className="panel trip-workbook-planning-sheet-v115"
+              data-trip-workbook-planning
+            >
+              <TripPlanningPanel
+                space={space}
+                members={members}
+                currentMember={currentMember || null}
+                initialView={tripWorkbookSheet}
+              />
+            </section>
+          )}
+
+          {tripWorkbookSheet === 'budget' && (
+            <TripBudgetSpreadsheet
+              space={space}
+              members={members}
+              currentMember={currentMember}
+            />
+          )}
+
+          {tripWorkbookSheet === 'expenses' && (
+            <TripExpensesSpreadsheet
+              space={space}
+              members={members}
+              currentMember={currentMember || null}
+            />
+          )}
+
+          {tripWorkbookSheet === 'fund' && (
+            <SpaceFundPanel
+              space={space}
+              members={members}
+              currentMember={currentMember || null}
+              canManage={
+                currentMember?.role === 'owner'
+                || currentMember?.role === 'admin'
+              }
+            />
+          )}
+
+          {tripWorkbookSheet === 'settle' && (
+            <SharedExpensesPanel
+              space={space}
+              members={members}
+              currentMember={currentMember || null}
+              canManage={
+                currentMember?.role === 'owner'
+                || currentMember?.role === 'admin'
+              }
+              view="balances"
+            />
+          )}
+        </div>
+      )}
+
     {activeTab === 'overview'
       && space.type === 'sme'
       && !marketplaceInlineSection
@@ -1789,25 +1968,6 @@ export function SpaceDetailsPage() {
           }
           onChanged={load}
         />
-      )}
-
-    {space.type === 'trip'
-      && activeTab === 'overview'
-      && requestedSection === 'budgets'
-      && (
-        <Suspense
-          fallback={
-            <div className="loading-panel">
-              Loading Trip Budget...
-            </div>
-          }
-        >
-          <TripBudgetSpreadsheet
-            space={space}
-            members={members}
-            currentMember={currentMember}
-          />
-        </Suspense>
       )}
 
     {space.type === 'household'
@@ -1948,21 +2108,6 @@ export function SpaceDetailsPage() {
       )}
 
     {activeTab === 'overview'
-      && space.type === 'trip'
-      && !requestedSection
-      && !detailedOverviewRequested
-      && (
-        <TripCommandCentre
-          space={space}
-          budgets={budgets}
-          members={members}
-          sharedExpenses={sharedExpenses}
-          currentMember={currentMember || null}
-          onOpenTab={chooseTab}
-        />
-      )}
-
-    {activeTab === 'overview'
       && compactActionHome
       && space.type !== 'trip'
       && !requestedSection
@@ -1984,22 +2129,6 @@ export function SpaceDetailsPage() {
             || space.ownerId === user?.uid
           }
         />
-      )}
-
-    {detailedOverviewRequested
-      && activeTab === 'overview'
-      && space.type === 'trip'
-      && (
-        <section
-          className="panel trip-plan-direct-v115"
-          data-trip-plan-direct
-        >
-          <TripPlanningPanel
-            space={space}
-            members={members}
-            currentMember={currentMember}
-          />
-        </section>
       )}
 
     {showDetailedSpaceOverviews() && activeTab === 'overview' && space.type === 'household' && (
@@ -2104,6 +2233,7 @@ export function SpaceDetailsPage() {
       <CollectionCommandCentre space={space} />
     )}
     {space.type !== 'sme'
+      && space.type !== 'trip'
       && (!compactActionHome || activeTab !== 'overview') && (
       <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
@@ -2153,7 +2283,7 @@ export function SpaceDetailsPage() {
       smePosRole={smePosRole}
       onRefresh={load}
     />
-    ) : space.type === 'goal' ? (
+    ) : tripWorkbookActive ? null : space.type === 'goal' ? (
       activeTab === 'activity' ? (
         <CollaborationPage
           embedded
