@@ -366,6 +366,541 @@ function spaceDescription(space: Space) {
   return 'Space money activity.';
 }
 
+function planPurposeLabel(
+  space: Space,
+) {
+  const description =
+    (space.description || '')
+      .toLowerCase();
+
+  if (
+    description.includes(
+      'purchase saving plan',
+    )
+  ) {
+    return 'Purchase Plan';
+  }
+
+  if (
+    description.includes(
+      'emergency fund plan',
+    )
+  ) {
+    return 'Emergency Fund';
+  }
+
+  if (
+    description.includes(
+      'dream saving plan',
+    )
+  ) {
+    return 'Dream Plan';
+  }
+
+  if (
+    description.includes(
+      'saving plan',
+    )
+  ) {
+    return 'Savings Plan';
+  }
+
+  return 'Plan';
+}
+
+function planMonthlyTarget(
+  remainingMinor: number,
+  targetDate?: string | null,
+) {
+  if (
+    remainingMinor <= 0
+    || !targetDate
+  ) {
+    return null;
+  }
+
+  const target =
+    new Date(
+      targetDate + 'T00:00:00',
+    );
+
+  const now =
+    new Date();
+
+  if (
+    Number.isNaN(
+      target.getTime(),
+    )
+    || target.getTime()
+      <= now.getTime()
+  ) {
+    return null;
+  }
+
+  const monthMillis =
+    30.4375
+    * 24
+    * 60
+    * 60
+    * 1000;
+
+  const months =
+    Math.max(
+      1,
+      Math.ceil(
+        (
+          target.getTime()
+          - now.getTime()
+        )
+        / monthMillis,
+      ),
+    );
+
+  return Math.ceil(
+    remainingMinor / months,
+  );
+}
+
+function PlanSpaceWorkspace({
+  space,
+  goals,
+  section,
+}: {
+  space: Space;
+  goals: SavingsGoal[];
+  section: string | null;
+}) {
+  const activeGoals =
+    goals.filter(
+      (item) =>
+        !item.archivedAt
+        && !item.closedAt,
+    );
+
+  if (section === 'goals') {
+    return (
+      <section
+        className="plan-space-workspace-v115"
+        data-plan-target-workspace
+      >
+        <Suspense
+          fallback={
+            <div className="loading-panel">
+              Loading Plan target...
+            </div>
+          }
+        >
+          <EmbeddedGoalsPage
+            embedded
+            spaceIdOverride={space.id}
+          />
+        </Suspense>
+      </section>
+    );
+  }
+
+  if (section === 'calendar') {
+    const datedGoals =
+      activeGoals
+        .filter(
+          (item) =>
+            Boolean(
+              item.targetDate,
+            ),
+        )
+        .sort(
+          (a, b) =>
+            (
+              a.targetDate
+              || '9999-12-31'
+            ).localeCompare(
+              b.targetDate
+              || '9999-12-31',
+            ),
+        );
+
+    return (
+      <section
+        className="panel plan-space-calendar-v115"
+        data-plan-calendar
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Plan calendar
+            </span>
+
+            <h2>Target dates</h2>
+
+            <p className="muted">
+              Only dates belonging to this Plan are shown.
+            </p>
+          </div>
+
+          <Link
+            className="button secondary compact"
+            to={
+              '/spaces/'
+              + space.id
+            }
+          >
+            Plan home
+          </Link>
+        </div>
+
+        {datedGoals.length > 0 ? (
+          <div className="plan-calendar-list-v115">
+            {datedGoals.map(
+              (goal) => (
+                <article
+                  key={goal.id}
+                  className="plan-calendar-row-v115"
+                >
+                  <div>
+                    <strong>
+                      {goal.name}
+                    </strong>
+
+                    <small>
+                      Target date
+                    </small>
+                  </div>
+
+                  <strong>
+                    {displaySpaceDate(
+                      goal.targetDate,
+                    )}
+                  </strong>
+                </article>
+              ),
+            )}
+          </div>
+        ) : (
+          <div className="notice">
+            No target date yet.
+            Add one from Target & contributions.
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  const targetMinor =
+    activeGoals.reduce(
+      (sum, item) =>
+        sum + item.targetMinor,
+      0,
+    );
+
+  const savedMinor =
+    activeGoals.reduce(
+      (sum, item) =>
+        sum + item.currentMinor,
+      0,
+    );
+
+  const remainingMinor =
+    Math.max(
+      0,
+      targetMinor - savedMinor,
+    );
+
+  const progress =
+    targetMinor > 0
+      ? Math.min(
+          100,
+          Math.round(
+            savedMinor
+            / targetMinor
+            * 100,
+          ),
+        )
+      : 0;
+
+  const targetDate =
+    activeGoals
+      .map(
+        (item) =>
+          item.targetDate || '',
+      )
+      .filter(Boolean)
+      .sort()[0]
+      || null;
+
+  const monthlyTarget =
+    planMonthlyTarget(
+      remainingMinor,
+      targetDate,
+    );
+
+  const purpose =
+    planPurposeLabel(
+      space,
+    );
+
+  return (
+    <div
+      className="plan-space-home-v115"
+      data-focused-plan-home
+    >
+      <section className="panel plan-space-hero-v115">
+        <div className="plan-space-hero-copy-v115">
+          <span className="eyebrow">
+            {purpose}
+          </span>
+
+          <h2>
+            {space.name}
+          </h2>
+
+          <p className="muted">
+            This Space is only for the target, contributions,
+            progress and target date.
+          </p>
+        </div>
+
+        {activeGoals.length === 0 ? (
+          <div className="plan-space-empty-v115">
+            <strong>
+              Set your Plan target
+            </strong>
+
+            <span className="muted">
+              Add the amount you need and an optional target date.
+            </span>
+
+            <Link
+              className="button primary"
+              to={
+                '/spaces/'
+                + space.id
+                + '?section=goals'
+              }
+            >
+              Set Plan target
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="summary-grid plan-space-summary-v115">
+              <article className="summary-card featured">
+                <span>Target</span>
+                <strong>
+                  {formatMoney(
+                    targetMinor,
+                    space.currency,
+                  )}
+                </strong>
+                <small>
+                  Amount needed
+                </small>
+              </article>
+
+              <article className="summary-card">
+                <span>Saved</span>
+                <strong>
+                  {formatMoney(
+                    savedMinor,
+                    space.currency,
+                  )}
+                </strong>
+                <small>
+                  Contributions recorded
+                </small>
+              </article>
+
+              <article className="summary-card">
+                <span>Remaining</span>
+                <strong>
+                  {formatMoney(
+                    remainingMinor,
+                    space.currency,
+                  )}
+                </strong>
+                <small>
+                  Still needed
+                </small>
+              </article>
+
+              <article className="summary-card">
+                <span>Progress</span>
+                <strong>
+                  {progress}%
+                </strong>
+                <small>
+                  Of target
+                </small>
+              </article>
+            </div>
+
+            <div className="plan-space-progress-v115">
+              <div>
+                <strong>
+                  {progress}% complete
+                </strong>
+
+                <span className="muted">
+                  {targetDate
+                    ? 'Target '
+                      + displaySpaceDate(
+                        targetDate,
+                      )
+                    : 'No target date'}
+                </span>
+              </div>
+
+              <div className="progress planning-progress">
+                <span
+                  style={{
+                    width:
+                      progress + '%',
+                  }}
+                />
+              </div>
+
+              {monthlyTarget !== null && (
+                <small className="muted">
+                  About{' '}
+                  {formatMoney(
+                    monthlyTarget,
+                    space.currency,
+                  )}
+                  {' '}per month to reach the current target date.
+                </small>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section
+        className="panel plan-space-actions-v115"
+        aria-label="Plan actions"
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Plan tools
+            </span>
+
+            <h2>Keep it focused</h2>
+          </div>
+        </div>
+
+        <div className="plan-space-action-grid-v115">
+          <Link
+            className="space-quick-card featured"
+            to={
+              '/spaces/'
+              + space.id
+              + '?section=goals'
+            }
+          >
+            <span className="space-quick-icon">
+              T
+            </span>
+
+            <div>
+              <strong>
+                Target & contributions
+              </strong>
+
+              <small>
+                Change the target or add saved progress.
+              </small>
+            </div>
+
+            <span aria-hidden="true">
+              {'>'}
+            </span>
+          </Link>
+
+          <Link
+            className="space-quick-card"
+            to={
+              '/spaces/'
+              + space.id
+              + '?section=calendar'
+            }
+          >
+            <span className="space-quick-icon">
+              D
+            </span>
+
+            <div>
+              <strong>
+                Target date
+              </strong>
+
+              <small>
+                Review the date for this Plan.
+              </small>
+            </div>
+
+            <span aria-hidden="true">
+              {'>'}
+            </span>
+          </Link>
+
+          <Link
+            className="space-quick-card"
+            to={
+              '/spaces/'
+              + space.id
+              + '?tab=activity'
+            }
+          >
+            <span className="space-quick-icon">
+              A
+            </span>
+
+            <div>
+              <strong>
+                Activity
+              </strong>
+
+              <small>
+                Review Plan history.
+              </small>
+            </div>
+
+            <span aria-hidden="true">
+              {'>'}
+            </span>
+          </Link>
+
+          <Link
+            className="space-quick-card"
+            to={
+              '/spaces/'
+              + space.id
+              + '?tab=settings'
+            }
+          >
+            <span className="space-quick-icon">
+              S
+            </span>
+
+            <div>
+              <strong>
+                Settings
+              </strong>
+
+              <small>
+                Edit the Plan appearance or archive it.
+              </small>
+            </div>
+
+            <span aria-hidden="true">
+              {'>'}
+            </span>
+          </Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function SpaceDetailsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -389,7 +924,16 @@ export function SpaceDetailsPage() {
   const requestedSection = searchParams.get('section');
   const detailedOverviewRequested =
     searchParams.get('details') === '1';
-  const activeTab = tabFromSearch(requestedTab, shared);
+  const activeTab: SpaceDetailsTab =
+    space?.type === 'goal'
+      ? requestedTab === 'activity'
+        || requestedTab === 'settings'
+          ? requestedTab
+          : 'overview'
+      : tabFromSearch(
+          requestedTab,
+          shared,
+        );
 
   const load = useCallback(async () => {
     if (!user || !spaceId) return;
@@ -472,11 +1016,16 @@ export function SpaceDetailsPage() {
       const nextShared =
         nextSpace.type !== 'personal';
 
-      const nextActiveTab =
-        tabFromSearch(
-          requestedTab,
-          nextShared,
-        );
+      const nextActiveTab: SpaceDetailsTab =
+        nextSpace.type === 'goal'
+          ? requestedTab === 'activity'
+            || requestedTab === 'settings'
+              ? requestedTab
+              : 'overview'
+          : tabFromSearch(
+              requestedTab,
+              nextShared,
+            );
 
       const nextCompactActionHome =
         nextSpace.type === 'personal'
@@ -561,6 +1110,7 @@ export function SpaceDetailsPage() {
 
       const shouldLoadOverviewData =
         nextActiveTab === 'overview'
+        && nextSpace.type !== 'goal'
         && !fullEmbeddedSection
         && (
           !nextCompactActionHome
@@ -581,6 +1131,24 @@ export function SpaceDetailsPage() {
         && nextCompactActionHome
         && !requestedSection
         && !detailedOverviewRequested;
+
+      const shouldLoadFocusedPlanData =
+        nextSpace.type === 'goal'
+        && nextActiveTab === 'overview'
+        && (
+          !requestedSection
+          || requestedSection === 'calendar'
+        );
+
+      if (shouldLoadFocusedPlanData) {
+        const nextGoals =
+          await listGoalsForOwnerSpace(
+            user.uid,
+            spaceId,
+          );
+
+        setGoals(nextGoals);
+      }
 
       if (
         shouldLoadCompactHomeData
@@ -823,7 +1391,10 @@ export function SpaceDetailsPage() {
         setBudgets(nextBudgets);
         setCommitments(nextCommitments);
 
-        if (nextShared) {
+        if (
+          nextShared
+          && nextSpace.type !== 'goal'
+        ) {
           const [
             nextSharedBills,
             nextSharedExpenses,
@@ -985,7 +1556,6 @@ export function SpaceDetailsPage() {
     space.type === 'goal'
       ? [
         { id: 'overview', label: 'Plan' },
-        { id: 'members', label: 'Members' },
         { id: 'activity', label: 'Activity' },
         { id: 'settings', label: 'Settings' },
       ]
@@ -1119,16 +1689,18 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
-    <SpaceActionHub
-      space={space}
-      members={members}
-      currentMember={currentMember || null}
-      supportsGroupFund={supportsGroupFund}
-      fundLabel={fundTabLabel}
-      smePosRole={smePosRole}
-      canViewSmeFinancials={canViewSmeFinancials}
-      onRefresh={load}
-    />
+    {space.type !== 'goal' && (
+      <SpaceActionHub
+        space={space}
+        members={members}
+        currentMember={currentMember || null}
+        supportsGroupFund={supportsGroupFund}
+        fundLabel={fundTabLabel}
+        smePosRole={smePosRole}
+        canViewSmeFinancials={canViewSmeFinancials}
+        onRefresh={load}
+      />
+    )}
 
     {activeTab === 'overview'
       && space.type === 'sme'
@@ -1458,18 +2030,26 @@ export function SpaceDetailsPage() {
     )}
 
     {activeTab === 'overview' ? (
-      householdInlineSection
+      space.type === 'goal'
+        ? (
+          <PlanSpaceWorkspace
+            space={space}
+            goals={goals}
+            section={requestedSection}
+          />
+        )
+        : householdInlineSection
       || marketplaceInlineSection
       || (
-        space.type === 'trip'
-        && requestedSection === 'budgets'
-      )
-      || (
-        space.type === 'trip'
-        && detailedOverviewRequested
-      )
-        ? null
-        : <SpaceOverview
+            space.type === 'trip'
+            && requestedSection === 'budgets'
+          )
+          || (
+            space.type === 'trip'
+            && detailedOverviewRequested
+          )
+            ? null
+            : <SpaceOverview
       space={space}
       moneyIn={moneyIn}
       moneyOut={moneyOut}
@@ -1486,6 +2066,33 @@ export function SpaceDetailsPage() {
       smePosRole={smePosRole}
       onRefresh={load}
     />
+    ) : space.type === 'goal' ? (
+      activeTab === 'activity' ? (
+        <CollaborationPage
+          embedded
+          spaceIdOverride={space.id}
+          activeTab="activity"
+          onSpaceUpdated={load}
+        />
+      ) : activeTab === 'settings' ? (
+        <>
+          {space.ownerId === user?.uid && (
+            <SpaceAvatarSettings
+              space={space}
+              onSaved={load}
+            />
+          )}
+
+          {space.ownerId === user?.uid && (
+            <SpaceLifecyclePanel
+              space={space}
+              onFinished={() =>
+                navigate('/spaces')
+              }
+            />
+          )}
+        </>
+      ) : null
     ) : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
       {activeTab === 'chat' ? (
           <SpaceChatPanel

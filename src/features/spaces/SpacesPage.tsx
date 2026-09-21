@@ -7,9 +7,11 @@ import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { acceptSpaceInvitation, declineSpaceInvitation, listMySpaceInvitations } from '../../repositories/collaborationRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
+import { createGoal } from '../../repositories/goalRepository';
 import { createSpace, listSpaces, updateSpace } from '../../repositories/spaceRepository';
 import type { CustomSpaceModule, Space, SpaceInvitation, SpaceType } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import { toMinorUnits } from '../../utils/money';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
 import { SpaceAvatar } from './SpaceAvatar';
 
@@ -236,11 +238,17 @@ export function SpacesPage() {
     )}
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {modal === 'create' && user && profile && <SpaceForm title="Add Space" submitLabel="Add Space" onClose={() => setModal(null)} onSubmit={async (values) => {
+      const {
+        planTargetAmount,
+        planTargetDate,
+        ...spaceValues
+      } = values;
+
       const createdSpaceId = await createSpace({
         uid: user.uid,
         currency: profile.currency,
         timezone: profile.timezone,
-        ...values,
+        ...spaceValues,
       });
 
       setModal(null);
@@ -251,15 +259,56 @@ export function SpacesPage() {
       }
 
       if (values.type === 'goal') {
-        navigate(
-          `/spaces/${createdSpaceId}?section=goals`,
-        );
+        try {
+          await createGoal({
+            name: values.name.trim(),
+            spaceId: createdSpaceId,
+            targetMinor:
+              toMinorUnits(
+                planTargetAmount || '',
+              ),
+            targetDate:
+              planTargetDate
+              || undefined,
+            note:
+              spaceValues.description
+              || undefined,
+          });
+
+          navigate(
+            `/spaces/${createdSpaceId}`,
+          );
+        } catch {
+          /*
+           * The Space is already valid even if target creation
+           * fails. Open the focused target workspace so the user
+           * can set it manually without creating a duplicate Space.
+           */
+          navigate(
+            `/spaces/${createdSpaceId}?section=goals`,
+          );
+        }
+
         return;
       }
 
       await load();
     }} />}
-    {modal === 'edit' && selected && <SpaceForm title="Edit Space" submitLabel="Save changes" initial={selected} lockType onClose={() => setModal(null)} onSubmit={async (values) => { await updateSpace(selected.id, values); setModal(null); await load(); }} />}
+    {modal === 'edit' && selected && <SpaceForm title="Edit Space" submitLabel="Save changes" initial={selected} lockType onClose={() => setModal(null)} onSubmit={async (values) => {
+      await updateSpace(
+        selected.id,
+        {
+          name: values.name,
+          description:
+            values.description,
+          customModules:
+            values.customModules,
+        },
+      );
+
+      setModal(null);
+      await load();
+    }} />}
   </main>;
 }
 
@@ -295,7 +344,13 @@ function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { 
 
       <div className="meta-row">
         <span>{space.currency}</span>
-        <span>{space.collaborationMode === 'private' ? 'Private' : 'Shared'}</span>
+        <span>
+          {space.type === 'goal'
+            ? 'Focused Plan'
+            : space.collaborationMode === 'private'
+              ? 'Private'
+              : 'Shared'}
+        </span>
       </div>
 
       <footer className="space-card-actions-footer">
@@ -371,6 +426,8 @@ function SpaceForm({
     type: Exclude<SpaceType, 'personal'>;
     description: string;
     customModules?: CustomSpaceModule[];
+    planTargetAmount?: string;
+    planTargetDate?: string;
   }) => Promise<void>;
 }) {
   const [name, setName] = useState(initial?.name || '');
@@ -381,6 +438,8 @@ function SpaceForm({
   );
   const [description, setDescription] = useState(initial?.description || '');
   const [planPurpose, setPlanPurpose] = useState<PlanPurpose>('saving');
+  const [planTargetAmount, setPlanTargetAmount] = useState('');
+  const [planTargetDate, setPlanTargetDate] = useState('');
   const [customModules, setCustomModules] = useState<CustomSpaceModule[]>(
     initial?.type === 'custom'
       ? normalizeCustomSpaceModules(initial.customModules)
@@ -403,17 +462,50 @@ function SpaceForm({
     setError('');
 
     try {
+      if (
+        !initial
+        && type === 'goal'
+        && toMinorUnits(
+          planTargetAmount,
+        ) <= 0
+      ) {
+        throw new Error(
+          'Enter a Plan target greater than BND 0.00.',
+        );
+      }
+
+      const planDescription =
+        planPurposeDescription(
+          planPurpose,
+        );
+
       await onSubmit({
         name,
         type,
         description:
-          type === 'goal'
-          && !description.trim()
-            ? planPurposeDescription(
-                planPurpose,
-              )
+          !initial
+          && type === 'goal'
+            ? [
+                planDescription,
+                description.trim(),
+              ]
+                .filter(Boolean)
+                .join(' ')
             : description,
-        customModules: type === 'custom' ? customModules : undefined,
+        customModules:
+          type === 'custom'
+            ? customModules
+            : undefined,
+        planTargetAmount:
+          !initial
+          && type === 'goal'
+            ? planTargetAmount
+            : undefined,
+        planTargetDate:
+          !initial
+          && type === 'goal'
+            ? planTargetDate
+            : undefined,
       });
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -501,6 +593,36 @@ function SpaceForm({
                 </label>
               ),
             )}
+          </div>
+
+          <div className="plan-target-fields-v115">
+            <label>
+              Target amount (BND)
+              <input
+                required
+                value={planTargetAmount}
+                onChange={(event) =>
+                  setPlanTargetAmount(
+                    event.target.value,
+                  )
+                }
+                inputMode="decimal"
+                placeholder="e.g. 8000"
+              />
+            </label>
+
+            <label>
+              Target date (optional)
+              <input
+                type="date"
+                value={planTargetDate}
+                onChange={(event) =>
+                  setPlanTargetDate(
+                    event.target.value,
+                  )
+                }
+              />
+            </label>
           </div>
         </fieldset>
       )}

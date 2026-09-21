@@ -19475,3 +19475,124 @@ a.business-report-row-v115:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 FOCUSED PLAN SPACE
+   Purchase / Saving Plans show only target-related tools.
+   ========================================================== */
+
+.plan-target-fields-v115 {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  margin-top: .2rem;
+}
+
+.plan-space-home-v115 {
+  display: grid;
+  gap: .85rem;
+}
+
+.plan-space-hero-v115 {
+  display: grid;
+  gap: 1rem;
+}
+
+.plan-space-hero-copy-v115 h2 {
+  margin: .18rem 0 .28rem;
+}
+
+.plan-space-empty-v115 {
+  display: grid;
+  gap: .55rem;
+  justify-items: start;
+  padding: .85rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 96%,
+      transparent
+    );
+}
+
+.plan-space-summary-v115 {
+  margin: 0;
+}
+
+.plan-space-progress-v115 {
+  display: grid;
+  gap: .55rem;
+  padding: .8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.plan-space-progress-v115 > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.plan-space-action-grid-v115 {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+}
+
+.plan-space-action-grid-v115
+.space-quick-card {
+  min-height: 92px;
+}
+
+.plan-space-workspace-v115 {
+  min-width: 0;
+}
+
+.plan-space-calendar-v115 {
+  display: grid;
+  gap: .8rem;
+}
+
+.plan-calendar-list-v115 {
+  display: grid;
+  gap: .55rem;
+}
+
+.plan-calendar-row-v115 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.plan-calendar-row-v115 > div {
+  display: grid;
+  gap: .1rem;
+}
+
+.plan-calendar-row-v115 small {
+  color: var(--muted);
+}
+
+@media (max-width: 680px) {
+  .plan-target-fields-v115,
+  .plan-space-action-grid-v115 {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-space-progress-v115
+  > div:first-child,
+  .plan-calendar-row-v115 {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
