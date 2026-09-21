@@ -28,6 +28,61 @@ const labels: Record<SpaceType, string> = {
   custom: 'Custom',
 };
 type SpaceLifecycleAction = 'archive' | 'delete';
+type PlanPurpose =
+  | 'saving'
+  | 'purchase'
+  | 'dream'
+  | 'emergency'
+  | 'other';
+
+const planPurposeOptions: Array<{
+  value: PlanPurpose;
+  label: string;
+  detail: string;
+}> = [
+  {
+    value: 'saving',
+    label: 'Saving',
+    detail: 'Build savings toward a target.',
+  },
+  {
+    value: 'purchase',
+    label: 'Buy something',
+    detail: 'Save toward a car, device or another purchase.',
+  },
+  {
+    value: 'dream',
+    label: 'Dream',
+    detail: 'Work toward something important in the future.',
+  },
+  {
+    value: 'emergency',
+    label: 'Emergency fund',
+    detail: 'Build a safety buffer for unexpected costs.',
+  },
+  {
+    value: 'other',
+    label: 'Other goal',
+    detail: 'Create a simple target for something else.',
+  },
+];
+
+function planPurposeDescription(
+  purpose: PlanPurpose,
+) {
+  switch (purpose) {
+    case 'saving':
+      return 'Saving plan.';
+    case 'purchase':
+      return 'Purchase saving plan.';
+    case 'dream':
+      return 'Dream saving plan.';
+    case 'emergency':
+      return 'Emergency fund plan.';
+    default:
+      return 'Personal goal plan.';
+  }
+}
 
 function spaceDefaultDescription(type: SpaceType) {
   const descriptions: Record<SpaceType, string> = {
@@ -35,7 +90,7 @@ function spaceDefaultDescription(type: SpaceType) {
     household: 'Shared household money, bills, shopping, tasks and members.',
     sme: 'One business environment. Its operational tools adapt to the type of business you set up.',
     trip: 'Trip budget, contributions, expenses, bookings, tasks and settlements.',
-    goal: 'Plan a saving target, debt payoff, purchase, emergency fund or dream in one focused Space.',
+    goal: 'Keep a saving target, purchase, emergency fund or dream in one focused Space.',
     collection: 'Organise a collection, its items, values and related activity.',
     vehicle: 'Keep one vehicle\'s costs, records and related money together.',
     property: 'Keep one property\'s money, records and responsibilities together.',
@@ -195,6 +250,13 @@ export function SpacesPage() {
         return;
       }
 
+      if (values.type === 'goal') {
+        navigate(
+          `/spaces/${createdSpaceId}?section=goals`,
+        );
+        return;
+      }
+
       await load();
     }} />}
     {modal === 'edit' && selected && <SpaceForm title="Edit Space" submitLabel="Save changes" initial={selected} lockType onClose={() => setModal(null)} onSubmit={async (values) => { await updateSpace(selected.id, values); setModal(null); await load(); }} />}
@@ -318,6 +380,7 @@ function SpaceForm({
       || 'household',
   );
   const [description, setDescription] = useState(initial?.description || '');
+  const [planPurpose, setPlanPurpose] = useState<PlanPurpose>('saving');
   const [customModules, setCustomModules] = useState<CustomSpaceModule[]>(
     initial?.type === 'custom'
       ? normalizeCustomSpaceModules(initial.customModules)
@@ -343,7 +406,13 @@ function SpaceForm({
       await onSubmit({
         name,
         type,
-        description,
+        description:
+          type === 'goal'
+          && !description.trim()
+            ? planPurposeDescription(
+                planPurpose,
+              )
+            : description,
         customModules: type === 'custom' ? customModules : undefined,
       });
     } catch (nextError) {
@@ -377,7 +446,7 @@ function SpaceForm({
           <option value="sme">Business</option>
           <option value="trip">Trip with others</option>
           <option value="household">Household / family</option>
-          <option value="goal">Plan / saving / debt payoff</option>
+          <option value="goal">Plan / saving goal</option>
           <option value="project">Project / group</option>
           <option value="event">Event / group</option>
           <option value="custom">Other shared Space</option>
@@ -387,6 +456,54 @@ function SpaceForm({
           {spaceDefaultDescription(type)}
         </small>
       </label>
+
+
+      {!initial && type === 'goal' && (
+        <fieldset className="plan-purpose-questionnaire-v115">
+          <legend>What is this Plan for?</legend>
+          <p className="muted">
+            Choose one. BajetBN will keep this Space focused on a saving target.
+            Debt stays in the main Debt tool.
+          </p>
+
+          <div className="plan-purpose-grid-v115">
+            {planPurposeOptions.map(
+              (item) => (
+                <label
+                  className={
+                    'plan-purpose-option-v115'
+                    + (
+                      planPurpose === item.value
+                        ? ' selected'
+                        : ''
+                    )
+                  }
+                  key={item.value}
+                >
+                  <input
+                    type="radio"
+                    name="plan-purpose"
+                    value={item.value}
+                    checked={
+                      planPurpose === item.value
+                    }
+                    onChange={() =>
+                      setPlanPurpose(
+                        item.value,
+                      )
+                    }
+                  />
+
+                  <span>
+                    <strong>{item.label}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                </label>
+              ),
+            )}
+          </div>
+        </fieldset>
+      )}
 
       {type === 'custom' && <fieldset className="custom-space-module-picker">
         <legend>Choose what this Space needs</legend>

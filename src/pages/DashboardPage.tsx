@@ -37,7 +37,10 @@ import {
   DEFAULT_TRANSACTION_CATEGORIES,
   categoryIconGlyph,
 } from '../features/categories/defaultCategories';
-import { MoneyActivityModal } from '../features/transactions/TransactionsPage';
+import {
+  MoneyActivityModal,
+  MoneyScopeSwitch,
+} from '../features/transactions/TransactionsPage';
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
 import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
 
@@ -425,6 +428,26 @@ export function DashboardPage() {
           (item) => !item.archivedAt,
         ),
       [spaces],
+    );
+
+  const quickPersonalSpaces =
+    useMemo(
+      () =>
+        activeSpaces.filter(
+          (item) =>
+            item.type !== 'sme',
+        ),
+      [activeSpaces],
+    );
+
+  const quickBusinessSpaces =
+    useMemo(
+      () =>
+        activeSpaces.filter(
+          (item) =>
+            item.type === 'sme',
+        ),
+      [activeSpaces],
     );
 
   const allCategories =
@@ -1821,7 +1844,7 @@ export function DashboardPage() {
         && (
           <MoneyActivityModal
             accounts={quickAccounts}
-            spaces={activeSpaces}
+            spaces={quickPersonalSpaces}
             categories={
               allCategories
             }
@@ -1829,6 +1852,13 @@ export function DashboardPage() {
               profile.timezone
             }
             online={online}
+            scopeControls={
+              <MoneyScopeSwitch
+                mode="personal"
+                businessSpaces={quickBusinessSpaces}
+                compact
+              />
+            }
             initialType={quickInitialType}
             entryMode={quickEntryMode}
             onClose={

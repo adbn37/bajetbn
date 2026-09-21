@@ -508,6 +508,10 @@ export function SpaceDetailsPage() {
           )
         )
         || (
+          nextSpace.type === 'goal'
+          && requestedSection === 'goals'
+        )
+        || (
           nextSpace.type === 'household'
           && [
             'budgets',
@@ -977,18 +981,26 @@ export function SpaceDetailsPage() {
         { id: 'bills', label: 'Shared bills' },
       ]
       : [];
-  const tabs: Array<{ id: SpaceDetailsTab; label: string }> = shared
-    ? [
-      { id: 'overview', label: 'Overview' },
-      { id: 'updates', label: 'Updates' },
-    { id: 'approvals', label: 'Approvals' },
-    { id: 'members', label: 'Members' },
-      { id: 'chat', label: 'Chat' },
-      ...sharedFinanceTabs,
-      { id: 'activity', label: 'Activity' },
-      { id: 'settings', label: 'Space settings' },
-    ]
-    : [
+  const tabs: Array<{ id: SpaceDetailsTab; label: string }> =
+    space.type === 'goal'
+      ? [
+        { id: 'overview', label: 'Plan' },
+        { id: 'members', label: 'Members' },
+        { id: 'activity', label: 'Activity' },
+        { id: 'settings', label: 'Settings' },
+      ]
+      : shared
+        ? [
+          { id: 'overview', label: 'Overview' },
+          { id: 'updates', label: 'Updates' },
+          { id: 'approvals', label: 'Approvals' },
+          { id: 'members', label: 'Members' },
+          { id: 'chat', label: 'Chat' },
+          ...sharedFinanceTabs,
+          { id: 'activity', label: 'Activity' },
+          { id: 'settings', label: 'Space settings' },
+        ]
+        : [
       { id: 'overview', label: 'Overview' },
       { id: 'settings', label: 'Space settings' },
     ];
@@ -2333,6 +2345,47 @@ function SpaceOverview({
     quickLinks.splice(Math.min(2, quickLinks.length), 0, { key: 'goals', section: 'goals', icon: '◇', title: 'Goals', detail: 'Review savings goals connected to this Space.' });
   }
 
+  if (space.type === 'goal') {
+    const allowed =
+      new Set([
+        'money',
+        'goals',
+        'calendar',
+      ]);
+
+    for (
+      let index =
+        quickLinks.length - 1;
+      index >= 0;
+      index -= 1
+    ) {
+      if (
+        !allowed.has(
+          quickLinks[index].key,
+        )
+      ) {
+        quickLinks.splice(
+          index,
+          1,
+        );
+      }
+    }
+
+    const target =
+      quickLinks.find(
+        (item) =>
+          item.key === 'goals',
+      );
+
+    if (target) {
+      target.title =
+        'Plan target';
+      target.detail =
+        'Set the amount, target date and track progress.';
+      target.featured = true;
+    }
+  }
+
   const accountName = (accountId?: string | null) => {
     if (!accountId) return 'No account';
     return accountsUsed.find((item) => item.id === accountId)?.name || 'Account';
@@ -2507,7 +2560,7 @@ function SpaceOverview({
       </section>
     )}
 
-    {shared && canViewFinancials && <div className="info-banner"><strong>This Space stays focused</strong><span>Money, bills, reports and calendar opened here are limited to {space.name}.</span></div>}
+    {shared && canViewFinancials && <div className="info-banner"><strong>This Space stays focused</strong><span>{space.type === 'goal' ? `Saving targets, money activity and target dates stay inside ${space.name}.` : `Money, bills, reports and calendar opened here are limited to ${space.name}.`}</span></div>}
 
     <section className="panel space-overview-panel">
       <div className="panel-heading"><div><span className="eyebrow">Open a section</span><h2>Manage this Space</h2></div></div>
@@ -2526,7 +2579,9 @@ function SpaceOverview({
       </div>
     </section>
 
-    {canViewFinancials && (
+    {canViewFinancials
+      && space.type !== 'goal'
+      && (
       <section className="space-overview-grid">
         <article className="panel compact-panel"><span className="eyebrow">Planning</span><h2>{budgets.length} budget{budgets.length === 1 ? '' : 's'}</h2><p>{goals.length} savings goal{goals.length === 1 ? '' : 's'} connected to this Space.</p></article>
         <article className="panel compact-panel"><span className="eyebrow">Payments</span><h2>{openBills.length} bill{openBills.length === 1 ? '' : 's'} still open</h2><p>Open Bills & instalments above to review only this Space.</p></article>
@@ -2619,7 +2674,8 @@ function SpaceOverview({
             </Suspense>
           )}
 
-        {space.type === 'personal'
+        {(space.type === 'personal'
+            || space.type === 'goal')
           && section === 'goals'
           && (
             <Suspense
@@ -2876,7 +2932,10 @@ function SpaceOverview({
           }) : <EmptyState title="No budgets in this Space" description="Create a Budget for this Space to start planning its spending." />}
         </div>}
 
-        {space.type !== 'personal' && section === 'goals' && <div className="space-scoped-list">
+        {space.type !== 'personal'
+          && space.type !== 'goal'
+          && section === 'goals'
+          && <div className="space-scoped-list">
           {goalRows.length ? goalRows.map((item) => <article key={item.id} className="space-scoped-row">
             <div><strong>{item.name}</strong><small>{item.targetDate ? `Target ${displaySpaceDate(item.targetDate)}` : 'No target date'} · {item.status}</small></div>
             <div className="space-scoped-amount"><strong>{formatMoney(item.currentMinor, item.currency)} / {formatMoney(item.targetMinor, item.currency)}</strong><small>{Math.max(0, Math.min(100, item.targetMinor > 0 ? Math.round((item.currentMinor / item.targetMinor) * 100) : 0))}%</small></div>

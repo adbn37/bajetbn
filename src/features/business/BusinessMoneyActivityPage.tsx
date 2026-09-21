@@ -13,7 +13,10 @@ import {
 } from '../../repositories/businessMoneyActivityRepository';
 import { listSpaceMembers } from '../../repositories/collaborationRepository';
 import { getMySmePosAccess } from '../../repositories/smePosRepository';
-import { getSpace } from '../../repositories/spaceRepository';
+import {
+  getSpace,
+  listSpaces,
+} from '../../repositories/spaceRepository';
 import {
   listBusinessTransactionsForSpace,
   postTransaction,
@@ -219,6 +222,7 @@ export function BusinessMoneyActivityPage() {
   const requestedAccountId = searchParams.get('accountId') || 'all';
 
   const [space, setSpace] = useState<Space | null>(null);
+  const [businessSpaces, setBusinessSpaces] = useState<Space[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] =
     useState<FinancialTransaction[]>([]);
@@ -274,6 +278,22 @@ export function BusinessMoneyActivityPage() {
       }
 
       setSpace(nextSpace);
+
+      const accessibleSpaces =
+        await listSpaces(user.uid);
+
+      setBusinessSpaces(
+        accessibleSpaces
+          .filter(
+            (item) =>
+              item.type === 'sme'
+              && !item.archivedAt,
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(b.name),
+          ),
+      );
 
       const members =
         await listSpaceMembers(spaceId);
@@ -811,7 +831,7 @@ export function BusinessMoneyActivityPage() {
         }
       />
 
-      <MoneyScopeSwitch mode="business" businessSpaces={[space]} currentBusinessId={space.id} />
+      <MoneyScopeSwitch mode="business" businessSpaces={businessSpaces.length ? businessSpaces : [space]} currentBusinessId={space.id} />
 
       {error && (
         <div className="notice error">
@@ -1270,7 +1290,7 @@ export function BusinessMoneyActivityPage() {
           labelSuggestions={availableLabels}
           timezone={timezone}
           online={online}
-          scopeControls={<MoneyScopeSwitch mode="business" businessSpaces={[space]} currentBusinessId={space.id} compact />}
+          scopeControls={<MoneyScopeSwitch mode="business" businessSpaces={businessSpaces.length ? businessSpaces : [space]} currentBusinessId={space.id} compact />}
           lockedSpaceId={space.id}
           onClose={() =>
             setShowAdd(false)

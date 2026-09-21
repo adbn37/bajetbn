@@ -19382,3 +19382,96 @@ a.business-report-row-v115:focus-visible {
 .commitment-global-filter-v115{display:flex;align-items:end;justify-content:space-between;gap:.8rem;margin:-.35rem 0 .9rem}.commitment-global-filter-v115 label{min-width:190px}.commitment-global-filter-v115>span{color:var(--muted);font-size:.7rem}.commitment-space-groups-v115{display:grid;gap:1.25rem}.commitment-space-group-v115{min-width:0}.commitment-space-group-heading-v115{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin-bottom:.45rem;padding-bottom:.55rem;border-bottom:1px solid var(--border)}.commitment-space-group-heading-v115 h2{margin:.15rem 0 0;font-size:1rem}.commitment-space-group-heading-v115>span{color:var(--muted);font-size:.7rem}.commitment-space-group-v115 .planning-card-grid{margin-top:.65rem}
 @media(min-width:1240px){.commitments-page-v115 .planning-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:1rem}.commitments-page-v115 .commitment-card{min-width:0;height:100%}.commitments-page-v115 .commitment-card .button-row{margin-top:auto}}
 @media(max-width:680px){.money-scope-switch{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.money-scope-switch>a,.money-scope-switch>span,.money-scope-switch>details,.money-scope-switch>details>summary{width:100%}.money-scope-business-list{left:0;right:auto;width:min(280px,calc(100vw - 3rem))}.commitment-global-filter-v115{align-items:stretch;flex-direction:column}.commitment-global-filter-v115 label{width:100%;min-width:0}.commitment-space-group-heading-v115{align-items:flex-start}}
+
+
+/* ==========================================================
+   BAJETBN V115 MONEY PLAN FOLLOWUP
+   Tighter account identity rows + simple Plan questionnaire.
+   ========================================================== */
+
+.bajetbn-account-identity-card,
+.bajetbn-move-account-card {
+  column-gap: .2rem !important;
+}
+
+.bajetbn-account-identity-card
+.bajetbn-identity-copy,
+.bajetbn-move-account-card
+.bajetbn-identity-copy {
+  justify-self: start !important;
+  text-align: left !important;
+  width: 100%;
+  margin-left: 0 !important;
+}
+
+.bajetbn-account-identity-card
+.bajetbn-identity-copy > *,
+.bajetbn-move-account-card
+.bajetbn-identity-copy > * {
+  justify-self: start !important;
+  text-align: left !important;
+}
+
+.plan-purpose-questionnaire-v115 {
+  display: grid;
+  gap: .65rem;
+  margin: 0;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.plan-purpose-questionnaire-v115 legend {
+  padding: 0 .3rem;
+  font-weight: 800;
+}
+
+.plan-purpose-grid-v115 {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+}
+
+.plan-purpose-option-v115 {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  min-height: 72px;
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.plan-purpose-option-v115.selected {
+  border-color: var(--accent);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 10%,
+      var(--surface)
+    );
+}
+
+.plan-purpose-option-v115 input {
+  margin-top: .14rem;
+}
+
+.plan-purpose-option-v115 span {
+  display: grid;
+  gap: .15rem;
+}
+
+.plan-purpose-option-v115 small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+@media (max-width: 560px) {
+  .plan-purpose-grid-v115 {
+    grid-template-columns: 1fr;
+  }
+}
