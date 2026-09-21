@@ -124,6 +124,391 @@ export function SpaceFundPanel({
 
   if (loading) return <div className="loading-panel">Loading {copy.shortTitle}…</div>;
 
+
+  if (space.type === 'trip') {
+    return (
+      <section
+        className="panel trip-fund-sheet-v115"
+        data-trip-fund-spreadsheet
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Trip worksheet
+            </span>
+
+            <h2>Trip Money</h2>
+
+            <p className="muted">
+              Track the Trip Fund target, collected money, spending, holder and member contributions in one worksheet.
+            </p>
+          </div>
+
+          <div className="button-row">
+            {canManage && (
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() =>
+                  setSettingsOpen(true)
+                }
+              >
+                {fund
+                  ? 'Change setup'
+                  : copy.setupTitle}
+              </button>
+            )}
+
+            <button
+              className="button primary"
+              type="button"
+              disabled={!contributionReady}
+              aria-describedby={
+                !contributionReady
+                  ? 'space-fund-contribution-help'
+                  : undefined
+              }
+              title={
+                !contributionReady
+                  ? contributionHelp
+                  : undefined
+              }
+              onClick={() => {
+                if (contributionReady) {
+                  setContributionOpen(true);
+                }
+              }}
+            >
+              Add contribution
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
+
+        {!contributionReady && (
+          <div
+            id="space-fund-contribution-help"
+            className="notice space-fund-setup-guard"
+          >
+            {contributionHelp}
+          </div>
+        )}
+
+        {!fund ? (
+          <div className="info-banner">
+            <strong>
+              Set up Trip money when the group needs it.
+            </strong>
+
+            <span>
+              Choose the target and the person holding the collected money.
+              Direct member-to-member payments remain available in Settle Up.
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="trip-sheet-scroll">
+              <table
+                className="trip-sheet-table trip-fund-summary-table"
+                aria-label="Trip Money summary worksheet"
+              >
+                <thead>
+                  <tr>
+                    <th>Target</th>
+                    <th>Collected</th>
+                    <th>Spent</th>
+                    <th>Available</th>
+                    <th>Holder</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <tr>
+                    <td className="trip-budget-number-cell">
+                      {formatMoney(
+                        fund.budgetMinor,
+                        fund.currency,
+                      )}
+                    </td>
+
+                    <td className="trip-budget-number-cell">
+                      {formatMoney(
+                        fund.contributedMinor,
+                        fund.currency,
+                      )}
+                    </td>
+
+                    <td className="trip-budget-number-cell">
+                      {formatMoney(
+                        fund.spentMinor,
+                        fund.currency,
+                      )}
+                    </td>
+
+                    <td className="trip-budget-number-cell">
+                      <strong>
+                        {formatMoney(
+                          fund.availableMinor,
+                          fund.currency,
+                        )}
+                      </strong>
+                    </td>
+
+                    <td>
+                      {fund.holderName
+                        || fund.holderEmail
+                        || memberLabel(activeHolder)}
+                    </td>
+
+                    <td className="trip-sheet-actions-cell">
+                      <div className="trip-sheet-row-actions">
+                        {canManage && (
+                          <button
+                            className="button secondary compact"
+                            type="button"
+                            onClick={() =>
+                              setSettingsOpen(true)
+                            }
+                          >
+                            Setup
+                          </button>
+                        )}
+
+                        <button
+                          className="button primary compact"
+                          type="button"
+                          disabled={!contributionReady}
+                          onClick={() =>
+                            setContributionOpen(true)
+                          }
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="info-banner">
+              <strong>
+                {fund.holderName
+                  || fund.holderEmail
+                  || 'Selected member'}{' '}
+                holds the Trip money.
+              </strong>
+
+              <span>
+                Trip Expenses marked as paid from Trip money reduce the Available amount automatically.
+              </span>
+            </div>
+
+            <div className="trip-sheet-section-heading">
+              <div>
+                <span className="eyebrow">
+                  Collected money
+                </span>
+
+                <h3>
+                  Member contributions
+                </h3>
+              </div>
+            </div>
+
+            <div className="trip-sheet-scroll">
+              <table
+                className="trip-sheet-table trip-fund-contribution-table"
+                aria-label="Trip Money contributions worksheet"
+              >
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Member</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                    <th>Note</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {contributions.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="trip-sheet-empty-cell"
+                      >
+                        No Trip Money contributions recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    contributions.map(
+                      (item) => {
+                        const canUndo =
+                          item.status === 'posted'
+                          && (
+                            canManage
+                            || currentMember?.uid
+                              === item.memberUid
+                          );
+
+                        return (
+                          <tr
+                            key={item.id}
+                            className={
+                              `trip-fund-contribution-status-${item.status}`
+                            }
+                          >
+                            <td>
+                              {item.contributionDate}
+                            </td>
+
+                            <td>
+                              <strong>
+                                {item.memberName
+                                  || item.memberEmail
+                                  || 'Member'}
+                              </strong>
+                            </td>
+
+                            <td className="trip-budget-number-cell">
+                              {formatMoney(
+                                item.amountMinor,
+                                item.currency,
+                              )}
+                            </td>
+
+                            <td>
+                              {item.paymentMethodLabel
+                                || item.paymentMethod
+                                || 'â€”'}
+                            </td>
+
+                            <td>
+                              <span
+                                className={
+                                  `trip-fund-status status-${item.status}`
+                                }
+                              >
+                                {item.status === 'reversed'
+                                  ? 'Undone'
+                                  : 'Recorded'}
+                              </span>
+                            </td>
+
+                            <td>
+                              {item.note || 'â€”'}
+                            </td>
+
+                            <td className="trip-sheet-actions-cell">
+                              {canUndo ? (
+                                <button
+                                  className="button danger-outline compact"
+                                  type="button"
+                                  onClick={() =>
+                                    setUndoDialog({
+                                      payload:
+                                        item,
+                                      title:
+                                        'Undo this contribution?',
+                                      description:
+                                        'This contribution will be reversed if the collected money has not already been spent.',
+                                      note:
+                                        'The original contribution stays in the history as an undone record.',
+                                      confirmLabel:
+                                        'Undo contribution',
+                                      tone:
+                                        'danger',
+                                    })
+                                  }
+                                >
+                                  Undo
+                                </button>
+                              ) : (
+                                <span className="muted">
+                                  â€”
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      },
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {undoDialog && (
+          <ActionConfirmModal
+            state={undoDialog}
+            busy={undoBusy}
+            error={error}
+            onClose={() => {
+              setUndoDialog(null);
+              setError('');
+            }}
+            onConfirm={() =>
+              void runUndoContribution()
+            }
+          />
+        )}
+
+        {settingsOpen && (
+          <Modal
+            title={copy.setupTitle}
+            onClose={() =>
+              setSettingsOpen(false)
+            }
+          >
+            <SpaceFundSettingsForm
+              space={space}
+              members={activeMembers}
+              fund={fund}
+              onSaved={async () => {
+                setSettingsOpen(false);
+                await load();
+              }}
+            />
+          </Modal>
+        )}
+
+        {contributionOpen
+          && contributionReady
+          && fund
+          && (
+            <Modal
+              title={copy.contributionTitle}
+              onClose={() =>
+                setContributionOpen(false)
+              }
+            >
+              <SpaceFundContributionForm
+                space={space}
+                members={activeMembers}
+                currentMember={currentMember}
+                canManage={canManage}
+                onSaved={async () => {
+                  setContributionOpen(false);
+                  await load();
+                }}
+              />
+            </Modal>
+          )}
+      </section>
+    );
+  }
+
   return <section className="panel trip-money-panel space-fund-panel">
     <div className="panel-heading"><div><span className="eyebrow">Optional shared money</span><h2>{copy.title}</h2></div><div className="button-row">{canManage && <button className="button secondary" onClick={() => setSettingsOpen(true)}>{fund ? 'Change setup' : copy.setupTitle}</button>}<button className="button primary" onClick={() => { if (contributionReady) setContributionOpen(true); }} disabled={!contributionReady} aria-describedby={!contributionReady ? 'space-fund-contribution-help' : undefined} title={!contributionReady ? contributionHelp : undefined}>Add contribution</button></div></div>
     {error && <div className="notice error">{error}</div>}

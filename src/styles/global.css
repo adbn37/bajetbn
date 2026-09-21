@@ -20051,3 +20051,46 @@ select.trip-sheet-cell-input {
     min-width: 980px;
   }
 }
+
+/* v1.15.0 Trip Money spreadsheet */
+.trip-fund-sheet-v115 {
+  min-width: 0;
+}
+
+.trip-fund-summary-table {
+  min-width: 860px;
+}
+
+.trip-fund-contribution-table {
+  min-width: 1080px;
+}
+
+.trip-fund-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.65rem;
+  padding: .18rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.trip-fund-contribution-status-posted .trip-fund-status {
+  color: var(--success);
+}
+
+.trip-fund-contribution-status-reversed .trip-fund-status {
+  color: var(--muted);
+}
+
+@media (max-width: 680px) {
+  .trip-fund-summary-table {
+    min-width: 800px;
+  }
+
+  .trip-fund-contribution-table {
+    min-width: 1020px;
+  }
+}
