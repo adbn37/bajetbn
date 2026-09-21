@@ -638,6 +638,13 @@ export function BusinessHomePage() {
       },
     );
   } else if (
+    businessIndustry === 'marketplace'
+  ) {
+    // Marketplace Home already exposes POS, stock, sellers,
+    // finance and reports in the workspace navigation.
+    // Keep the Home action row empty so the operational
+    // overview can use the full available width.
+  } else if (
     businessIndustry === 'retail'
   ) {
     businessActions.push(
