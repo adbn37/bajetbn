@@ -165,6 +165,502 @@ export function SharedExpensesPanel({
   const monthTotal = monthExpenses.reduce((sum, item) => sum + item.totalMinor, 0);
   const monthLeft = monthExpenses.reduce((sum, item) => sum + item.amountLeftMinor, 0);
 
+
+  if (view === 'balances' && space.type === 'trip') {
+    const openTotalMinor =
+      whoOwes.reduce(
+        (sum, row) =>
+          sum + row.amountMinor,
+        0,
+      );
+
+    const postedPaymentMinor =
+      payments
+        .filter(
+          (payment) =>
+            payment.status === 'posted',
+        )
+        .reduce(
+          (sum, payment) =>
+            sum + payment.amountMinor,
+          0,
+        );
+
+    const pendingPaymentMinor =
+      payments
+        .filter(
+          (payment) =>
+            payment.status === 'submitted',
+        )
+        .reduce(
+          (sum, payment) =>
+            sum + payment.amountMinor,
+          0,
+        );
+
+    return (
+      <section
+        className="panel trip-settle-sheet-v115"
+        data-trip-settle-spreadsheet
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">
+              Trip worksheet
+            </span>
+
+            <h2>Settle Up</h2>
+
+            <p className="muted">
+              See who owes whom and keep member payment history in one worksheet.
+            </p>
+          </div>
+
+          <div className="button-row">
+            {canManage && (
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() =>
+                  setInviteOpen(true)
+                }
+              >
+                Invite participant
+              </button>
+            )}
+          </div>
+        </div>
+
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
+
+        <div className="trip-sheet-summary">
+          <span>
+            Open{' '}
+            {formatMoney(
+              openTotalMinor,
+              space.currency,
+            )}
+          </span>
+
+          <span>
+            Paid{' '}
+            {formatMoney(
+              postedPaymentMinor,
+              space.currency,
+            )}
+          </span>
+
+          <span>
+            Waiting{' '}
+            {formatMoney(
+              pendingPaymentMinor,
+              space.currency,
+            )}
+          </span>
+        </div>
+
+        <div className="info-banner">
+          <strong>
+            One simple amount per pair.
+          </strong>
+
+          <span>
+            BajetBN combines open shares between the same two people.
+            Member repayments do not change bank account balances.
+          </span>
+        </div>
+
+        <div className="trip-sheet-section-heading">
+          <div>
+            <span className="eyebrow">
+              Open balances
+            </span>
+
+            <h3>
+              Who pays whom
+            </h3>
+          </div>
+        </div>
+
+        <div className="trip-sheet-scroll">
+          <table
+            className="trip-sheet-table trip-settle-balance-table"
+            aria-label="Trip open balances worksheet"
+          >
+            <thead>
+              <tr>
+                <th>From</th>
+                <th>To</th>
+                <th>Expenses</th>
+                <th>Amount</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {whoOwes.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="trip-sheet-empty-cell"
+                  >
+                    Everyone is settled for the current Trip Expenses.
+                  </td>
+                </tr>
+              ) : (
+                whoOwes.map(
+                  (row) => {
+                    const from =
+                      memberMap.get(
+                        row.fromUid,
+                      );
+
+                    const to =
+                      memberMap.get(
+                        row.toUid,
+                      );
+
+                    const mine =
+                      currentMember?.uid
+                      === row.fromUid;
+
+                    return (
+                      <tr
+                        key={
+                          `${row.fromUid}-${row.toUid}`
+                        }
+                      >
+                        <td>
+                          <strong>
+                            {memberLabel(
+                              from,
+                            )}
+                          </strong>
+                        </td>
+
+                        <td>
+                          {memberLabel(
+                            to,
+                          )}
+                        </td>
+
+                        <td>
+                          {row.expenseIds.length}{' '}
+                          {row.expenseIds.length === 1
+                            ? 'expense'
+                            : 'expenses'}
+                        </td>
+
+                        <td className="trip-budget-number-cell">
+                          {formatMoney(
+                            row.amountMinor,
+                            space.currency,
+                          )}
+                        </td>
+
+                        <td className="trip-sheet-actions-cell">
+                          {mine ? (
+                            <button
+                              className="button primary compact"
+                              type="button"
+                              onClick={() =>
+                                setPaying({
+                                  toUid:
+                                    row.toUid,
+                                  amountMinor:
+                                    row.amountMinor,
+                                  title:
+                                    `Pay ${memberLabel(to)}`,
+                                })
+                              }
+                            >
+                              Pay
+                            </button>
+                          ) : (
+                            <span className="muted">
+                              Waiting
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  },
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="trip-sheet-section-heading">
+          <div>
+            <span className="eyebrow">
+              Payment history
+            </span>
+
+            <h3>
+              Recent member payments
+            </h3>
+          </div>
+        </div>
+
+        <div className="trip-sheet-scroll">
+          <table
+            className="trip-sheet-table trip-settle-payment-table"
+            aria-label="Trip payment history worksheet"
+          >
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Proof</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {payments.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="trip-sheet-empty-cell"
+                  >
+                    No member payments yet.
+                  </td>
+                </tr>
+              ) : (
+                payments
+                  .slice(0, 30)
+                  .map(
+                    (payment) => {
+                      const canReview =
+                        canManage
+                        && payment.status
+                          === 'submitted';
+
+                      const canUndo =
+                        payment.status
+                          === 'posted'
+                        && (
+                          canManage
+                          || currentMember?.uid
+                            === payment.fromUid
+                        );
+
+                      return (
+                        <tr
+                          key={payment.id}
+                          className={
+                            `trip-settle-payment-status-${payment.status}`
+                          }
+                        >
+                          <td>
+                            {payment.paymentDate}
+                          </td>
+
+                          <td>
+                            {payment.fromName
+                              || payment.fromEmail
+                              || 'Member'}
+                          </td>
+
+                          <td>
+                            {payment.toName
+                              || payment.toEmail
+                              || 'Member'}
+                          </td>
+
+                          <td className="trip-budget-number-cell">
+                            {formatMoney(
+                              payment.amountMinor,
+                              payment.currency,
+                            )}
+                          </td>
+
+                          <td>
+                            <span
+                              className={
+                                `trip-settle-status status-${payment.status}`
+                              }
+                            >
+                              {paymentStatusLabel(
+                                payment.status,
+                              )}
+                            </span>
+                          </td>
+
+                          <td>
+                            {payment.proofPath ? (
+                              <button
+                                className="text-button"
+                                type="button"
+                                onClick={() =>
+                                  void getSharedExpenseProofUrl(
+                                    payment.proofPath
+                                    || '',
+                                  ).then(
+                                    (url) =>
+                                      window.open(
+                                        url,
+                                        '_blank',
+                                        'noopener,noreferrer',
+                                      ),
+                                  )
+                                }
+                              >
+                                View proof
+                              </button>
+                            ) : (
+                              <span className="muted">
+                                â€”
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="trip-sheet-actions-cell">
+                            <div className="trip-sheet-row-actions">
+                              {canReview && (
+                                <>
+                                  <button
+                                    className="button primary compact"
+                                    type="button"
+                                    onClick={() =>
+                                      void run(
+                                        () =>
+                                          reviewSharedExpensePayment({
+                                            paymentId:
+                                              payment.id,
+                                            decision:
+                                              'confirmed',
+                                          }),
+                                      )
+                                    }
+                                  >
+                                    Confirm
+                                  </button>
+
+                                  <button
+                                    className="button danger-outline compact"
+                                    type="button"
+                                    onClick={() =>
+                                      void run(
+                                        () =>
+                                          reviewSharedExpensePayment({
+                                            paymentId:
+                                              payment.id,
+                                            decision:
+                                              'rejected',
+                                          }),
+                                      )
+                                    }
+                                  >
+                                    Decline
+                                  </button>
+                                </>
+                              )}
+
+                              {canUndo && (
+                                <button
+                                  className="button danger-outline compact"
+                                  type="button"
+                                  onClick={() =>
+                                    setUndoDialog({
+                                      payload:
+                                        payment,
+                                      title:
+                                        'Undo this payment?',
+                                      description:
+                                        'The payment will be reversed and the amount will be shown as owed again.',
+                                      note:
+                                        'The original payment stays in the history as an undone record.',
+                                      confirmLabel:
+                                        'Undo member payment',
+                                      tone:
+                                        'danger',
+                                    })
+                                  }
+                                >
+                                  Undo
+                                </button>
+                              )}
+
+                              {!canReview
+                                && !canUndo
+                                && (
+                                  <span className="muted">
+                                    â€”
+                                  </span>
+                                )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    },
+                  )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {undoDialog && (
+          <ActionConfirmModal
+            state={undoDialog}
+            busy={undoBusy}
+            error={error}
+            onClose={() => {
+              setUndoDialog(null);
+              setError('');
+            }}
+            onConfirm={() =>
+              void runUndoPayment()
+            }
+          />
+        )}
+
+        {paying && (
+          <Modal
+            title={paying.title}
+            onClose={() =>
+              setPaying(null)
+            }
+          >
+            <SharedExpensePaymentForm
+              space={space}
+              payment={paying}
+              onSaved={async () => {
+                setPaying(null);
+                await load();
+              }}
+            />
+          </Modal>
+        )}
+
+        {inviteOpen && (
+          <Modal
+            title="Invite to Settlements"
+            onClose={() =>
+              setInviteOpen(false)
+            }
+          >
+            <SharedExpenseInviteForm
+              space={space}
+              destination="balances"
+              onDone={() =>
+                setInviteOpen(false)
+              }
+            />
+          </Modal>
+        )}
+      </section>
+    );
+  }
+
   if (view === 'balances') {
     return <section className="panel shared-expense-panel">
       <div className="panel-heading">
