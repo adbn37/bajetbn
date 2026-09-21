@@ -20094,3 +20094,30 @@ select.trip-sheet-cell-input {
     min-width: 1020px;
   }
 }
+
+/* v1.15.0 Trip Overview spreadsheet */
+.trip-overview-sheet-v115 {
+  min-width: 0;
+}
+
+.trip-overview-money-table {
+  min-width: 960px;
+}
+
+.trip-overview-team-table {
+  min-width: 760px;
+}
+
+.trip-overview-sheet-v115 .trip-command-guidance {
+  margin-top: 1rem;
+}
+
+@media (max-width: 680px) {
+  .trip-overview-money-table {
+    min-width: 900px;
+  }
+
+  .trip-overview-team-table {
+    min-width: 700px;
+  }
+}
