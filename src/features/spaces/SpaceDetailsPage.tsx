@@ -219,6 +219,17 @@ const TripPlanningPanel = lazy(
   },
 );
 
+const TripBudgetSpreadsheet = lazy(
+  async () => {
+    const module =
+      await import('./TripBudgetSpreadsheet');
+
+    return {
+      default: module.TripBudgetSpreadsheet,
+    };
+  },
+);
+
 const CollectionCommandCentre = lazy(
   async () => {
     const module =
@@ -1736,13 +1747,14 @@ export function SpaceDetailsPage() {
         <Suspense
           fallback={
             <div className="loading-panel">
-              Loading Budget...
+              Loading Trip Budget...
             </div>
           }
         >
-          <EmbeddedBudgetsPage
-            embedded
-            spaceIdOverride={space.id}
+          <TripBudgetSpreadsheet
+            space={space}
+            members={members}
+            currentMember={currentMember}
           />
         </Suspense>
       )}

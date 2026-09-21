@@ -19819,3 +19819,69 @@ select.trip-sheet-cell-input {
     min-width: 180px;
   }
 }
+
+/* v1.15.0 Trip Budget spreadsheet */
+.trip-budget-sheet-v115 {
+  min-width: 0;
+}
+
+.trip-budget-sheet-table {
+  min-width: 1260px;
+}
+
+.trip-budget-pot-cell {
+  min-width: 190px;
+}
+
+.trip-budget-read-cell {
+  min-width: 135px;
+  padding: .38rem .5rem !important;
+}
+
+.trip-budget-read-cell strong,
+.trip-budget-read-cell small {
+  display: block;
+}
+
+.trip-budget-read-cell small {
+  margin-top: .1rem;
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.trip-budget-number-cell {
+  min-width: 125px;
+  padding: .45rem .55rem !important;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.trip-budget-number-cell.is-over {
+  color: var(--danger);
+}
+
+.trip-budget-date-pair {
+  display: grid;
+  grid-template-columns: minmax(132px, 1fr) auto minmax(132px, 1fr);
+  align-items: center;
+  min-width: 310px;
+}
+
+.trip-budget-date-pair > span {
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.trip-budget-people-note {
+  margin-bottom: .2rem;
+}
+
+@media (max-width: 680px) {
+  .trip-budget-sheet-table {
+    min-width: 1180px;
+  }
+
+  .trip-budget-date-pair {
+    min-width: 290px;
+  }
+}
