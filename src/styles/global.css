@@ -19327,3 +19327,39 @@ a.business-report-row-v115:focus-visible {
     min-width: 0;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS HOME REMOVE REDUNDANT POS CARD
+   Marketplace Home already has POS in the workspace nav.
+   When no Home action cards remain, Marketplace Overview
+   uses the full row and Business Activity stays below it.
+   ========================================================== */
+
+@media (min-width: 1180px) {
+  .business-home-v115-lower-layout.no-actions {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .business-home-v115-lower-layout.no-actions
+  > .business-home-v115-attention {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+    height: auto;
+  }
+
+  .business-home-v115-lower-layout.no-actions
+  > .business-home-v115-attention
+  > .sme-pos-operational-attention {
+    height: auto;
+  }
+
+  .business-home-v115-lower-layout.no-actions
+  .business-home-v115-section {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+}

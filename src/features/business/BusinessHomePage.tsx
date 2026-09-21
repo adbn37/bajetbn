@@ -638,17 +638,6 @@ export function BusinessHomePage() {
       },
     );
   } else if (
-    businessIndustry === 'marketplace'
-  ) {
-    businessActions.push({
-      label: 'Open POS',
-      icon: '▦',
-      to:
-        '/spaces/'
-        + space.id
-        + '/pos',
-    });
-  } else if (
     businessIndustry === 'retail'
   ) {
     businessActions.push(
@@ -1345,7 +1334,7 @@ export function BusinessHomePage() {
         </section>
       )}
 
-      <div className="business-home-v115-lower-layout">
+      <div className={`business-home-v115-lower-layout${businessActions.length ? '' : ' no-actions'}`}>
         <div className="business-home-v115-lower-main">
           {businessActions.length > 0 && (
             <section
