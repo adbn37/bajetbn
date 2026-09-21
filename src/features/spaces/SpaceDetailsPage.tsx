@@ -230,6 +230,17 @@ const TripPlanningPanel = lazy(
   },
 );
 
+const TripCommandCentre = lazy(
+  async () => {
+    const module =
+      await import('./TripCommandCentre');
+
+    return {
+      default: module.TripCommandCentre,
+    };
+  },
+);
+
 const TripBudgetSpreadsheet = lazy(
   async () => {
     const module =
@@ -1152,6 +1163,13 @@ export function SpaceDetailsPage() {
       const shouldLoadCompactHomeData =
         nextActiveTab === 'overview'
         && nextCompactActionHome
+        && nextSpace.type !== 'trip'
+        && !requestedSection
+        && !detailedOverviewRequested;
+
+      const shouldLoadTripHomeData =
+        nextActiveTab === 'overview'
+        && nextSpace.type === 'trip'
         && !requestedSection
         && !detailedOverviewRequested;
 
@@ -1171,6 +1189,28 @@ export function SpaceDetailsPage() {
           );
 
         setGoals(nextGoals);
+      }
+
+      if (shouldLoadTripHomeData) {
+        const [
+          nextTripBudgets,
+          nextTripExpenses,
+        ] = await Promise.all([
+          listBudgetsForSpace(
+            spaceId,
+          ),
+          listSharedExpenses(
+            spaceId,
+          ),
+        ]);
+
+        setBudgets(
+          nextTripBudgets,
+        );
+
+        setSharedExpenses(
+          nextTripExpenses,
+        );
       }
 
       if (
@@ -1908,7 +1948,23 @@ export function SpaceDetailsPage() {
       )}
 
     {activeTab === 'overview'
+      && space.type === 'trip'
+      && !requestedSection
+      && !detailedOverviewRequested
+      && (
+        <TripCommandCentre
+          space={space}
+          budgets={budgets}
+          members={members}
+          sharedExpenses={sharedExpenses}
+          currentMember={currentMember || null}
+          onOpenTab={chooseTab}
+        />
+      )}
+
+    {activeTab === 'overview'
       && compactActionHome
+      && space.type !== 'trip'
       && !requestedSection
       && !detailedOverviewRequested
       && (
@@ -2073,6 +2129,11 @@ export function SpaceDetailsPage() {
           || (
             space.type === 'trip'
             && detailedOverviewRequested
+          )
+          || (
+            space.type === 'trip'
+            && !requestedSection
+            && !detailedOverviewRequested
           )
             ? null
             : <SpaceOverview
