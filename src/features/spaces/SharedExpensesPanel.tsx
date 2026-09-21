@@ -281,7 +281,7 @@ export function SharedExpensesPanel({
           const payer = memberMap.get(expense.paidByUid);
           return <article className={`shared-expense-card status-${expense.status}`} key={expense.id}>
             <div className="planning-card-head"><div><span className="eyebrow">{expense.paidFromGroupFund || expense.paidFromTripMoney ? (space.type === 'trip' ? 'Paid using Trip money' : space.type === 'household' ? 'Paid using Household fund' : 'Paid using Group fund') : expense.status === 'paid' ? 'Everyone paid' : 'Payment still open'}</span><h3>{expense.title}</h3></div><strong>{formatMoney(expense.totalMinor, expense.currency)}</strong></div>
-            <div className="planning-meta"><span>Paid by {memberLabel(payer)}</span><span>{expense.expenseDate}</span><span>{expenseShares.length} {expenseShares.length === 1 ? 'person' : 'people'} Â· {expense.splitMode === 'equal' ? 'Split equally' : expense.splitMode === 'custom' ? 'Different amounts' : 'By percentage'}</span></div>
+            <div className="planning-meta"><span>Paid by {memberLabel(payer)}</span><span>{expense.expenseDate}</span><span>{expenseShares.length} {expenseShares.length === 1 ? 'person' : 'people'} - {expense.splitMode === 'equal' ? 'Split equally' : expense.splitMode === 'custom' ? 'Different amounts' : 'By percentage'}</span></div>
             <div className="transaction-preview"><div><span>Paid back</span><strong>{formatMoney(expense.totalSettledMinor, expense.currency)}</strong></div><div><span>Still to pay</span><strong>{formatMoney(expense.amountLeftMinor, expense.currency)}</strong></div></div>
             {expense.note && <p>{expense.note}</p>}
             <div className="expense-share-list">{expenseShares.map((share) => <span className={`expense-share-chip status-${share.status}`} key={share.id}>{share.memberName || share.memberEmail || 'Member'} · {formatMoney(share.shareMinor, share.currency)}{share.amountLeftMinor > 0 ? ` · ${formatMoney(share.amountLeftMinor, share.currency)} left` : ' · paid'}</span>)}</div>
@@ -615,7 +615,7 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
         required
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        placeholder="Food, groceries, taxi, hotelâ€¦"
+        placeholder="Food, groceries, taxi, hotel..."
       />
     </label>
 
@@ -689,14 +689,14 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
         {splitMode === 'equal' && (
           <div>
             <span>Each person</span>
-            <strong>â‰ˆ {formatMoney(equalShareMinor, space.currency)}</strong>
+            <strong>~ {formatMoney(equalShareMinor, space.currency)}</strong>
           </div>
         )}
 
         <small>
           {memberLabel(payer)} paid {formatMoney(previewTotalMinor, space.currency)}.
           {splitMode === 'equal'
-            ? ' BajetBN will track each selected personâ€™s share automatically.'
+            ? " BajetBN will track each selected person's share automatically."
             : ' BajetBN will track the split you enter below.'}
         </small>
       </div>
@@ -743,7 +743,7 @@ function SharedExpenseForm({ space, members, onSaved }: { space: Space; members:
     </details>
 
     <button className="button primary full" disabled={busy || selectedMembers.length === 0}>
-      {busy ? 'Savingâ€¦' : 'Save expense'}
+      {busy ? 'Saving...' : 'Save expense'}
     </button>
   </form>;
 }
