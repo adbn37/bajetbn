@@ -19137,3 +19137,46 @@ a.business-report-row-v115:focus-visible {
     grid-column: 1 / -1;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS HOME DESKTOP GAP HOTFIX V2
+   Desktop masonry-like composition using normal CSS Grid:
+   actions + activity stack left, Marketplace Overview spans
+   the two rows on the right. No mobile/tablet changes.
+   ========================================================== */
+
+@media (min-width: 1440px) {
+  .page.business-home-v115 {
+    grid-auto-flow: row dense;
+    row-gap: 1rem;
+  }
+
+  .page.business-home-v115
+  > .business-home-v115-actions {
+    grid-column: 1;
+    grid-row: auto;
+    align-self: start;
+    margin: 0;
+  }
+
+  .page.business-home-v115
+  > .business-home-v115-attention {
+    grid-column: 2;
+    grid-row: span 2;
+    align-self: start;
+    margin-top: 0;
+    min-width: 0;
+  }
+
+  .page.business-home-v115
+  > .business-home-v115-section,
+  .page.business-home-v115
+  > .business-home-v115-section:last-of-type {
+    grid-column: 1;
+    grid-row: auto;
+    align-self: start;
+    margin-top: 0;
+    min-width: 0;
+  }
+}
