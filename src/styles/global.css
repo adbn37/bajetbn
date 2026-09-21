@@ -19256,3 +19256,74 @@ a.business-report-row-v115:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS HOME BALANCED FIRST ROW FINAL
+   Desktop: Open POS + Marketplace Overview share row one.
+   Recent Business Activity returns to full width below.
+   Mobile/tablet remain on the existing single-column flow.
+   ========================================================== */
+
+@media (min-width: 1180px) {
+  .business-home-v115-lower-layout {
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(360px, .65fr);
+    column-gap: 1.15rem;
+    row-gap: .85rem;
+    align-items: stretch;
+  }
+
+  .business-home-v115-lower-main {
+    display: contents;
+  }
+
+  .business-home-v115-lower-main
+  > .business-home-v115-actions {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: stretch;
+    height: 100%;
+    margin: 0;
+    grid-template-columns:
+      repeat(
+        auto-fit,
+        minmax(180px, 1fr)
+      );
+  }
+
+  .business-home-v115-lower-main
+  > .business-home-v115-actions
+  > a {
+    height: 100%;
+    min-height: 100%;
+    align-content: center;
+  }
+
+  .business-home-v115-lower-layout
+  > .business-home-v115-attention {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    height: 100%;
+    margin: 0;
+  }
+
+  .business-home-v115-lower-layout
+  > .business-home-v115-attention
+  > .sme-pos-operational-attention {
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  .business-home-v115-lower-main
+  > .business-home-v115-section {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    margin: 0;
+    min-width: 0;
+  }
+}
