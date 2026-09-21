@@ -19885,3 +19885,105 @@ select.trip-sheet-cell-input {
     min-width: 290px;
   }
 }
+
+/* v1.15.0 Trip Expenses spreadsheet */
+.trip-expenses-sheet-v115 {
+  min-width: 0;
+}
+
+.trip-expenses-sheet-table {
+  min-width: 1450px;
+}
+
+.trip-expense-description-cell {
+  min-width: 210px;
+}
+
+.trip-expense-description-cell strong,
+.trip-expense-description-cell small {
+  display: block;
+}
+
+.trip-expense-description-cell small {
+  margin-top: .12rem;
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.trip-expense-people-picker {
+  position: relative;
+  min-width: 112px;
+}
+
+.trip-expense-people-picker > summary {
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.trip-expense-people-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.trip-expense-people-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + .35rem);
+  left: 0;
+  width: 290px;
+  max-height: 320px;
+  overflow: auto;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: .8rem;
+  background: var(--panel);
+  box-shadow: 0 14px 35px rgba(0, 0, 0, .18);
+}
+
+.trip-expense-people-actions {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: .5rem;
+}
+
+.trip-expense-person-row,
+.trip-expense-share-read-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  align-items: center;
+  gap: .5rem;
+  padding: .35rem 0;
+}
+
+.trip-expense-share-read-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.trip-expense-share-read-row + .trip-expense-share-read-row,
+.trip-expense-person-row + .trip-expense-person-row {
+  border-top: 1px solid var(--border);
+}
+
+.trip-expense-people-picker.read-only .trip-expense-people-popover {
+  width: 260px;
+}
+
+.trip-expense-open {
+  color: var(--warning);
+}
+
+.trip-expenses-sheet-footnote {
+  margin: .75rem 0 0;
+  font-size: .78rem;
+}
+
+@media (max-width: 680px) {
+  .trip-expenses-sheet-table {
+    min-width: 1380px;
+  }
+
+  .trip-expense-people-popover {
+    width: 270px;
+  }
+}

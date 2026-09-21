@@ -175,6 +175,17 @@ const SharedExpensesPanel = lazy(
   },
 );
 
+const TripExpensesSpreadsheet = lazy(
+  async () => {
+    const module =
+      await import('./TripExpensesSpreadsheet');
+
+    return {
+      default: module.TripExpensesSpreadsheet,
+    };
+  },
+);
+
 const SpaceFundPanel = lazy(
   async () => {
     const module =
@@ -2108,7 +2119,25 @@ export function SpaceDetailsPage() {
           )}
         </>
       ) : null
-    ) : shared && activeTab === 'expenses' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="expenses" /> : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
+    ) : shared && activeTab === 'expenses' ? (
+      space.type === 'trip'
+        ? (
+          <TripExpensesSpreadsheet
+            space={space}
+            members={members}
+            currentMember={currentMember || null}
+          />
+        )
+        : (
+          <SharedExpensesPanel
+            space={space}
+            members={members}
+            currentMember={currentMember || null}
+            canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'}
+            view="expenses"
+          />
+        )
+    ) : shared && activeTab === 'balances' ? <SharedExpensesPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} view="balances" /> : shared && supportsGroupFund && (activeTab === 'trip_money' || activeTab === 'group_fund') ? <SpaceFundPanel space={space} members={members} currentMember={currentMember || null} canManage={currentMember?.role === 'owner' || currentMember?.role === 'admin'} /> : shared ? <>
       {activeTab === 'chat' ? (
           <SpaceChatPanel
             space={space}
