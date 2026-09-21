@@ -14,6 +14,7 @@ import { getErrorMessage } from '../../utils/errors';
 import { toMinorUnits } from '../../utils/money';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
 import { SpaceAvatar } from './SpaceAvatar';
+import { deleteUnusedPlanSpace } from './planSpaceLifecycle';
 
 const labels: Record<SpaceType, string> = {
   personal: 'Personal',
@@ -174,9 +175,15 @@ export function SpacesPage() {
           record: space,
           action,
           title: `Delete ${space.name} permanently?`,
-          description: 'Permanent deletion only works when this Space is empty and has no saved history.',
+          description:
+            space.type === 'goal'
+              ? 'Permanent deletion removes this Plan and its target only when no contribution history has been saved.'
+              : 'Permanent deletion only works when this Space is empty and has no saved history.',
           note: 'This cannot be undone.',
-          confirmLabel: 'Delete permanently',
+          confirmLabel:
+            space.type === 'goal'
+              ? 'Delete Plan permanently'
+              : 'Delete permanently',
           tone: 'danger',
         });
   }
@@ -186,7 +193,27 @@ export function SpacesPage() {
     const { record: space, action } = lifecycleDialog;
     setBusyId(space.id); setError('');
     try {
-      await manageSpace(space.id, action);
+      if (
+        space.type === 'goal'
+        && action === 'delete'
+      ) {
+        if (!user) {
+          throw new Error(
+            'Sign in again to delete this Plan.',
+          );
+        }
+
+        await deleteUnusedPlanSpace(
+          user.uid,
+          space.id,
+        );
+      } else {
+        await manageSpace(
+          space.id,
+          action,
+        );
+      }
+
       setLifecycleDialog(null);
       await load();
     } catch (nextError) {
@@ -198,7 +225,12 @@ export function SpacesPage() {
           title: `${space.name} cannot be deleted`,
           description: message,
           note: 'Archive it instead. It will be hidden from normal use while its previous records stay correct.',
-          confirmLabel: space.type === 'trip' ? 'Close Trip instead' : 'Archive Space instead',
+          confirmLabel:
+            space.type === 'goal'
+              ? 'Archive Plan instead'
+              : space.type === 'trip'
+                ? 'Close Trip instead'
+                : 'Archive Space instead',
         });
       } else setError(message);
     } finally { setBusyId(''); }

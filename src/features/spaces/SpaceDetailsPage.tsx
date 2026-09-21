@@ -72,6 +72,7 @@ import { SpaceActionHub } from './SpaceActionHub';
 import { CUSTOM_SPACE_MODULE_OPTIONS, DEFAULT_CUSTOM_SPACE_MODULES, normalizeCustomSpaceModules } from './customSpaceModules';
 import { SmeOperationalAttentionPanel } from './SmeOperationalAttentionPanel';
 import { SpaceAvatar } from './SpaceAvatar';
+import { deleteUnusedPlanSpace } from './planSpaceLifecycle';
 
 import type { CustomSpaceModule } from '../../types/models';
 
@@ -1661,9 +1662,11 @@ export function SpaceDetailsPage() {
         <div>
           <strong>{spaceTypeLabel[space.type]}</strong>
           <span>
-            {shared
-              ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Shared Space`
-              : 'Private Space'}
+            {space.type === 'goal'
+              ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Focused Plan`
+              : shared
+                ? `${currentMember?.role === 'owner' ? 'Owner' : currentMember?.role || 'Member'} · Shared Space`
+                : 'Private Space'}
           </span>
         </div>
 
@@ -4008,50 +4011,197 @@ function PersonalSpaceSettings({ space }: { space: Space }) {
 
 
 function SpaceLifecyclePanel({ space, onFinished }: { space: Space; onFinished: () => void }) {
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [dialog, setDialog] = useState<LifecycleConfirmState<Space, 'archive' | 'delete'> | null>(null);
 
   function ask(action: 'archive' | 'delete') {
     setError('');
-    setDialog(action === 'archive'
-      ? {
-          record: space,
-          action,
-          title: space.type === 'trip' ? `Close ${space.name}?` : `Archive ${space.name}?`,
-          description: 'It will move to Archived Spaces and disappear from normal use.',
-          note: 'Contributions, spending, balances, members, and payment history will stay available.',
-          confirmLabel: space.type === 'trip' ? 'Close Trip' : 'Archive Space',
-        }
-      : {
-          record: space,
-          action,
-          title: `Delete ${space.name} permanently?`,
-          description: 'Permanent deletion only works when the Space is empty and has no saved history.',
-          note: 'This cannot be undone.',
-          confirmLabel: 'Delete permanently',
-          tone: 'danger',
-        });
+
+    setDialog(
+      action === 'archive'
+        ? {
+            record: space,
+            action,
+            title:
+              space.type === 'trip'
+                ? `Close ${space.name}?`
+                : space.type === 'goal'
+                  ? `Archive ${space.name} Plan?`
+                  : `Archive ${space.name}?`,
+            description:
+              'It will move to Archived Spaces and disappear from normal use.',
+            note:
+              space.type === 'goal'
+                ? 'The target and contribution history will stay available.'
+                : 'Contributions, spending, balances, members, and payment history will stay available.',
+            confirmLabel:
+              space.type === 'trip'
+                ? 'Close Trip'
+                : space.type === 'goal'
+                  ? 'Archive Plan'
+                  : 'Archive Space',
+          }
+        : {
+            record: space,
+            action,
+            title:
+              `Delete ${space.name} permanently?`,
+            description:
+              space.type === 'goal'
+                ? 'Permanent deletion removes this Plan and its target only when no contribution history has been saved.'
+                : 'Permanent deletion only works when the Space is empty and has no saved history.',
+            note:
+              'This cannot be undone.',
+            confirmLabel:
+              space.type === 'goal'
+                ? 'Delete Plan permanently'
+                : 'Delete permanently',
+            tone: 'danger',
+          },
+    );
   }
 
   async function run() {
     if (!dialog) return;
-    setBusy(true); setError('');
-    try { await manageSpace(space.id, dialog.action); setDialog(null); onFinished(); }
-    catch (nextError) {
-      const message = getErrorMessage(nextError);
-      if (dialog.action === 'delete' && /archive/i.test(message)) {
-        setDialog({ record: space, action: 'archive', title: `${space.name} cannot be deleted`, description: message, note: 'Archive it instead. Previous records will stay correct and can be viewed later.', confirmLabel: space.type === 'trip' ? 'Close Trip instead' : 'Archive Space instead' });
-      } else setError(message);
+
+    setBusy(true);
+    setError('');
+
+    try {
+      if (
+        space.type === 'goal'
+        && dialog.action === 'delete'
+      ) {
+        if (!user) {
+          throw new Error(
+            'Sign in again to delete this Plan.',
+          );
+        }
+
+        await deleteUnusedPlanSpace(
+          user.uid,
+          space.id,
+        );
+      } else {
+        await manageSpace(
+          space.id,
+          dialog.action,
+        );
+      }
+
+      setDialog(null);
+      onFinished();
+    } catch (nextError) {
+      const message =
+        getErrorMessage(
+          nextError,
+        );
+
+      if (
+        dialog.action === 'delete'
+        && /archive/i.test(
+          message,
+        )
+      ) {
+        setDialog({
+          record: space,
+          action: 'archive',
+          title:
+            `${space.name} cannot be deleted`,
+          description: message,
+          note:
+            space.type === 'goal'
+              ? 'Archive the Plan instead. Its target and contribution history will stay available.'
+              : 'Archive it instead. Previous records will stay correct and can be viewed later.',
+          confirmLabel:
+            space.type === 'trip'
+              ? 'Close Trip instead'
+              : space.type === 'goal'
+                ? 'Archive Plan instead'
+                : 'Archive Space instead',
+        });
+      } else {
+        setError(message);
+      }
+    } finally {
+      setBusy(false);
     }
-    finally { setBusy(false); }
   }
 
-  return <section className="panel danger-zone-panel">
-    <div className="panel-heading"><div><span className="eyebrow">Space controls</span><h2>Archive or delete this Space</h2></div></div>
-    {error && !dialog && <div className="notice error">{error}</div>}
-    <p>Archive keeps previous records and lets you restore the Space later. Delete only works for an empty Space.</p>
-    <div className="button-row"><button className="button secondary" disabled={busy} onClick={() => ask('archive')}>{space.type === 'trip' ? 'Close Trip' : 'Archive Space'}</button><button className="button danger" disabled={busy} onClick={() => ask('delete')}>Delete Space</button></div>
-    {dialog && <LifecycleConfirmModal state={dialog} busy={busy} error={error} onClose={() => { setDialog(null); setError(''); }} onConfirm={() => void run()} />}
-  </section>;
+  return (
+    <section className="panel danger-zone-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">
+            {space.type === 'goal'
+              ? 'Plan controls'
+              : 'Space controls'}
+          </span>
+
+          <h2>
+            {space.type === 'goal'
+              ? 'Archive or delete this Plan'
+              : 'Archive or delete this Space'}
+          </h2>
+        </div>
+      </div>
+
+      {error && !dialog && (
+        <div className="notice error">
+          {error}
+        </div>
+      )}
+
+      <p>
+        {space.type === 'goal'
+          ? 'Archive keeps the target and contribution history. Permanent delete is available only before any contribution history is saved.'
+          : 'Archive keeps previous records and lets you restore the Space later. Delete only works for an empty Space.'}
+      </p>
+
+      <div className="button-row">
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={() =>
+            ask('archive')
+          }
+        >
+          {space.type === 'trip'
+            ? 'Close Trip'
+            : space.type === 'goal'
+              ? 'Archive Plan'
+              : 'Archive Space'}
+        </button>
+
+        <button
+          className="button danger"
+          disabled={busy}
+          onClick={() =>
+            ask('delete')
+          }
+        >
+          {space.type === 'goal'
+            ? 'Delete Plan'
+            : 'Delete Space'}
+        </button>
+      </div>
+
+      {dialog && (
+        <LifecycleConfirmModal
+          state={dialog}
+          busy={busy}
+          error={error}
+          onClose={() => {
+            setDialog(null);
+            setError('');
+          }}
+          onConfirm={() =>
+            void run()
+          }
+        />
+      )}
+    </section>
+  );
 }
