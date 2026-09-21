@@ -304,7 +304,7 @@ export function TripCommandCentre({
                   ? 'No pots yet'
                   : budgetRemainingMinor < 0
                     ? 'Over plan'
-                    : 'Tracking'}
+                    : 'Money Activity only'}
               </td>
 
               <td>
@@ -531,6 +531,17 @@ export function TripCommandCentre({
         )}
       </div>
 
+      <div className="info-banner trip-overview-budget-source-note">
+        <strong>
+          Trip Budget Spent does not include Trip Expenses yet.
+        </strong>
+
+        <span>
+          It currently follows posted Money Activity transactions
+          linked to this Trip. Expense-to-budget linking will be
+          handled separately.
+        </span>
+      </div>
       <TripPlanningPanel
         space={space}
         members={members}

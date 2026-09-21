@@ -655,7 +655,8 @@ export function TripBudgetSpreadsheet({
 
           <p className="muted">
             Plan Trip pots in one spreadsheet.
-            Spending updates automatically from saved expenses.
+            Spent currently follows posted Money Activity transactions
+            linked to this Trip. Trip Expenses are not included yet.
           </p>
         </div>
 
@@ -963,6 +964,12 @@ export function TripBudgetSpreadsheet({
                 )}
             </tbody>
           </table>
+
+          <p className="muted trip-budget-spend-source-note">
+            Spent currently uses posted Money Activity transactions
+            for this Trip within the pot date/category range.
+            Trip Expenses are not included yet.
+          </p>
         </div>
       )}
     </section>
