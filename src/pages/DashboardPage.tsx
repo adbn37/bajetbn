@@ -547,7 +547,7 @@ export function DashboardPage() {
             (item) => !item.archivedAt,
           );
 
-        setSpaces(nextSpaces.filter((item) => !item.archivedAt && item.type !== 'sme'));
+        setSpaces(nextActiveSpaces);
         setCustomCategories(
           nextCategories,
         );
@@ -1856,6 +1856,7 @@ export function DashboardPage() {
               <MoneyScopeSwitch
                 mode="personal"
                 businessSpaces={quickBusinessSpaces}
+                openAddOnBusiness
                 compact
               />
             }

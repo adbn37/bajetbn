@@ -218,7 +218,7 @@ export function BusinessMoneyActivityPage() {
   const { user, profile } = useAuth();
   const { online } = useOfflineSync();
   const { spaceId = '' } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedAccountId = searchParams.get('accountId') || 'all';
 
   const [space, setSpace] = useState<Space | null>(null);
@@ -385,6 +385,35 @@ export function BusinessMoneyActivityPage() {
   useEffect(() => {
     if (requestedAccountId !== 'all') setAccountFilter(requestedAccountId);
   }, [requestedAccountId]);
+
+  useEffect(() => {
+    if (
+      searchParams.get('quick') !== '1'
+      || loading
+      || !canManage
+    ) {
+      return;
+    }
+
+    setShowAdd(true);
+
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    next.delete('quick');
+
+    setSearchParams(
+      next,
+      { replace: true },
+    );
+  }, [
+    canManage,
+    loading,
+    searchParams,
+    setSearchParams,
+  ]);
 
   const allCategories = useMemo(() => {
     const map =

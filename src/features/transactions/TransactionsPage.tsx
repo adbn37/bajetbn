@@ -124,12 +124,115 @@ function spaceDisplayLabel(space: Space): string {
   return [space.name, spaceTypeLabels[space.type], space.currency].join(' · ');
 }
 
-export function MoneyScopeSwitch({ mode, businessSpaces, currentBusinessId, compact = false }: { mode: 'personal' | 'business'; businessSpaces: Space[]; currentBusinessId?: string; compact?: boolean; }) {
-  const activeBusiness = businessSpaces.find((space) => space.id === currentBusinessId) || businessSpaces[0];
-  return <div className={'money-scope-switch' + (compact ? ' compact' : '')} aria-label="Money Activity scope">
-    <Link className={mode === 'personal' ? 'active' : ''} to="/transactions">Personal</Link>
-    {businessSpaces.length === 0 ? <span className="money-scope-disabled" title="Create or join a Business Space to use Business Money Activity.">Business</span> : businessSpaces.length === 1 ? <Link className={mode === 'business' ? 'active' : ''} to={'/spaces/' + businessSpaces[0].id + '/business/money'}>{mode === 'business' ? businessSpaces[0].name : 'Business'}</Link> : <details className={mode === 'business' ? 'active' : ''}><summary>{mode === 'business' && activeBusiness ? activeBusiness.name : 'Business'}</summary><div className="money-scope-business-list">{businessSpaces.map((space) => <Link key={space.id} className={space.id === currentBusinessId ? 'active' : ''} to={'/spaces/' + space.id + '/business/money'}>{space.name}</Link>)}</div></details>}
-  </div>;
+export function MoneyScopeSwitch({
+  mode,
+  businessSpaces,
+  currentBusinessId,
+  compact = false,
+  openAddOnBusiness = false,
+}: {
+  mode: 'personal' | 'business';
+  businessSpaces: Space[];
+  currentBusinessId?: string;
+  compact?: boolean;
+  openAddOnBusiness?: boolean;
+}) {
+  const activeBusiness =
+    businessSpaces.find(
+      (space) =>
+        space.id === currentBusinessId,
+    ) || businessSpaces[0];
+
+  const businessMoneyPath =
+    (space: Space) =>
+      '/spaces/'
+      + space.id
+      + '/business/money'
+      + (
+        openAddOnBusiness
+          ? '?quick=1'
+          : ''
+      );
+
+  return (
+    <div
+      className={
+        'money-scope-switch'
+        + (compact ? ' compact' : '')
+      }
+      aria-label="Money Activity scope"
+    >
+      <Link
+        className={
+          mode === 'personal'
+            ? 'active'
+            : ''
+        }
+        to="/transactions"
+      >
+        Personal
+      </Link>
+
+      {businessSpaces.length === 0 ? (
+        <span
+          className="money-scope-disabled"
+          title="Create or join a Business Space to use Business Money Activity."
+        >
+          Business
+        </span>
+      ) : businessSpaces.length === 1 ? (
+        <Link
+          className={
+            mode === 'business'
+              ? 'active'
+              : ''
+          }
+          to={
+            businessMoneyPath(
+              businessSpaces[0],
+            )
+          }
+        >
+          {mode === 'business'
+            ? businessSpaces[0].name
+            : 'Business'}
+        </Link>
+      ) : (
+        <details
+          className={
+            mode === 'business'
+              ? 'active'
+              : ''
+          }
+        >
+          <summary>
+            {mode === 'business'
+              && activeBusiness
+                ? activeBusiness.name
+                : 'Business'}
+          </summary>
+
+          <div className="money-scope-business-list">
+            {businessSpaces.map(
+              (space) => (
+                <Link
+                  key={space.id}
+                  className={
+                    space.id === currentBusinessId
+                      ? 'active'
+                      : ''
+                  }
+                  to={businessMoneyPath(space)}
+                >
+                  {space.name}
+                </Link>
+              ),
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  );
 }
 
 function transactionTimestampMillis(value: unknown): number {
