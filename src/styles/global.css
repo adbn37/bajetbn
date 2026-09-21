@@ -20177,3 +20177,174 @@ select.trip-sheet-cell-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================
+   BAJETBN V115 TRIP HOME COMPACT VISUAL POLISH
+   Tighten desktop hierarchy without changing Trip behaviour.
+   ========================================================== */
+
+@media (min-width: 901px) {
+  .trip-overview-sheet-v115 {
+    gap: .58rem;
+    padding: .95rem 1rem 1rem;
+  }
+
+  .trip-overview-sheet-v115 > .panel-heading {
+    align-items: flex-start;
+    margin-bottom: 0;
+  }
+
+  .trip-overview-sheet-v115 > .panel-heading h2 {
+    margin-bottom: .2rem;
+  }
+
+  .trip-overview-sheet-v115 > .panel-heading p {
+    margin-bottom: 0;
+  }
+
+  .trip-overview-sheet-v115 .trip-sheet-section-heading {
+    margin: .28rem 0 .32rem;
+  }
+
+  .trip-overview-sheet-v115 .trip-sheet-section-heading h3 {
+    margin-top: .05rem;
+  }
+
+  .trip-overview-money-table th:nth-child(1),
+  .trip-overview-money-table td:nth-child(1) {
+    width: 18%;
+  }
+
+  .trip-overview-money-table th:nth-child(2),
+  .trip-overview-money-table td:nth-child(2),
+  .trip-overview-money-table th:nth-child(3),
+  .trip-overview-money-table td:nth-child(3),
+  .trip-overview-money-table th:nth-child(4),
+  .trip-overview-money-table td:nth-child(4) {
+    width: 18%;
+  }
+
+  .trip-overview-money-table th:nth-child(5),
+  .trip-overview-money-table td:nth-child(5) {
+    width: 16%;
+  }
+
+  .trip-overview-money-table th:nth-child(6),
+  .trip-overview-money-table td:nth-child(6) {
+    width: 12%;
+  }
+
+  .trip-overview-money-table td,
+  .trip-overview-team-table td {
+    padding: .4rem .5rem;
+  }
+
+  .trip-overview-team-table {
+    font-size: .86rem;
+  }
+
+  .trip-overview-team-table th:nth-child(1),
+  .trip-overview-team-table td:nth-child(1) {
+    width: 20%;
+  }
+
+  .trip-overview-team-table th:nth-child(2),
+  .trip-overview-team-table td:nth-child(2) {
+    width: 25%;
+  }
+
+  .trip-overview-team-table th:nth-child(3),
+  .trip-overview-team-table td:nth-child(3) {
+    width: 40%;
+  }
+
+  .trip-overview-team-table th:nth-child(4),
+  .trip-overview-team-table td:nth-child(4) {
+    width: 15%;
+  }
+
+  .trip-overview-sheet-v115 .trip-command-guidance {
+    gap: .45rem;
+    margin-top: .05rem;
+  }
+
+  .trip-overview-sheet-v115 .trip-command-guidance .notice {
+    min-height: 0;
+    margin: 0;
+    padding: .62rem .72rem;
+    font-size: .78rem;
+    line-height: 1.38;
+  }
+
+  .trip-overview-budget-source-note {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    margin: .08rem 0 0;
+    padding: .58rem .72rem;
+    font-size: .76rem;
+    line-height: 1.35;
+  }
+
+  .trip-overview-budget-source-note strong {
+    flex: 0 0 auto;
+  }
+
+  .trip-overview-sheet-v115 > .trip-sheet-planning-v115 {
+    gap: .62rem;
+    margin-top: .08rem;
+    padding-top: .82rem;
+  }
+
+  .trip-sheet-planning-v115 > .panel-heading {
+    align-items: flex-end;
+    margin-bottom: 0;
+  }
+
+  .trip-sheet-planning-v115 > .panel-heading h2 {
+    margin-bottom: .18rem;
+  }
+
+  .trip-sheet-planning-v115 > .panel-heading p {
+    margin-bottom: 0;
+  }
+
+  .trip-sheet-planning-v115 .trip-planning-tabs {
+    margin-top: .05rem;
+  }
+
+  .trip-sheet-planning-v115 .trip-planning-heading {
+    min-height: 42px;
+  }
+
+  .trip-overview-sheet-v115
+  .trip-sheet-new-row
+  .trip-sheet-cell-input {
+    min-height: 48px;
+    padding: .56rem .6rem;
+  }
+
+  .trip-overview-sheet-v115
+  .trip-sheet-new-row
+  .trip-sheet-main-cell
+  .trip-sheet-cell-input {
+    font-weight: 650;
+  }
+
+  .trip-overview-sheet-v115
+  .trip-sheet-actions-cell {
+    min-width: 96px;
+  }
+
+  .trip-overview-sheet-v115
+  .trip-sheet-row-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
+  .trip-overview-budget-source-note {
+    display: grid;
+    gap: .25rem;
+  }
+}
