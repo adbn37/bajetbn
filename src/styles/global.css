@@ -20121,3 +20121,59 @@ select.trip-sheet-cell-input {
     min-width: 700px;
   }
 }
+
+/* ==========================================================
+   BAJETBN V115 TRIP HOME DESKTOP WORKSHEET POLISH
+   Keep Trip Home and Trip Plan as full-width spreadsheet rows.
+   Overrides legacy two-column Trip desktop composition only.
+   ========================================================== */
+
+.trip-overview-sheet-v115 > .trip-sheet-planning-v115 {
+  width: 100%;
+  min-width: 0;
+  margin-top: .25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 901px) {
+  .trip-overview-sheet-v115.trip-command-centre {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .trip-overview-sheet-v115.trip-command-centre > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .trip-overview-sheet-v115 .trip-overview-money-table,
+  .trip-overview-sheet-v115 .trip-overview-team-table {
+    width: 100%;
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  .trip-overview-sheet-v115 .trip-command-guidance {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    margin-top: .15rem;
+  }
+
+  .trip-sheet-planning-v115 .trip-planning-grid {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .trip-sheet-planning-v115 .trip-sheet-section {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .trip-overview-sheet-v115 .trip-command-guidance {
+    grid-template-columns: 1fr;
+  }
+}
