@@ -19180,3 +19180,79 @@ a.business-report-row-v115:focus-visible {
     min-width: 0;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS HOME EXPLICIT LOWER LAYOUT HOTFIX
+   Structural desktop layout: actions + activity stack left,
+   Marketplace Overview stays right. This replaces reliance
+   on implicit parent-grid auto placement.
+   ========================================================== */
+
+.business-home-v115-lower-layout,
+.business-home-v115-lower-main {
+  min-width: 0;
+}
+
+.business-home-v115-lower-layout {
+  display: grid;
+  gap: .85rem;
+}
+
+.business-home-v115-lower-main {
+  display: grid;
+  gap: .85rem;
+}
+
+.business-home-v115-lower-layout
+.business-home-v115-actions,
+.business-home-v115-lower-layout
+.business-home-v115-section,
+.business-home-v115-lower-layout
+.business-home-v115-attention {
+  margin-top: 0;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+@media (min-width: 1180px) {
+  .page.business-home-v115 {
+    display: block;
+  }
+
+  .business-home-v115-lower-layout {
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(360px, .65fr);
+    align-items: start;
+    column-gap: 1.15rem;
+    row-gap: .85rem;
+  }
+
+  .business-home-v115-lower-main {
+    grid-column: 1;
+    align-self: start;
+  }
+
+  .business-home-v115-lower-layout
+  > .business-home-v115-attention {
+    grid-column: 2;
+    align-self: start;
+  }
+
+  .business-home-v115-lower-main
+  > .business-home-v115-actions {
+    grid-template-columns:
+      repeat(
+        auto-fit,
+        minmax(180px, 1fr)
+      );
+  }
+}
+
+@media (max-width: 1179px) {
+  .business-home-v115-lower-layout,
+  .business-home-v115-lower-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

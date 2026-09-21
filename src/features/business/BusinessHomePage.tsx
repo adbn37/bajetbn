@@ -1345,79 +1345,83 @@ export function BusinessHomePage() {
         </section>
       )}
 
-      {businessActions.length > 0 && (
-        <section
-          className="business-home-v115-actions"
-          aria-label="Business actions"
-        >
-          {businessActions.map(
-            (action) => (
-              <Link
-                key={
-                  action.label
-                  + action.to
-                }
-                to={action.to}
-              >
-                <span>{action.icon}</span>
-                <strong>
-                  {action.label}
-                </strong>
-              </Link>
-            ),
+      <div className="business-home-v115-lower-layout">
+        <div className="business-home-v115-lower-main">
+          {businessActions.length > 0 && (
+            <section
+              className="business-home-v115-actions"
+              aria-label="Business actions"
+            >
+              {businessActions.map(
+                (action) => (
+                  <Link
+                    key={
+                      action.label
+                      + action.to
+                    }
+                    to={action.to}
+                  >
+                    <span>{action.icon}</span>
+                    <strong>
+                      {action.label}
+                    </strong>
+                  </Link>
+                ),
+              )}
+            </section>
           )}
-        </section>
-      )}
 
-      {canViewFinancials && (
-        <div
-          className="business-home-v115-attention"
-          data-business-home-attention
-        >
-          <SmeOperationalAttentionPanel
-            space={space}
-            role={
-              isOwner
-                ? 'owner'
-                : posRole
-            }
-          />
+          {canViewFinancials && (
+            <section
+              className="business-home-v115-section"
+              data-business-activity-section
+            >
+              <div className="business-home-v115-section-heading">
+                <div>
+                  <span>Recent</span>
+                  <h2>Business activity</h2>
+                </div>
+
+                <Link
+                  to={
+                    '/spaces/'
+                    + space.id
+                    + '/business/money'
+                  }
+                >
+                  Money activity
+                </Link>
+              </div>
+
+              <p className="muted business-activity-intro-v115">
+                Sales, documents, bookings, payouts and money movements in one timeline.
+              </p>
+
+              <BusinessActivityTimeline
+                spaceId={space.id}
+                businessIndustry={businessIndustry}
+                transactions={transactions}
+              />
+            </section>
+          )}
         </div>
-      )}
 
-      {canViewFinancials && (
-      <section
-        className="business-home-v115-section"
-        data-business-activity-section
-      >
-        <div className="business-home-v115-section-heading">
-          <div>
-            <span>Recent</span>
-            <h2>Business activity</h2>
-          </div>
-
-          <Link
-            to={
-              '/spaces/'
-              + space.id
-              + '/business/money'
-            }
+        {canViewFinancials && (
+          <div
+            className="business-home-v115-attention"
+            data-business-home-attention
           >
-            Money activity
-          </Link>
-        </div>
-
-        <p className="muted business-activity-intro-v115">
-          Sales, documents, bookings, payouts and money movements in one timeline.
-        </p>
-
-        <BusinessActivityTimeline
-          spaceId={space.id}
-          businessIndustry={businessIndustry}
-          transactions={transactions}
-        />
-      </section>
-      )}
+            <SmeOperationalAttentionPanel
+              space={space}
+              role={
+                isOwner
+                  ? 'owner'
+                  : posRole
+              }
+            />
+          </div>
+        )}
+      </div>
         </>
       )}
     </main>
