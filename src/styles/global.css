@@ -19089,3 +19089,51 @@ a.business-report-row-v115:focus-visible {
     flex: 0 0 auto;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V115 BUSINESS HOME DESKTOP GAP HOTFIX
+   Wide desktop only. Keep the primary action and Marketplace
+   overview on one row; place recent activity directly below.
+   Mobile/tablet and Business data logic remain unchanged.
+   ========================================================== */
+
+@media (min-width: 1440px) {
+  .page.business-home-v115 {
+    row-gap: 1rem;
+  }
+
+  .page.business-home-v115
+  > .business-home-v115-actions {
+    grid-column: 1;
+    grid-row: auto;
+    align-self: start;
+    margin: 0;
+    grid-template-columns:
+      repeat(
+        auto-fit,
+        minmax(180px, 1fr)
+      );
+  }
+
+  .page.business-home-v115
+  > .business-home-v115-attention {
+    grid-column: 2;
+    grid-row: auto;
+    align-self: start;
+    margin-top: 0;
+    min-width: 0;
+  }
+
+  .page.business-home-v115
+  > .business-home-v115-section {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    min-width: 0;
+  }
+
+  .page.business-home-v115
+  > .business-home-v115-section:last-of-type {
+    grid-column: 1 / -1;
+  }
+}
