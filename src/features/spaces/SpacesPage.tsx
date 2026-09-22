@@ -8,7 +8,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { acceptSpaceInvitation, declineSpaceInvitation, listMySpaceInvitations } from '../../repositories/collaborationRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { createGoal } from '../../repositories/goalRepository';
-import { createSpace, listSpaces, updateSpace } from '../../repositories/spaceRepository';
+import {
+  createSpace,
+  listSpaces,
+  prepareAdbnTechIntegration,
+  updateSpace,
+} from '../../repositories/spaceRepository';
 import type { CustomSpaceModule, Space, SpaceInvitation, SpaceType } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { toMinorUnits } from '../../utils/money';
@@ -133,17 +138,123 @@ export function SpacesPage() {
   };
   useEffect(() => { void load(); }, [user, profile?.email]);
 
+  const currentEmail =
+    (
+      profile?.email
+      || user?.email
+      || ''
+    )
+      .trim()
+      .toLowerCase();
+
+  const canProvisionAdbnTechSpace =
+    currentEmail
+      === 'zardeerwandy@gmail.com';
+
+  const adbnTechSpace =
+    useMemo(
+      () =>
+        spaces.find(
+          (item) =>
+            !item.archivedAt
+            && item.type === 'sme'
+            && item.ownerId === user?.uid
+            && (
+              item.externalIntegrationProvider
+                === 'adbn_tech'
+              || item.name
+                .trim()
+                .toLowerCase()
+                === 'adbn tech'
+            ),
+        )
+        || null,
+      [
+        spaces,
+        user?.uid,
+      ],
+    );
+
+  const visibleSpaces =
+    useMemo(
+      () =>
+        spaces.filter(
+          (item) =>
+            item.externalIntegrationProvider
+              !== 'adbn_tech'
+            || canProvisionAdbnTechSpace,
+        ),
+      [
+        spaces,
+        canProvisionAdbnTechSpace,
+      ],
+    );
+
   const active = useMemo(
-    () => spaces.filter((item) => !item.archivedAt && item.type !== 'personal'),
-    [spaces],
+    () => visibleSpaces.filter((item) => !item.archivedAt && item.type !== 'personal'),
+    [visibleSpaces],
   );
   const archived = useMemo(
-    () => spaces.filter((item) => item.archivedAt && item.type !== 'personal'),
-    [spaces],
+    () => visibleSpaces.filter((item) => item.archivedAt && item.type !== 'personal'),
+    [visibleSpaces],
   );
 
   const openEdit = (space: Space) => { setSelected(space); setModal('edit'); };
   const pendingInvitations = useMemo(() => invitations.filter((item) => item.status === 'pending'), [invitations]);
+
+  async function provisionAdbnTechSpace() {
+    if (
+      !user
+      || !profile
+      || !canProvisionAdbnTechSpace
+    ) {
+      return;
+    }
+
+    setBusyId(
+      'adbn-tech-space',
+    );
+    setError('');
+
+    try {
+      let nextSpaceId =
+        adbnTechSpace?.id
+        || '';
+
+      if (!nextSpaceId) {
+        nextSpaceId =
+          await createSpace({
+            uid: user.uid,
+            name: 'ADBN TECH',
+            type: 'sme',
+            currency: profile.currency,
+            timezone: profile.timezone,
+            description:
+              'ADBN TECH business workspace connected to BajetBN.',
+          });
+      }
+
+      await prepareAdbnTechIntegration(
+        nextSpaceId,
+      );
+
+      await load();
+
+      navigate(
+        '/business/'
+        + nextSpaceId
+        + '?workspace=setup',
+      );
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
 
   async function answerInvitation(invitation: SpaceInvitation, decision: 'accept' | 'decline') {
     setBusyId(invitation.id); setError('');
@@ -240,6 +351,47 @@ export function SpacesPage() {
   return <main className="page">
     <PageHeader eyebrow="Shared & separate" title="Spaces" description="Use a Space for a business, trip, household or group you manage with other people." leading={<button type="button" className="spaces-title-help" onClick={() => setSpacesHelpOpen(true)} aria-label="About Spaces" title="About Spaces">?</button>} action={<div className="page-header-action-row"><Link className="button secondary archive-button" to="/spaces/archived">Archived <span>{archived.length}</span></Link><button className="button primary" onClick={() => setModal('create')}>+ Add Space</button></div>} />
     {error && <div className="notice error">{error}</div>}
+
+    {canProvisionAdbnTechSpace
+      && !adbnTechSpace
+      && (
+        <section
+          className="panel adbn-tech-space-setup-v115"
+          data-adbn-tech-space-setup
+        >
+          <div>
+            <span className="eyebrow">
+              ADBN TECH integration
+            </span>
+
+            <h2>
+              ADBN TECH Business Space
+            </h2>
+
+            <p className="muted">
+              Create one dedicated Business Space for the ADBN TECH connection. Customers, invoices, payments, purchases, expenses, refunds and inventory will be added to this Space in the next integration slices.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="button primary"
+            disabled={
+              busyId
+                === 'adbn-tech-space'
+            }
+            onClick={() =>
+              void provisionAdbnTechSpace()
+            }
+          >
+            {busyId
+              === 'adbn-tech-space'
+              ? 'Creating…'
+              : 'Create ADBN TECH Space'}
+          </button>
+        </section>
+      )}
+
     {pendingInvitations.length > 0 && <section className="panel incoming-invitations-panel"><div className="panel-heading"><div><span className="eyebrow">Invitations for me</span><h2>Spaces you can join</h2></div><span className="type-badge">{pendingInvitations.length}</span></div><div className="incoming-invitation-list">{pendingInvitations.map((invitation) => { const expired = Boolean(invitation.expiresAt?.toDate?.().getTime() && invitation.expiresAt.toDate().getTime() < Date.now()); return <article className="incoming-invitation-row" key={invitation.id}><div><strong>{invitation.spaceName || 'Shared Space'}</strong><span>{invitation.spaceType ? `${labels[invitation.spaceType]} Space` : 'Shared Space'} · Invited by {invitation.invitedByName || 'the Space owner'}</span><small>Access: {invitation.role === 'admin' ? 'Manager' : invitation.role === 'viewer' ? 'View only' : invitation.role === 'payer' ? 'Record payments' : 'Add money records'}{invitation.posRole ? ` · POS: ${invitation.posRole === 'stock_staff' ? 'Stock staff' : invitation.posRole.charAt(0).toUpperCase() + invitation.posRole.slice(1)}` : ''}{expired ? ' · Invite expired' : ''}</small></div><div className="button-row">{expired ? <span className="status-pill">Ask for a new invite</span> : <><button className="button primary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'accept')}>{busyId === invitation.id ? 'Working…' : 'Join Space'}</button><button className="button secondary" disabled={busyId === invitation.id} onClick={() => void answerInvitation(invitation, 'decline')}>Decline</button></>}</div></article>; })}</div></section>}
     {loading ? <div className="loading-panel">Loading Spaces…</div> : active.length === 0 ? <EmptyState title="No Spaces yet" description="That is fine. Use BajetBN normally for your personal budget, and add a Space when you need one." /> : <SpaceGrid spaces={active} busyId={busyId} navigate={navigate} onEdit={openEdit} onArchive={(space) => askLifecycle(space, 'archive')} onDelete={(space) => askLifecycle(space, 'delete')} />}
 
@@ -366,7 +518,12 @@ function SpaceGrid({ spaces, busyId, navigate, onEdit, onArchive, onDelete }: { 
     >
       <div className="card-top">
         <SpaceAvatar space={space} size="large" />
-        <span className="type-badge">{labels[space.type]}</span>
+        <span className="type-badge">
+          {space.externalIntegrationProvider
+            === 'adbn_tech'
+            ? 'ADBN TECH'
+            : labels[space.type]}
+        </span>
       </div>
 
       <div className="space-card-copy">

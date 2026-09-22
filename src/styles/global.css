@@ -21311,3 +21311,30 @@ select.trip-sheet-cell-input {
     grid-column: 1 / -1;
   }
 }
+
+
+/* BAJETBN V115 ADBN TECH DEDICATED SPACE */
+.adbn-tech-space-setup-v115 {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.adbn-tech-space-setup-v115 h2,
+.adbn-tech-space-setup-v115 p {
+  margin-top: 0.35rem;
+}
+
+.adbn-tech-space-setup-v115 > div {
+  min-width: 0;
+  max-width: 760px;
+}
+
+@media (max-width: 720px) {
+  .adbn-tech-space-setup-v115 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

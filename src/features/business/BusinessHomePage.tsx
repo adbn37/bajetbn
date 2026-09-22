@@ -424,7 +424,15 @@ export function BusinessHomePage() {
   const canManageAdbnTechConnection =
     isOwner
     && user?.email?.trim().toLowerCase()
-      === 'zardeerwandy@gmail.com';
+      === 'zardeerwandy@gmail.com'
+    && (
+      space.externalIntegrationProvider
+        === 'adbn_tech'
+      || space.name
+        .trim()
+        .toLowerCase()
+        === 'adbn tech'
+    );
 
   const adbnTechPrepared =
     space.externalIntegrationProvider
