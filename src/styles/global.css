@@ -20811,7 +20811,7 @@ select.trip-sheet-cell-input {
 
 /* ==========================================================
    BAJETBN V115 TRIP WORKBOOK COMPLETION
-   Final workbook composition: worksheet first, sheet tabs below.
+   Final workbook composition: sheet navigation above worksheet.
    ========================================================== */
 
 .trip-workbook-shell-v115 {
@@ -20823,34 +20823,14 @@ select.trip-sheet-cell-input {
   flex: 0 0 auto;
 }
 
-.trip-workbook-sheet-body-v115 {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.trip-workbook-support-tabs-v115 {
-  order: 20;
-  flex: 0 0 auto;
-  min-height: 34px;
-  padding: .22rem .42rem;
-  border-top: 1px solid var(--border);
-  border-bottom: 0;
-  background:
-    color-mix(
-      in srgb,
-      var(--surface-2) 72%,
-      var(--bg)
-    );
-}
-
 .trip-workbook-tabs-v115 {
-  order: 21;
   flex: 0 0 auto;
-  align-items: flex-start;
+  order: initial;
+  align-items: flex-end;
   min-height: 40px;
-  padding: 0 .42rem .3rem;
-  border-top: 1px solid var(--border);
-  border-bottom: 0;
+  padding: .3rem .42rem 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
   background:
     color-mix(
       in srgb,
@@ -20862,15 +20842,15 @@ select.trip-sheet-cell-input {
 .trip-workbook-tabs-v115 button {
   min-height: 32px;
   padding: .4rem .72rem;
-  border-radius: 0 0 7px 7px;
-  border-top: 0;
+  border-radius: 7px 7px 0 0;
+  border-bottom: 0;
 }
 
 .trip-workbook-tabs-v115 button.active {
-  margin-top: -1px;
-  margin-bottom: 0;
+  margin-top: 0;
+  margin-bottom: -1px;
   border-color: var(--border);
-  border-top-color: transparent;
+  border-bottom-color: transparent;
   background:
     color-mix(
       in srgb,
@@ -20878,16 +20858,36 @@ select.trip-sheet-cell-input {
       var(--bg)
     );
   box-shadow:
-    inset 0 -2px 0 var(--accent);
+    inset 0 2px 0 var(--accent);
+}
+
+.trip-workbook-support-tabs-v115 {
+  flex: 0 0 auto;
+  order: initial;
+  min-height: 34px;
+  padding: .22rem .42rem;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
+  background:
+    color-mix(
+      in srgb,
+      var(--surface-2) 72%,
+      var(--bg)
+    );
+}
+
+.trip-workbook-sheet-body-v115 {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .trip-workbook-status-v115 {
-  order: 22;
+  order: initial;
   flex: 0 0 auto;
 }
 
 /*
- * Embedded support tools are still the existing proven BajetBN
+ * Embedded support tools keep the existing proven BajetBN
  * components, but inside Trip they inherit the workbook canvas
  * instead of looking like a second page inside the sheet.
  */
@@ -20967,8 +20967,8 @@ select.trip-sheet-cell-input {
 
   .trip-workbook-tabs-v115 {
     position: sticky;
-    top: auto;
-    bottom: 0;
+    top: 0;
+    bottom: auto;
     z-index: 14;
   }
 }

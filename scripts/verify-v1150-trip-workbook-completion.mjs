@@ -49,21 +49,21 @@ const footerIndex =
   );
 
 check(
-  bodyIndex >= 0
-  && tabIndex > bodyIndex
-  && footerIndex > tabIndex,
-  'Primary worksheet tabs sit below the active worksheet and above the workbook status bar.',
+  tabIndex >= 0
+  && supportIndex > tabIndex
+  && bodyIndex > supportIndex
+  && footerIndex > bodyIndex,
+  'Primary and support sheet navigation sit above the active worksheet.',
 );
 
 check(
-  supportIndex > bodyIndex
-  && css.includes(
-    '.trip-workbook-support-tabs-v115 {\n  order: 20;'
+  css.includes(
+    '.trip-workbook-tabs-v115 {\n  flex: 0 0 auto;\n  order: initial;'
   )
   && css.includes(
-    '.trip-workbook-tabs-v115 {\n  order: 21;'
+    '.trip-workbook-support-tabs-v115 {\n  flex: 0 0 auto;\n  order: initial;'
   ),
-  'More support sheets render immediately above the bottom sheet strip.',
+  'Workbook navigation uses normal top-of-workbook ordering.',
 );
 
 check(
@@ -84,12 +84,12 @@ check(
     'BAJETBN V115 TRIP WORKBOOK COMPLETION'
   )
   && css.includes(
-    '.trip-workbook-tabs-v115 {\n  order: 21;'
+    'border-radius: 7px 7px 0 0;'
   )
   && css.includes(
-    'border-radius: 0 0 7px 7px;'
+    'border-bottom: 1px solid var(--border);'
   ),
-  'Bottom workbook sheet-strip styling is installed.',
+  'Top workbook sheet-strip styling is installed.',
 );
 
 check(
@@ -113,9 +113,12 @@ check(
     'position: sticky;'
   )
   && css.includes(
-    'bottom: 0;'
+    'top: 0;'
+  )
+  && css.includes(
+    'bottom: auto;'
   ),
-  'Desktop workbook sheet strip remains reachable at the bottom edge.',
+  'Desktop workbook sheet strip stays reachable at the top edge.',
 );
 
 for (const sheet of [
