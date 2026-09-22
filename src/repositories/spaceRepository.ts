@@ -119,6 +119,22 @@ export async function prepareAdbnTechIntegration(
   );
 }
 
+export async function markAdbnTechIntegrationConnected(
+  spaceId: string,
+): Promise<void> {
+  const { db } = requireFirebase();
+
+  await updateDoc(
+    doc(db, 'spaces', spaceId),
+    {
+      externalIntegrationProvider: 'adbn_tech',
+      externalIntegrationStatus: 'connected',
+      externalIntegrationKey: 'adbntech',
+      updatedAt: serverTimestamp(),
+    },
+  );
+}
+
 export async function archiveSpace(spaceId: string) {
   const { db } = requireFirebase();
   await updateDoc(doc(db, 'spaces', spaceId), {

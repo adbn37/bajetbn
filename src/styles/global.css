@@ -21338,3 +21338,77 @@ select.trip-sheet-cell-input {
     flex-direction: column;
   }
 }
+
+
+/* Slice 22: ADBN TECH read-only bridge */
+.adbn-tech-mirror-connect-v115,
+.adbn-tech-mirror-v115 {
+  display: grid;
+  gap: 1rem;
+}
+
+.adbn-tech-mirror-connect-actions-v115,
+.adbn-tech-mirror-heading-actions-v115,
+.adbn-tech-mirror-meta-v115 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.adbn-tech-mirror-meta-v115 {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.adbn-tech-mirror-meta-v115 span {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.adbn-tech-mirror-search-v115 {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 34rem;
+}
+
+.adbn-tech-mirror-search-v115 input {
+  width: 100%;
+}
+
+.adbn-tech-table-wrap-v115 {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.adbn-tech-table-v115 {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.adbn-tech-table-v115 th,
+.adbn-tech-table-v115 td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.adbn-tech-table-v115 td strong,
+.adbn-tech-table-v115 td span,
+.adbn-tech-table-v115 td small {
+  display: block;
+}
+
+.adbn-tech-table-v115 td small {
+  margin-top: 0.2rem;
+  opacity: 0.72;
+}
+
+@media (max-width: 720px) {
+  .adbn-tech-mirror-heading-actions-v115 {
+    width: 100%;
+  }
+}

@@ -36,6 +36,9 @@ import {
   BusinessActivityTimeline,
 } from './BusinessActivityTimeline';
 import {
+  AdbnTechMirrorWorkspace,
+} from './AdbnTechMirrorWorkspace';
+import {
   BusinessReportsWorkspace,
 } from './BusinessReportsWorkspace';
 import { AccountsPage } from '../accounts/AccountsPage';
@@ -124,6 +127,8 @@ type BusinessWorkspaceView =
   | 'finance'
   | 'sellers'
   | 'reports'
+  | 'adbn_customers'
+  | 'adbn_invoices'
   | 'setup';
 
 function workspaceViewFromSearch(
@@ -135,6 +140,8 @@ function workspaceViewFromSearch(
     || value === 'finance'
     || value === 'sellers'
     || value === 'reports'
+    || value === 'adbn_customers'
+    || value === 'adbn_invoices'
     || value === 'setup'
   ) {
     return value;
@@ -421,18 +428,19 @@ export function BusinessHomePage() {
   const isOwner =
     space.ownerId === user?.uid;
 
+  const isAdbnTechSpace =
+    space.externalIntegrationProvider
+        === 'adbn_tech'
+    || space.name
+      .trim()
+      .toLowerCase()
+      === 'adbn tech';
+
   const canManageAdbnTechConnection =
     isOwner
     && user?.email?.trim().toLowerCase()
       === 'zardeerwandy@gmail.com'
-    && (
-      space.externalIntegrationProvider
-        === 'adbn_tech'
-      || space.name
-        .trim()
-        .toLowerCase()
-        === 'adbn tech'
-    );
+    && isAdbnTechSpace;
 
   const adbnTechPrepared =
     space.externalIntegrationProvider
@@ -843,6 +851,38 @@ export function BusinessHomePage() {
           Home
         </button>
 
+        {canManageAdbnTechConnection && (
+          <>
+            <button
+              type="button"
+              className={
+                workspaceView === 'adbn_customers'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setWorkspaceView('adbn_customers')
+              }
+            >
+              Customers
+            </button>
+
+            <button
+              type="button"
+              className={
+                workspaceView === 'adbn_invoices'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setWorkspaceView('adbn_invoices')
+              }
+            >
+              Invoices
+            </button>
+          </>
+        )}
+
         {posSettings && (
           <Link
             to={
@@ -975,7 +1015,23 @@ export function BusinessHomePage() {
         )}
       </nav>
 
-      {workspaceView === 'reports'
+      {workspaceView === 'adbn_customers'
+        && canManageAdbnTechConnection
+        ? (
+          <AdbnTechMirrorWorkspace
+            spaceId={space.id}
+            view="customers"
+          />
+        )
+        : workspaceView === 'adbn_invoices'
+        && canManageAdbnTechConnection
+        ? (
+          <AdbnTechMirrorWorkspace
+            spaceId={space.id}
+            view="invoices"
+          />
+        )
+        : workspaceView === 'reports'
         && canViewFinancials
         ? (
           <BusinessReportsWorkspace
@@ -1104,7 +1160,7 @@ export function BusinessHomePage() {
                 </h3>
 
                 <p className="muted">
-                  Use this Business Space as the BajetBN home for ADBN TECH. Customers, invoices, payments, purchases, expenses, refunds and inventory will be connected in later integration slices.
+                  Use this Business Space as the BajetBN home for ADBN TECH. Customers and invoices can now be viewed through a separate read-only ADBN TECH sign-in. Payments, purchases, expenses, refunds and inventory remain for later integration slices.
                 </p>
 
                 {adbnTechPrepared && (
@@ -1140,7 +1196,7 @@ export function BusinessHomePage() {
               </div>
 
                 <small className="muted">
-                  Preparing this Space does not sync or change any ADBN TECH customer, invoice, payment, purchase, expense, refund or inventory record yet.
+                  Slice 22 reads ADBN TECH customers and invoices only. It does not create, update or delete ADBN TECH records.
                 </small>
               </section>
             )}
