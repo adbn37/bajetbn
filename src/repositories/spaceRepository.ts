@@ -95,6 +95,30 @@ export async function updateSpace(spaceId: string, updates: { name: string; desc
   });
 }
 
+export async function prepareAdbnTechIntegration(
+  spaceId: string,
+): Promise<void> {
+  const { db } = requireFirebase();
+
+  await updateDoc(
+    doc(
+      db,
+      'spaces',
+      spaceId,
+    ),
+    {
+      externalIntegrationProvider:
+        'adbn_tech',
+      externalIntegrationStatus:
+        'prepared',
+      externalIntegrationKey:
+        'adbntech',
+      updatedAt:
+        serverTimestamp(),
+    },
+  );
+}
+
 export async function archiveSpace(spaceId: string) {
   const { db } = requireFirebase();
   await updateDoc(doc(db, 'spaces', spaceId), {

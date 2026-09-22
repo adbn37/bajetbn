@@ -27,11 +27,41 @@ const css =
 const checks = [
   [app, 'business/:spaceId', 'dedicated Business Home route'],
   [page, 'data-business-home-v115', 'Business Home page marker'],
-  [page, 'listAccountsForSpace', 'Business accounts only'],
-  [page, 'listBusinessTransactionsForSpace', 'Business transaction scope'],
-  [page, 'Business funds', 'Business funds hero'],
-  [page, '<AccountAvatar', 'shared Business account icons'],
-  [page, '<SpaceAvatar', 'Business Space avatar'],
+  [
+    page,
+    'listBusinessTransactionsForSpace',
+    'Business transaction scope',
+  ],
+  [
+    page,
+    "if (!canReadFinancials)",
+    'restricted roles skip financial loading',
+  ],
+  [
+    page,
+    'All-time Business total',
+    'current Business financial hero',
+  ],
+  [
+    page,
+    '<AccountsPage',
+    'embedded Business Accounts workspace',
+  ],
+  [
+    page,
+    'spaceIdOverride={space.id}',
+    'embedded Business finance stays scoped to this Space',
+  ],
+  [
+    page,
+    '<SpaceAvatar',
+    'Business Space avatar',
+  ],
+  [
+    page,
+    'Business money',
+    'current Finance workspace marker',
+  ],
   [
     shell,
     'smeSpaces[0].id',
@@ -47,19 +77,42 @@ const checks = [
     'space.id',
     'Business picker uses selected Business ID',
   ],
-  [shell, "location.pathname.startsWith('/business/')", 'Business nav active state'],
-  [shell, '<SpaceAvatar', 'picker uses Business Space avatar'],
-  [css, 'BAJETBN V115 DEDICATED BUSINESS HOME', 'Business Home CSS'],
+  [
+    shell,
+    "location.pathname.startsWith('/business/')",
+    'Business nav active state',
+  ],
+  [
+    shell,
+    '<SpaceAvatar',
+    'picker uses Business Space avatar',
+  ],
+  [
+    css,
+    'BAJETBN V115 DEDICATED BUSINESS HOME',
+    'Business Home CSS',
+  ],
 ];
 
 let failed = 0;
 
 for (const [text, marker, label] of checks) {
   const ok = text.includes(marker);
-  console.log((ok ? 'PASS ' : 'FAIL ') + label);
-  if (!ok) failed += 1;
+
+  console.log(
+    (ok ? 'PASS ' : 'FAIL ')
+    + label,
+  );
+
+  if (!ok) {
+    failed += 1;
+  }
 }
 
-if (failed) process.exit(1);
+if (failed) {
+  process.exit(1);
+}
 
-console.log('Dedicated Business Home verifier: PASS');
+console.log(
+  'Dedicated Business Home verifier: PASS',
+);

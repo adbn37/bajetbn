@@ -41,6 +41,15 @@ export type CustomSpaceModule =
 export type SpaceRole = 'owner' | 'admin' | 'contributor' | 'payer' | 'viewer' | 'member';
 export type SpaceMemberStatus = 'active' | 'suspended' | 'removed';
 export type SpaceApprovalMode = 'none' | 'owner_approval';
+
+export type SpaceExternalIntegrationProvider =
+  | 'adbn_tech';
+
+export type SpaceExternalIntegrationStatus =
+  | 'prepared'
+  | 'connected'
+  | 'error';
+
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
 export type SharedBillStatus = 'unpaid' | 'submitted' | 'partially_paid' | 'paid' | 'rejected' | 'confirmed';
 export type SharedBillSettlementMode = 'account' | 'external';
@@ -1302,6 +1311,9 @@ export interface Space {
   customModules?: CustomSpaceModule[];
   approvalMode?: SpaceApprovalMode;
   headWhatsapp?: string;
+  externalIntegrationProvider?: SpaceExternalIntegrationProvider | null;
+  externalIntegrationStatus?: SpaceExternalIntegrationStatus | null;
+  externalIntegrationKey?: string | null;
   archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

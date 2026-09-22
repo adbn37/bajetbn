@@ -60,8 +60,28 @@ const checks = [
   ],
   [
     page,
-    'Business funds',
+    'All-time Business total',
     'Owner / Manager financial hero preserved',
+  ],
+  [
+    page,
+    'businessTransactionTotal',
+    'Owner / Manager all-time total calculation remains',
+  ],
+  [
+    page,
+    'moneyIn',
+    'Owner / Manager monthly money-in calculation remains',
+  ],
+  [
+    page,
+    'moneyOut',
+    'Owner / Manager monthly money-out calculation remains',
+  ],
+  [
+    page,
+    'monthNet',
+    'Owner / Manager monthly net calculation remains',
   ],
   [
     css,
@@ -74,11 +94,15 @@ let failed = 0;
 
 for (const [text, marker, label] of checks) {
   const ok = text.includes(marker);
+
   console.log(
     (ok ? 'PASS ' : 'FAIL ')
     + label,
   );
-  if (!ok) failed += 1;
+
+  if (!ok) {
+    failed += 1;
+  }
 }
 
 if (failed) {

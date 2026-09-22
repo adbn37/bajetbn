@@ -19,6 +19,7 @@ import {
 } from '../../repositories/smePosRepository';
 import {
   getSpace,
+  prepareAdbnTechIntegration,
 } from '../../repositories/spaceRepository';
 import {
   listBusinessTransactionsForSpace,
@@ -188,6 +189,11 @@ export function BusinessHomePage() {
 
   const [error, setError] =
     useState('');
+
+  const [
+    integrationBusy,
+    setIntegrationBusy,
+  ] = useState(false);
 
   const load = useCallback(async () => {
     if (!user || !spaceId) {
@@ -415,6 +421,22 @@ export function BusinessHomePage() {
   const isOwner =
     space.ownerId === user?.uid;
 
+  const adbnTechPrepared =
+    space.externalIntegrationProvider
+      === 'adbn_tech'
+    && (
+      space.externalIntegrationStatus
+        === 'prepared'
+      || space.externalIntegrationStatus
+        === 'connected'
+    );
+
+  const adbnTechConnected =
+    space.externalIntegrationProvider
+      === 'adbn_tech'
+    && space.externalIntegrationStatus
+      === 'connected';
+
   const currentRole =
     isOwner
       ? 'Owner'
@@ -532,6 +554,46 @@ export function BusinessHomePage() {
 
     setSearchParams(next);
   };
+
+  const prepareAdbnTechConnection =
+    async () => {
+      if (
+        !isOwner
+        || integrationBusy
+      ) {
+        return;
+      }
+
+      setIntegrationBusy(true);
+      setError('');
+
+      try {
+        await prepareAdbnTechIntegration(
+          space.id,
+        );
+
+        setSpace(
+          (current) =>
+            current
+              ? {
+                  ...current,
+                  externalIntegrationProvider:
+                    'adbn_tech',
+                  externalIntegrationStatus:
+                    'prepared',
+                  externalIntegrationKey:
+                    'adbntech',
+                }
+              : current,
+        );
+      } catch {
+        setError(
+          'The ADBN TECH connection could not be prepared. Check your connection and try again.',
+        );
+      } finally {
+        setIntegrationBusy(false);
+      }
+    };
 
   const businessActions: Array<{
     label: string;
@@ -1013,6 +1075,60 @@ export function BusinessHomePage() {
                 </div>
               </Link>
             </div>
+
+            <section
+              className="panel adbn-tech-connection-v115"
+              data-adbn-tech-connection
+            >
+              <div>
+                <span className="eyebrow">
+                  External business connection
+                </span>
+
+                <h3>
+                  ADBN TECH
+                </h3>
+
+                <p className="muted">
+                  Use this Business Space as the BajetBN home for ADBN TECH. Customers, invoices, payments, purchases, expenses, refunds and inventory will be connected in later integration slices.
+                </p>
+
+                {adbnTechPrepared && (
+                  <small>
+                    Connection Space ID: {space.id}
+                  </small>
+                )}
+              </div>
+
+              <div className="adbn-tech-connection-actions-v115">
+                <span className="status-pill">
+                  {adbnTechConnected
+                    ? 'Connected'
+                    : adbnTechPrepared
+                      ? 'BajetBN side ready'
+                      : 'Not prepared'}
+                </span>
+
+                {!adbnTechPrepared && (
+                  <button
+                    type="button"
+                    className="button primary"
+                    disabled={integrationBusy}
+                    onClick={() =>
+                      void prepareAdbnTechConnection()
+                    }
+                  >
+                    {integrationBusy
+                      ? 'Preparing…'
+                      : 'Prepare ADBN TECH connection'}
+                  </button>
+                )}
+              </div>
+
+              <small className="muted">
+                Preparing this Space does not sync or change any ADBN TECH customer, invoice, payment, purchase, expense, refund or inventory record yet.
+              </small>
+            </section>
 
             <div className="notice">
               Custom role names still use the existing secure access templates. Granular combined permissions remain a separate future security redesign.

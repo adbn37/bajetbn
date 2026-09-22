@@ -21280,3 +21280,34 @@ select.trip-sheet-cell-input {
     min-height: 44px;
   }
 }
+
+
+/* BAJETBN V115 ADBN TECH CONNECTION FOUNDATION */
+.adbn-tech-connection-v115 {
+  margin-top: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.adbn-tech-connection-v115 h3,
+.adbn-tech-connection-v115 p {
+  margin-top: 0.35rem;
+}
+
+.adbn-tech-connection-actions-v115 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+@media (min-width: 760px) {
+  .adbn-tech-connection-v115 {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .adbn-tech-connection-v115 > small {
+    grid-column: 1 / -1;
+  }
+}
