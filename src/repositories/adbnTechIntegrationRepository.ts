@@ -62,6 +62,47 @@ export interface AdbnTechReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechBankAccountMirror {
+  id: string;
+  accountName: string;
+  bankName: string;
+  accountType: string;
+  accountNumber: string;
+  currency: string;
+  status: string;
+  isActive: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AdbnTechPaymentMirror {
+  id: string;
+  paymentNo: string;
+  invoiceId: string;
+  invoiceNo: string;
+  customerId: string;
+  customerNo: string;
+  customerName: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  reference: string;
+  status: string;
+  note: string;
+  bankAccountId: string;
+  bankAccountName: string;
+  bankAccountType: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AdbnTechPaymentsReadOnlySnapshot {
+  bankAccounts: AdbnTechBankAccountMirror[];
+  payments: AdbnTechPaymentMirror[];
+  connectedEmail: string;
+  loadedAt: string;
+}
+
 function text(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
@@ -207,6 +248,194 @@ export async function loadAdbnTechReadOnlySnapshot(): Promise<
   return {
     customers,
     invoices,
+    connectedEmail,
+    loadedAt: new Date().toISOString(),
+  };
+}
+
+
+export async function loadAdbnTechPaymentsReadOnly(): Promise<
+  AdbnTechPaymentsReadOnlySnapshot
+> {
+  const { auth, db } = requireAdbnTechFirebase();
+  const connectedEmail = normalizeEmail(auth.currentUser?.email);
+
+  if (connectedEmail !== ADBN_TECH_ADMIN_EMAIL) {
+    throw new Error(
+      'Connect ADBN TECH with ' + ADBN_TECH_ADMIN_EMAIL + ' first.',
+    );
+  }
+
+  /*
+   * Slice 23A is read-only against ADBN TECH.
+   * Accounts, payments and invoice labels are fetched only with getDocs.
+   */
+  const [
+    bankAccountSnapshot,
+    paymentSnapshot,
+    invoiceSnapshot,
+  ] = await Promise.all([
+    getDocs(collection(db, 'bankAccounts')),
+    getDocs(collection(db, 'payments')),
+    getDocs(collection(db, 'invoices')),
+  ]);
+
+  const bankAccounts = bankAccountSnapshot.docs
+    .map((record) => {
+      const data = record.data();
+      const status = text(data.status);
+      const normalizedStatus = status.trim().toLowerCase();
+
+      return {
+        id: record.id,
+        accountName: text(data.accountName),
+        bankName: text(data.bankName),
+        accountType: text(data.accountType),
+        accountNumber: text(data.accountNumber),
+        currency: text(data.currency) || 'BND',
+        status,
+        isActive:
+          data.active !== false
+          && !data.archivedAt
+          && normalizedStatus !== 'archived'
+          && normalizedStatus !== 'closed'
+          && normalizedStatus !== 'inactive',
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      } satisfies AdbnTechBankAccountMirror;
+    })
+    .sort((a, b) => {
+      if (a.isActive !== b.isActive) {
+        return a.isActive ? -1 : 1;
+      }
+
+      return (
+        a.accountName
+        || a.bankName
+        || a.id
+      ).localeCompare(
+        b.accountName
+        || b.bankName
+        || b.id,
+      );
+    });
+
+  const bankAccountById = new Map(
+    bankAccounts.map((account) => [
+      account.id,
+      account,
+    ]),
+  );
+
+  const invoiceById = new Map(
+    invoiceSnapshot.docs.map((record) => {
+      const data = record.data();
+
+      return [
+        record.id,
+        {
+          invoiceNo: text(data.invoiceNo),
+          customerId: text(data.customerId),
+          customerNo: text(data.customerNo),
+          customerName: text(data.customerName),
+        },
+      ] as const;
+    }),
+  );
+
+  const payments = paymentSnapshot.docs
+    .map((record) => {
+      const data = record.data();
+
+      const invoiceId = text(
+        data.invoiceId
+        ?? data.linkedInvoiceId
+        ?? data.invoiceID,
+      );
+
+      const invoice = invoiceById.get(invoiceId);
+
+      const bankAccountId = text(data.bankAccountId);
+      const bankAccount =
+        bankAccountById.get(bankAccountId);
+
+      return {
+        id: record.id,
+        paymentNo: text(
+          data.paymentNo
+          ?? data.receiptNo
+          ?? data.referenceNo,
+        ),
+        invoiceId,
+        invoiceNo:
+          text(data.invoiceNo)
+          || invoice?.invoiceNo
+          || '',
+        customerId:
+          text(data.customerId)
+          || invoice?.customerId
+          || '',
+        customerNo:
+          text(data.customerNo)
+          || invoice?.customerNo
+          || '',
+        customerName:
+          text(data.customerName)
+          || invoice?.customerName
+          || '',
+        amount: money(
+          data.amount
+          ?? data.paymentAmount
+          ?? data.amountPaid,
+        ),
+        paymentDate: text(
+          data.paymentDate
+          ?? data.date
+          ?? data.paidDate,
+        ),
+        paymentMethod: text(
+          data.method
+          ?? data.paymentMethod
+          ?? data.paymentType,
+        ),
+        reference: text(
+          data.customerBankReference
+          ?? data.reference
+          ?? data.transactionReference
+          ?? data.bankReference,
+        ),
+        status: text(
+          data.status
+          ?? data.paymentStatus,
+        ),
+        note: text(
+          data.note
+          ?? data.notes
+          ?? data.remarks,
+        ),
+        bankAccountId,
+        bankAccountName:
+          text(data.bankAccountName)
+          || bankAccount?.accountName
+          || bankAccount?.bankName
+          || '',
+        bankAccountType:
+          text(data.bankAccountType)
+          || bankAccount?.accountType
+          || '',
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      } satisfies AdbnTechPaymentMirror;
+    })
+    .sort(
+      (a, b) =>
+        timestampMillis(b.createdAt)
+        - timestampMillis(a.createdAt),
+    );
+
+  return {
+    bankAccounts,
+    payments,
     connectedEmail,
     loadedAt: new Date().toISOString(),
   };

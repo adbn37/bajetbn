@@ -1314,6 +1314,7 @@ export interface Space {
   externalIntegrationProvider?: SpaceExternalIntegrationProvider | null;
   externalIntegrationStatus?: SpaceExternalIntegrationStatus | null;
   externalIntegrationKey?: string | null;
+  externalIntegrationAccountMappings?: Record<string, string>;
   archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

@@ -142,3 +142,33 @@ export async function archiveSpace(spaceId: string) {
     updatedAt: serverTimestamp(),
   });
 }
+
+
+export async function setAdbnTechAccountMappings(
+  spaceId: string,
+  mappings: Record<string, string>,
+): Promise<void> {
+  const { db } = requireFirebase();
+
+  const cleanMappings = Object.fromEntries(
+    Object.entries(mappings)
+      .map(([sourceId, accountId]) => [
+        sourceId.trim(),
+        accountId.trim(),
+      ])
+      .filter(
+        ([sourceId, accountId]) =>
+          Boolean(sourceId)
+          && Boolean(accountId),
+      ),
+  );
+
+  await updateDoc(
+    doc(db, 'spaces', spaceId),
+    {
+      externalIntegrationAccountMappings:
+        cleanMappings,
+      updatedAt: serverTimestamp(),
+    },
+  );
+}

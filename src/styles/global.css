@@ -21482,3 +21482,98 @@ select.trip-sheet-cell-input {
     flex-direction: column;
   }
 }
+
+
+/* BAJETBN V115 ADBN TECH ACCOUNT-AWARE PAYMENTS SLICE 23A */
+.adbn-tech-account-mapping-v115 {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.adbn-tech-account-mapping-v115 h3 {
+  margin: 0;
+}
+
+.adbn-tech-account-mapping-v115 p {
+  margin: 0.35rem 0 0;
+}
+
+.adbn-tech-account-mapping-list-v115 {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.adbn-tech-account-mapping-row-v115 {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 0.8fr)
+    auto
+    minmax(220px, 1fr);
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #07111f;
+}
+
+.adbn-tech-account-mapping-row-v115 strong,
+.adbn-tech-account-mapping-row-v115 small {
+  display: block;
+}
+
+.adbn-tech-account-mapping-row-v115 small {
+  margin-top: 0.2rem;
+  color: var(--muted);
+}
+
+.adbn-tech-account-mapping-arrow-v115 {
+  color: var(--accent);
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.adbn-tech-account-mapping-footer-v115 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.adbn-tech-account-mapping-footer-v115 span {
+  color: var(--muted);
+}
+
+.adbn-tech-mapping-required-v115 {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 999px;
+  color: #fde68a;
+  background: rgba(251, 191, 36, 0.08);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .adbn-tech-account-mapping-row-v115 {
+    grid-template-columns: 1fr;
+  }
+
+  .adbn-tech-account-mapping-arrow-v115 {
+    transform: rotate(90deg);
+    justify-self: start;
+  }
+
+  .adbn-tech-account-mapping-footer-v115 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .adbn-tech-account-mapping-footer-v115 .button {
+    width: 100%;
+  }
+}

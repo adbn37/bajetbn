@@ -39,6 +39,9 @@ import {
   AdbnTechMirrorWorkspace,
 } from './AdbnTechMirrorWorkspace';
 import {
+  AdbnTechPaymentsWorkspace,
+} from './AdbnTechPaymentsWorkspace';
+import {
   BusinessReportsWorkspace,
 } from './BusinessReportsWorkspace';
 import { AccountsPage } from '../accounts/AccountsPage';
@@ -129,6 +132,7 @@ type BusinessWorkspaceView =
   | 'reports'
   | 'adbn_customers'
   | 'adbn_invoices'
+  | 'adbn_payments'
   | 'setup';
 
 function workspaceViewFromSearch(
@@ -142,6 +146,7 @@ function workspaceViewFromSearch(
     || value === 'reports'
     || value === 'adbn_customers'
     || value === 'adbn_invoices'
+    || value === 'adbn_payments'
     || value === 'setup'
   ) {
     return value;
@@ -880,6 +885,20 @@ export function BusinessHomePage() {
             >
               Invoices
             </button>
+
+            <button
+              type="button"
+              className={
+                workspaceView === 'adbn_payments'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setWorkspaceView('adbn_payments')
+              }
+            >
+              Payments
+            </button>
           </>
         )}
 
@@ -1029,6 +1048,13 @@ export function BusinessHomePage() {
           <AdbnTechMirrorWorkspace
             spaceId={space.id}
             view="invoices"
+          />
+        )
+        : workspaceView === 'adbn_payments'
+        && canManageAdbnTechConnection
+        ? (
+          <AdbnTechPaymentsWorkspace
+            spaceId={space.id}
           />
         )
         : workspaceView === 'reports'
