@@ -73,7 +73,7 @@ check(
 
 check(
   details.includes(
-    "{space.type !== 'goal' && (\n      <SpaceActionHub"
+    "{space.type !== 'goal'\n      && space.type !== 'trip'\n      && (\n      <SpaceActionHub"
   ),
   'Plan bypasses the generic shared Space launcher.',
 );

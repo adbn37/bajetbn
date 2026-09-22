@@ -19533,18 +19533,6 @@ a.business-report-row-v115:focus-visible {
   gap: .75rem;
 }
 
-.plan-space-action-grid-v115 {
-  display: grid;
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
-  gap: .7rem;
-}
-
-.plan-space-action-grid-v115
-.space-quick-card {
-  min-height: 92px;
-}
-
 .plan-space-workspace-v115 {
   min-width: 0;
 }
@@ -19579,8 +19567,7 @@ a.business-report-row-v115:focus-visible {
 }
 
 @media (max-width: 680px) {
-  .plan-target-fields-v115,
-  .plan-space-action-grid-v115 {
+  .plan-target-fields-v115 {
     grid-template-columns: 1fr;
   }
 
@@ -21206,5 +21193,90 @@ select.trip-sheet-cell-input {
     data-household-inline-section='shopping'
   ] {
     margin-top: 0;
+  }
+}
+
+/* ==========================================================
+   BAJETBN V115 PLAN WORKSPACE NAVIGATION
+   One persistent navigation row for the focused Plan workflow.
+   ========================================================== */
+
+.plan-workspace-tabs-v115 {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 .8rem;
+  padding: .32rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 96%,
+      transparent
+    );
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.plan-workspace-tabs-v115 a {
+  flex: 0 0 auto;
+  min-width: 92px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem .72rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.plan-workspace-tabs-v115 a:hover {
+  color: var(--text);
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 7%,
+      var(--surface)
+    );
+}
+
+.plan-workspace-tabs-v115 a.active {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--accent) 34%,
+      var(--border)
+    );
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 12%,
+      var(--surface)
+    );
+  color: var(--text);
+}
+
+@media (max-width: 620px) {
+  .plan-workspace-tabs-v115 {
+    margin-inline: -.1rem;
+    width: calc(100% + .2rem);
+    padding: .28rem;
+  }
+
+  .plan-workspace-tabs-v115 a {
+    min-width: 88px;
+    min-height: 44px;
   }
 }

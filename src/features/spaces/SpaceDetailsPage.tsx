@@ -674,15 +674,6 @@ function PlanSpaceWorkspace({
             </p>
           </div>
 
-          <Link
-            className="button secondary compact"
-            to={
-              '/spaces/'
-              + space.id
-            }
-          >
-            Plan home
-          </Link>
         </div>
 
         {datedGoals.length > 0 ? (
@@ -910,130 +901,6 @@ function PlanSpaceWorkspace({
         )}
       </section>
 
-      <section
-        className="panel plan-space-actions-v115"
-        aria-label="Plan actions"
-      >
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">
-              Plan tools
-            </span>
-
-            <h2>Keep it focused</h2>
-          </div>
-        </div>
-
-        <div className="plan-space-action-grid-v115">
-          <Link
-            className="space-quick-card featured"
-            to={
-              '/spaces/'
-              + space.id
-              + '?section=goals'
-            }
-          >
-            <span className="space-quick-icon">
-              T
-            </span>
-
-            <div>
-              <strong>
-                Target & contributions
-              </strong>
-
-              <small>
-                Change the target or add saved progress.
-              </small>
-            </div>
-
-            <span aria-hidden="true">
-              {'>'}
-            </span>
-          </Link>
-
-          <Link
-            className="space-quick-card"
-            to={
-              '/spaces/'
-              + space.id
-              + '?section=calendar'
-            }
-          >
-            <span className="space-quick-icon">
-              D
-            </span>
-
-            <div>
-              <strong>
-                Target date
-              </strong>
-
-              <small>
-                Review the date for this Plan.
-              </small>
-            </div>
-
-            <span aria-hidden="true">
-              {'>'}
-            </span>
-          </Link>
-
-          <Link
-            className="space-quick-card"
-            to={
-              '/spaces/'
-              + space.id
-              + '?tab=activity'
-            }
-          >
-            <span className="space-quick-icon">
-              A
-            </span>
-
-            <div>
-              <strong>
-                Activity
-              </strong>
-
-              <small>
-                Review Plan history.
-              </small>
-            </div>
-
-            <span aria-hidden="true">
-              {'>'}
-            </span>
-          </Link>
-
-          <Link
-            className="space-quick-card"
-            to={
-              '/spaces/'
-              + space.id
-              + '?tab=settings'
-            }
-          >
-            <span className="space-quick-icon">
-              S
-            </span>
-
-            <div>
-              <strong>
-                Settings
-              </strong>
-
-              <small>
-                Edit the Plan appearance or archive it.
-              </small>
-            </div>
-
-            <span aria-hidden="true">
-              {'>'}
-            </span>
-          </Link>
-        </div>
-      </section>
     </div>
   );
 }
@@ -1946,6 +1813,102 @@ export function SpaceDetailsPage() {
       />
     )}
 
+    {space.type === 'goal' && (
+      <nav
+        className="plan-workspace-tabs-v115"
+        aria-label="Plan workspace sections"
+        data-plan-workspace-navigation
+      >
+        <Link
+          className={
+            activeTab === 'overview'
+            && !requestedSection
+              ? 'active'
+              : ''
+          }
+          aria-current={
+            activeTab === 'overview'
+            && !requestedSection
+              ? 'page'
+              : undefined
+          }
+          to={`/spaces/${space.id}`}
+        >
+          Overview
+        </Link>
+
+        <Link
+          className={
+            activeTab === 'overview'
+            && requestedSection === 'goals'
+              ? 'active'
+              : ''
+          }
+          aria-current={
+            activeTab === 'overview'
+            && requestedSection === 'goals'
+              ? 'page'
+              : undefined
+          }
+          to={`/spaces/${space.id}?section=goals`}
+        >
+          Target
+        </Link>
+
+        <Link
+          className={
+            activeTab === 'overview'
+            && requestedSection === 'calendar'
+              ? 'active'
+              : ''
+          }
+          aria-current={
+            activeTab === 'overview'
+            && requestedSection === 'calendar'
+              ? 'page'
+              : undefined
+          }
+          to={`/spaces/${space.id}?section=calendar`}
+        >
+          Calendar
+        </Link>
+
+        <Link
+          className={
+            activeTab === 'activity'
+              ? 'active'
+              : ''
+          }
+          aria-current={
+            activeTab === 'activity'
+              ? 'page'
+              : undefined
+          }
+          to={`/spaces/${space.id}?tab=activity`}
+        >
+          Activity
+        </Link>
+
+        {space.ownerId === user?.uid && (
+          <Link
+            className={
+              activeTab === 'settings'
+                ? 'active'
+                : ''
+            }
+            aria-current={
+              activeTab === 'settings'
+                ? 'page'
+                : undefined
+            }
+            to={`/spaces/${space.id}?tab=settings`}
+          >
+            Settings
+          </Link>
+        )}
+      </nav>
+    )}
+
     {tripWorkbookActive
       && tripWorkbookSheet
       && (
@@ -2539,6 +2502,7 @@ export function SpaceDetailsPage() {
     )}
     {space.type !== 'sme'
       && space.type !== 'trip'
+      && space.type !== 'goal'
       && (!compactActionHome || activeTab !== 'overview') && (
       <nav className="space-details-tabs" aria-label="Space sections">
       {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => chooseTab(tab.id)}>{tab.label}</button>)}
