@@ -20490,3 +20490,269 @@ select.trip-sheet-cell-input {
     padding: .72rem;
   }
 }
+
+/* ==========================================================
+   BAJETBN V115 TRUE TRIP WORKBOOK
+   One persistent frame; only worksheet body changes in-place.
+   ========================================================== */
+
+.bajetbn-reference-space-trip
+.space-action-hub {
+  display: none;
+}
+
+.trip-workbook-shell-v115 {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.trip-workbook-toolbar-v115 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 54px;
+  padding: .65rem .85rem;
+  border-bottom: 1px solid var(--border);
+  background:
+    color-mix(
+      in srgb,
+      var(--surface-2) 64%,
+      var(--surface)
+    );
+}
+
+.trip-workbook-toolbar-v115 > div:first-child {
+  display: grid;
+  gap: .08rem;
+}
+
+.trip-workbook-toolbar-v115
+> div:first-child > strong {
+  font-size: .94rem;
+}
+
+.trip-workbook-toolbar-v115
+> div:first-child > small {
+  font-size: .68rem;
+}
+
+.trip-workbook-access-v115 {
+  display: flex;
+  align-items: baseline;
+  gap: .38rem;
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.trip-workbook-access-v115 strong {
+  color: var(--text);
+  font-size: .74rem;
+}
+
+.trip-workbook-tabs-v115,
+.trip-workbook-support-tabs-v115 {
+  display: flex;
+  gap: .12rem;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.trip-workbook-tabs-v115 {
+  align-items: flex-end;
+  min-height: 43px;
+  padding: .32rem .45rem 0;
+  border-bottom: 1px solid var(--border);
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 88%,
+      var(--background)
+    );
+}
+
+.trip-workbook-tabs-v115 button,
+.trip-workbook-support-tabs-v115 button {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 760;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.trip-workbook-tabs-v115 button {
+  min-height: 34px;
+  padding: .42rem .72rem;
+  border-radius: 8px 8px 0 0;
+  border-bottom: 0;
+}
+
+.trip-workbook-tabs-v115 button:hover,
+.trip-workbook-support-tabs-v115 button:hover {
+  color: var(--text);
+  background:
+    color-mix(
+      in srgb,
+      var(--surface-2) 78%,
+      transparent
+    );
+}
+
+.trip-workbook-tabs-v115 button.active {
+  position: relative;
+  z-index: 1;
+  margin-bottom: -1px;
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow:
+    inset 0 2px 0 var(--accent);
+}
+
+.trip-workbook-support-tabs-v115 {
+  align-items: center;
+  min-height: 38px;
+  padding: .28rem .48rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.trip-workbook-support-tabs-v115 button {
+  min-height: 28px;
+  padding: .3rem .58rem;
+  border-radius: 7px;
+}
+
+.trip-workbook-support-tabs-v115 button.active {
+  color: var(--text);
+  border-color:
+    color-mix(
+      in srgb,
+      var(--accent) 42%,
+      var(--border)
+    );
+  background:
+    color-mix(
+      in srgb,
+      var(--accent) 11%,
+      var(--surface)
+    );
+}
+
+.trip-workbook-sheet-body-v115 {
+  min-width: 0;
+  min-height: 460px;
+  background: var(--surface);
+}
+
+.trip-workbook-sheet-body-v115
+> .panel,
+.trip-workbook-sheet-body-v115
+> .trip-planning-panel {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.trip-workbook-sheet-body-v115
+> .panel {
+  padding: 1rem;
+}
+
+.trip-workbook-sheet-body-v115
+> .trip-planning-panel {
+  padding: 1rem;
+}
+
+.trip-workbook-sheet-body-v115
+.trip-planning-tabs {
+  display: none;
+}
+
+.trip-workbook-sheet-body-v115
+.trip-planning-grid {
+  grid-template-columns:
+    minmax(0, 1fr) !important;
+}
+
+.trip-workbook-sheet-body-v115
+.trip-sheet-section {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+.trip-workbook-status-v115 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-height: 32px;
+  padding: .35rem .7rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: .66rem;
+}
+
+.trip-workbook-status-v115 strong {
+  color: var(--text);
+  font-size: .68rem;
+}
+
+@media (min-width: 1240px) {
+  .space-details-page.bajetbn-reference-space-trip {
+    max-width: 1680px;
+  }
+
+  .trip-workbook-tabs-v115 {
+    position: sticky;
+    top: 0;
+    z-index: 14;
+  }
+}
+
+@media (max-width: 680px) {
+  .trip-workbook-toolbar-v115 {
+    align-items: flex-start;
+    padding: .58rem .65rem;
+  }
+
+  .trip-workbook-toolbar-v115
+  > div:first-child > small {
+    display: none;
+  }
+
+  .trip-workbook-tabs-v115 {
+    padding-inline: .3rem;
+  }
+
+  .trip-workbook-tabs-v115 button {
+    padding-inline: .62rem;
+  }
+
+  .trip-workbook-sheet-body-v115 {
+    min-height: 360px;
+  }
+
+  .trip-workbook-sheet-body-v115
+  > .panel,
+  .trip-workbook-sheet-body-v115
+  > .trip-planning-panel {
+    padding: .72rem;
+  }
+}

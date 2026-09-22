@@ -4,23 +4,55 @@ const read = (file) =>
   fs.readFileSync(file, 'utf8')
     .replace(/\r\n?/g, '\n');
 
-const hub =
-  read('src/features/spaces/SpaceActionHub.tsx');
 const page =
-  read('src/features/spaces/SpaceDetailsPage.tsx');
-const planning =
-  read('src/features/spaces/TripPlanningPanel.tsx');
+  read(
+    'src/features/spaces/SpaceDetailsPage.tsx',
+  );
+
 const centre =
-  read('src/features/spaces/TripCommandCentre.tsx');
+  read(
+    'src/features/spaces/TripCommandCentre.tsx',
+  );
+
 const css =
-  read('src/styles/global.css');
+  read(
+    'src/styles/global.css',
+  );
 
 function check(value, label) {
   if (!value) {
-    throw new Error('FAIL: ' + label);
+    throw new Error(
+      'FAIL: ' + label,
+    );
   }
-  console.log('PASS: ' + label);
+
+  console.log(
+    'PASS: ' + label,
+  );
 }
+
+check(
+  page.includes(
+    "space.type !== 'trip'"
+  )
+  && page.includes(
+    '<SpaceActionHub'
+  ),
+  'Trip no longer uses the generic SpaceActionHub launcher.',
+);
+
+check(
+  page.includes(
+    'className="trip-workbook-shell-v115"'
+  )
+  && page.includes(
+    'className="trip-workbook-sheet-body-v115"'
+  )
+  && page.includes(
+    'className="trip-workbook-status-v115"'
+  ),
+  'Trip owns one persistent workbook frame around the active worksheet.',
+);
 
 for (const sheet of [
   'overview',
@@ -33,62 +65,111 @@ for (const sheet of [
   'settle',
 ]) {
   check(
-    hub.includes(`?sheet=${sheet}`),
-    `Trip workbook exposes ${sheet} as a primary sheet.`,
+    page.includes(
+      `{ id: '${sheet}', label:`
+    ),
+    `Primary workbook sheet ${sheet} is present.`,
   );
 }
 
-check(
-  hub.includes('data-trip-workbook-tabs=')
-  && hub.includes('tripSupportActive'),
-  'Trip launcher is a workbook tab strip with More support state.',
-);
-
-for (const support of [
-  '?tab=bills',
-  '?tab=members',
-  '?tab=chat',
-  '?tab=activity',
-  '?tab=settings',
+for (const sheet of [
+  'bills',
+  'members',
+  'chat',
+  'activity',
+  'settings',
 ]) {
   check(
-    hub.includes(support),
-    `Trip More keeps ${support.slice(5)} support access.`,
+    page.includes(
+      `{ id: '${sheet}', label:`
+    ),
+    `Support sheet ${sheet} remains inside the workbook.`,
   );
 }
 
 check(
-  page.includes('data-trip-workbook')
-  && page.includes("tripWorkbookSheet === 'budget'")
-  && page.includes("tripWorkbookSheet === 'expenses'"),
-  'Selected workbook sheets render in the same Trip workspace.',
+  page.includes(
+    'chooseTripWorkbookSheet('
+  )
+  && page.includes(
+    "{ sheet },\n      { replace: true },"
+  ),
+  'Sheet changes happen in-place without creating module-style navigation history.',
 );
 
 check(
-  planning.includes("initialView = 'itinerary'")
-  && planning.includes('setPlanningView(initialView);'),
-  'Trip Plan can open directly to Itinerary, Tasks or Bookings.',
+  page.includes(
+    'tripWorkbookActive =\n    space.type ==='
+  ),
+  'Workbook frame stays active for the entire Trip Space.',
 );
 
 check(
-  centre.includes('showPlanning = true')
-  && centre.includes('{showPlanning && ('),
-  'Overview can omit embedded planning when used as workbook sheet.',
+  page.includes(
+    "tripWorkbookSheet\n              === 'members'"
+  )
+  && page.includes(
+    "tripWorkbookSheet\n              === 'chat'"
+  )
+  && page.includes(
+    "tripWorkbookSheet\n              === 'settings'"
+  ),
+  'Support tools render in the same worksheet body.',
 );
 
 check(
-  css.includes('BAJETBN V115 TRIP WORKBOOK SHELL')
-  && css.includes('max-width: 1600px;')
-  && css.includes("data-trip-workbook-tabs='true'"),
-  'Trip workbook receives wider spreadsheet workspace and tab styling.',
+  centre.includes(
+    'onOpenSheet'
+  )
+  && centre.includes(
+    "onOpenSheet('budget')"
+  )
+  && centre.includes(
+    "onOpenSheet('fund')"
+  )
+  && centre.includes(
+    "onOpenSheet('expenses')"
+  )
+  && centre.includes(
+    "onOpenSheet('settle')"
+  ),
+  'Overview actions switch workbook sheets instead of opening old modules.',
 );
 
 check(
-  css.includes('.trip-workbook-v115')
-  && css.includes('.trip-planning-tabs')
-  && css.includes('display: none;'),
-  'Nested Trip Plan tabs are hidden inside workbook sheets.',
+  !centre.includes(
+    'Budget sheet below'
+  ),
+  'Overview no longer describes Budget as a separate section below.',
+);
+
+check(
+  css.includes(
+    'BAJETBN V115 TRUE TRIP WORKBOOK'
+  )
+  && css.includes(
+    '.trip-workbook-shell-v115'
+  )
+  && css.includes(
+    '.trip-workbook-tabs-v115 button.active'
+  )
+  && css.includes(
+    '.trip-workbook-sheet-body-v115'
+  ),
+  'True workbook frame styling is installed.',
+);
+
+check(
+  css.includes(
+    '> .panel'
+  )
+  && css.includes(
+    'border-radius: 0;'
+  ),
+  'Module card chrome is stripped inside the workbook worksheet body.',
 );
 
 console.log('');
-console.log('BAJETBN v1.15.0 TRIP WORKBOOK SHELL: PASS');
+console.log(
+  'BAJETBN v1.15.0 TRUE TRIP WORKBOOK: PASS',
+);

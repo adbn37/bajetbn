@@ -11,7 +11,11 @@ import type {
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 
-type TripTab = 'trip_money' | 'expenses' | 'balances';
+type TripWorkbookTarget =
+  | 'fund'
+  | 'budget'
+  | 'expenses'
+  | 'settle';
 
 export function TripCommandCentre({
   space,
@@ -19,7 +23,7 @@ export function TripCommandCentre({
   members,
   sharedExpenses,
   currentMember,
-  onOpenTab,
+  onOpenSheet,
   showPlanning = true,
 }: {
   space: Space;
@@ -27,7 +31,9 @@ export function TripCommandCentre({
   members: SpaceMember[];
   sharedExpenses: SharedExpense[];
   currentMember?: SpaceMember | null;
-  onOpenTab: (tab: TripTab) => void;
+  onOpenSheet: (
+    sheet: TripWorkbookTarget,
+  ) => void;
   showPlanning?: boolean;
 }) {
   const [fund, setFund] = useState<SpaceFund | null>(null);
@@ -151,7 +157,7 @@ export function TripCommandCentre({
           type="button"
           className="button secondary"
           onClick={() =>
-            onOpenTab('trip_money')
+            onOpenSheet('fund')
           }
         >
           Open Trip Money
@@ -257,7 +263,7 @@ export function TripCommandCentre({
                   type="button"
                   className="button secondary compact"
                   onClick={() =>
-                    onOpenTab('trip_money')
+                    onOpenSheet('fund')
                   }
                 >
                   Open
@@ -309,10 +315,16 @@ export function TripCommandCentre({
                     : 'Money Activity only'}
               </td>
 
-              <td>
-                <span className="muted">
-                  Budget sheet below
-                </span>
+              <td className="trip-sheet-actions-cell">
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  onClick={() =>
+                    onOpenSheet('budget')
+                  }
+                >
+                  Open
+                </button>
               </td>
             </tr>
 
@@ -355,7 +367,7 @@ export function TripCommandCentre({
                   type="button"
                   className="button secondary compact"
                   onClick={() =>
-                    onOpenTab('expenses')
+                    onOpenSheet('expenses')
                   }
                 >
                   Open
@@ -415,7 +427,7 @@ export function TripCommandCentre({
                   type="button"
                   className="button secondary compact"
                   onClick={() =>
-                    onOpenTab('trip_money')
+                    onOpenSheet('fund')
                   }
                 >
                   Open
@@ -467,7 +479,7 @@ export function TripCommandCentre({
                   type="button"
                   className="button secondary compact"
                   onClick={() =>
-                    onOpenTab('balances')
+                    onOpenSheet('settle')
                   }
                 >
                   Open

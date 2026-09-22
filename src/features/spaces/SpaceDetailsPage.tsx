@@ -306,18 +306,45 @@ type TripWorkbookSheet =
   | 'budget'
   | 'expenses'
   | 'fund'
-  | 'settle';
+  | 'settle'
+  | 'bills'
+  | 'members'
+  | 'chat'
+  | 'activity'
+  | 'settings';
 
-const TRIP_WORKBOOK_SHEETS: TripWorkbookSheet[] = [
-  'overview',
-  'itinerary',
-  'tasks',
-  'bookings',
-  'budget',
-  'expenses',
-  'fund',
-  'settle',
+const TRIP_WORKBOOK_PRIMARY_SHEETS: Array<{
+  id: TripWorkbookSheet;
+  label: string;
+}> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'itinerary', label: 'Itinerary' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'bookings', label: 'Bookings' },
+  { id: 'budget', label: 'Budget' },
+  { id: 'expenses', label: 'Expenses' },
+  { id: 'fund', label: 'Fund' },
+  { id: 'settle', label: 'Settle' },
 ];
+
+const TRIP_WORKBOOK_SUPPORT_SHEETS: Array<{
+  id: TripWorkbookSheet;
+  label: string;
+}> = [
+  { id: 'bills', label: 'Bills' },
+  { id: 'members', label: 'Members' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'activity', label: 'Activity' },
+  { id: 'settings', label: 'Settings' },
+];
+
+const TRIP_WORKBOOK_SHEETS =
+  [
+    ...TRIP_WORKBOOK_PRIMARY_SHEETS,
+    ...TRIP_WORKBOOK_SUPPORT_SHEETS,
+  ].map(
+    (item) => item.id,
+  );
 
 function tripWorkbookSheetFromSearch(
   searchParams: URLSearchParams,
@@ -352,6 +379,24 @@ function tripWorkbookSheetFromSearch(
 
   if (searchParams.get('tab') === 'balances') {
     return 'settle';
+  }
+
+  const legacySupportTab =
+    searchParams.get('tab');
+
+  if (
+    legacySupportTab
+    && [
+      'bills',
+      'members',
+      'chat',
+      'activity',
+      'settings',
+    ].includes(
+      legacySupportTab,
+    )
+  ) {
+    return legacySupportTab as TripWorkbookSheet;
   }
 
   return 'overview';
@@ -1010,6 +1055,10 @@ export function SpaceDetailsPage() {
   const [smePosRole, setSmePosRole] = useState<SmePosRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [
+    tripWorkbookMoreOpen,
+    setTripWorkbookMoreOpen,
+  ] = useState(false);
 
   const shared = Boolean(space && space.type !== 'personal');
   const requestedTab = searchParams.get('tab');
@@ -1616,6 +1665,22 @@ export function SpaceDetailsPage() {
           ? 'Owner'
           : 'Member';
 
+  function chooseTripWorkbookSheet(
+    sheet: TripWorkbookSheet,
+  ) {
+    setTripWorkbookMoreOpen(
+      TRIP_WORKBOOK_SUPPORT_SHEETS.some(
+        (item) =>
+          item.id === sheet,
+      ),
+    );
+
+    setSearchParams(
+      { sheet },
+      { replace: true },
+    );
+  }
+
   function chooseTab(tab: SpaceDetailsTab) {
     if (space?.type === 'trip') {
       const tripSheet =
@@ -1627,12 +1692,22 @@ export function SpaceDetailsPage() {
               ? 'expenses'
               : tab === 'balances'
                 ? 'settle'
-                : null;
+                : tab === 'bills'
+                  ? 'bills'
+                  : tab === 'members'
+                    ? 'members'
+                    : tab === 'chat'
+                      ? 'chat'
+                      : tab === 'activity'
+                        ? 'activity'
+                        : tab === 'settings'
+                          ? 'settings'
+                          : null;
 
       if (tripSheet) {
-        setSearchParams({
-          sheet: tripSheet,
-        });
+        chooseTripWorkbookSheet(
+          tripSheet,
+        );
         return;
       }
     }
@@ -1662,12 +1737,16 @@ export function SpaceDetailsPage() {
       : null;
 
   const tripWorkbookActive =
-    space.type === 'trip'
-    && (
-      activeTab === 'overview'
-      || activeTab === 'trip_money'
-      || activeTab === 'expenses'
-      || activeTab === 'balances'
+    space.type === 'trip';
+
+  const tripWorkbookSupportSelected =
+    Boolean(
+      tripWorkbookSheet
+      && TRIP_WORKBOOK_SUPPORT_SHEETS.some(
+        (item) =>
+          item.id
+          === tripWorkbookSheet,
+      ),
     );
 
   /*
@@ -1852,7 +1931,9 @@ export function SpaceDetailsPage() {
       </section>
     )}
 
-    {space.type !== 'goal' && (
+    {space.type !== 'goal'
+      && space.type !== 'trip'
+      && (
       <SpaceActionHub
         space={space}
         members={members}
@@ -1868,82 +1949,360 @@ export function SpaceDetailsPage() {
     {tripWorkbookActive
       && tripWorkbookSheet
       && (
-        <div
-          className="trip-workbook-v115"
-          data-trip-workbook
-          data-trip-sheet={tripWorkbookSheet}
+        <section
+          className="trip-workbook-shell-v115"
+          data-trip-workbook-shell
+          data-trip-sheet={
+            tripWorkbookSheet
+          }
         >
-          {tripWorkbookSheet === 'overview' && (
-            <TripCommandCentre
-              space={space}
-              budgets={budgets}
-              members={members}
-              sharedExpenses={sharedExpenses}
-              currentMember={currentMember || null}
-              onOpenTab={chooseTab}
-              showPlanning={false}
-            />
-          )}
+          <header
+            className="trip-workbook-toolbar-v115"
+          >
+            <div>
+              <span className="eyebrow">
+                Trip workbook
+              </span>
 
-          {(
-            tripWorkbookSheet === 'itinerary'
-            || tripWorkbookSheet === 'tasks'
-            || tripWorkbookSheet === 'bookings'
-          ) && (
-            <section
-              className="panel trip-workbook-planning-sheet-v115"
-              data-trip-workbook-planning
+              <strong>
+                {space.name}
+              </strong>
+
+              <small className="muted">
+                Shared worksheet · changes stay inside this Trip
+              </small>
+            </div>
+
+            <div
+              className="trip-workbook-access-v115"
             >
+              <span>
+                Your access
+              </span>
+
+              <strong>
+                {currentMember?.role === 'owner'
+                  ? 'Owner'
+                  : currentMember?.role
+                    || 'Member'}
+              </strong>
+            </div>
+          </header>
+
+          <nav
+            className="trip-workbook-tabs-v115"
+            aria-label="Trip workbook sheets"
+          >
+            {TRIP_WORKBOOK_PRIMARY_SHEETS.map(
+              (item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={
+                    tripWorkbookSheet
+                      === item.id
+                      ? 'active'
+                      : ''
+                  }
+                  aria-current={
+                    tripWorkbookSheet
+                      === item.id
+                      ? 'page'
+                      : undefined
+                  }
+                  onClick={() =>
+                    chooseTripWorkbookSheet(
+                      item.id,
+                    )
+                  }
+                >
+                  {item.label}
+                </button>
+              ),
+            )}
+
+            <button
+              type="button"
+              className={
+                tripWorkbookMoreOpen
+                || tripWorkbookSupportSelected
+                  ? 'active'
+                  : ''
+              }
+              aria-expanded={
+                tripWorkbookMoreOpen
+                || tripWorkbookSupportSelected
+              }
+              onClick={() =>
+                setTripWorkbookMoreOpen(
+                  (current) =>
+                    !current,
+                )
+              }
+            >
+              More
+            </button>
+          </nav>
+
+          {(tripWorkbookMoreOpen
+              || tripWorkbookSupportSelected)
+            && (
+              <nav
+                className="trip-workbook-support-tabs-v115"
+                aria-label="Trip workbook support sheets"
+              >
+                {TRIP_WORKBOOK_SUPPORT_SHEETS
+                  .filter(
+                    (item) =>
+                      item.id
+                        !== 'settings'
+                      || currentMember?.role
+                        === 'owner',
+                  )
+                  .map(
+                    (item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={
+                          tripWorkbookSheet
+                            === item.id
+                            ? 'active'
+                            : ''
+                        }
+                        onClick={() =>
+                          chooseTripWorkbookSheet(
+                            item.id,
+                          )
+                        }
+                      >
+                        {item.label}
+                      </button>
+                    ),
+                  )}
+              </nav>
+            )}
+
+          <div
+            className="trip-workbook-sheet-body-v115"
+            data-trip-workbook
+          >
+            {tripWorkbookSheet
+              === 'overview'
+              && (
+                <TripCommandCentre
+                  space={space}
+                  budgets={budgets}
+                  members={members}
+                  sharedExpenses={
+                    sharedExpenses
+                  }
+                  currentMember={
+                    currentMember
+                    || null
+                  }
+                  onOpenSheet={
+                    chooseTripWorkbookSheet
+                  }
+                  showPlanning={false}
+                />
+              )}
+
+            {(
+              tripWorkbookSheet
+                === 'itinerary'
+              || tripWorkbookSheet
+                === 'tasks'
+              || tripWorkbookSheet
+                === 'bookings'
+            ) && (
               <TripPlanningPanel
                 space={space}
                 members={members}
-                currentMember={currentMember || null}
-                initialView={tripWorkbookSheet}
+                currentMember={
+                  currentMember
+                  || null
+                }
+                initialView={
+                  tripWorkbookSheet
+                }
               />
-            </section>
-          )}
+            )}
 
-          {tripWorkbookSheet === 'budget' && (
-            <TripBudgetSpreadsheet
-              space={space}
-              members={members}
-              currentMember={currentMember}
-            />
-          )}
+            {tripWorkbookSheet
+              === 'budget'
+              && (
+                <TripBudgetSpreadsheet
+                  space={space}
+                  members={members}
+                  currentMember={
+                    currentMember
+                  }
+                />
+              )}
 
-          {tripWorkbookSheet === 'expenses' && (
-            <TripExpensesSpreadsheet
-              space={space}
-              members={members}
-              currentMember={currentMember || null}
-            />
-          )}
+            {tripWorkbookSheet
+              === 'expenses'
+              && (
+                <TripExpensesSpreadsheet
+                  space={space}
+                  members={members}
+                  currentMember={
+                    currentMember
+                    || null
+                  }
+                />
+              )}
 
-          {tripWorkbookSheet === 'fund' && (
-            <SpaceFundPanel
-              space={space}
-              members={members}
-              currentMember={currentMember || null}
-              canManage={
-                currentMember?.role === 'owner'
-                || currentMember?.role === 'admin'
+            {tripWorkbookSheet
+              === 'fund'
+              && (
+                <SpaceFundPanel
+                  space={space}
+                  members={members}
+                  currentMember={
+                    currentMember
+                    || null
+                  }
+                  canManage={
+                    currentMember?.role
+                      === 'owner'
+                    || currentMember?.role
+                      === 'admin'
+                  }
+                />
+              )}
+
+            {tripWorkbookSheet
+              === 'settle'
+              && (
+                <SharedExpensesPanel
+                  space={space}
+                  members={members}
+                  currentMember={
+                    currentMember
+                    || null
+                  }
+                  canManage={
+                    currentMember?.role
+                      === 'owner'
+                    || currentMember?.role
+                      === 'admin'
+                  }
+                  view="balances"
+                />
+              )}
+
+            {tripWorkbookSheet
+              === 'bills'
+              && (
+                <CollaborationPage
+                  embedded
+                  spaceIdOverride={
+                    space.id
+                  }
+                  activeTab="bills"
+                  onSpaceUpdated={load}
+                />
+              )}
+
+            {tripWorkbookSheet
+              === 'members'
+              && (
+                <CollaborationPage
+                  embedded
+                  spaceIdOverride={
+                    space.id
+                  }
+                  activeTab="members"
+                  onSpaceUpdated={load}
+                />
+              )}
+
+            {tripWorkbookSheet
+              === 'chat'
+              && (
+                <SpaceChatPanel
+                  space={space}
+                  members={members}
+                  currentMember={
+                    currentMember
+                    || null
+                  }
+                />
+              )}
+
+            {tripWorkbookSheet
+              === 'activity'
+              && (
+                <CollaborationPage
+                  embedded
+                  spaceIdOverride={
+                    space.id
+                  }
+                  activeTab="activity"
+                  onSpaceUpdated={load}
+                />
+              )}
+
+            {tripWorkbookSheet
+              === 'settings'
+              && currentMember?.role
+                === 'owner'
+              && (
+                <>
+                  <CollaborationPage
+                    embedded
+                    spaceIdOverride={
+                      space.id
+                    }
+                    activeTab="settings"
+                    onSpaceUpdated={load}
+                  />
+
+                  <SpaceReminderAutomationPanel
+                    space={space}
+                    currentMember={
+                      currentMember
+                    }
+                  />
+
+                  <SpaceAvatarSettings
+                    space={space}
+                    onSaved={load}
+                  />
+
+                  <SpaceLifecyclePanel
+                    space={space}
+                    onFinished={() =>
+                      navigate('/spaces')
+                    }
+                  />
+                </>
+              )}
+          </div>
+
+          <footer
+            className="trip-workbook-status-v115"
+          >
+            <strong>
+              {
+                [
+                  ...TRIP_WORKBOOK_PRIMARY_SHEETS,
+                  ...TRIP_WORKBOOK_SUPPORT_SHEETS,
+                ].find(
+                  (item) =>
+                    item.id
+                    === tripWorkbookSheet,
+                )?.label
               }
-            />
-          )}
+            </strong>
 
-          {tripWorkbookSheet === 'settle' && (
-            <SharedExpensesPanel
-              space={space}
-              members={members}
-              currentMember={currentMember || null}
-              canManage={
-                currentMember?.role === 'owner'
-                || currentMember?.role === 'admin'
-              }
-              view="balances"
-            />
-          )}
-        </div>
+            <span>
+              {space.currency} · Shared Trip workbook
+            </span>
+          </footer>
+        </section>
       )}
 
     {activeTab === 'overview'

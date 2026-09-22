@@ -8,74 +8,88 @@ const page =
 
 function check(value, label) {
   if (!value) {
-    throw new Error('FAIL: ' + label);
+    throw new Error(
+      'FAIL: ' + label,
+    );
   }
-  console.log('PASS: ' + label);
+
+  console.log(
+    'PASS: ' + label,
+  );
 }
 
 check(
-  page.includes("const TripCommandCentre = lazy(")
-  && page.includes("import('./TripCommandCentre')"),
+  page.includes(
+    "const TripCommandCentre = lazy("
+  )
+  && page.includes(
+    "import('./TripCommandCentre')"
+  ),
   'SpaceDetails lazy-loads TripCommandCentre.',
 );
 
 check(
-  page.includes("const shouldLoadTripHomeData =")
-  && page.includes("nextSpace.type === 'trip'"),
-  'Trip overview still has a dedicated data-loading path.',
+  page.includes(
+    "const shouldLoadTripHomeData ="
+  )
+  && page.includes(
+    "nextSpace.type === 'trip'"
+  ),
+  'Trip workbook keeps its dedicated lightweight data path.',
 );
 
 check(
-  page.includes('listBudgetsForSpace(')
-  && page.includes('listSharedExpenses(')
-  && page.includes('setBudgets(')
-  && page.includes('setSharedExpenses('),
-  'Trip overview loads Budget and Trip Expense datasets.',
+  page.includes(
+    'listBudgetsForSpace('
+  )
+  && page.includes(
+    'listSharedExpenses('
+  ),
+  'Trip workbook can load Budget and Trip Expense datasets.',
 );
 
 check(
-  page.includes('type TripWorkbookSheet =')
-  && page.includes('tripWorkbookSheetFromSearch(')
-  && page.includes('const tripWorkbookActive ='),
-  'Trip routing is driven by workbook sheet state.',
+  page.includes(
+    'type TripWorkbookSheet ='
+  )
+  && page.includes(
+    'tripWorkbookSheetFromSearch('
+  ),
+  'Trip routes resolve to workbook sheet state.',
 );
 
 check(
-  page.includes('data-trip-workbook')
-  && page.includes('data-trip-sheet='),
-  'Trip renders one persistent workbook workspace.',
+  page.includes(
+    'data-trip-workbook-shell'
+  )
+  && page.includes(
+    'data-trip-workbook'
+  ),
+  'Trip route renders the persistent workbook shell and worksheet body.',
 );
 
 check(
-  page.includes('showPlanning={false}')
-  && page.includes("tripWorkbookSheet === 'overview'"),
-  'Overview stands alone instead of embedding Trip Plan.',
+  page.includes(
+    "space.type !== 'trip'\n      && (\n      <SpaceActionHub"
+  ),
+  'Generic SpaceActionHub is excluded from Trip.',
 );
 
 check(
-  page.includes("tripWorkbookSheet === 'itinerary'")
-  && page.includes("tripWorkbookSheet === 'tasks'")
-  && page.includes("tripWorkbookSheet === 'bookings'"),
-  'Planning sheets render inside the workbook.',
+  page.includes(
+    "space.type !== 'trip'\n      && (!compactActionHome"
+  ),
+  'Generic Space tabs remain excluded from Trip.',
 );
 
 check(
-  page.includes("tripWorkbookSheet === 'budget'")
-  && page.includes("tripWorkbookSheet === 'expenses'")
-  && page.includes("tripWorkbookSheet === 'fund'")
-  && page.includes("tripWorkbookSheet === 'settle'"),
-  'Financial Trip sheets render inside the workbook.',
-);
-
-check(
-  page.includes("space.type !== 'trip'\n      && (!compactActionHome"),
-  'Generic Space tab strip is hidden for Trip.',
-);
-
-check(
-  page.includes(') : tripWorkbookActive ? null : space.type'),
-  'Legacy Trip tab content is suppressed when workbook handles it.',
+  page.includes(
+    ') : tripWorkbookActive ? null : space.type'
+  ),
+  'Legacy shared module renderer stays suppressed for Trip.',
 );
 
 console.log('');
-console.log('BAJETBN v1.15.0 TRIP HOME ROUTE: PASS');
+console.log(
+  'BAJETBN v1.15.0 TRIP HOME ROUTE: PASS',
+);

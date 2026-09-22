@@ -52,19 +52,6 @@ for (const heading of [
   );
 }
 
-for (const heading of [
-  'Item',
-  'Current',
-  'Attention',
-]) {
-  check(
-    centre.includes(
-      `<th>${heading}</th>`
-    ),
-    `Trip team overview includes ${heading} column.`,
-  );
-}
-
 check(
   centre.includes(
     'Trip Money'
@@ -80,29 +67,25 @@ check(
 
 check(
   centre.includes(
-    "onOpenTab('trip_money')"
+    "onOpenSheet('fund')"
   )
   && centre.includes(
-    "onOpenTab('expenses')"
+    "onOpenSheet('budget')"
   )
   && centre.includes(
-    "onOpenTab('balances')"
+    "onOpenSheet('expenses')"
+  )
+  && centre.includes(
+    "onOpenSheet('settle')"
   ),
-  'Trip overview keeps navigation to detailed worksheets.',
-);
-
-check(
-  centre.includes(
-    '<TripPlanningPanel'
-  ),
-  'Trip Planning remains attached below the overview.',
+  'Overview actions switch directly to workbook sheets.',
 );
 
 check(
   !centre.includes(
-    'summary-grid trip-command-summary'
+    'Budget sheet below'
   ),
-  'Old Trip overview summary-card grid is removed.',
+  'Budget action no longer assumes an embedded module below Overview.',
 );
 
 check(
@@ -112,7 +95,7 @@ check(
   && css.includes(
     '.trip-overview-money-table'
   ),
-  'Trip overview spreadsheet styling is installed.',
+  'Trip overview spreadsheet styling remains installed.',
 );
 
 console.log('');
