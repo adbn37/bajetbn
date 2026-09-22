@@ -41,10 +41,10 @@ check(
 
 check(
   panel.includes('Edit the Trip like a spreadsheet.')
-  && panel.includes('placeholder="Add a stopâ€¦"')
-  && panel.includes('placeholder="Add a taskâ€¦"')
-  && panel.includes('placeholder="Add bookingâ€¦"'),
-  'Spreadsheet rows support direct inline entry.',
+  && panel.includes('placeholder="Add a stop…"')
+  && panel.includes('placeholder="Add a task…"')
+  && panel.includes('placeholder="Add booking…"'),
+  'Spreadsheet rows support direct inline entry with correct UTF-8 placeholders.',
 );
 
 check(
@@ -79,6 +79,11 @@ check(
 check(
   !panel.includes('className="trip-planning-card"'),
   'Trip Plan no longer presents planning records as card stacks.',
+);
+
+check(
+  !panel.includes('â€¦'),
+  'Trip Plan contains no corrupted ellipsis text.',
 );
 
 console.log('');

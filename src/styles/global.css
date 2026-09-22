@@ -20756,3 +20756,197 @@ select.trip-sheet-cell-input {
     padding: .72rem;
   }
 }
+
+/* ==========================================================
+   BAJETBN V115 TRIP WORKBOOK VISUAL UNIFICATION
+   One flat worksheet surface across every Trip workbook sheet.
+   ========================================================== */
+
+.trip-workbook-shell-v115 {
+  background:
+    color-mix(
+      in srgb,
+      var(--bg) 94%,
+      var(--surface)
+    );
+}
+
+.trip-workbook-toolbar-v115 {
+  min-height: 38px;
+  padding: .4rem .68rem;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 78%,
+      var(--bg)
+    );
+}
+
+.trip-workbook-title-v115 {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  min-width: 0;
+}
+
+.trip-workbook-title-v115
+.eyebrow {
+  margin: 0;
+}
+
+.trip-workbook-title-v115
+.muted {
+  font-size: .66rem;
+}
+
+.trip-workbook-access-v115 {
+  font-size: .66rem;
+}
+
+.trip-workbook-access-v115 strong {
+  font-size: .68rem;
+}
+
+.trip-workbook-sheet-body-v115 {
+  min-height: 0;
+  background:
+    color-mix(
+      in srgb,
+      var(--bg) 96%,
+      var(--surface)
+    );
+}
+
+.trip-workbook-sheet-body-v115
+> .panel,
+.trip-workbook-sheet-body-v115
+> .trip-planning-panel,
+.trip-workbook-sheet-body-v115
+> .trip-overview-sheet-v115,
+.trip-workbook-sheet-body-v115
+> .trip-budget-sheet-v115,
+.trip-workbook-sheet-body-v115
+> .trip-expenses-sheet-v115,
+.trip-workbook-sheet-body-v115
+> .trip-fund-sheet-v115,
+.trip-workbook-sheet-body-v115
+> .trip-settle-sheet-v115 {
+  margin: 0 !important;
+  padding: .78rem .82rem .88rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.trip-workbook-sheet-body-v115
+.panel-heading {
+  margin-bottom: .65rem;
+}
+
+.trip-workbook-sheet-body-v115
+.panel-heading h2 {
+  margin: 0 0 .12rem;
+}
+
+.trip-workbook-sheet-body-v115
+.panel-heading p {
+  margin-bottom: 0;
+}
+
+.trip-workbook-sheet-body-v115
+.trip-sheet-section-heading {
+  margin: .72rem 0 .32rem;
+}
+
+.trip-workbook-sheet-body-v115
+.trip-sheet-scroll {
+  border-radius: 3px;
+  background: transparent;
+}
+
+.trip-workbook-sheet-body-v115
+.trip-sheet-table th,
+.trip-workbook-sheet-body-v115
+.trip-sheet-table td {
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 68%,
+      var(--bg)
+    );
+}
+
+.trip-workbook-sheet-body-v115
+.trip-sheet-table th {
+  background:
+    color-mix(
+      in srgb,
+      var(--surface-2) 78%,
+      var(--bg)
+    );
+}
+
+.trip-workbook-sheet-body-v115
+.info-banner,
+.trip-workbook-sheet-body-v115
+.notice {
+  border-radius: 5px;
+}
+
+.trip-workbook-sheet-body-v115
+.trip-sheet-summary span {
+  border-radius: 5px;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface-2) 82%,
+      var(--bg)
+    );
+}
+
+.trip-workbook-status-v115 {
+  min-height: 26px;
+  padding: .28rem .55rem;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface) 78%,
+      var(--bg)
+    );
+}
+
+@media (min-width: 901px) {
+  .trip-workbook-sheet-body-v115
+  > .panel,
+  .trip-workbook-sheet-body-v115
+  > .trip-planning-panel,
+  .trip-workbook-sheet-body-v115
+  > .trip-overview-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-budget-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-expenses-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-fund-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-settle-sheet-v115 {
+    padding: .72rem .8rem .82rem !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .trip-workbook-toolbar-v115 {
+    min-height: 36px;
+    padding: .36rem .52rem;
+  }
+
+  .trip-workbook-title-v115
+  .muted {
+    display: none;
+  }
+
+  .trip-workbook-sheet-body-v115 {
+    min-height: 0;
+  }
+}

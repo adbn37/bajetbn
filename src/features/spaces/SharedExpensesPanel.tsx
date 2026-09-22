@@ -518,7 +518,7 @@ export function SharedExpensesPanel({
                               </button>
                             ) : (
                               <span className="muted">
-                                â€”
+                                —
                               </span>
                             )}
                           </td>
@@ -594,7 +594,7 @@ export function SharedExpensesPanel({
                                 && !canUndo
                                 && (
                                   <span className="muted">
-                                    â€”
+                                    —
                                   </span>
                                 )}
                             </div>

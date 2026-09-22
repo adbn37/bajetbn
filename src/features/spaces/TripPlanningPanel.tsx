@@ -1279,7 +1279,7 @@ export function TripPlanningPanel({
 
       {loading ? (
         <div className="notice">
-          Loading Trip worksheetâ€¦
+          Loading Trip worksheet…
         </div>
       ) : (
         <div className="trip-planning-grid">
@@ -1361,7 +1361,7 @@ export function TripPlanningPanel({
                           className="trip-sheet-cell-input"
                           value={newItinerary.title}
                           maxLength={120}
-                          placeholder="Add a stopâ€¦"
+                          placeholder="Add a stop…"
                           aria-label="New itinerary item"
                           onChange={(event) =>
                             setNewItinerary(
@@ -1580,7 +1580,7 @@ export function TripPlanningPanel({
                           className="trip-sheet-cell-input"
                           value={newTask.title}
                           maxLength={120}
-                          placeholder="Add a taskâ€¦"
+                          placeholder="Add a task…"
                           onChange={(event) =>
                             setNewTask(
                               (current) => ({
@@ -1828,7 +1828,7 @@ export function TripPlanningPanel({
                           className="trip-sheet-cell-input"
                           value={newBooking.title}
                           maxLength={120}
-                          placeholder="Add bookingâ€¦"
+                          placeholder="Add booking…"
                           onChange={(event) =>
                             setNewBooking(
                               (current) => ({

@@ -389,7 +389,7 @@ export function SpaceFundPanel({
                             <td>
                               {item.paymentMethodLabel
                                 || item.paymentMethod
-                                || 'â€”'}
+                                || '—'}
                             </td>
 
                             <td>
@@ -405,7 +405,7 @@ export function SpaceFundPanel({
                             </td>
 
                             <td>
-                              {item.note || 'â€”'}
+                              {item.note || '—'}
                             </td>
 
                             <td className="trip-sheet-actions-cell">
@@ -434,7 +434,7 @@ export function SpaceFundPanel({
                                 </button>
                               ) : (
                                 <span className="muted">
-                                  â€”
+                                  —
                                 </span>
                               )}
                             </td>

@@ -1959,25 +1959,23 @@ export function SpaceDetailsPage() {
           <header
             className="trip-workbook-toolbar-v115"
           >
-            <div>
+            <div
+              className="trip-workbook-title-v115"
+            >
               <span className="eyebrow">
                 Trip workbook
               </span>
 
-              <strong>
-                {space.name}
-              </strong>
-
-              <small className="muted">
-                Shared worksheet · changes stay inside this Trip
-              </small>
+              <span className="muted">
+                Shared
+              </span>
             </div>
 
             <div
               className="trip-workbook-access-v115"
             >
               <span>
-                Your access
+                Access
               </span>
 
               <strong>

@@ -293,7 +293,7 @@ function TripBudgetRow({
             }
           />
 
-          <span>â†’</span>
+          <span>→</span>
 
           <input
             className="trip-sheet-cell-input"
@@ -708,7 +708,7 @@ export function TripBudgetSpreadsheet({
 
       {loading ? (
         <div className="loading-panel">
-          Loading Trip Budgetâ€¦
+          Loading Trip Budget…
         </div>
       ) : (
         <div className="trip-sheet-scroll">
@@ -738,7 +738,7 @@ export function TripBudgetSpreadsheet({
                       className="trip-sheet-cell-input"
                       value={newDraft.name}
                       maxLength={80}
-                      placeholder="Add a potâ€¦"
+                      placeholder="Add a pot…"
                       aria-label="New Trip pot"
                       onChange={(event) =>
                         setNewDraft(
@@ -863,7 +863,7 @@ export function TripBudgetSpreadsheet({
                         }
                       />
 
-                      <span>â†’</span>
+                      <span>→</span>
 
                       <input
                         className="trip-sheet-cell-input"
