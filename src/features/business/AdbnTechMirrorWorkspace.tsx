@@ -50,6 +50,8 @@ export function AdbnTechMirrorWorkspace({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [selectedInvoiceId, setSelectedInvoiceId] =
+    useState('');
 
   const load = useCallback(async () => {
     if (getAdbnTechConnectedEmail() !== ADBN_TECH_ADMIN_EMAIL) {
@@ -140,6 +142,14 @@ export function AdbnTechMirrorWorkspace({
       ].some((value) => value.toLowerCase().includes(normalizedQuery)),
     );
   }, [normalizedQuery, snapshot]);
+
+  const selectedInvoice = useMemo(
+    () =>
+      snapshot?.invoices.find(
+        (item) => item.id === selectedInvoiceId,
+      ) || null,
+    [selectedInvoiceId, snapshot],
+  );
 
   if (connectedEmail !== ADBN_TECH_ADMIN_EMAIL) {
     return (
@@ -258,45 +268,174 @@ export function AdbnTechMirrorWorkspace({
           </table>
         </div>
       ) : (
-        <div className="adbn-tech-table-wrap-v115">
-          <table className="adbn-tech-table-v115">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Customer</th>
-                <th>Total</th>
-                <th>Paid</th>
-                <th>Balance</th>
-                <th>Due</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <strong>{item.invoiceNo || item.id}</strong>
-                    <small>{item.saleType || item.title || 'Invoice'}</small>
-                  </td>
-                  <td>
-                    <span>{item.customerName || '—'}</span>
-                    <small>{item.customerNo || item.customerEmail || ''}</small>
-                  </td>
-                  <td>{bnd(item.total)}</td>
-                  <td>{bnd(item.paid)}</td>
-                  <td>{bnd(item.balance)}</td>
-                  <td>{simpleDate(item.nextDueDate || item.dueDate)}</td>
-                  <td>{item.status || '—'}</td>
-                </tr>
-              ))}
-              {!invoices.length && (
+        <>
+          {selectedInvoice && (
+            <section
+              className="panel adbn-tech-invoice-detail-v115"
+              data-adbn-tech-invoice-detail
+            >
+              <div className="adbn-tech-invoice-detail-heading-v115">
+                <div>
+                  <span className="eyebrow">Read-only invoice detail</span>
+                  <h3>{selectedInvoice.invoiceNo || selectedInvoice.id}</h3>
+                  <p className="muted">
+                    {selectedInvoice.title
+                      || selectedInvoice.saleType
+                      || 'ADBN TECH invoice'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => setSelectedInvoiceId('')}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="adbn-tech-invoice-detail-grid-v115">
+                <div>
+                  <span>Customer</span>
+                  <strong>{selectedInvoice.customerName || '—'}</strong>
+                  <small>
+                    {selectedInvoice.customerNo
+                      || selectedInvoice.customerEmail
+                      || '—'}
+                  </small>
+                </div>
+                <div>
+                  <span>Contact</span>
+                  <strong>{selectedInvoice.customerPhone || '—'}</strong>
+                  <small>{selectedInvoice.customerEmail || 'No email'}</small>
+                </div>
+                <div>
+                  <span>Total</span>
+                  <strong>{bnd(selectedInvoice.total)}</strong>
+                  <small>Invoice amount</small>
+                </div>
+                <div>
+                  <span>Paid</span>
+                  <strong>{bnd(selectedInvoice.paid)}</strong>
+                  <small>Recorded in ADBN TECH</small>
+                </div>
+                <div>
+                  <span>Balance</span>
+                  <strong>{bnd(selectedInvoice.balance)}</strong>
+                  <small>Outstanding</small>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>{selectedInvoice.status || '—'}</strong>
+                  <small>
+                    Fulfilment: {selectedInvoice.fulfilmentStatus || '—'}
+                  </small>
+                </div>
+                <div>
+                  <span>Invoice date</span>
+                  <strong>{simpleDate(selectedInvoice.invoiceDate)}</strong>
+                  <small>Created invoice date</small>
+                </div>
+                <div>
+                  <span>Next due</span>
+                  <strong>
+                    {simpleDate(
+                      selectedInvoice.nextDueDate
+                      || selectedInvoice.dueDate,
+                    )}
+                  </strong>
+                  <small>
+                    Original due: {simpleDate(selectedInvoice.dueDate)}
+                  </small>
+                </div>
+                <div>
+                  <span>Payment plan</span>
+                  <strong>
+                    {selectedInvoice.monthlyAmount > 0
+                      ? bnd(selectedInvoice.monthlyAmount) + ' / month'
+                      : '—'}
+                  </strong>
+                  <small>
+                    {selectedInvoice.termMonths > 0
+                      ? selectedInvoice.termMonths + ' month term'
+                      : 'No term recorded'}
+                  </small>
+                </div>
+                <div>
+                  <span>Source</span>
+                  <strong>{selectedInvoice.source || '—'}</strong>
+                  <small>{selectedInvoice.saleType || 'Invoice'}</small>
+                </div>
+              </div>
+
+              <small className="muted">
+                Read-only mirror. Edit, delete and payment actions remain in ADBN TECH.
+              </small>
+            </section>
+          )}
+
+          <div className="adbn-tech-table-wrap-v115">
+            <table className="adbn-tech-table-v115">
+              <thead>
                 <tr>
-                  <td colSpan={7} className="muted">No matching ADBN TECH invoices.</td>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Total</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                  <th>Due</th>
+                  <th>Status</th>
+                  <th aria-label="Invoice actions" />
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {invoices.map((item) => (
+                  <tr
+                    key={item.id}
+                    className={
+                      selectedInvoiceId === item.id
+                        ? 'is-selected'
+                        : ''
+                    }
+                  >
+                    <td>
+                      <button
+                        type="button"
+                        className="adbn-tech-record-link-v115"
+                        onClick={() => setSelectedInvoiceId(item.id)}
+                      >
+                        <strong>{item.invoiceNo || item.id}</strong>
+                        <small>{item.saleType || item.title || 'Invoice'}</small>
+                      </button>
+                    </td>
+                    <td>
+                      <span>{item.customerName || '—'}</span>
+                      <small>{item.customerNo || item.customerEmail || ''}</small>
+                    </td>
+                    <td>{bnd(item.total)}</td>
+                    <td>{bnd(item.paid)}</td>
+                    <td>{bnd(item.balance)}</td>
+                    <td>{simpleDate(item.nextDueDate || item.dueDate)}</td>
+                    <td>{item.status || '—'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button secondary adbn-tech-view-button-v115"
+                        onClick={() => setSelectedInvoiceId(item.id)}
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {!invoices.length && (
+                  <tr>
+                    <td colSpan={8} className="muted">No matching ADBN TECH invoices.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <small className="muted">
