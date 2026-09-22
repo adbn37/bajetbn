@@ -522,11 +522,13 @@ export function SpaceWorkPanel({
   members,
   currentMember,
   initialView,
+  showViewSwitcher = true,
 }: {
   space: Space;
   members: SpaceMember[];
   currentMember: SpaceMember | null;
   initialView: WorkView;
+  showViewSwitcher?: boolean;
 }) {
   const [view, setView] = useState<WorkView>(initialView);
   const [items, setItems] = useState<SpaceWorkItem[]>([]);
@@ -841,35 +843,37 @@ export function SpaceWorkPanel({
       id="space-work"
       className="space-work-panel"
     >
-      <div className="button-row">
-        <button
-          type="button"
-          className={
-            view === 'tasks'
-              ? 'button primary compact'
-              : 'button secondary compact'
-          }
-          onClick={() => setView('tasks')}
-        >
-          {space.type === 'household'
-            ? 'To-Do'
-            : 'Tasks'}
-        </button>
+      {showViewSwitcher && (
+        <div className="button-row">
+          <button
+            type="button"
+            className={
+              view === 'tasks'
+                ? 'button primary compact'
+                : 'button secondary compact'
+            }
+            onClick={() => setView('tasks')}
+          >
+            {space.type === 'household'
+              ? 'To-Do'
+              : 'Tasks'}
+          </button>
 
-        <button
-          type="button"
-          className={
-            view === 'shopping'
-              ? 'button primary compact'
-              : 'button secondary compact'
-          }
-          onClick={() => setView('shopping')}
-        >
-          {space.type === 'sme'
-            ? 'Purchase List'
-            : 'To-Buy'}
-        </button>
-      </div>
+          <button
+            type="button"
+            className={
+              view === 'shopping'
+                ? 'button primary compact'
+                : 'button secondary compact'
+            }
+            onClick={() => setView('shopping')}
+          >
+            {space.type === 'sme'
+              ? 'Purchase List'
+              : 'To-Buy'}
+          </button>
+        </div>
+      )}
 
       {message && (
         <div className="notice success">{message}</div>

@@ -2314,6 +2314,7 @@ export function SpaceDetailsPage() {
                   ? 'tasks'
                   : 'shopping'
               }
+              showViewSwitcher={false}
             />
           )}
 

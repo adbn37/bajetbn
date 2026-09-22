@@ -18569,11 +18569,6 @@ a.business-report-row-v115:focus-visible {
   min-width: 0;
 }
 
-.household-inline-section-v1147
-.space-work-panel
-> .button-row:first-child {
-  display: none !important;
-}
 
 
 /* ==========================================================
@@ -21170,5 +21165,46 @@ select.trip-sheet-cell-input {
   .trip-overview-sheet-v115
   .trip-sheet-section-heading {
     margin: .62rem 0 .38rem;
+  }
+}
+
+/* ==========================================================
+   BAJETBN V115 HOUSEHOLD INLINE WORKSPACE CLEANUP
+   To-Do and To-Buy are dedicated inline Household destinations.
+   ========================================================== */
+
+.household-inline-section-v1147[
+  data-household-inline-section='todo'
+]
+.space-work-panel,
+.household-inline-section-v1147[
+  data-household-inline-section='shopping'
+]
+.space-work-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+.household-inline-section-v1147[
+  data-household-inline-section='todo'
+]
+.space-work-panel
+> .panel-heading,
+.household-inline-section-v1147[
+  data-household-inline-section='shopping'
+]
+.space-work-panel
+> .panel-heading {
+  margin-top: 0;
+}
+
+@media (max-width: 620px) {
+  .household-inline-section-v1147[
+    data-household-inline-section='todo'
+  ],
+  .household-inline-section-v1147[
+    data-household-inline-section='shopping'
+  ] {
+    margin-top: 0;
   }
 }

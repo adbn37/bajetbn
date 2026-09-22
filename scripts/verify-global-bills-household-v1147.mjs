@@ -30,9 +30,18 @@ check(
 
 check(
   source.includes(
-    'setPayments(scopedPayments);',
+    'getSpaceCommitmentWorkspace(',
+  )
+  && source.includes(
+    'const nextPayments ='
+  )
+  && source.includes(
+    'workspace.payments;'
+  )
+  && source.includes(
+    'setPayments(nextPayments);'
   ),
-  'Household payment history uses owner-scoped query.',
+  'Household payment history uses the canonical Space-scoped workspace loader.',
 );
 
 check(

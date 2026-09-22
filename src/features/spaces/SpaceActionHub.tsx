@@ -1059,7 +1059,7 @@ export function SpaceActionHub({
 
               <ShortcutLink
                 to={`/spaces/${space.id}?section=shared-expenses`}
-                label="Expenses"
+                label="Shared Expenses"
                 primary={
                   householdNavigationTarget === 'expenses'
                 }
@@ -1067,7 +1067,7 @@ export function SpaceActionHub({
 
               <ShortcutLink
                 to={`/spaces/${space.id}?tab=balances`}
-                label="Settle"
+                label="Settle Up"
                 primary={
                   activeTabTarget === 'balances'
                 }
@@ -1083,7 +1083,7 @@ export function SpaceActionHub({
 
               <ShortcutLink
                 to={`/spaces/${space.id}?section=shopping`}
-                label="Shopping"
+                label="To-Buy"
                 primary={
                   householdNavigationTarget === 'shopping'
                 }
