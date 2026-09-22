@@ -228,6 +228,10 @@ export function BusinessMoneyActivityPage() {
     useState<FinancialTransaction[]>([]);
   const [canView, setCanView] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [canRequestTransfer, setCanRequestTransfer] =
+    useState(false);
+  const [requestMoveOnly, setRequestMoveOnly] =
+    useState(false);
   const [accessLabel, setAccessLabel] = useState('Member');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -287,6 +291,7 @@ export function BusinessMoneyActivityPage() {
         setSpace(null);
         setCanView(false);
         setCanManage(false);
+        setCanRequestTransfer(false);
         return;
       }
 
@@ -343,6 +348,9 @@ export function BusinessMoneyActivityPage() {
         nextCanManage || isManager;
 
       setCanManage(nextCanManage);
+      setCanRequestTransfer(
+        Boolean(isManager),
+      );
       setCanView(Boolean(nextCanView));
       setAccessLabel(
         isOwner
@@ -357,6 +365,7 @@ export function BusinessMoneyActivityPage() {
       if (!nextCanView) {
         setAccounts([]);
         setTransactions([]);
+        setCanRequestTransfer(false);
         return;
       }
 
@@ -857,13 +866,33 @@ export function BusinessMoneyActivityPage() {
                   !online
                   || writableAccounts.length === 0
                 }
-                onClick={() =>
-                  setShowAdd(true)
-                }
+                onClick={() => {
+                  setRequestMoveOnly(false);
+                  setShowAdd(true);
+                }}
               >
                 + Add money activity
               </button>
             )}
+
+            {!canManage
+              && canRequestTransfer
+              && (
+                <button
+                  className="button primary"
+                  type="button"
+                  disabled={
+                    !online
+                    || writableAccounts.length < 2
+                  }
+                  onClick={() => {
+                    setRequestMoveOnly(true);
+                    setShowAdd(true);
+                  }}
+                >
+                  Request money move
+                </button>
+              )}
           </div>
         }
       />
@@ -1159,17 +1188,29 @@ export function BusinessMoneyActivityPage() {
           title="No matching Business money activity"
           description="Change the filters or add a new Business money record."
           action={
-            canManage
-            && writableAccounts.length > 0
+            (
+              canManage
+              && writableAccounts.length > 0
+            )
+            || (
+              !canManage
+              && canRequestTransfer
+              && writableAccounts.length >= 2
+            )
               ? (
                 <button
                   className="button primary"
                   type="button"
-                  onClick={() =>
-                    setShowAdd(true)
-                  }
+                  onClick={() => {
+                    setRequestMoveOnly(
+                      !canManage,
+                    );
+                    setShowAdd(true);
+                  }}
                 >
-                  Add money activity
+                  {canManage
+                    ? 'Add money activity'
+                    : 'Request money move'}
                 </button>
               )
               : undefined
@@ -1336,17 +1377,24 @@ export function BusinessMoneyActivityPage() {
           labelSuggestions={availableLabels}
           timezone={timezone}
           online={online}
+          entryMode={
+            requestMoveOnly
+              ? 'move'
+              : undefined
+          }
           scopeControls={<MoneyScopeSwitch mode="business" businessSpaces={businessSpaces.length ? businessSpaces : [space]} currentBusinessId={space.id} compact />}
           lockedSpaceId={space.id}
-          onClose={() =>
-            setShowAdd(false)
-          }
+          onClose={() => {
+            setShowAdd(false);
+            setRequestMoveOnly(false);
+          }}
           onSubmit={postTransaction}
           onComplete={async (
             message,
             refresh,
           ) => {
             setShowAdd(false);
+            setRequestMoveOnly(false);
             setFeedback(message);
             if (refresh) {
               await load();

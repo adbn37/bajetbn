@@ -1689,6 +1689,11 @@ export interface Account {
   type: AccountType;
   classification: AccountClassification;
   /**
+   * When true, this Business-classified account is also available in
+   * Personal money views. It remains one real account with one balance.
+   */
+  personalUseEnabled?: boolean;
+  /**
    * Legacy single-Business fields kept for safe migration/backward compatibility.
    * businessSpaceIds / posSpaceIds are authoritative for new Business accounts.
    */

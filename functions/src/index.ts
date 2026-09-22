@@ -2024,6 +2024,9 @@ export const createAccount = onCall({ region }, async (request) => {
   const institutionCode = optionalInstitutionCode(request.data?.institutionCode);
   const type = oneOf(request.data?.type, accountTypes, 'account type');
   const classification = oneOf(request.data?.classification, ['personal', 'business'] as const, 'classification');
+  const personalUseEnabled =
+    classification === 'personal'
+    || request.data?.personalUseEnabled === true;
   const currency = oneOf(request.data?.currency, ['BND', 'MYR', 'SGD', 'USD'] as const, 'currency');
   const openingBalanceMinor = request.data?.openingBalanceMinor;
   if (!Number.isSafeInteger(openingBalanceMinor) || Math.abs(openingBalanceMinor) > 99_999_999_999) {
@@ -2061,6 +2064,7 @@ export const createAccount = onCall({ region }, async (request) => {
 
     transaction.create(accountRef, {
       displayId: displayId('ACC'), ownerId: uid, name, institution, institutionCode, type, classification,
+      personalUseEnabled,
       spaceId, posEnabled, businessSpaceIds, posSpaceIds,
       currency, openingBalanceMinor, ledgerBalanceMinor: openingBalanceMinor,
       balanceVersion: 1, archivedAt: null, closedAt: null, createdAt: now, updatedAt: now,
@@ -2090,6 +2094,14 @@ export const updateAccountProfile = onCall({ region }, async (request) => {
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new HttpsError('not-found', 'Account not found.');
   if (snapshot.data()?.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this account.');
+
+  const personalUseEnabled =
+    classification === 'personal'
+    || (
+      typeof request.data?.personalUseEnabled === 'boolean'
+        ? request.data.personalUseEnabled
+        : snapshot.data()?.personalUseEnabled === true
+    );
 
   const requestedBusinessSpaceIds = optionalUniqueStringList(request.data?.businessSpaceIds, 'Business Spaces');
   const requestedPosSpaceIds = optionalUniqueStringList(request.data?.posSpaceIds, 'POS Business Spaces');
@@ -2125,6 +2137,7 @@ export const updateAccountProfile = onCall({ region }, async (request) => {
     institutionCode,
     type,
     classification,
+    personalUseEnabled,
     spaceId,
     posEnabled,
     businessSpaceIds,
@@ -3259,9 +3272,12 @@ export const respondLinkedMoneyOffer = onCall(
 
         if (
           account.ownerId !== uid
-          || accountSnapshot.data()
-            ?.classification
-            !== 'personal'
+          || (
+            accountSnapshot.data()
+              ?.classification !== 'personal'
+            && accountSnapshot.data()
+              ?.personalUseEnabled !== true
+          )
         ) {
           throw new HttpsError(
             'permission-denied',
@@ -29005,7 +29021,9 @@ export const recordDebtPayment = onCall(
 
         if (
           accountSnapshot.data()?.classification
-          !== 'personal'
+            !== 'personal'
+          && accountSnapshot.data()
+            ?.personalUseEnabled !== true
         ) {
           throw new HttpsError(
             'failed-precondition',

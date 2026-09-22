@@ -29,6 +29,7 @@ import {
   suggestedCategoryIcon,
 } from '../categories/defaultCategories';
 import {
+  accountSupportsPersonalUse,
   businessSpaceIdsForAccount,
   listPersonalAccounts,
 } from '../../repositories/accountRepository';
@@ -828,7 +829,7 @@ export function TransactionsPage() {
 
         return activeWritableAccounts.some(
           (account) =>
-            account.classification === 'personal'
+            accountSupportsPersonalUse(account)
             && account.currency === space.currency,
         );
       },
@@ -1648,7 +1649,7 @@ export function MoneyActivityModal({
       return account.classification === 'business'
         && businessSpaceIdsForAccount(account).includes(selectedSpace.id);
     }
-    return account.classification === 'personal';
+    return accountSupportsPersonalUse(account);
   };
   const compatibleAccounts = accounts.filter(
     (account) =>

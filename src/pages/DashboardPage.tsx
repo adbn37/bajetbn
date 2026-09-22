@@ -13,7 +13,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useOfflineSync } from '../contexts/OfflineSyncContext';
 import { Modal } from '../components/Modal';
 import { shareTransactionToWhatsApp } from '../services/transactionShare';
-import { listAccounts } from '../repositories/accountRepository';
+import {
+  accountSupportsPersonalUse,
+  listAccounts,
+} from '../repositories/accountRepository';
 import {
   accountColorClass,
   getAccountColor,
@@ -162,7 +165,7 @@ function homeActivityMeta(
     ),
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(' Ã‚Â· ');
 }
 
 export function DashboardPage() {
@@ -305,8 +308,9 @@ export function DashboardPage() {
         accounts
           .filter(
             (account) =>
-              account.classification
-                === 'personal',
+              accountSupportsPersonalUse(
+                account,
+              ),
           )
           .sort(
             (a, b) =>
@@ -318,19 +322,18 @@ export function DashboardPage() {
     );
 
   /*
-   * Personal Home is strictly Personal-account only.
-   * Business accounts belong to the dedicated Business Home
-   * and never appear in the Personal Home account carousel.
-   *
-   * Global Add remains personal-first as well.
+   * Personal Home includes Personal accounts plus explicitly
+   * Personal + Business accounts. Pure Business-only accounts
+   * remain inside their Business Spaces.
    */
   const quickAccounts =
     useMemo(
       () =>
         accounts.filter(
           (account) =>
-            account.classification
-              === 'personal',
+            accountSupportsPersonalUse(
+              account,
+            ),
         ),
       [accounts],
     );
@@ -1272,7 +1275,7 @@ export function DashboardPage() {
         <div className="bajetbn-total-assets-head">
           <div>
             <span>Total Assets</span>
-            <small>Personal only · Business excluded</small>
+            <small>Personal + explicitly shared global accounts · Business-only excluded</small>
           </div>
 
           <button
@@ -1310,7 +1313,7 @@ export function DashboardPage() {
                 totalPersonalAssets,
                 currency,
               )
-            : '••••••'}
+            : 'Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢'}
         </strong>
 
         <div
@@ -1332,7 +1335,7 @@ export function DashboardPage() {
                         currency + ' ',
                         '',
                       )
-                    : '••••'}
+                    : 'Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢'}
                 </strong>
               </div>
             ),
@@ -1370,12 +1373,14 @@ export function DashboardPage() {
                       '_',
                       ' ',
                     ),
-                  account.classification === 'business'
-                    ? 'Business'
-                    : null,
+                  account.personalUseEnabled === true
+                    ? 'Personal + Business'
+                    : account.classification === 'business'
+                      ? 'Business'
+                      : null,
                 ]
                   .filter(Boolean)
-                  .join(' · ');
+                  .join(' Ã‚Â· ');
 
                 return (
                   <button
@@ -1411,7 +1416,7 @@ export function DashboardPage() {
 
                     <b>
                       {loading
-                        ? '—'
+                        ? 'Ã¢â‚¬â€'
                         : formatMoney(
                             account.ledgerBalanceMinor,
                             account.currency,
@@ -1516,7 +1521,7 @@ export function DashboardPage() {
         ) : activityLoading ? (
           <div className="home-v110-empty">
             <span aria-hidden="true">
-              …
+              Ã¢â‚¬Â¦
             </span>
 
             <strong>
@@ -1579,7 +1584,7 @@ export function DashboardPage() {
                           activeAccount?.name,
                         ]
                           .filter(Boolean)
-                          .join(' · ')}
+                          .join(' Ã‚Â· ')}
                       </small>
                     </span>
 
@@ -1614,7 +1619,7 @@ export function DashboardPage() {
         ) : (
           <div className="home-v110-empty">
             <span aria-hidden="true">
-              ◎
+              Ã¢â€”Å½
             </span>
 
             <strong>
@@ -1642,7 +1647,7 @@ export function DashboardPage() {
               }
             >
               {quickLoading
-                ? 'Loading…'
+                ? 'LoadingÃ¢â‚¬Â¦'
                 : 'Add income or expense'}
             </button>
           </div>
@@ -1729,7 +1734,7 @@ export function DashboardPage() {
                 <dt>Space</dt>
                 <dd>
                   {activityDetailLoading
-                    ? 'Loading…'
+                    ? 'LoadingÃ¢â‚¬Â¦'
                     : selectedActivitySpaceName
                       || 'Unknown Space'}
                 </dd>
@@ -1741,7 +1746,7 @@ export function DashboardPage() {
                   {selectedActivitySource?.name
                     || 'Unknown Account'}
                   {selectedActivityDestination
-                    ? ` → ${selectedActivityDestination.name}`
+                    ? ` Ã¢â€ â€™ ${selectedActivityDestination.name}`
                     : ''}
                 </dd>
               </div>

@@ -9,6 +9,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { institutionCodeForLabel, institutionDisplay, institutionOptionsForType } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  accountSupportsPersonalUse,
   businessSpaceIdsForAccount,
   createAccount,
   listAccountAccess,
@@ -47,6 +48,7 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 
 const accountLabels: Record<AccountType, string> = { bank: 'Bank', cash: 'Cash', e_wallet: 'E-wallet', credit_card: 'Credit card' };
 type AccountLifecycleAction = 'close' | 'delete';
+type AccountUsage = AccountClassification | 'both';
 
 type SharedAccountContext = {
   spaceIds: string[];
@@ -503,6 +505,8 @@ export function AccountsPage({
                         type: account.type,
                         classification:
                           'business',
+                        personalUseEnabled:
+                          account.personalUseEnabled === true,
                         businessSpaceIds:
                           nextBusinessSpaceIds,
                         posSpaceIds:
@@ -616,6 +620,8 @@ export function AccountsPage({
                                   account.type,
                                 classification:
                                   'business',
+                                personalUseEnabled:
+                                  account.personalUseEnabled === true,
                                 businessSpaceIds: [
                                   ...businessSpaceIdsForAccount(
                                     account,
@@ -733,6 +739,7 @@ export function AccountsPage({
             institutionCode: values.institutionCode,
             type: values.type,
             classification: values.classification,
+            personalUseEnabled: values.personalUseEnabled,
             businessSpaceIds: values.businessSpaceIds,
             posSpaceIds: values.posSpaceIds,
           });
@@ -774,10 +781,18 @@ function AccountGroups({
         account.classification === 'personal',
     );
 
+  const personalBusiness =
+    accounts.filter(
+      (account) =>
+        account.classification === 'business'
+        && account.personalUseEnabled === true,
+    );
+
   const business =
     accounts.filter(
       (account) =>
-        account.classification === 'business',
+        account.classification === 'business'
+        && account.personalUseEnabled !== true,
     );
 
   const actions = {
@@ -805,6 +820,27 @@ function AccountGroups({
 
           <AccountList
             accounts={personal}
+            spaces={spaces}
+            spaceIdOverride={spaceIdOverride}
+            {...actions}
+          />
+        </section>
+      )}
+
+      {personalBusiness.length > 0 && (
+        <section>
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">
+                Global Account
+              </span>
+              <h2>Personal + Business accounts</h2>
+            </div>
+            <span>{personalBusiness.length}</span>
+          </div>
+
+          <AccountList
+            accounts={personalBusiness}
             spaces={spaces}
             spaceIdOverride={spaceIdOverride}
             {...actions}
@@ -905,14 +941,25 @@ function AccountList({
             {canManage
               ? account.classification === 'personal'
                 ? 'Personal Account'
-                : spaceIdOverride
-                  ? 'Business Account'
-                  : businessSpaceIdsForAccount(account).length > 0
-                    ? 'Business Account · Used by '
-                      + businessSpaceIdsForAccount(account).length
-                      + ' Business'
-                      + (businessSpaceIdsForAccount(account).length === 1 ? '' : 'es')
-                    : 'Business Account · Not linked'
+                : account.personalUseEnabled === true
+                  ? (
+                    spaceIdOverride
+                      ? 'Personal + Business Account'
+                      : businessSpaceIdsForAccount(account).length > 0
+                        ? 'Personal + Business Account · Used by '
+                          + businessSpaceIdsForAccount(account).length
+                          + ' Business'
+                          + (businessSpaceIdsForAccount(account).length === 1 ? '' : 'es')
+                        : 'Personal + Business Account · Not linked'
+                  )
+                  : spaceIdOverride
+                    ? 'Business Account'
+                    : businessSpaceIdsForAccount(account).length > 0
+                      ? 'Business Account · Used by '
+                        + businessSpaceIdsForAccount(account).length
+                        + ' Business'
+                        + (businessSpaceIdsForAccount(account).length === 1 ? '' : 'es')
+                      : 'Business Account · Not linked'
               : sharedLabel}
           </p>
         </div>
@@ -935,9 +982,12 @@ function AccountList({
             to={
               canManage
                 ? account.classification === 'business'
-                  ? (spaceIdOverride || businessSpaceIdsForAccount(account)[0])
-                    ? `/spaces/${spaceIdOverride || businessSpaceIdsForAccount(account)[0]}/business/money?accountId=${encodeURIComponent(account.id)}`
-                    : '/accounts'
+                  ? account.personalUseEnabled === true
+                    && !spaceIdOverride
+                    ? `/transactions?accountId=${encodeURIComponent(account.id)}`
+                    : (spaceIdOverride || businessSpaceIdsForAccount(account)[0])
+                      ? `/spaces/${spaceIdOverride || businessSpaceIdsForAccount(account)[0]}/business/money?accountId=${encodeURIComponent(account.id)}`
+                      : '/accounts'
                   : `/transactions?accountId=${encodeURIComponent(account.id)}`
                 : sharedLedgerSpaceId
                   ? `/spaces/${sharedLedgerSpaceId}?section=money`
@@ -1216,6 +1266,7 @@ type AccountFormValues = {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  personalUseEnabled: boolean;
   businessSpaceIds: string[];
   posSpaceIds: string[];
   currency: string;
@@ -1254,6 +1305,10 @@ function AccountForm({
       || initial?.classification
       || 'personal',
   );
+  const [personalUseEnabled, setPersonalUseEnabled] = useState(
+    initial?.classification === 'personal'
+    || initial?.personalUseEnabled === true,
+  );
   /*
    * Compatibility marker for the historical Personal module verifier.
    * Personal embedding still locks Personal scope, while Business embedding
@@ -1276,11 +1331,21 @@ function AccountForm({
     else if (type === 'cash' && institution === 'Cash') setInstitution('');
   };
 
-  const changeClassification = (nextClassification: AccountClassification) => {
+  const changeUsage = (nextUsage: AccountUsage) => {
     if (lockedClassification) return;
 
-    setClassification(nextClassification);
-    if (nextClassification === 'personal') {
+    if (nextUsage === 'both') {
+      setClassification('business');
+      setPersonalUseEnabled(true);
+      return;
+    }
+
+    setClassification(nextUsage);
+    setPersonalUseEnabled(
+      nextUsage === 'personal',
+    );
+
+    if (nextUsage === 'personal') {
       setBusinessSpaceIds([]);
     }
   };
@@ -1302,6 +1367,9 @@ function AccountForm({
         institutionCode: institutionCodeForLabel(cleanInstitution),
         type,
         classification,
+        personalUseEnabled:
+          classification === 'personal'
+          || personalUseEnabled,
         businessSpaceIds: classification === 'business' ? businessSpaceIds : [],
         posSpaceIds: classification === 'business' ? businessSpaceIds : [],
         currency,
@@ -1322,7 +1390,28 @@ function AccountForm({
     )}
     <label className="span-2">Account name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. BIBD Main" /></label>
     <label>Type<select value={type} onChange={(event) => changeType(event.target.value as AccountType)}><option value="bank">Bank</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="credit_card">Credit card</option></select></label>
-    <label>Used for<select value={classification} disabled={Boolean(lockedClassification)} onChange={(event) => changeClassification(event.target.value as AccountClassification)}><option value="personal">Personal</option><option value="business">Business</option></select></label>
+    <label>Used for<select
+      value={
+        classification === 'business'
+        && personalUseEnabled
+          ? 'both'
+          : classification
+      }
+      disabled={Boolean(lockedClassification)}
+      onChange={(event) =>
+        changeUsage(
+          event.target.value as AccountUsage,
+        )
+      }
+    >
+      <option value="personal">Personal</option>
+      <option value="business">Business</option>
+      <option value="both">Personal + Business</option>
+    </select>
+      <small>
+        Personal + Business keeps one real account and one balance, while allowing the account to be used in Personal money and selected Business Spaces.
+      </small>
+    </label>
     {classification === 'business' && <fieldset className="span-2">
       <legend>Available in Business Spaces</legend>
       <div className="form-stack compact">

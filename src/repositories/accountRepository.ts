@@ -10,6 +10,15 @@ import type {
   InstitutionCode,
 } from '../types/models';
 
+export function accountSupportsPersonalUse(
+  account: Pick<Account, 'classification' | 'personalUseEnabled'>,
+): boolean {
+  return (
+    account.classification === 'personal'
+    || account.personalUseEnabled === true
+  );
+}
+
 export function businessSpaceIdsForAccount(account: Pick<Account, 'businessSpaceIds' | 'spaceId'>): string[] {
   const ids = Array.isArray(account.businessSpaceIds)
     ? account.businessSpaceIds.filter(Boolean)
@@ -37,22 +46,8 @@ export async function listAllAccounts(uid: string): Promise<Account[]> {
 export async function listAllPersonalAccounts(
   uid: string,
 ): Promise<Account[]> {
-  const { db } = requireFirebase();
-
-  const snapshot = await getDocs(query(
-    collection(db, 'accounts'),
-    where('ownerId', '==', uid),
-    where('classification', '==', 'personal'),
-  ));
-
-  return snapshot.docs
-    .map(
-      (item) =>
-        ({
-          id: item.id,
-          ...item.data(),
-        }) as Account,
-    )
+  return (await listAllAccounts(uid))
+    .filter(accountSupportsPersonalUse)
     .sort(
       (a, b) =>
         a.name.localeCompare(b.name),
@@ -128,6 +123,7 @@ export async function createAccount(input: {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  personalUseEnabled?: boolean;
   /** Legacy callers remain accepted; new UI uses the arrays below. */
   spaceId?: string | null;
   posEnabled?: boolean;
@@ -148,6 +144,7 @@ export async function updateAccount(input: {
   institutionCode?: InstitutionCode | null;
   type: AccountType;
   classification: AccountClassification;
+  personalUseEnabled?: boolean;
   /** Legacy callers remain accepted; new UI uses the arrays below. */
   spaceId?: string | null;
   posEnabled?: boolean;

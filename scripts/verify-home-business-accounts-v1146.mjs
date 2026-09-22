@@ -25,7 +25,7 @@ function check(condition, message) {
 
 check(
   dashboard.includes(
-    "import { listAccounts } from '../repositories/accountRepository';",
+    "from '../repositories/accountRepository';",
   ),
   'Home retains the active owned-account reader.',
 );
@@ -48,20 +48,20 @@ check(
 );
 
 check(
-  /const\s+homeAccounts\s*=[\s\S]{0,700}?classification[\s\S]{0,80}?===\s*'personal'/m.test(
-    dashboard,
+  dashboard.includes(
+    'accountSupportsPersonalUse(',
   )
     && !dashboard.includes(
       "a.classification === 'business'",
     ),
-  'Personal Home account carousel excludes Business accounts.',
+  'Personal Home includes Personal + explicitly enabled global accounts, while excluding pure Business-only accounts.',
 );
 
 check(
-  /const\s+quickAccounts\s*=[\s\S]{0,500}?classification[\s\S]{0,80}?===\s*'personal'/m.test(
+  /const\s+quickAccounts\s*=[\s\S]{0,500}?accountSupportsPersonalUse/m.test(
     dashboard,
   ),
-  'Global Add remains Personal-account only.',
+  'Global Add accepts Personal + explicitly enabled global accounts.',
 );
 
 check(
@@ -80,9 +80,9 @@ check(
 
 check(
   dashboard.includes(
-    'Personal only · Business excluded',
+    'Personal + explicitly shared global accounts · Business-only excluded',
   ),
-  'Home explicitly identifies Personal-only assets.',
+  'Home explains Personal + Business global-account visibility.',
 );
 
 check(
