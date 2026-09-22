@@ -33,7 +33,7 @@ check(
   && centre.includes(
     'trip-overview-money-table'
   ),
-  'Trip overview renders as a spreadsheet worksheet.',
+  'Trip overview remains a spreadsheet worksheet.',
 );
 
 for (const heading of [
@@ -42,7 +42,6 @@ for (const heading of [
   'Collected / Spent',
   'Available / Left',
   'Status',
-  'Action',
 ]) {
   check(
     centre.includes(
@@ -53,6 +52,19 @@ for (const heading of [
 }
 
 check(
+  !centre.includes(
+    '<th>Action</th>'
+  )
+  && !centre.includes(
+    'onOpenSheet'
+  )
+  && !centre.includes(
+    '>Open<'
+  ),
+  'Overview no longer duplicates workbook navigation with Open actions.',
+);
+
+check(
   centre.includes(
     'Trip Money'
   )
@@ -61,44 +73,47 @@ check(
   )
   && centre.includes(
     'Trip Expenses'
+  )
+  && centre.includes(
+    'Trip Members'
+  )
+  && centre.includes(
+    'Settle Up'
   ),
-  'Trip overview covers Money, Budget and Expenses.',
+  'Overview still covers core Trip money and people status.',
 );
 
 check(
   centre.includes(
-    "onOpenSheet('fund')"
+    'trip-overview-attention-v115'
   )
-  && centre.includes(
-    "onOpenSheet('budget')"
-  )
-  && centre.includes(
-    "onOpenSheet('expenses')"
-  )
-  && centre.includes(
-    "onOpenSheet('settle')"
+  && !centre.includes(
+    'trip-command-guidance'
   ),
-  'Overview actions switch directly to workbook sheets.',
+  'Multiple setup cards are replaced by one compact needs-setup line.',
 );
 
 check(
-  !centre.includes(
-    'Budget sheet below'
+  centre.includes(
+    '<strong>Budget note:</strong>'
+  )
+  && centre.includes(
+    'Trip Expenses are not linked to Budget yet.'
   ),
-  'Budget action no longer assumes an embedded module below Overview.',
+  'Budget accuracy limitation remains visible in compact form.',
 );
 
 check(
   css.includes(
-    '/* v1.15.0 Trip Overview spreadsheet */'
+    'BAJETBN V115 TRIP DESKTOP USABILITY POLISH'
   )
   && css.includes(
-    '.trip-overview-money-table'
+    '.trip-overview-attention-v115'
   ),
-  'Trip overview spreadsheet styling remains installed.',
+  'Desktop usability styling is installed.',
 );
 
 console.log('');
 console.log(
-  'BAJETBN v1.15.0 TRIP OVERVIEW SPREADSHEET: PASS',
+  'BAJETBN v1.15.0 TRIP OVERVIEW CLEANUP: PASS',
 );

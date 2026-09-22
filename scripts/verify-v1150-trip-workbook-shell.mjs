@@ -46,12 +46,22 @@ check(
     'className="trip-workbook-shell-v115"'
   )
   && page.includes(
-    'className="trip-workbook-sheet-body-v115"'
+    'className="trip-workbook-tabs-v115"'
   )
   && page.includes(
+    'className="trip-workbook-sheet-body-v115"'
+  ),
+  'Trip owns one persistent workbook frame with top sheet navigation.',
+);
+
+check(
+  !page.includes(
+    'className="trip-workbook-toolbar-v115"'
+  )
+  && !page.includes(
     'className="trip-workbook-status-v115"'
   ),
-  'Trip owns one persistent workbook frame around the active worksheet.',
+  'Redundant internal workbook toolbar and status footer are removed.',
 );
 
 for (const sheet of [
@@ -94,14 +104,7 @@ check(
   && page.includes(
     "{ sheet },\n      { replace: true },"
   ),
-  'Sheet changes happen in-place without creating module-style navigation history.',
-);
-
-check(
-  page.includes(
-    'tripWorkbookActive =\n    space.type ==='
-  ),
-  'Workbook frame stays active for the entire Trip Space.',
+  'Sheet changes happen in-place without module-style navigation history.',
 );
 
 check(
@@ -118,29 +121,13 @@ check(
 );
 
 check(
-  centre.includes(
+  !centre.includes(
     'onOpenSheet'
   )
-  && centre.includes(
-    "onOpenSheet('budget')"
-  )
-  && centre.includes(
-    "onOpenSheet('fund')"
-  )
-  && centre.includes(
-    "onOpenSheet('expenses')"
-  )
-  && centre.includes(
-    "onOpenSheet('settle')"
+  && !centre.includes(
+    '<th>Action</th>'
   ),
-  'Overview actions switch workbook sheets instead of opening old modules.',
-);
-
-check(
-  !centre.includes(
-    'Budget sheet below'
-  ),
-  'Overview no longer describes Budget as a separate section below.',
+  'Overview relies on workbook tabs instead of duplicate Open controls.',
 );
 
 check(
@@ -156,17 +143,7 @@ check(
   && css.includes(
     '.trip-workbook-sheet-body-v115'
   ),
-  'True workbook frame styling is installed.',
-);
-
-check(
-  css.includes(
-    '> .panel'
-  )
-  && css.includes(
-    'border-radius: 0;'
-  ),
-  'Module card chrome is stripped inside the workbook worksheet body.',
+  'True workbook frame styling remains installed.',
 );
 
 console.log('');

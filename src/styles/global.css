@@ -20993,3 +20993,182 @@ select.trip-sheet-cell-input {
     padding: .62rem;
   }
 }
+
+/* ==========================================================
+   BAJETBN V115 TRIP DESKTOP USABILITY POLISH
+   Cleaner workbook chrome and more readable desktop worksheet scale.
+   ========================================================== */
+
+.trip-overview-attention-v115 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .42rem;
+  margin-top: .55rem;
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.trip-overview-attention-v115 > strong {
+  color: var(--text);
+}
+
+.trip-overview-attention-v115 > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding: .2rem .48rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background:
+    color-mix(
+      in srgb,
+      var(--surface-2) 72%,
+      var(--bg)
+    );
+  color: var(--text);
+  font-weight: 700;
+}
+
+.trip-overview-budget-source-note {
+  margin: .62rem 0 0;
+  padding: .5rem 0 0;
+  border-top: 1px solid var(--border);
+  background: transparent !important;
+  color: var(--muted);
+  font-size: .76rem;
+  line-height: 1.45;
+}
+
+.trip-overview-budget-source-note strong {
+  color: var(--text);
+}
+
+@media (min-width: 901px) {
+  .trip-workbook-tabs-v115 {
+    min-height: 48px;
+    padding: .36rem .58rem 0;
+  }
+
+  .trip-workbook-tabs-v115 button {
+    min-height: 39px;
+    padding: .5rem .88rem;
+    font-size: .82rem;
+  }
+
+  .trip-workbook-support-tabs-v115 {
+    min-height: 40px;
+    padding: .3rem .58rem;
+  }
+
+  .trip-workbook-support-tabs-v115 button {
+    min-height: 31px;
+    padding: .38rem .68rem;
+    font-size: .78rem;
+  }
+
+  .trip-workbook-sheet-body-v115
+  > .panel,
+  .trip-workbook-sheet-body-v115
+  > .trip-planning-panel,
+  .trip-workbook-sheet-body-v115
+  > .trip-overview-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-budget-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-expenses-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-fund-sheet-v115,
+  .trip-workbook-sheet-body-v115
+  > .trip-settle-sheet-v115 {
+    padding: 1rem 1.05rem 1.1rem !important;
+  }
+
+  .trip-workbook-sheet-body-v115
+  .panel-heading h2 {
+    font-size: 1.18rem;
+  }
+
+  .trip-workbook-sheet-body-v115
+  .panel-heading p {
+    font-size: .86rem;
+    line-height: 1.45;
+  }
+
+  .trip-workbook-sheet-body-v115
+  .trip-sheet-table {
+    font-size: .88rem;
+  }
+
+  .trip-workbook-sheet-body-v115
+  .trip-sheet-table th {
+    padding: .52rem .62rem;
+    font-size: .72rem;
+  }
+
+  .trip-workbook-sheet-body-v115
+  .trip-sheet-table td {
+    min-height: 44px;
+  }
+
+  .trip-workbook-sheet-body-v115
+  .trip-budget-number-cell,
+  .trip-workbook-sheet-body-v115
+  .trip-budget-read-cell {
+    padding: .52rem .62rem !important;
+  }
+
+  .trip-workbook-sheet-body-v115
+  .trip-sheet-cell-input {
+    min-height: 46px;
+    padding: .52rem .58rem;
+    font-size: .88rem;
+  }
+
+  .trip-overview-money-table {
+    min-width: 820px;
+  }
+
+  .trip-overview-team-table {
+    min-width: 660px;
+  }
+
+  .trip-overview-money-table th:nth-child(1),
+  .trip-overview-money-table td:nth-child(1) {
+    width: 20%;
+  }
+
+  .trip-overview-money-table th:nth-child(2),
+  .trip-overview-money-table td:nth-child(2),
+  .trip-overview-money-table th:nth-child(3),
+  .trip-overview-money-table td:nth-child(3),
+  .trip-overview-money-table th:nth-child(4),
+  .trip-overview-money-table td:nth-child(4) {
+    width: 20%;
+  }
+
+  .trip-overview-money-table th:nth-child(5),
+  .trip-overview-money-table td:nth-child(5) {
+    width: 20%;
+  }
+
+  .trip-overview-team-table th:nth-child(1),
+  .trip-overview-team-table td:nth-child(1) {
+    width: 26%;
+  }
+
+  .trip-overview-team-table th:nth-child(2),
+  .trip-overview-team-table td:nth-child(2) {
+    width: 24%;
+  }
+
+  .trip-overview-team-table th:nth-child(3),
+  .trip-overview-team-table td:nth-child(3) {
+    width: 50%;
+  }
+
+  .trip-overview-sheet-v115
+  .trip-sheet-section-heading {
+    margin: .62rem 0 .38rem;
+  }
+}

@@ -100,39 +100,30 @@ check(
 );
 
 check(
-  page.includes(
+  !page.includes(
     'className="trip-workbook-title-v115"'
   )
-  && page.includes(
-    '>Shared<'
-  ) === false
   && !page.includes(
-    'Shared worksheet · changes stay inside this Trip'
+    'className="trip-workbook-access-v115"'
+  )
+  && !page.includes(
+    'className="trip-workbook-status-v115"'
   ),
-  'Workbook toolbar no longer repeats the Trip name and long subtitle.',
-);
-
-check(
-  !page.includes(
-    `<strong>
-                {space.name}
-              </strong>`
-  ),
-  'Trip name is not duplicated inside the workbook toolbar.',
+  'Redundant workbook chrome no longer consumes worksheet space.',
 );
 
 check(
   css.includes(
     'BAJETBN V115 TRIP WORKBOOK VISUAL UNIFICATION'
   ),
-  'Slice 13 workbook visual unification CSS is installed.',
+  'Workbook visual unification CSS remains installed.',
 );
 
 check(
   css.includes(
     '.trip-workbook-sheet-body-v115 {\n  min-height: 0;'
   ),
-  'Workbook no longer forces a tall empty worksheet canvas.',
+  'Workbook does not force a tall empty worksheet canvas.',
 );
 
 for (const selector of [
@@ -158,7 +149,7 @@ check(
   && css.includes(
     '.trip-sheet-scroll {\n  border-radius: 3px;'
   ),
-  'Workbook sheets use one flat grid-oriented surface.',
+  'Workbook sheets retain one flat grid-oriented surface.',
 );
 
 console.log('');

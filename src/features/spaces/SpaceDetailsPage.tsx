@@ -1956,36 +1956,6 @@ export function SpaceDetailsPage() {
             tripWorkbookSheet
           }
         >
-          <header
-            className="trip-workbook-toolbar-v115"
-          >
-            <div
-              className="trip-workbook-title-v115"
-            >
-              <span className="eyebrow">
-                Trip workbook
-              </span>
-
-              <span className="muted">
-                Shared
-              </span>
-            </div>
-
-            <div
-              className="trip-workbook-access-v115"
-            >
-              <span>
-                Access
-              </span>
-
-              <strong>
-                {currentMember?.role === 'owner'
-                  ? 'Owner'
-                  : currentMember?.role
-                    || 'Member'}
-              </strong>
-            </div>
-          </header>
 
           <nav
             className="trip-workbook-tabs-v115"
@@ -2098,9 +2068,6 @@ export function SpaceDetailsPage() {
                   currentMember={
                     currentMember
                     || null
-                  }
-                  onOpenSheet={
-                    chooseTripWorkbookSheet
                   }
                   showPlanning={false}
                 />
@@ -2280,26 +2247,6 @@ export function SpaceDetailsPage() {
               )}
           </div>
 
-          <footer
-            className="trip-workbook-status-v115"
-          >
-            <strong>
-              {
-                [
-                  ...TRIP_WORKBOOK_PRIMARY_SHEETS,
-                  ...TRIP_WORKBOOK_SUPPORT_SHEETS,
-                ].find(
-                  (item) =>
-                    item.id
-                    === tripWorkbookSheet,
-                )?.label
-              }
-            </strong>
-
-            <span>
-              {space.currency} · Shared Trip workbook
-            </span>
-          </footer>
         </section>
       )}
 

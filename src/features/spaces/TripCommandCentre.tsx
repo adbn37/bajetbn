@@ -11,19 +11,12 @@ import type {
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
 
-type TripWorkbookTarget =
-  | 'fund'
-  | 'budget'
-  | 'expenses'
-  | 'settle';
-
 export function TripCommandCentre({
   space,
   budgets,
   members,
   sharedExpenses,
   currentMember,
-  onOpenSheet,
   showPlanning = true,
 }: {
   space: Space;
@@ -31,9 +24,6 @@ export function TripCommandCentre({
   members: SpaceMember[];
   sharedExpenses: SharedExpense[];
   currentMember?: SpaceMember | null;
-  onOpenSheet: (
-    sheet: TripWorkbookTarget,
-  ) => void;
   showPlanning?: boolean;
 }) {
   const [fund, setFund] = useState<SpaceFund | null>(null);
@@ -148,20 +138,10 @@ export function TripCommandCentre({
           <h2>Trip at a glance</h2>
 
           <p className="muted">
-            One compact overview for Trip Money, Budget,
-            Expenses, members and Settle Up.
+            Money, budget, expenses and people in one view.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="button secondary"
-          onClick={() =>
-            onOpenSheet('fund')
-          }
-        >
-          Open Trip Money
-        </button>
       </div>
 
       {fundError && (
@@ -194,7 +174,6 @@ export function TripCommandCentre({
               <th>Collected / Spent</th>
               <th>Available / Left</th>
               <th>Status</th>
-              <th>Action</th>
             </tr>
           </thead>
 
@@ -258,17 +237,6 @@ export function TripCommandCentre({
                         )} to target`}
               </td>
 
-              <td className="trip-sheet-actions-cell">
-                <button
-                  type="button"
-                  className="button secondary compact"
-                  onClick={() =>
-                    onOpenSheet('fund')
-                  }
-                >
-                  Open
-                </button>
-              </td>
             </tr>
 
             <tr>
@@ -315,17 +283,6 @@ export function TripCommandCentre({
                     : 'Money Activity only'}
               </td>
 
-              <td className="trip-sheet-actions-cell">
-                <button
-                  type="button"
-                  className="button secondary compact"
-                  onClick={() =>
-                    onOpenSheet('budget')
-                  }
-                >
-                  Open
-                </button>
-              </td>
             </tr>
 
             <tr>
@@ -362,17 +319,6 @@ export function TripCommandCentre({
                   : 'Settled'}
               </td>
 
-              <td className="trip-sheet-actions-cell">
-                <button
-                  type="button"
-                  className="button secondary compact"
-                  onClick={() =>
-                    onOpenSheet('expenses')
-                  }
-                >
-                  Open
-                </button>
-              </td>
             </tr>
           </tbody>
         </table>
@@ -400,7 +346,6 @@ export function TripCommandCentre({
               <th>Item</th>
               <th>Current</th>
               <th>Attention</th>
-              <th>Action</th>
             </tr>
           </thead>
 
@@ -422,17 +367,6 @@ export function TripCommandCentre({
                   : 'Choose an active holder'}
               </td>
 
-              <td className="trip-sheet-actions-cell">
-                <button
-                  type="button"
-                  className="button secondary compact"
-                  onClick={() =>
-                    onOpenSheet('fund')
-                  }
-                >
-                  Open
-                </button>
-              </td>
             </tr>
 
             <tr>
@@ -450,11 +384,6 @@ export function TripCommandCentre({
                 Active members
               </td>
 
-              <td>
-                <span className="muted">
-                  Shared across Trip sheets
-                </span>
-              </td>
             </tr>
 
             <tr>
@@ -474,88 +403,55 @@ export function TripCommandCentre({
                   : 'No open shared expenses'}
               </td>
 
-              <td className="trip-sheet-actions-cell">
-                <button
-                  type="button"
-                  className="button secondary compact"
-                  onClick={() =>
-                    onOpenSheet('settle')
-                  }
-                >
-                  Open
-                </button>
-              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div className="trip-command-guidance">
-        {!loadingFund && !fund && (
-          <div className="notice">
-            <strong>
-              Set up Trip Money first.
-            </strong>{' '}
-            Choose the Trip Fund target and the person
-            holding the collected money.
-          </div>
-        )}
-
-        {fund && !holder && (
-          <div className="notice">
-            <strong>
-              Treasurer needs attention.
-            </strong>{' '}
-            Choose an active member before recording
-            Contributions.
-          </div>
-        )}
-
-        {fund
+      {(
+        (!loadingFund && !fund)
+        || (fund && !holder)
+        || (
+          fund
           && holder
           && fund.contributedMinor === 0
-          && (
-            <div className="notice">
-              <strong>
-                No Contributions yet.
-              </strong>{' '}
-              Open Trip Money to record the first
-              Contribution.
-            </div>
+        )
+        || budgets.length === 0
+        || sharedExpenses.length === 0
+      ) && (
+        <div className="trip-overview-attention-v115">
+          <strong>Needs setup</strong>
+
+          {!loadingFund && !fund && (
+            <span>Trip Money</span>
           )}
 
-        {budgets.length === 0 && (
-          <div className="notice">
-            <strong>
-              No Trip Budget yet.
-            </strong>{' '}
-            Use the Trip Budget worksheet to add the
-            first pot.
-          </div>
-        )}
+          {fund && !holder && (
+            <span>Treasurer</span>
+          )}
 
-        {sharedExpenses.length === 0 && (
-          <div className="notice">
-            <strong>
-              No Trip Expenses yet.
-            </strong>{' '}
-            Open Trip Expenses when the group starts
-            spending.
-          </div>
-        )}
-      </div>
+          {fund
+            && holder
+            && fund.contributedMinor === 0
+            && (
+              <span>First contribution</span>
+            )}
 
-      <div className="info-banner trip-overview-budget-source-note">
-        <strong>
-          Trip Budget Spent does not include Trip Expenses yet.
-        </strong>
+          {budgets.length === 0 && (
+            <span>Budget</span>
+          )}
 
-        <span>
-          It currently follows posted Money Activity transactions
-          linked to this Trip. Expense-to-budget linking will be
-          handled separately.
-        </span>
-      </div>
+          {sharedExpenses.length === 0 && (
+            <span>Expenses</span>
+          )}
+        </div>
+      )}
+
+      <p className="trip-overview-budget-source-note">
+        <strong>Budget note:</strong>{' '}
+        Trip Budget Spent currently follows posted Money Activity
+        only. Trip Expenses are not linked to Budget yet.
+      </p>
       {showPlanning && (
         <TripPlanningPanel
           space={space}

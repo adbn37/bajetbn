@@ -43,27 +43,21 @@ const supportIndex =
     'className="trip-workbook-support-tabs-v115"',
   );
 
-const footerIndex =
-  page.indexOf(
-    'className="trip-workbook-status-v115"',
-  );
-
 check(
   tabIndex >= 0
   && supportIndex > tabIndex
-  && bodyIndex > supportIndex
-  && footerIndex > bodyIndex,
+  && bodyIndex > supportIndex,
   'Primary and support sheet navigation sit above the active worksheet.',
 );
 
 check(
-  css.includes(
-    '.trip-workbook-tabs-v115 {\n  flex: 0 0 auto;\n  order: initial;'
+  !page.includes(
+    'className="trip-workbook-toolbar-v115"'
   )
-  && css.includes(
-    '.trip-workbook-support-tabs-v115 {\n  flex: 0 0 auto;\n  order: initial;'
+  && !page.includes(
+    'className="trip-workbook-status-v115"'
   ),
-  'Workbook navigation uses normal top-of-workbook ordering.',
+  'Workbook keeps only useful navigation chrome.',
 );
 
 check(
@@ -76,7 +70,7 @@ check(
   && !css.includes(
     '.trip-workbook-v115'
   ),
-  'Obsolete launcher-era Trip workbook CSS is removed.',
+  'Obsolete launcher-era Trip workbook CSS remains removed.',
 );
 
 check(
@@ -85,11 +79,8 @@ check(
   )
   && css.includes(
     'border-radius: 7px 7px 0 0;'
-  )
-  && css.includes(
-    'border-bottom: 1px solid var(--border);'
   ),
-  'Top workbook sheet-strip styling is installed.',
+  'Top workbook sheet-strip styling remains installed.',
 );
 
 check(
