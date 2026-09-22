@@ -1135,7 +1135,7 @@ export function SpaceActionHub({
             {space.type === 'personal' && <>
               <ShortcutLink
                 to={`/spaces/${space.id}`}
-                label="Overview"
+                label="Home"
                 primary={
                   !activeSection
                   && !activeTabTarget
@@ -1152,7 +1152,7 @@ export function SpaceActionHub({
 
               <ShortcutLink
                 to={`/spaces/${space.id}?section=money`}
-                label="Money Activity"
+                label="Money"
                 primary={
                   activeSection === 'money'
                 }
