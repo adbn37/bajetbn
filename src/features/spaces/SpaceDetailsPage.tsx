@@ -3707,21 +3707,25 @@ function SpaceOverview({
           <h2>{sectionTitle[section]}</h2>
         </div>
 
-        <button
-          type="button"
-          className="button secondary compact"
-          onClick={closeOverviewSection}
-        >
-          Home
-        </button>
+        {space.type !== 'personal' && (
+          <button
+            type="button"
+            className="button secondary compact"
+            onClick={closeOverviewSection}
+          >
+            Home
+          </button>
+        )}
       </div>
       <div className="space-scoped-modal">
-        <div className="space-scoped-context">
-          <strong>{space.name}</strong>
-          <span>
-            Only records from this Space are shown.
-          </span>
-        </div>
+        {space.type !== 'personal' && (
+          <div className="space-scoped-context">
+            <strong>{space.name}</strong>
+            <span>
+              Only records from this Space are shown.
+            </span>
+          </div>
+        )}
 
         {space.type === 'personal'
           && (
