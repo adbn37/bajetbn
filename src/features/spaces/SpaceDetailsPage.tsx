@@ -1987,100 +1987,6 @@ export function SpaceDetailsPage() {
             </div>
           </header>
 
-          <nav
-            className="trip-workbook-tabs-v115"
-            aria-label="Trip workbook sheets"
-          >
-            {TRIP_WORKBOOK_PRIMARY_SHEETS.map(
-              (item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={
-                    tripWorkbookSheet
-                      === item.id
-                      ? 'active'
-                      : ''
-                  }
-                  aria-current={
-                    tripWorkbookSheet
-                      === item.id
-                      ? 'page'
-                      : undefined
-                  }
-                  onClick={() =>
-                    chooseTripWorkbookSheet(
-                      item.id,
-                    )
-                  }
-                >
-                  {item.label}
-                </button>
-              ),
-            )}
-
-            <button
-              type="button"
-              className={
-                tripWorkbookMoreOpen
-                || tripWorkbookSupportSelected
-                  ? 'active'
-                  : ''
-              }
-              aria-expanded={
-                tripWorkbookMoreOpen
-                || tripWorkbookSupportSelected
-              }
-              onClick={() =>
-                setTripWorkbookMoreOpen(
-                  (current) =>
-                    !current,
-                )
-              }
-            >
-              More
-            </button>
-          </nav>
-
-          {(tripWorkbookMoreOpen
-              || tripWorkbookSupportSelected)
-            && (
-              <nav
-                className="trip-workbook-support-tabs-v115"
-                aria-label="Trip workbook support sheets"
-              >
-                {TRIP_WORKBOOK_SUPPORT_SHEETS
-                  .filter(
-                    (item) =>
-                      item.id
-                        !== 'settings'
-                      || currentMember?.role
-                        === 'owner',
-                  )
-                  .map(
-                    (item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={
-                          tripWorkbookSheet
-                            === item.id
-                            ? 'active'
-                            : ''
-                        }
-                        onClick={() =>
-                          chooseTripWorkbookSheet(
-                            item.id,
-                          )
-                        }
-                      >
-                        {item.label}
-                      </button>
-                    ),
-                  )}
-              </nav>
-            )}
-
           <div
             className="trip-workbook-sheet-body-v115"
             data-trip-workbook
@@ -2279,6 +2185,100 @@ export function SpaceDetailsPage() {
                 </>
               )}
           </div>
+
+          <nav
+            className="trip-workbook-tabs-v115"
+            aria-label="Trip workbook sheets"
+          >
+            {TRIP_WORKBOOK_PRIMARY_SHEETS.map(
+              (item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={
+                    tripWorkbookSheet
+                      === item.id
+                      ? 'active'
+                      : ''
+                  }
+                  aria-current={
+                    tripWorkbookSheet
+                      === item.id
+                      ? 'page'
+                      : undefined
+                  }
+                  onClick={() =>
+                    chooseTripWorkbookSheet(
+                      item.id,
+                    )
+                  }
+                >
+                  {item.label}
+                </button>
+              ),
+            )}
+
+            <button
+              type="button"
+              className={
+                tripWorkbookMoreOpen
+                || tripWorkbookSupportSelected
+                  ? 'active'
+                  : ''
+              }
+              aria-expanded={
+                tripWorkbookMoreOpen
+                || tripWorkbookSupportSelected
+              }
+              onClick={() =>
+                setTripWorkbookMoreOpen(
+                  (current) =>
+                    !current,
+                )
+              }
+            >
+              More
+            </button>
+          </nav>
+
+          {(tripWorkbookMoreOpen
+              || tripWorkbookSupportSelected)
+            && (
+              <nav
+                className="trip-workbook-support-tabs-v115"
+                aria-label="Trip workbook support sheets"
+              >
+                {TRIP_WORKBOOK_SUPPORT_SHEETS
+                  .filter(
+                    (item) =>
+                      item.id
+                        !== 'settings'
+                      || currentMember?.role
+                        === 'owner',
+                  )
+                  .map(
+                    (item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={
+                          tripWorkbookSheet
+                            === item.id
+                            ? 'active'
+                            : ''
+                        }
+                        onClick={() =>
+                          chooseTripWorkbookSheet(
+                            item.id,
+                          )
+                        }
+                      >
+                        {item.label}
+                      </button>
+                    ),
+                  )}
+              </nav>
+            )}
 
           <footer
             className="trip-workbook-status-v115"
