@@ -192,7 +192,9 @@ export function GoalsPage({
       title={
         focusedPlan
           ? 'Target & contributions'
-          : 'Savings goals'
+          : embedded
+            ? 'Savings goals'
+            : 'Goals'
       }
       description={
         focusedPlan

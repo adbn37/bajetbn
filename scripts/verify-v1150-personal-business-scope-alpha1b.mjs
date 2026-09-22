@@ -80,7 +80,8 @@ for (
     "space.type === 'personal'",
     'setWritableAccounts(',
     'if (!cancelled) void load();',
-    'Personal money activity.',
+    'title="Money"',
+    'Business money stays inside Business Spaces.',
     'Personal money only.',
     'Business activity is kept inside its specific Business Space.',
   ]

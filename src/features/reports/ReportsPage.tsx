@@ -659,8 +659,8 @@ export function ReportsPage() {
   return <main className="page reports-page reports-v110">
     <header className="reports-v110-header">
       <div>
-        <span className="reports-v110-kicker">Money reports</span>
-        <h1>Reports</h1>
+        <span className="reports-v110-kicker">Personal finance</span>
+        <h1>Money reports</h1>
         <p>See your Personal money only. Business money stays inside its Business Space.</p>
       </div>
 

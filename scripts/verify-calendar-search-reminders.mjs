@@ -29,7 +29,7 @@ const checks = [
 [personalisation, "{ id: 'calendar', path: '/calendar', label: 'Calendar'", 'Calendar navigation'],
 [personalisation, "{ id: 'search', path: '/search', label: 'Search'", 'Search navigation'],
   [shell, 'Search BajetBN', 'Top search box'],
-  [calendar, 'Calendar & reminders', 'Simple calendar title'],
+  [calendar, 'title="Calendar"', 'Simple calendar title'],
   [calendar, 'Due today', 'Today section'],
   [calendar, 'Coming soon', 'Soon section'],
   [calendar, 'Mark as reminded', 'In-app reminder action'],

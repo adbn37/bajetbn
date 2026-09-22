@@ -174,7 +174,7 @@ export function BudgetsPage({
                 : 'Personal Space'
           : 'Planning'
       }
-      title="Budget"
+      title={embedded ? 'Budget' : 'Budgets'}
       description="Plan spending. Saved expenses update budgets automatically."
       action={
         embedded

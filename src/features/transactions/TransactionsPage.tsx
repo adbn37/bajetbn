@@ -1096,9 +1096,9 @@ export function TransactionsPage() {
   return (
     <main className="page">
       <PageHeader
-        eyebrow="Money records"
-        title="Money activity"
-        description="Personal money activity."
+        eyebrow="Personal finance"
+        title="Money"
+        description="Your personal money activity. Business money stays inside Business Spaces."
         action={<div className="header-actions">
           <Link className="button secondary" to="/linked-money">Linked money</Link>
           <Link className="button secondary" to="/recurring">Recurring money</Link>
