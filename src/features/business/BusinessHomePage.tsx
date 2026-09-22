@@ -421,6 +421,11 @@ export function BusinessHomePage() {
   const isOwner =
     space.ownerId === user?.uid;
 
+  const canManageAdbnTechConnection =
+    isOwner
+    && user?.email?.trim().toLowerCase()
+      === 'zardeerwandy@gmail.com';
+
   const adbnTechPrepared =
     space.externalIntegrationProvider
       === 'adbn_tech'
@@ -558,7 +563,7 @@ export function BusinessHomePage() {
   const prepareAdbnTechConnection =
     async () => {
       if (
-        !isOwner
+        !canManageAdbnTechConnection
         || integrationBusy
       ) {
         return;
@@ -1076,10 +1081,11 @@ export function BusinessHomePage() {
               </Link>
             </div>
 
-            <section
-              className="panel adbn-tech-connection-v115"
-              data-adbn-tech-connection
-            >
+            {canManageAdbnTechConnection && (
+              <section
+                className="panel adbn-tech-connection-v115"
+                data-adbn-tech-connection
+              >
               <div>
                 <span className="eyebrow">
                   External business connection
@@ -1125,10 +1131,11 @@ export function BusinessHomePage() {
                 )}
               </div>
 
-              <small className="muted">
-                Preparing this Space does not sync or change any ADBN TECH customer, invoice, payment, purchase, expense, refund or inventory record yet.
-              </small>
-            </section>
+                <small className="muted">
+                  Preparing this Space does not sync or change any ADBN TECH customer, invoice, payment, purchase, expense, refund or inventory record yet.
+                </small>
+              </section>
+            )}
 
             <div className="notice">
               Custom role names still use the existing secure access templates. Granular combined permissions remain a separate future security redesign.
