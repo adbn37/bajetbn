@@ -172,6 +172,39 @@ export interface AdbnTechPurchasesReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechInventoryProductMirror {
+  id: string;
+  sku: string;
+  barcode: string;
+  category: string;
+  brand: string;
+  model: string;
+  description: string;
+  condition: string;
+  stock: number;
+  reservedStock: number;
+  availableStock: number;
+  minimumStock: number;
+  purchasePrice: number;
+  latestPurchasePrice: number;
+  latestLandedUnitCost: number;
+  sellingPrice: number;
+  monthlyPrice: number;
+  supplier: string;
+  warranty: string;
+  status: string;
+  serialNumber: string;
+  imageUrl: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AdbnTechInventoryReadOnlySnapshot {
+  products: AdbnTechInventoryProductMirror[];
+  connectedEmail: string;
+  loadedAt: string;
+}
+
 function text(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
@@ -776,5 +809,169 @@ export async function loadAdbnTechPurchasesReadOnly(): Promise<
     purchases,
     connectedEmail,
     loadedAt: new Date().toISOString(),
+  };
+}
+
+export async function loadAdbnTechInventoryReadOnly(): Promise<
+  AdbnTechInventoryReadOnlySnapshot
+> {
+  const {
+    auth,
+    db,
+  } = requireAdbnTechFirebase();
+
+  const connectedEmail =
+    normalizeEmail(
+      auth.currentUser?.email,
+    );
+
+  if (
+    connectedEmail
+    !== ADBN_TECH_ADMIN_EMAIL
+  ) {
+    throw new Error(
+      'Connect ADBN TECH with '
+      + ADBN_TECH_ADMIN_EMAIL
+      + ' first.',
+    );
+  }
+
+  /*
+   * Slice 24D.1 is intentionally read-only.
+   * ADBN TECH /products remains authoritative for stock.
+   * Do not mirror these quantities into BajetBN POS stock.
+   */
+  const productSnapshot =
+    await getDocs(
+      collection(
+        db,
+        'products',
+      ),
+    );
+
+  const products =
+    productSnapshot.docs
+      .map((record) => {
+        const data =
+          record.data();
+
+        const stock =
+          Math.max(
+            money(data.stock),
+            0,
+          );
+
+        const reservedStock =
+          Math.max(
+            money(data.reservedStock),
+            0,
+          );
+
+        return {
+          id: record.id,
+          sku:
+            text(data.sku),
+          barcode:
+            text(
+              data.barcode
+              ?? data.productBarcode
+              ?? data.upc
+              ?? data.ean,
+            ),
+          category:
+            text(data.category),
+          brand:
+            text(data.brand),
+          model:
+            text(
+              data.model
+              ?? data.productName
+              ?? data.partName,
+            ),
+          description:
+            text(data.description),
+          condition:
+            text(data.condition),
+          stock,
+          reservedStock,
+          availableStock:
+            Math.max(
+              stock
+              - reservedStock,
+              0,
+            ),
+          minimumStock:
+            Math.max(
+              money(data.minimumStock),
+              0,
+            ),
+          purchasePrice:
+            money(data.purchasePrice),
+          latestPurchasePrice:
+            money(data.latestPurchasePrice),
+          latestLandedUnitCost:
+            money(data.latestLandedUnitCost),
+          sellingPrice:
+            money(data.sellingPrice),
+          monthlyPrice:
+            money(data.monthlyPrice),
+          supplier:
+            text(
+              data.supplier
+              ?? data.supplierName
+              ?? data.vendorName,
+            ),
+          warranty:
+            text(data.warranty),
+          status:
+            text(data.status),
+          serialNumber:
+            text(data.serialNumber),
+          imageUrl:
+            text(data.imageUrl),
+          createdAt:
+            data.createdAt,
+          updatedAt:
+            data.updatedAt,
+        } satisfies AdbnTechInventoryProductMirror;
+      })
+      .sort(
+        (a, b) => {
+          const categoryCompare =
+            a.category.localeCompare(
+              b.category,
+            );
+
+          if (categoryCompare !== 0) {
+            return categoryCompare;
+          }
+
+          return (
+            (
+              a.brand
+              + ' '
+              + a.model
+              + ' '
+              + a.sku
+            )
+              .trim()
+              .localeCompare(
+                (
+                  b.brand
+                  + ' '
+                  + b.model
+                  + ' '
+                  + b.sku
+                ).trim(),
+              )
+          );
+        },
+      );
+
+  return {
+    products,
+    connectedEmail,
+    loadedAt:
+      new Date().toISOString(),
   };
 }

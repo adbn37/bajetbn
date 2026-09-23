@@ -52,6 +52,9 @@ import {
   AdbnTechPurchasesWorkspace,
 } from './AdbnTechPurchasesWorkspace';
 import {
+  AdbnTechInventoryWorkspace,
+} from './AdbnTechInventoryWorkspace';
+import {
   BusinessReportsWorkspace,
 } from './BusinessReportsWorkspace';
 import { AccountsPage } from '../accounts/AccountsPage';
@@ -144,6 +147,7 @@ type BusinessWorkspaceView =
   | 'adbn_invoices'
   | 'adbn_payments'
   | 'adbn_purchases'
+  | 'adbn_inventory'
   | 'setup';
 
 function workspaceViewFromSearch(
@@ -159,6 +163,7 @@ function workspaceViewFromSearch(
     || value === 'adbn_invoices'
     || value === 'adbn_payments'
     || value === 'adbn_purchases'
+    || value === 'adbn_inventory'
     || value === 'setup'
   ) {
     return value;
@@ -1032,6 +1037,20 @@ export function BusinessHomePage() {
             >
               Purchases
             </button>
+
+            <button
+              type="button"
+              className={
+                workspaceView === 'adbn_inventory'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setWorkspaceView('adbn_inventory')
+              }
+            >
+              Inventory
+            </button>
           </>
         )}
 
@@ -1200,6 +1219,13 @@ export function BusinessHomePage() {
         && canManageAdbnTechConnection
         ? (
           <AdbnTechPurchasesWorkspace
+            spaceId={space.id}
+          />
+        )
+        : workspaceView === 'adbn_inventory'
+        && canManageAdbnTechConnection
+        ? (
+          <AdbnTechInventoryWorkspace
             spaceId={space.id}
           />
         )
