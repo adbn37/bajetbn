@@ -1181,6 +1181,9 @@ export function BusinessHomePage() {
           <AdbnTechMirrorWorkspace
             spaceId={space.id}
             view="invoices"
+            onFinancialSync={
+              refreshBusinessTransactions
+            }
           />
         )
         : workspaceView === 'adbn_payments'
