@@ -320,6 +320,25 @@ export function BusinessHomePage() {
     void load();
   }, [load]);
 
+  const refreshBusinessTransactions =
+    useCallback(
+      async () => {
+        const nextTransactions =
+          await listBusinessTransactionsForSpace(
+            spaceId,
+          );
+
+        setTransactions(
+          nextTransactions.filter(
+            (item) =>
+              item.status === 'posted'
+              && item.type !== 'reversal',
+          ),
+        );
+      },
+      [spaceId],
+    );
+
   const currentMonth =
     monthPrefix();
 
@@ -1074,6 +1093,9 @@ export function BusinessHomePage() {
         ? (
           <AdbnTechPaymentsWorkspace
             spaceId={space.id}
+            onFinancialSync={
+              refreshBusinessTransactions
+            }
           />
         )
         : workspaceView === 'adbn_purchases'

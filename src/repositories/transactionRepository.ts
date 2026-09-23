@@ -369,6 +369,44 @@ export async function postTransaction(input: {
   }
 }
 
+export async function postTransactionWithIdempotencyKey(
+  input: TransactionInput,
+  key: string,
+): Promise<PostTransactionOutcome> {
+  const { auth } = requireFirebase();
+  const uid = auth.currentUser?.uid;
+
+  if (!uid) {
+    throw new Error(
+      'Your session has ended. Sign in again.',
+    );
+  }
+
+  if (!navigator.onLine) {
+    throw new Error(
+      'ADBN TECH payment sync requires an online connection.',
+    );
+  }
+
+  const result =
+    await invokePostTransaction(
+      input,
+      key,
+    );
+
+  if (result.status === 'pending_approval') {
+    return {
+      mode: 'pending_approval',
+      approvalId: result.approvalId,
+    };
+  }
+
+  return {
+    mode: 'posted',
+    transactionId: result.transactionId,
+  };
+}
+
 async function syncOne(command: OfflineFinancialCommand): Promise<'posted' | 'waiting' | 'needs_attention'> {
   const attempts = command.attempts + 1;
   const attemptedAt = new Date().toISOString();

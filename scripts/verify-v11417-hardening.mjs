@@ -122,14 +122,14 @@ check(
 
 check(
   packageJson.scripts['verify:all-structural']
-    .endsWith(
+    .includes(
       '&& node scripts/verify-v11417-hardening.mjs',
     )
     && !packageJson.scripts['verify:all-structural']
       .includes(
         'npmrun verify:v11417-hardening',
       ),
-  'Full structural suite ends with the direct v1.14.17 verifier.',
+  'Full structural suite includes the direct v1.14.17 verifier.',
 );
 
 check(

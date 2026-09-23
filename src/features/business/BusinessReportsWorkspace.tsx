@@ -29,11 +29,16 @@ import {
   getSmePosStaffWorkspace,
 } from '../../repositories/smePosRepository';
 
+import {
+  listBusinessReportTransactionsForSpace,
+} from '../../repositories/transactionRepository';
+
 import type {
   BusinessIndustry,
   BusinessInvoice,
   BusinessQuotation,
   BusinessSalesOrder,
+  FinancialTransaction,
   SmePosListing,
   SmePosPayout,
   SmePosProduct,
@@ -53,6 +58,7 @@ type ReportRange =
   | 'custom';
 
 type ReportTab =
+  | 'money'
   | 'sales'
   | 'stock'
   | 'sellers'
@@ -503,6 +509,11 @@ export function BusinessReportsWorkspace({
   ] = useState<BusinessInvoice[]>([]);
 
   const [
+    moneyTransactions,
+    setMoneyTransactions,
+  ] = useState<FinancialTransaction[]>([]);
+
+  const [
     loading,
     setLoading,
   ] = useState(true);
@@ -519,6 +530,7 @@ export function BusinessReportsWorkspace({
           orderResult,
           invoiceResult,
           posResult,
+          moneyResult,
         ] = await Promise.allSettled([
           getBusinessQuotationWorkspace(
             spaceId,
@@ -536,6 +548,9 @@ export function BusinessReportsWorkspace({
             : getSmePosStaffWorkspace(
                 spaceId,
               ),
+          listBusinessReportTransactionsForSpace(
+            spaceId,
+          ),
         ]);
 
         if (!active) return;
@@ -555,6 +570,12 @@ export function BusinessReportsWorkspace({
         setInvoices(
           invoiceResult.status === 'fulfilled'
             ? invoiceResult.value.invoices
+            : [],
+        );
+
+        setMoneyTransactions(
+          moneyResult.status === 'fulfilled'
+            ? moneyResult.value
             : [],
         );
 
@@ -970,6 +991,52 @@ export function BusinessReportsWorkspace({
       ],
     );
 
+  const filteredMoneyTransactions =
+    useMemo(
+      () =>
+        moneyTransactions.filter(
+          (item) =>
+            item.status === 'posted'
+            && item.type !== 'reversal'
+            && inWindow(
+              item.transactionDate,
+              window,
+            ),
+        ),
+      [
+        moneyTransactions,
+        window,
+      ],
+    );
+
+  const moneyInTotal =
+    filteredMoneyTransactions
+      .filter(
+        (item) =>
+          item.type === 'income',
+      )
+      .reduce(
+        (sum, item) =>
+          sum + item.amountMinor,
+        0,
+      );
+
+  const moneyOutTotal =
+    filteredMoneyTransactions
+      .filter(
+        (item) =>
+          item.type === 'expense',
+      )
+      .reduce(
+        (sum, item) =>
+          sum + item.amountMinor,
+        0,
+      );
+
+  const moneyNetTotal =
+    moneyInTotal
+    - moneyOutTotal;
+
   const salesTotal =
     filteredSales.reduce(
       (sum, sale) =>
@@ -1316,6 +1383,47 @@ export function BusinessReportsWorkspace({
 
   const reportRows =
     (): Array<Array<string | number>> => {
+      if (tab === 'money') {
+        return [
+          [
+            'Date',
+            'Type',
+            'Category',
+            'Counterparty',
+            'Payment',
+            'Account ID',
+            'Amount',
+            'Source',
+            'Note',
+          ],
+          ...filteredMoneyTransactions.map(
+            (item) => [
+              item.transactionDate,
+              item.type,
+              item.category,
+              item.counterparty || '',
+              item.paymentMethodLabel
+                || item.paymentMethod
+                || '',
+              item.accountId,
+              (
+                (
+                  item.type === 'expense'
+                    ? -item.amountMinor
+                    : item.amountMinor
+                )
+                / 100
+              ).toFixed(2),
+              item.labels
+                ?.includes('adbn_tech')
+                  ? 'ADBN TECH'
+                  : 'BajetBN',
+              item.note || '',
+            ],
+          ),
+        ];
+      }
+
       if (tab === 'sales') {
         return [
           [
@@ -1549,6 +1657,10 @@ export function BusinessReportsWorkspace({
     id: ReportTab;
     label: string;
   }> = [
+    {
+      id: 'money',
+      label: 'Money',
+    },
     {
       id: 'sales',
       label: 'Sales',
@@ -1898,6 +2010,110 @@ export function BusinessReportsWorkspace({
           ),
         )}
       </div>
+
+      {tab === 'money' && (
+        <>
+          <div className="business-report-summary-v115">
+            <article>
+              <span>Money in</span>
+              <strong>
+                {formatMoney(
+                  moneyInTotal,
+                  currency,
+                )}
+              </strong>
+            </article>
+
+            <article>
+              <span>Money out</span>
+              <strong>
+                {formatMoney(
+                  moneyOutTotal,
+                  currency,
+                )}
+              </strong>
+            </article>
+
+            <article>
+              <span>Net cashflow</span>
+              <strong>
+                {formatMoney(
+                  moneyNetTotal,
+                  currency,
+                )}
+              </strong>
+            </article>
+          </div>
+
+          <div className="adbn-tech-table-wrap-v115">
+            <table className="adbn-tech-table-v115">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Category</th>
+                  <th>Counterparty</th>
+                  <th>Payment</th>
+                  <th>Amount</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredMoneyTransactions.map(
+                  (item) => (
+                    <tr key={item.id}>
+                      <td>{item.transactionDate}</td>
+                      <td>{item.type}</td>
+                      <td>{item.category}</td>
+                      <td>
+                        {item.counterparty || '-'}
+                      </td>
+                      <td>
+                        {item.paymentMethodLabel
+                          || item.paymentMethod
+                          || '-'}
+                      </td>
+                      <td>
+                        <strong>
+                          {item.type === 'expense'
+                            ? '-'
+                            : item.type === 'income'
+                              ? '+'
+                              : ''}
+                          {formatMoney(
+                            item.amountMinor,
+                            item.currency,
+                          )}
+                        </strong>
+                      </td>
+                      <td>
+                        {item.labels
+                          ?.includes(
+                            'adbn_tech',
+                          )
+                          ? 'ADBN TECH'
+                          : 'BajetBN'}
+                      </td>
+                    </tr>
+                  ),
+                )}
+
+                {!filteredMoneyTransactions.length && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="muted"
+                    >
+                      No Money activity in this period.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {tab === 'sales' && (
         <>
