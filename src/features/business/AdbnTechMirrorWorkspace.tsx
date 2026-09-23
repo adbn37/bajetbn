@@ -434,6 +434,181 @@ export function AdbnTechMirrorWorkspace({
           className="panel"
           data-adbn-tech-invoice-filters
         >
+          <div
+            data-adbn-tech-invoice-quick-filters
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
+              marginBottom: '1rem',
+            }}
+          >
+            <button
+              type="button"
+              className={
+                'button compact '
+                + (
+                  !invoiceStatusFilter
+                  && !invoicePaymentFilter
+                  && !invoiceSaleTypeFilter
+                  && !invoiceDateFilter
+                    ? 'primary'
+                    : 'secondary'
+                )
+              }
+              onClick={() => {
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter('');
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter('');
+              }}
+            >
+              All
+            </button>
+
+            <button
+              type="button"
+              className={
+                'button compact '
+                + (
+                  invoicePaymentFilter
+                  === 'outstanding'
+                  && !invoiceDateFilter
+                    ? 'primary'
+                    : 'secondary'
+                )
+              }
+              onClick={() => {
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter(
+                  'outstanding',
+                );
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter('');
+              }}
+            >
+              Outstanding
+            </button>
+
+            <button
+              type="button"
+              className={
+                'button compact '
+                + (
+                  invoicePaymentFilter
+                  === 'unpaid'
+                  && !invoiceDateFilter
+                    ? 'primary'
+                    : 'secondary'
+                )
+              }
+              onClick={() => {
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter(
+                  'unpaid',
+                );
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter('');
+              }}
+            >
+              Unpaid
+            </button>
+
+            <button
+              type="button"
+              className={
+                'button compact '
+                + (
+                  invoicePaymentFilter
+                  === 'partial'
+                  && !invoiceDateFilter
+                    ? 'primary'
+                    : 'secondary'
+                )
+              }
+              onClick={() => {
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter(
+                  'partial',
+                );
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter('');
+              }}
+            >
+              Partially paid
+            </button>
+
+            <button
+              type="button"
+              className={
+                'button compact '
+                + (
+                  invoicePaymentFilter
+                  === 'paid'
+                  && !invoiceDateFilter
+                    ? 'primary'
+                    : 'secondary'
+                )
+              }
+              onClick={() => {
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter(
+                  'paid',
+                );
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter('');
+              }}
+            >
+              Paid
+            </button>
+
+            <button
+              type="button"
+              className={
+                'button compact '
+                + (
+                  invoiceDateFilter
+                  === 'overdue'
+                    ? 'primary'
+                    : 'secondary'
+                )
+              }
+              onClick={() => {
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter('');
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter(
+                  'overdue',
+                );
+              }}
+            >
+              Overdue
+            </button>
+
+            <button
+              type="button"
+              className={
+                'button compact '
+                + (
+                  invoiceDateFilter
+                  === 'month'
+                    ? 'primary'
+                    : 'secondary'
+                )
+              }
+              onClick={() => {
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter('');
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter(
+                  'month',
+                );
+              }}
+            >
+              This Month
+            </button>
+          </div>
+
           <div className="business-report-filter-grid-v115">
             <label>
               Status

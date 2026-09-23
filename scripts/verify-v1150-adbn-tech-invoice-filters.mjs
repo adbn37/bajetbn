@@ -70,6 +70,38 @@ need(
 
 need(
   mirror.includes(
+    'data-adbn-tech-invoice-quick-filters',
+  )
+    && mirror.includes(
+      "setInvoiceDateFilter(\n                  'overdue',",
+    )
+    && mirror.includes(
+      '>\n              Overdue\n            </button>',
+    ),
+  'Overdue is available as a direct one-tap invoice quick filter.',
+);
+
+need(
+  mirror.includes(
+    '>\n              Outstanding\n            </button>',
+  )
+    && mirror.includes(
+      '>\n              Unpaid\n            </button>',
+    )
+    && mirror.includes(
+      '>\n              Partially paid\n            </button>',
+    )
+    && mirror.includes(
+      '>\n              Paid\n            </button>',
+    )
+    && mirror.includes(
+      '>\n              This Month\n            </button>',
+    ),
+  'Invoice quick filters expose common receivables views.',
+);
+
+need(
+  mirror.includes(
     'visibleInvoiceOutstanding',
   )
     && mirror.includes(
