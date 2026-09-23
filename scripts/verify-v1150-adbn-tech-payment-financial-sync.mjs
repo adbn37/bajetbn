@@ -10,6 +10,9 @@ const transactionRepo =
 const payments =
   read('src/features/business/AdbnTechPaymentsWorkspace.tsx');
 
+const syncRepo =
+  read('src/repositories/adbnTechPaymentSyncRepository.ts');
+
 const home =
   read('src/features/business/BusinessHomePage.tsx');
 
@@ -40,13 +43,13 @@ need(
 );
 
 need(
-  payments.includes(
+  syncRepo.includes(
     "'adbn-payment-'",
   )
-    && payments.includes(
+    && syncRepo.includes(
       "'adbn_pay_'",
     )
-    && payments.includes(
+    && syncRepo.includes(
       "'income-sales'",
     ),
   'ADBN payment sync uses deterministic IDs and Sales income.',
@@ -66,7 +69,7 @@ need(
 );
 
 need(
-  payments.includes(
+  syncRepo.includes(
     "'adbn_tech'",
   )
     && payments.includes(
@@ -86,16 +89,16 @@ need(
 );
 
 need(
-  payments.includes(
+  syncRepo.includes(
     'adbnPaymentCanPost',
   )
-    && payments.includes(
+    && syncRepo.includes(
       "'cancel'",
     )
-    && payments.includes(
+    && syncRepo.includes(
       "'void'",
     )
-    && payments.includes(
+    && syncRepo.includes(
       "'reverse'",
     ),
   'Invalid/cancelled payment states remain blocked.',

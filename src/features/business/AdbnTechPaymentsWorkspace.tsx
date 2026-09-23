@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -21,15 +22,20 @@ import {
   getSpace,
   markAdbnTechIntegrationConnected,
   setAdbnTechAccountMappings,
+  setAdbnTechPaymentAutoSync,
 } from '../../repositories/spaceRepository';
 import {
+  adbnPaymentCanPost,
+  adbnPaymentSyncLabel,
+  autoSyncNewAdbnTechPaymentsToBajetBn,
+  syncAdbnTechPaymentToBajetBn,
+} from '../../repositories/adbnTechPaymentSyncRepository';
+import {
   listBusinessTransactionsForSpace,
-  postTransactionWithIdempotencyKey,
 } from '../../repositories/transactionRepository';
 import type {
   Account,
   FinancialTransaction,
-  PaymentMethodCode,
 } from '../../types/models';
 
 function bnd(value: number) {
@@ -81,162 +87,30 @@ function accountLabel(
   );
 }
 
-function externalPaymentToken(
+function simpleDateTime(
   value: string,
 ) {
-  let first = 2166136261;
-  let second = 5381;
-
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-
-    first = Math.imul(
-      first ^ code,
-      16777619,
-    );
-
-    second = (
-      Math.imul(second, 33)
-      ^ code
-    );
-  }
-
-  return (
-    (first >>> 0)
-      .toString(16)
-      .padStart(8, '0')
-    + (second >>> 0)
-      .toString(16)
-      .padStart(8, '0')
-  );
-}
-
-function adbnPaymentSyncLabel(
-  paymentId: string,
-) {
-  return (
-    'adbn_pay_'
-    + externalPaymentToken(paymentId)
-  );
-}
-
-function adbnPaymentSyncKey(
-  paymentId: string,
-) {
-  return (
-    'adbn-payment-'
-    + externalPaymentToken(paymentId)
-  );
-}
-
-function normalizedPaymentDate(
-  value: string,
-) {
-  const direct =
-    value.match(
-      /^\d{4}-\d{2}-\d{2}/,
-    )?.[0];
-
-  if (direct) return direct;
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-
-  return parsed
-    .toISOString()
-    .slice(0, 10);
-}
-
-function adbnPaymentCanPost(
-  payment: AdbnTechPaymentMirror,
-) {
-  const status =
-    payment.status
-      .trim()
-      .toLowerCase();
-
-  return (
-    payment.amount > 0
-    && Boolean(
-      normalizedPaymentDate(
-        payment.paymentDate,
-      ),
-    )
-    && ![
-      'cancel',
-      'void',
-      'reverse',
-      'refund',
-      'reject',
-      'delete',
-      'failed',
-    ].some(
-      (blocked) =>
-        status.includes(blocked),
-    )
-  );
-}
-
-function paymentMethodFromAdbn(
-  value: string,
-): {
-  paymentMethod: PaymentMethodCode;
-  paymentMethodLabel?: string;
-} {
-  const normalized =
-    value.trim().toLowerCase();
+  const parsed =
+    new Date(value);
 
   if (
-    normalized.includes('bank')
-    || normalized.includes('transfer')
+    Number.isNaN(
+      parsed.getTime(),
+    )
   ) {
-    return {
-      paymentMethod: 'bank_transfer',
-    };
+    return value;
   }
 
-  if (normalized.includes('cash')) {
-    return {
-      paymentMethod: 'cash',
-    };
-  }
-
-  if (normalized.includes('debit')) {
-    return {
-      paymentMethod: 'debit_card',
-    };
-  }
-
-  if (normalized.includes('credit')) {
-    return {
-      paymentMethod: 'credit_card',
-    };
-  }
-
-  if (
-    normalized.includes('wallet')
-    || normalized.includes('e-wallet')
-  ) {
-    return {
-      paymentMethod: 'e_wallet',
-    };
-  }
-
-  if (normalized.includes('qr')) {
-    return {
-      paymentMethod: 'qr_payment',
-    };
-  }
-
-  return {
-    paymentMethod: 'other',
-    paymentMethodLabel:
-      value.trim()
-      || 'ADBN TECH',
-  };
+  return new Intl.DateTimeFormat(
+    'en-BN',
+    {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  ).format(parsed);
 }
 
 export function AdbnTechPaymentsWorkspace({
@@ -293,6 +167,25 @@ export function AdbnTechPaymentsWorkspace({
   const [syncMessage, setSyncMessage] =
     useState('');
 
+  const [
+    autoSyncEnabled,
+    setAutoSyncEnabled,
+  ] = useState(false);
+
+  const [
+    autoSyncCutoffIso,
+    setAutoSyncCutoffIso,
+  ] = useState('');
+
+  const [autoSyncBusy, setAutoSyncBusy] =
+    useState(false);
+
+  const [autoSyncMessage, setAutoSyncMessage] =
+    useState('');
+
+  const autoSyncRunRef =
+    useRef('');
+
   const loadBajetBnSide = useCallback(
     async () => {
       if (!user?.uid) return;
@@ -322,6 +215,18 @@ export function AdbnTechPaymentsWorkspace({
         setSavedMappings(nextMappings);
         setBusinessTransactions(
           nextTransactions,
+        );
+
+        setAutoSyncEnabled(
+          nextSpace
+            ?.externalIntegrationPaymentAutoSyncEnabled
+          === true,
+        );
+
+        setAutoSyncCutoffIso(
+          nextSpace
+            ?.externalIntegrationPaymentAutoSyncCutoffIso
+          || '',
         );
       } catch (nextError) {
         setError(
@@ -521,58 +426,13 @@ export function AdbnTechPaymentsWorkspace({
       setError('');
 
       try {
-        const method =
-          paymentMethodFromAdbn(
-            payment.paymentMethod,
-          );
-
         const outcome =
-          await postTransactionWithIdempotencyKey(
+          await syncAdbnTechPaymentToBajetBn(
             {
-              type: 'income',
-              accountId:
-                mappedAccountId,
+              payment,
               spaceId,
-              amountMinor:
-                Math.round(
-                  payment.amount * 100,
-                ),
-              transactionDate:
-                normalizedPaymentDate(
-                  payment.paymentDate,
-                ),
-              categoryId:
-                'income-sales',
-              counterparty:
-                payment.customerName
-                || 'ADBN TECH customer',
-              note:
-                [
-                  'ADBN TECH payment '
-                    + (
-                      payment.paymentNo
-                      || payment.id
-                    ),
-                  payment.invoiceNo
-                    ? 'Invoice '
-                      + payment.invoiceNo
-                    : '',
-                  payment.reference
-                    ? 'Reference '
-                      + payment.reference
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' | '),
-              labels: [
-                'adbn_tech',
-                syncLabel,
-              ],
-              ...method,
+              mappedAccountId,
             },
-            adbnPaymentSyncKey(
-              payment.id,
-            ),
           );
 
         if (
@@ -611,6 +471,204 @@ export function AdbnTechPaymentsWorkspace({
         setSyncBusyPaymentId('');
       }
     };
+
+  const enableAutoSync =
+    async () => {
+      const cutoffIso =
+        new Date()
+          .toISOString();
+
+      setAutoSyncBusy(true);
+      setAutoSyncMessage('');
+      setError('');
+
+      try {
+        await setAdbnTechPaymentAutoSync(
+          spaceId,
+          {
+            enabled: true,
+            cutoffIso,
+          },
+        );
+
+        setAutoSyncEnabled(true);
+        setAutoSyncCutoffIso(
+          cutoffIso,
+        );
+        setAutoSyncMessage(
+          'Auto-sync enabled. Only ADBN TECH payments created after this moment can post automatically.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN TECH payment auto-sync could not be enabled.',
+        );
+      } finally {
+        setAutoSyncBusy(false);
+      }
+    };
+
+  const disableAutoSync =
+    async () => {
+      setAutoSyncBusy(true);
+      setAutoSyncMessage('');
+      setError('');
+
+      try {
+        await setAdbnTechPaymentAutoSync(
+          spaceId,
+          {
+            enabled: false,
+          },
+        );
+
+        setAutoSyncEnabled(false);
+        setAutoSyncMessage(
+          'Auto-sync is off. Manual Sync to BajetBN remains available.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN TECH payment auto-sync could not be disabled.',
+        );
+      } finally {
+        setAutoSyncBusy(false);
+      }
+    };
+
+  const runFuturePaymentAutoSync =
+    useCallback(
+      async (
+        payments:
+          AdbnTechPaymentMirror[],
+      ) => {
+        if (
+          !autoSyncEnabled
+          || !autoSyncCutoffIso
+        ) {
+          return;
+        }
+
+        setAutoSyncBusy(true);
+        setAutoSyncMessage('');
+
+        try {
+          const summary =
+            await autoSyncNewAdbnTechPaymentsToBajetBn(
+              {
+                spaceId,
+                mappings:
+                  savedMappings,
+                cutoffIso:
+                  autoSyncCutoffIso,
+                payments,
+              },
+            );
+
+          setBusinessTransactions(
+            summary.transactions,
+          );
+
+          if (
+            summary.posted > 0
+            && onFinancialSync
+          ) {
+            await onFinancialSync();
+          }
+
+          if (
+            summary.connected
+            && (
+              summary.posted > 0
+              || summary.failed > 0
+              || summary.blocked > 0
+            )
+          ) {
+            setAutoSyncMessage(
+              summary.posted
+              + ' new payment'
+              + (
+                summary.posted === 1
+                  ? ''
+                  : 's'
+              )
+              + ' auto-synced. '
+              + summary.blocked
+              + ' blocked. '
+              + summary.failed
+              + ' failed.'
+            );
+          }
+
+          if (
+            summary.firstError
+          ) {
+            setError(
+              summary.firstError,
+            );
+          }
+        } catch (nextError) {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : 'ADBN TECH payment auto-sync check failed.',
+          );
+        } finally {
+          setAutoSyncBusy(false);
+        }
+      },
+      [
+        autoSyncCutoffIso,
+        autoSyncEnabled,
+        onFinancialSync,
+        savedMappings,
+        spaceId,
+      ],
+    );
+
+  useEffect(
+    () => {
+      if (
+        !snapshot
+        || !autoSyncEnabled
+        || !autoSyncCutoffIso
+      ) {
+        return;
+      }
+
+      const signature =
+        snapshot.loadedAt
+        + '|'
+        + autoSyncCutoffIso
+        + '|'
+        + JSON.stringify(
+          savedMappings,
+        );
+
+      if (
+        autoSyncRunRef.current
+        === signature
+      ) {
+        return;
+      }
+
+      autoSyncRunRef.current =
+        signature;
+
+      void runFuturePaymentAutoSync(
+        snapshot.payments,
+      );
+    },
+    [
+      autoSyncCutoffIso,
+      autoSyncEnabled,
+      runFuturePaymentAutoSync,
+      savedMappings,
+      snapshot,
+    ],
+  );
 
   const normalizedQuery =
     query.trim().toLowerCase();
@@ -1002,6 +1060,90 @@ export function AdbnTechPaymentsWorkspace({
         )}
       </section>
 
+      <section
+        className="panel adbn-tech-account-mapping-v115"
+        data-adbn-tech-payment-auto-sync
+      >
+        <div>
+          <span className="eyebrow">
+            Future payments
+          </span>
+
+          <h3>
+            Auto-sync new ADBN TECH payments
+          </h3>
+
+          <p className="muted">
+            Existing receipts stay manual. When enabled, only ADBN TECH payments created after the activation time can post automatically into the mapped BajetBN Business account.
+          </p>
+        </div>
+
+        {autoSyncEnabled ? (
+          <div className="adbn-tech-account-mapping-footer-v115">
+            <div>
+              <strong>
+                Auto-sync on
+              </strong>
+              <span>
+                {' · from '}
+                {simpleDateTime(
+                  autoSyncCutoffIso,
+                )}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="button secondary"
+              disabled={autoSyncBusy}
+              onClick={() =>
+                void disableAutoSync()
+              }
+            >
+              {autoSyncBusy
+                ? 'Updating...'
+                : 'Turn off auto-sync'}
+            </button>
+          </div>
+        ) : (
+          <div className="adbn-tech-account-mapping-footer-v115">
+            <div>
+              <strong>
+                Auto-sync off
+              </strong>
+              <span>
+                {' '}
+                Older payments will never be imported automatically.
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="button primary"
+              disabled={
+                autoSyncBusy
+                || !Object.keys(
+                  savedMappings,
+                ).length
+              }
+              onClick={() =>
+                void enableAutoSync()
+              }
+            >
+              {autoSyncBusy
+                ? 'Enabling...'
+                : 'Enable auto-sync from now'}
+            </button>
+          </div>
+        )}
+
+        {autoSyncMessage && (
+          <div className="notice success">
+            {autoSyncMessage}
+          </div>
+        )}
+      </section>
+
       <label className="adbn-tech-mirror-search-v115">
         <span>Search payments</span>
 
@@ -1215,7 +1357,7 @@ export function AdbnTechPaymentsWorkspace({
       )}
 
       <small className="muted">
-        Source of truth: ADBN TECH. Slice 24B can explicitly post a mapped incoming payment into BajetBN Money activity. ADBN TECH remains read-only and is never edited by this sync.
+        Source of truth: ADBN TECH. Manual sync remains available for older receipts. When future-only auto-sync is enabled, only payments created after the stored cutoff can post automatically. ADBN TECH remains read-only.
       </small>
     </section>
   );

@@ -1315,6 +1315,8 @@ export interface Space {
   externalIntegrationStatus?: SpaceExternalIntegrationStatus | null;
   externalIntegrationKey?: string | null;
   externalIntegrationAccountMappings?: Record<string, string>;
+  externalIntegrationPaymentAutoSyncEnabled?: boolean;
+  externalIntegrationPaymentAutoSyncCutoffIso?: string | null;
   archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
