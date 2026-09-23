@@ -8,7 +8,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   ADBN_TECH_ADMIN_EMAIL,
   connectAdbnTechReadOnly,
-  disconnectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
   loadAdbnTechPurchasesReadOnly,
   type AdbnTechPurchasesReadOnlySnapshot,
@@ -98,13 +97,6 @@ export function AdbnTechPurchasesWorkspace({
     }
   };
 
-  const disconnect = async () => {
-    await disconnectAdbnTechReadOnly();
-    setConnectedEmail('');
-    setSnapshot(null);
-    setError('');
-  };
-
   const normalizedQuery = query.trim().toLowerCase();
   const purchases = useMemo(() => {
     const rows = snapshot?.purchases || [];
@@ -171,23 +163,6 @@ export function AdbnTechPurchasesWorkspace({
         <div>
           <span>ADBN TECH · Read-only mirror</span>
           <h2>Purchases</h2>
-        </div>
-        <div className="adbn-tech-mirror-heading-actions-v115">
-          <button
-            type="button"
-            className="button secondary"
-            disabled={loading}
-            onClick={() => void loadPurchases()}
-          >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => void disconnect()}
-          >
-            Disconnect
-          </button>
         </div>
       </div>
 

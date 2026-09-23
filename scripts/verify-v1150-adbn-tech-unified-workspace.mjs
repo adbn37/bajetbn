@@ -7,6 +7,15 @@ const read = (file) =>
 const home =
   read('src/features/business/BusinessHomePage.tsx');
 
+const mirror =
+  read('src/features/business/AdbnTechMirrorWorkspace.tsx');
+
+const payments =
+  read('src/features/business/AdbnTechPaymentsWorkspace.tsx');
+
+const purchases =
+  read('src/features/business/AdbnTechPurchasesWorkspace.tsx');
+
 const checks = [];
 
 function need(condition, label) {
@@ -19,84 +28,99 @@ function need(condition, label) {
 
 need(
   home.includes(
-    "| 'adbn'",
+    "| 'adbn_customers'",
   )
-    && !home.includes(
-      "| 'adbn_customers'",
-    )
-    && !home.includes(
+    && home.includes(
       "| 'adbn_invoices'",
     )
-    && !home.includes(
+    && home.includes(
       "| 'adbn_payments'",
     )
-    && !home.includes(
+    && home.includes(
       "| 'adbn_purchases'",
+    )
+    && !home.includes(
+      "| 'adbn'",
     ),
-  'Business workspace uses one top-level ADBN TECH view.',
+  'Customers, Invoices, Payments and Purchases are normal Business workspace views.',
 );
 
-need(
-  home.includes(
-    "value === 'adbn_customers'",
-  )
-    && home.includes(
-      "value === 'adbn_invoices'",
-    )
-    && home.includes(
-      "value === 'adbn_payments'",
-    )
-    && home.includes(
-      "value === 'adbn_purchases'",
-    )
-    && home.includes(
-      "return 'adbn';",
-    ),
-  'Legacy ADBN workspace URLs remain backward-compatible.',
-);
-
-need(
-  home.includes(
-    'data-adbn-tech-unified-workspace',
-  )
-    && home.includes(
-      'data-adbn-tech-workspace-tabs',
-    )
-    && home.includes(
-      'setAdbnTechWorkspaceTab',
-    ),
-  'ADBN TECH renders one parent workspace with internal tab navigation.',
-);
-
-for (const label of [
-  'Customers',
-  'Invoices',
-  'Payments',
-  'Purchases',
+for (const [view, label] of [
+  ['adbn_customers', 'Customers'],
+  ['adbn_invoices', 'Invoices'],
+  ['adbn_payments', 'Payments'],
+  ['adbn_purchases', 'Purchases'],
 ]) {
   need(
     home.includes(
-      `>${label}</button>`,
+      `workspaceView === '${view}'`,
     )
-      || home.includes(
-        `>\n                ${label}\n              </button>`,
+      && home.includes(
+        `setWorkspaceView('${view}')`,
+      )
+      && home.includes(
+        `>\n              ${label}\n            </button>`,
       ),
-    `Unified ADBN TECH workspace includes ${label}.`,
+    `${label} is a normal top-level Business navigation item.`,
   );
 }
 
 need(
+  !home.includes(
+    'data-adbn-tech-unified-workspace',
+  )
+    && !home.includes(
+      'data-adbn-tech-workspace-tabs',
+    )
+    && !home.includes(
+      'setAdbnTechWorkspaceTab',
+    )
+    && !home.includes(
+      '>\n            ADBN TECH\n          </button>',
+    ),
+  'No parent ADBN TECH operational navigation remains.',
+);
+
+need(
   home.includes(
-    'Open ADBN TECH workspace',
+    'Refresh ADBN TECH',
   )
     && home.includes(
-      'Connection and integration setup lives here.',
+      'Disconnect ADBN TECH',
+    )
+    && home.includes(
+      'refreshAdbnTechConnection',
+    )
+    && home.includes(
+      'disconnectAdbnTechConnection',
     )
     && home.includes(
       'data-adbn-tech-connection',
     ),
-  'Business Setup acts as the ADBN TECH integration control hub.',
+  'Refresh and Disconnect live in Business Setup ADBN TECH Integration.',
 );
+
+for (const [label, source] of [
+  ['Customers / Invoices', mirror],
+  ['Payments', payments],
+  ['Purchases', purchases],
+]) {
+  need(
+    !source.includes(
+      'disconnectAdbnTechReadOnly',
+    )
+      && !source.includes(
+        'void disconnect()',
+      )
+      && !source.includes(
+        "'Refreshing…' : 'Refresh'",
+      )
+      && !source.includes(
+        "? 'Refreshing…'\n              : 'Refresh'",
+      ),
+    `${label} does not repeat Refresh / Disconnect controls.`,
+  );
+}
 
 need(
   home.includes(
@@ -111,9 +135,9 @@ need(
     && home.includes(
       '<AdbnTechMirrorWorkspace',
     ),
-  'Existing ADBN operational components remain wired into the unified workspace.',
+  'Existing ADBN operational components remain wired normally.',
 );
 
 console.log(
-  `ADBN TECH unified workspace verification PASS (${checks.length} checks).`,
+  `ADBN TECH normal navigation and setup controls verification PASS (${checks.length} checks).`,
 );
