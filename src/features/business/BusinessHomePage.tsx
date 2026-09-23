@@ -22,6 +22,9 @@ import {
   prepareAdbnTechIntegration,
 } from '../../repositories/spaceRepository';
 import {
+  autoSyncNewAdbnTechPaymentsToBajetBn,
+} from '../../repositories/adbnTechPaymentSyncRepository';
+import {
   listBusinessTransactionsForSpace,
 } from '../../repositories/transactionRepository';
 import type {
@@ -293,6 +296,31 @@ export function BusinessHomePage() {
       if (!canReadFinancials) {
         setTransactions([]);
         return;
+      }
+
+      if (
+        isOwner
+        && nextSpace
+          .externalIntegrationProvider
+          === 'adbn_tech'
+        && nextSpace
+          .externalIntegrationPaymentAutoSyncEnabled
+          === true
+        && nextSpace
+          .externalIntegrationPaymentAutoSyncCutoffIso
+      ) {
+        await autoSyncNewAdbnTechPaymentsToBajetBn(
+          {
+            spaceId,
+            mappings:
+              nextSpace
+                .externalIntegrationAccountMappings
+              || {},
+            cutoffIso:
+              nextSpace
+                .externalIntegrationPaymentAutoSyncCutoffIso,
+          },
+        ).catch(() => null);
       }
 
       const nextTransactions =
