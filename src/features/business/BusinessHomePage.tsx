@@ -1220,6 +1220,9 @@ export function BusinessHomePage() {
         ? (
           <AdbnTechPurchasesWorkspace
             spaceId={space.id}
+            onFinancialSync={
+              refreshBusinessTransactions
+            }
           />
         )
         : workspaceView === 'adbn_inventory'
