@@ -103,6 +103,41 @@ export interface AdbnTechPaymentsReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechPurchaseMirror {
+  id: string;
+  purchaseNo: string;
+  purchaseDate: string;
+  sellerName: string;
+  sellerType: string;
+  brand: string;
+  model: string;
+  category: string;
+  condition: string;
+  quantity: number;
+  unitPrice: number;
+  totalCost: number;
+  quantityReceived: number;
+  quantityOutstanding: number;
+  orderStatus: string;
+  receivedDate: string;
+  deliveryReference: string;
+  paymentStatus: string;
+  amountPaid: number;
+  outstandingBalance: number;
+  linkedProductId: string;
+  linkedBuildId: string;
+  linkedBuildNo: string;
+  inventoryAdded: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AdbnTechPurchasesReadOnlySnapshot {
+  purchases: AdbnTechPurchaseMirror[];
+  connectedEmail: string;
+  loadedAt: string;
+}
+
 function text(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
@@ -436,6 +471,86 @@ export async function loadAdbnTechPaymentsReadOnly(): Promise<
   return {
     bankAccounts,
     payments,
+    connectedEmail,
+    loadedAt: new Date().toISOString(),
+  };
+}
+
+export async function loadAdbnTechPurchasesReadOnly(): Promise<
+  AdbnTechPurchasesReadOnlySnapshot
+> {
+  const { auth, db } = requireAdbnTechFirebase();
+  const connectedEmail = normalizeEmail(auth.currentUser?.email);
+
+  if (connectedEmail !== ADBN_TECH_ADMIN_EMAIL) {
+    throw new Error(
+      'Connect ADBN TECH with ' + ADBN_TECH_ADMIN_EMAIL + ' first.',
+    );
+  }
+
+  /*
+   * Slice 24A is read-only. ADBN TECH supplierPartPurchases
+   * remains the source of truth. Do not add write APIs here.
+   */
+  const purchaseSnapshot = await getDocs(
+    collection(db, 'supplierPartPurchases'),
+  );
+
+  const purchases = purchaseSnapshot.docs
+    .map((record) => {
+      const data = record.data();
+      const quantity = money(data.quantity);
+      const unitPrice = money(data.unitPrice);
+      const quantityReceived = money(data.quantityReceived);
+      const totalCost = money(
+        data.totalCost
+        ?? data.total
+        ?? data.amount
+        ?? (quantity * unitPrice),
+      );
+      const amountPaid = money(data.amountPaid);
+
+      return {
+        id: record.id,
+        purchaseNo: text(data.purchaseNo ?? data.poNo ?? data.referenceNo),
+        purchaseDate: text(data.purchaseDate ?? data.orderDate ?? data.date),
+        sellerName: text(data.sellerName ?? data.supplierName ?? data.vendorName),
+        sellerType: text(data.sellerType ?? data.supplierType),
+        brand: text(data.brand),
+        model: text(data.model ?? data.partName ?? data.productName),
+        category: text(data.category),
+        condition: text(data.condition),
+        quantity,
+        unitPrice,
+        totalCost,
+        quantityReceived,
+        quantityOutstanding: money(
+          data.quantityOutstanding ?? Math.max(0, quantity - quantityReceived),
+        ),
+        orderStatus: text(data.orderStatus ?? data.status),
+        receivedDate: text(data.receivedDate),
+        deliveryReference: text(data.deliveryReference ?? data.deliveryRef),
+        paymentStatus: text(data.paymentStatus),
+        amountPaid,
+        outstandingBalance: money(
+          data.outstandingBalance ?? Math.max(0, totalCost - amountPaid),
+        ),
+        linkedProductId: text(data.linkedProductId),
+        linkedBuildId: text(data.linkedBuildId),
+        linkedBuildNo: text(data.linkedBuildNo),
+        inventoryAdded: data.inventoryAdded === true,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      } satisfies AdbnTechPurchaseMirror;
+    })
+    .sort(
+      (a, b) =>
+        Math.max(timestampMillis(b.updatedAt), timestampMillis(b.createdAt))
+        - Math.max(timestampMillis(a.updatedAt), timestampMillis(a.createdAt)),
+    );
+
+  return {
+    purchases,
     connectedEmail,
     loadedAt: new Date().toISOString(),
   };

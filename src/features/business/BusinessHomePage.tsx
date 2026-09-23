@@ -42,6 +42,9 @@ import {
   AdbnTechPaymentsWorkspace,
 } from './AdbnTechPaymentsWorkspace';
 import {
+  AdbnTechPurchasesWorkspace,
+} from './AdbnTechPurchasesWorkspace';
+import {
   BusinessReportsWorkspace,
 } from './BusinessReportsWorkspace';
 import { AccountsPage } from '../accounts/AccountsPage';
@@ -133,6 +136,7 @@ type BusinessWorkspaceView =
   | 'adbn_customers'
   | 'adbn_invoices'
   | 'adbn_payments'
+  | 'adbn_purchases'
   | 'setup';
 
 function workspaceViewFromSearch(
@@ -147,6 +151,7 @@ function workspaceViewFromSearch(
     || value === 'adbn_customers'
     || value === 'adbn_invoices'
     || value === 'adbn_payments'
+    || value === 'adbn_purchases'
     || value === 'setup'
   ) {
     return value;
@@ -899,6 +904,20 @@ export function BusinessHomePage() {
             >
               Payments
             </button>
+
+            <button
+              type="button"
+              className={
+                workspaceView === 'adbn_purchases'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setWorkspaceView('adbn_purchases')
+              }
+            >
+              Purchases
+            </button>
           </>
         )}
 
@@ -1057,6 +1076,13 @@ export function BusinessHomePage() {
             spaceId={space.id}
           />
         )
+        : workspaceView === 'adbn_purchases'
+        && canManageAdbnTechConnection
+        ? (
+          <AdbnTechPurchasesWorkspace
+            spaceId={space.id}
+          />
+        )
         : workspaceView === 'reports'
         && canViewFinancials
         ? (
@@ -1186,7 +1212,7 @@ export function BusinessHomePage() {
                 </h3>
 
                 <p className="muted">
-                  Use this Business Space as the BajetBN home for ADBN TECH. Customers and invoices can now be viewed through a separate read-only ADBN TECH sign-in. Payments, purchases, expenses, refunds and inventory remain for later integration slices.
+                  Use this Business Space as the BajetBN home for ADBN TECH. Customers, invoices, payments and supplier purchases can be viewed through a separate read-only ADBN TECH sign-in. Expenses, refunds and inventory posting remain isolated for later integration slices.
                 </p>
 
                 {adbnTechPrepared && (
@@ -1222,7 +1248,7 @@ export function BusinessHomePage() {
               </div>
 
                 <small className="muted">
-                  Slice 22 reads ADBN TECH customers and invoices only. It does not create, update or delete ADBN TECH records.
+                  Slice 24A keeps the ADBN TECH bridge read-only. Purchases are mirrored from supplierPartPurchases only; BajetBN transactions, POS stock and inventory are not changed.
                 </small>
               </section>
             )}
