@@ -8,6 +8,9 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import {
+  httpsCallable,
+} from 'firebase/functions';
+import {
   prepareAdbnTechSessionAuth,
   requireAdbnTechFirebase,
 } from '../services/adbnTechFirebase';
@@ -103,6 +106,37 @@ export interface AdbnTechPaymentsReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechRecordPaymentInput {
+  requestId: string;
+  invoiceId: string;
+  amount: number;
+  paymentDate: string;
+  method: string;
+  reference: string;
+  bankAccountId: string;
+  note: string;
+}
+
+export interface AdbnTechRecordPaymentResult {
+  duplicatePrevented: boolean;
+  paymentId: string;
+  receiptNo: string;
+  invoiceId: string;
+  invoiceNo: string;
+  planId: string;
+  planNo: string;
+  amount: number;
+  paymentDate: string;
+  method: string;
+  reference: string;
+  bankAccountId: string;
+  bankAccountName: string;
+  previousPaidTotal?: number;
+  totalPaidAfter?: number;
+  remainingBalanceAfter: number;
+  nextDueDateAfter: string;
+}
+
 export interface AdbnTechPurchaseMirror {
   id: string;
   purchaseNo: string;
@@ -195,6 +229,195 @@ export async function connectAdbnTechReadOnly() {
 export async function disconnectAdbnTechReadOnly() {
   const { auth } = requireAdbnTechFirebase();
   await signOut(auth);
+}
+
+function adbnTechConnectedSession() {
+  const {
+    auth,
+    db,
+    functions,
+  } = requireAdbnTechFirebase();
+
+  const connectedEmail =
+    normalizeEmail(
+      auth.currentUser?.email,
+    );
+
+  if (
+    connectedEmail
+    !== ADBN_TECH_ADMIN_EMAIL
+  ) {
+    throw new Error(
+      'Connect ADBN TECH with '
+      + ADBN_TECH_ADMIN_EMAIL
+      + ' first.',
+    );
+  }
+
+  return {
+    auth,
+    db,
+    functions,
+    connectedEmail,
+  };
+}
+
+export async function loadAdbnTechBankAccountsReadOnly(): Promise<
+  AdbnTechBankAccountMirror[]
+> {
+  const { db } =
+    adbnTechConnectedSession();
+
+  const snapshot =
+    await getDocs(
+      collection(
+        db,
+        'bankAccounts',
+      ),
+    );
+
+  return snapshot.docs
+    .map((record) => {
+      const data =
+        record.data();
+
+      const status =
+        text(data.status);
+
+      const normalizedStatus =
+        status
+          .trim()
+          .toLowerCase();
+
+      return {
+        id: record.id,
+        accountName:
+          text(data.accountName),
+        bankName:
+          text(data.bankName),
+        accountType:
+          text(data.accountType),
+        accountNumber:
+          text(data.accountNumber),
+        currency:
+          text(data.currency)
+          || 'BND',
+        status,
+        isActive:
+          data.active !== false
+          && !data.archivedAt
+          && normalizedStatus !== 'archived'
+          && normalizedStatus !== 'closed'
+          && normalizedStatus !== 'inactive',
+        createdAt:
+          data.createdAt,
+        updatedAt:
+          data.updatedAt,
+      } satisfies AdbnTechBankAccountMirror;
+    })
+    .sort((a, b) => {
+      if (
+        a.isActive
+        !== b.isActive
+      ) {
+        return a.isActive
+          ? -1
+          : 1;
+      }
+
+      return (
+        a.accountName
+        || a.bankName
+        || a.id
+      ).localeCompare(
+        b.accountName
+        || b.bankName
+        || b.id,
+      );
+    });
+}
+
+export async function recordAdbnTechPayment(
+  input: AdbnTechRecordPaymentInput,
+): Promise<AdbnTechRecordPaymentResult> {
+  const { functions } =
+    adbnTechConnectedSession();
+
+  const requestId =
+    input.requestId.trim();
+  const invoiceId =
+    input.invoiceId.trim();
+  const amount =
+    money(input.amount);
+  const paymentDate =
+    input.paymentDate.trim();
+  const method =
+    input.method.trim();
+  const bankAccountId =
+    input.bankAccountId.trim();
+
+  if (requestId.length < 8) {
+    throw new Error(
+      'A valid ADBN TECH payment request ID is required.',
+    );
+  }
+
+  if (!invoiceId) {
+    throw new Error(
+      'Choose an ADBN TECH invoice first.',
+    );
+  }
+
+  if (amount <= 0) {
+    throw new Error(
+      'Payment amount must be greater than zero.',
+    );
+  }
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/
+      .test(paymentDate)
+  ) {
+    throw new Error(
+      'Choose a valid payment date.',
+    );
+  }
+
+  if (!method) {
+    throw new Error(
+      'Choose a payment method.',
+    );
+  }
+
+  if (!bankAccountId) {
+    throw new Error(
+      'Choose the ADBN TECH receiving account.',
+    );
+  }
+
+  const call = httpsCallable<
+    AdbnTechRecordPaymentInput,
+    AdbnTechRecordPaymentResult
+  >(
+    functions,
+    'recordBajetBnPayment',
+  );
+
+  const result =
+    await call({
+      requestId,
+      invoiceId,
+      amount,
+      paymentDate,
+      method,
+      reference:
+        input.reference.trim(),
+      bankAccountId,
+      note:
+        input.note.trim(),
+    });
+
+  return result.data;
 }
 
 export async function loadAdbnTechReadOnlySnapshot(): Promise<

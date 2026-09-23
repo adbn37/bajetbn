@@ -13,6 +13,10 @@ import {
   getFirestore,
   type Firestore,
 } from 'firebase/firestore';
+import {
+  getFunctions,
+  type Functions,
+} from 'firebase/functions';
 
 /*
  * ADBN TECH is a separate Firebase project and a separate Google account.
@@ -35,6 +39,7 @@ const appName = 'adbn-tech-readonly';
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
+let functions: Functions | null = null;
 
 export function requireAdbnTechFirebase() {
   if (!app) {
@@ -44,8 +49,17 @@ export function requireAdbnTechFirebase() {
 
   auth ||= getAuth(app);
   db ||= getFirestore(app);
+  functions ||= getFunctions(
+    app,
+    'asia-southeast1',
+  );
 
-  return { app, auth, db };
+  return {
+    app,
+    auth,
+    db,
+    functions,
+  };
 }
 
 export async function prepareAdbnTechSessionAuth() {
