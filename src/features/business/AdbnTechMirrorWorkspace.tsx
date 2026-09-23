@@ -36,6 +36,57 @@ function simpleDate(value: string) {
   }).format(parsed);
 }
 
+function todayIso() {
+  return new Date()
+    .toISOString()
+    .slice(0, 10);
+}
+
+function currentMonthPrefix() {
+  return todayIso()
+    .slice(0, 7);
+}
+
+function invoicePaymentState(
+  invoice: {
+    total: number;
+    paid: number;
+    balance: number;
+  },
+) {
+  if (
+    invoice.total > 0
+    && invoice.balance <= 0
+  ) {
+    return 'paid';
+  }
+
+  if (
+    invoice.paid > 0
+    && invoice.balance > 0
+  ) {
+    return 'partial';
+  }
+
+  if (invoice.balance > 0) {
+    return 'unpaid';
+  }
+
+  return 'paid';
+}
+
+function invoiceDueDate(
+  invoice: {
+    nextDueDate: string;
+    dueDate: string;
+  },
+) {
+  return (
+    invoice.nextDueDate
+    || invoice.dueDate
+  );
+}
+
 export function AdbnTechMirrorWorkspace({
   spaceId,
   view,
@@ -50,6 +101,27 @@ export function AdbnTechMirrorWorkspace({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+
+  const [
+    invoiceStatusFilter,
+    setInvoiceStatusFilter,
+  ] = useState('');
+
+  const [
+    invoicePaymentFilter,
+    setInvoicePaymentFilter,
+  ] = useState('');
+
+  const [
+    invoiceSaleTypeFilter,
+    setInvoiceSaleTypeFilter,
+  ] = useState('');
+
+  const [
+    invoiceDateFilter,
+    setInvoiceDateFilter,
+  ] = useState('');
+
   const [selectedInvoiceId, setSelectedInvoiceId] =
     useState('');
 
@@ -127,21 +199,149 @@ export function AdbnTechMirrorWorkspace({
     );
   }, [normalizedQuery, snapshot]);
 
-  const invoices = useMemo(() => {
-    const rows = snapshot?.invoices || [];
-    if (!normalizedQuery) return rows;
-    return rows.filter((item) =>
-      [
-        item.invoiceNo,
-        item.customerNo,
-        item.customerName,
-        item.customerEmail,
-        item.saleType,
-        item.status,
-        item.title,
-      ].some((value) => value.toLowerCase().includes(normalizedQuery)),
+  const invoiceStatuses =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            (snapshot?.invoices || [])
+              .map(
+                (item) =>
+                  item.status.trim(),
+              )
+              .filter(Boolean),
+          ),
+        ).sort(
+          (a, b) =>
+            a.localeCompare(b),
+        ),
+      [snapshot],
     );
-  }, [normalizedQuery, snapshot]);
+
+  const invoiceSaleTypes =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            (snapshot?.invoices || [])
+              .map(
+                (item) =>
+                  item.saleType.trim(),
+              )
+              .filter(Boolean),
+          ),
+        ).sort(
+          (a, b) =>
+            a.localeCompare(b),
+        ),
+      [snapshot],
+    );
+
+  const invoices = useMemo(() => {
+    const rows =
+      snapshot?.invoices || [];
+
+    const today =
+      todayIso();
+
+    const month =
+      currentMonthPrefix();
+
+    return rows.filter((item) => {
+      const matchesSearch =
+        !normalizedQuery
+        || [
+          item.invoiceNo,
+          item.customerNo,
+          item.customerName,
+          item.customerEmail,
+          item.saleType,
+          item.status,
+          item.title,
+        ].some(
+          (value) =>
+            value
+              .toLowerCase()
+              .includes(
+                normalizedQuery,
+              ),
+        );
+
+      const matchesStatus =
+        !invoiceStatusFilter
+        || item.status
+          === invoiceStatusFilter;
+
+      const paymentState =
+        invoicePaymentState(item);
+
+      const matchesPayment =
+        !invoicePaymentFilter
+        || (
+          invoicePaymentFilter
+          === 'outstanding'
+            ? item.balance > 0
+            : paymentState
+              === invoicePaymentFilter
+        );
+
+      const matchesSaleType =
+        !invoiceSaleTypeFilter
+        || item.saleType
+          === invoiceSaleTypeFilter;
+
+      const dueDate =
+        invoiceDueDate(item);
+
+      const matchesDate =
+        !invoiceDateFilter
+        || (
+          invoiceDateFilter === 'today'
+            ? item.invoiceDate
+              .startsWith(today)
+            : invoiceDateFilter === 'month'
+              ? item.invoiceDate
+                .startsWith(month)
+              : invoiceDateFilter === 'overdue'
+                ? Boolean(
+                    dueDate
+                    && dueDate < today
+                    && item.balance > 0
+                  )
+                : true
+        );
+
+      return (
+        matchesSearch
+        && matchesStatus
+        && matchesPayment
+        && matchesSaleType
+        && matchesDate
+      );
+    });
+  }, [
+    invoiceDateFilter,
+    invoicePaymentFilter,
+    invoiceSaleTypeFilter,
+    invoiceStatusFilter,
+    normalizedQuery,
+    snapshot,
+  ]);
+
+  const visibleInvoiceOutstanding =
+    useMemo(
+      () =>
+        invoices.reduce(
+          (sum, item) =>
+            sum
+            + Math.max(
+              0,
+              item.balance,
+            ),
+          0,
+        ),
+      [invoices],
+    );
 
   const selectedInvoice = useMemo(
     () =>
@@ -228,6 +428,152 @@ export function AdbnTechMirrorWorkspace({
           }
         />
       </label>
+
+      {view === 'invoices' && (
+        <section
+          className="panel"
+          data-adbn-tech-invoice-filters
+        >
+          <div className="business-report-filter-grid-v115">
+            <label>
+              Status
+              <select
+                value={invoiceStatusFilter}
+                onChange={(event) =>
+                  setInvoiceStatusFilter(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  All statuses
+                </option>
+
+                {invoiceStatuses.map(
+                  (status) => (
+                    <option
+                      key={status}
+                      value={status}
+                    >
+                      {status}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+
+            <label>
+              Payment
+              <select
+                value={invoicePaymentFilter}
+                onChange={(event) =>
+                  setInvoicePaymentFilter(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  All payments
+                </option>
+                <option value="outstanding">
+                  Outstanding
+                </option>
+                <option value="unpaid">
+                  Unpaid
+                </option>
+                <option value="partial">
+                  Partially paid
+                </option>
+                <option value="paid">
+                  Paid
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Sale type
+              <select
+                value={invoiceSaleTypeFilter}
+                onChange={(event) =>
+                  setInvoiceSaleTypeFilter(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  All sale types
+                </option>
+
+                {invoiceSaleTypes.map(
+                  (saleType) => (
+                    <option
+                      key={saleType}
+                      value={saleType}
+                    >
+                      {saleType}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+
+            <label>
+              Date
+              <select
+                value={invoiceDateFilter}
+                onChange={(event) =>
+                  setInvoiceDateFilter(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  All dates
+                </option>
+                <option value="today">
+                  Invoiced today
+                </option>
+                <option value="month">
+                  This month
+                </option>
+                <option value="overdue">
+                  Overdue
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <div className="adbn-tech-account-mapping-footer-v115">
+            <div>
+              <strong>
+                Showing {invoices.length}
+                {' of '}
+                {snapshot?.invoices.length || 0}
+              </strong>
+              <span>
+                {' · Outstanding '}
+                {bnd(
+                  visibleInvoiceOutstanding,
+                )}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="button secondary compact"
+              onClick={() => {
+                setQuery('');
+                setInvoiceStatusFilter('');
+                setInvoicePaymentFilter('');
+                setInvoiceSaleTypeFilter('');
+                setInvoiceDateFilter('');
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        </section>
+      )}
 
       {error && <div className="notice error">{error}</div>}
 
@@ -415,7 +761,18 @@ export function AdbnTechMirrorWorkspace({
                     <td>{bnd(item.paid)}</td>
                     <td>{bnd(item.balance)}</td>
                     <td>{simpleDate(item.nextDueDate || item.dueDate)}</td>
-                    <td>{item.status || '—'}</td>
+                    <td>
+                      <span>
+                        {item.status || '—'}
+                      </span>
+                      <small>
+                        {invoicePaymentState(item) === 'partial'
+                          ? 'Partially paid'
+                          : invoicePaymentState(item) === 'paid'
+                            ? 'Paid'
+                            : 'Unpaid'}
+                      </small>
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -439,7 +796,7 @@ export function AdbnTechMirrorWorkspace({
       )}
 
       <small className="muted">
-        Source of truth: ADBN TECH. This view is read-only in Slice 22.
+        Source of truth: ADBN TECH. Invoice filtering is local to BajetBN and does not edit ADBN TECH. Record Payment write-back remains disabled until the ADBN TECH payment-write contract is verified.
       </small>
     </section>
   );
