@@ -54,12 +54,21 @@ check(
     'listAllPersonalAccounts',
   )
     && accountRepo.includes(
-      "where('classification', '==', 'personal')",
+      'accountSupportsPersonalUse',
+    )
+    && accountRepo.includes(
+      "account.classification === 'personal'",
+    )
+    && accountRepo.includes(
+      'account.personalUseEnabled === true',
+    )
+    && accountRepo.includes(
+      '.filter(accountSupportsPersonalUse)',
     )
     && accountRepo.includes(
       'listPersonalAccounts',
     ),
-  'Personal accounts use personal classification.',
+  'Personal accounts include personal and explicitly personal-enabled global accounts.',
 );
 
 check(

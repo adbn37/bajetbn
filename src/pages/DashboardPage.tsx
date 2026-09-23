@@ -165,7 +165,7 @@ function homeActivityMeta(
     ),
   ]
     .filter(Boolean)
-    .join(' Ã‚Â· ');
+    .join(' · ');
 }
 
 export function DashboardPage() {
@@ -1313,7 +1313,7 @@ export function DashboardPage() {
                 totalPersonalAssets,
                 currency,
               )
-            : 'Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢'}
+            : '••••••'}
         </strong>
 
         <div
@@ -1335,7 +1335,7 @@ export function DashboardPage() {
                         currency + ' ',
                         '',
                       )
-                    : 'Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢'}
+                    : '••••'}
                 </strong>
               </div>
             ),
@@ -1380,7 +1380,7 @@ export function DashboardPage() {
                       : null,
                 ]
                   .filter(Boolean)
-                  .join(' Ã‚Â· ');
+                  .join(' · ');
 
                 return (
                   <button
@@ -1416,7 +1416,7 @@ export function DashboardPage() {
 
                     <b>
                       {loading
-                        ? 'Ã¢â‚¬â€'
+                        ? '—'
                         : formatMoney(
                             account.ledgerBalanceMinor,
                             account.currency,
@@ -1521,7 +1521,7 @@ export function DashboardPage() {
         ) : activityLoading ? (
           <div className="home-v110-empty">
             <span aria-hidden="true">
-              Ã¢â‚¬Â¦
+              …
             </span>
 
             <strong>
@@ -1584,7 +1584,7 @@ export function DashboardPage() {
                           activeAccount?.name,
                         ]
                           .filter(Boolean)
-                          .join(' Ã‚Â· ')}
+                          .join(' · ')}
                       </small>
                     </span>
 
@@ -1619,7 +1619,7 @@ export function DashboardPage() {
         ) : (
           <div className="home-v110-empty">
             <span aria-hidden="true">
-              Ã¢â€”Å½
+              ◎
             </span>
 
             <strong>
@@ -1647,7 +1647,7 @@ export function DashboardPage() {
               }
             >
               {quickLoading
-                ? 'LoadingÃ¢â‚¬Â¦'
+                ? 'Loading…'
                 : 'Add income or expense'}
             </button>
           </div>
@@ -1734,7 +1734,7 @@ export function DashboardPage() {
                 <dt>Space</dt>
                 <dd>
                   {activityDetailLoading
-                    ? 'LoadingÃ¢â‚¬Â¦'
+                    ? 'Loading…'
                     : selectedActivitySpaceName
                       || 'Unknown Space'}
                 </dd>
@@ -1746,7 +1746,7 @@ export function DashboardPage() {
                   {selectedActivitySource?.name
                     || 'Unknown Account'}
                   {selectedActivityDestination
-                    ? ` Ã¢â€ â€™ ${selectedActivityDestination.name}`
+                    ? ` → ${selectedActivityDestination.name}`
                     : ''}
                 </dd>
               </div>

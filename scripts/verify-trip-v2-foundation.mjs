@@ -31,67 +31,76 @@ need(
     && details.includes(
       'default: module.TripPlanningPanel',
     ),
-  'SpaceDetailsPage must lazy-load TripPlanningPanel directly.',
+  'Trip workbook must lazy-load TripPlanningPanel.',
 );
 
 need(
-  !details.includes(
-    "import('./TripCommandCentre')",
-  ),
-  'SpaceDetailsPage must not restore the old TripCommandCentre wrapper.',
-);
-
-need(
-  details.includes(
-    "detailedOverviewRequested",
-  )
+  details.includes("import('./TripCommandCentre')")
     && details.includes(
-      "activeTab === 'overview'",
-    )
-    && details.includes(
-      "space.type === 'trip'",
+      'default: module.TripCommandCentre',
     ),
-  'Direct Trip Plan must stay scoped to Trip overview.',
+  'Trip workbook Overview must lazy-load TripCommandCentre.',
 );
 
 need(
   details.includes(
-    'className="panel trip-plan-direct-v115"',
+    'className="trip-workbook-shell-v115"',
   )
     && details.includes(
-      'data-trip-plan-direct',
+      'className="trip-workbook-sheet-body-v115"',
     ),
-  'Direct Trip Plan full-width section is missing.',
+  'Trip must remain inside the v1.15 workbook shell.',
 );
 
 need(
   details.includes(
-    '<TripPlanningPanel',
+    '<TripCommandCentre',
   )
     && details.includes(
-      'space={space}',
-    )
+      '<TripPlanningPanel',
+    ),
+  'Trip workbook must render Overview and planning worksheets.',
+);
+
+for (const sheet of [
+  "'overview'",
+  "'itinerary'",
+  "'tasks'",
+  "'bookings'",
+]) {
+  need(
+    details.includes(sheet),
+    `Trip workbook sheet missing: ${sheet}`,
+  );
+}
+
+need(
+  details.includes(
+    'space={space}',
+  )
     && details.includes(
       'members={members}',
     )
     && details.includes(
-      'currentMember={currentMember}',
+      'currentMember={',
     ),
-  'Direct Trip Plan must receive the current Space context.',
+  'Trip worksheets must receive the current Space context.',
 );
 
 for (const text of [
   'Trip Plan',
-  'Add itinerary item',
-  'Add Task',
-  'Add Booking',
+  'Edit the Trip like a spreadsheet.',
+  'placeholder="Add a stop…"',
+  'placeholder="Add a task…"',
+  'placeholder="Add booking…"',
   'No itinerary yet.',
   'No tasks yet.',
   'No bookings yet.',
+  'Record actual payment in Trip Expenses.',
 ]) {
   need(
     panel.includes(text),
-    `Missing Trip planning UI text: ${text}`,
+    `Missing current Trip planning UI text: ${text}`,
   );
 }
 
@@ -118,11 +127,17 @@ need(
 
 need(
   css.includes(
-    '.trip-plan-direct-v115',
-  ),
-  'Direct full-width Trip Plan CSS is missing.',
+    '.trip-workbook-shell-v115',
+  )
+    && css.includes(
+      '.trip-workbook-sheet-body-v115',
+    )
+    && css.includes(
+      '.trip-sheet-table',
+    ),
+  'Current Trip workbook/spreadsheet CSS is missing.',
 );
 
 console.log(
-  `Trip v2 foundation / v1.15 direct-plan checks passed (${checks.length} checks).`,
+  `Trip v2 foundation / v1.15 workbook checks passed (${checks.length} checks).`,
 );

@@ -78,7 +78,7 @@ for (
     "status:\n              'accepted'",
     "status:\n                'declined'",
     "targetPath:\n              '/linked-money'",
-    "accountSnapshot.data()\n            ?.classification\n            !== 'personal'",
+    "accountSnapshot.data()\n              ?.classification !== 'personal'\n            && accountSnapshot.data()\n              ?.personalUseEnabled !== true",
   ]
 ) {
   assert.equal(

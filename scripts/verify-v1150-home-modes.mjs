@@ -29,7 +29,7 @@ for (const marker of [
   'data-home-mode-switch-v115',
   "searchParams.get('home') === 'business'",
   'GlobalBusinessOverview',
-  'Personal only · Business excluded',
+  'Personal + explicitly shared global accounts · Business-only excluded',
 ]) {
   assert.equal(
     dashboard.includes(marker),
