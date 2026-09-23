@@ -136,31 +136,68 @@ type BusinessWorkspaceView =
   | 'finance'
   | 'sellers'
   | 'reports'
-  | 'adbn_customers'
-  | 'adbn_invoices'
-  | 'adbn_payments'
-  | 'adbn_purchases'
+  | 'adbn'
   | 'setup';
+
+type AdbnTechWorkspaceTab =
+  | 'customers'
+  | 'invoices'
+  | 'payments'
+  | 'purchases';
 
 function workspaceViewFromSearch(
   value: string | null,
 ): BusinessWorkspaceView {
+  if (
+    value === 'adbn_customers'
+    || value === 'adbn_invoices'
+    || value === 'adbn_payments'
+    || value === 'adbn_purchases'
+  ) {
+    return 'adbn';
+  }
+
   if (
     value === 'inventory'
     || value === 'documents'
     || value === 'finance'
     || value === 'sellers'
     || value === 'reports'
-    || value === 'adbn_customers'
-    || value === 'adbn_invoices'
-    || value === 'adbn_payments'
-    || value === 'adbn_purchases'
+    || value === 'adbn'
     || value === 'setup'
   ) {
     return value;
   }
 
   return 'home';
+}
+
+function adbnTechWorkspaceTabFromSearch(
+  workspaceValue: string | null,
+  tabValue: string | null,
+): AdbnTechWorkspaceTab {
+  if (
+    tabValue === 'customers'
+    || tabValue === 'invoices'
+    || tabValue === 'payments'
+    || tabValue === 'purchases'
+  ) {
+    return tabValue;
+  }
+
+  if (workspaceValue === 'adbn_invoices') {
+    return 'invoices';
+  }
+
+  if (workspaceValue === 'adbn_payments') {
+    return 'payments';
+  }
+
+  if (workspaceValue === 'adbn_purchases') {
+    return 'purchases';
+  }
+
+  return 'customers';
 }
 
 export function BusinessHomePage() {
@@ -171,9 +208,18 @@ export function BusinessHomePage() {
     setSearchParams,
   ] = useSearchParams();
 
+  const workspaceSearchValue =
+    searchParams.get('workspace');
+
   const workspaceView =
     workspaceViewFromSearch(
-      searchParams.get('workspace'),
+      workspaceSearchValue,
+    );
+
+  const adbnTechWorkspaceTab =
+    adbnTechWorkspaceTabFromSearch(
+      workspaceSearchValue,
+      searchParams.get('adbn'),
     );
 
   const financeView =
@@ -630,6 +676,33 @@ export function BusinessHomePage() {
       );
     }
 
+    if (nextView !== 'adbn') {
+      next.delete('adbn');
+    }
+
+    setSearchParams(next);
+  };
+
+  const setAdbnTechWorkspaceTab = (
+    nextTab: AdbnTechWorkspaceTab,
+  ) => {
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    next.set(
+      'workspace',
+      'adbn',
+    );
+
+    next.set(
+      'adbn',
+      nextTab,
+    );
+
+    next.delete('finance');
+
     setSearchParams(next);
   };
 
@@ -909,63 +982,21 @@ export function BusinessHomePage() {
         </button>
 
         {canManageAdbnTechConnection && (
-          <>
-            <button
-              type="button"
-              className={
-                workspaceView === 'adbn_customers'
-                  ? 'active'
-                  : ''
-              }
-              onClick={() =>
-                setWorkspaceView('adbn_customers')
-              }
-            >
-              Customers
-            </button>
-
-            <button
-              type="button"
-              className={
-                workspaceView === 'adbn_invoices'
-                  ? 'active'
-                  : ''
-              }
-              onClick={() =>
-                setWorkspaceView('adbn_invoices')
-              }
-            >
-              Invoices
-            </button>
-
-            <button
-              type="button"
-              className={
-                workspaceView === 'adbn_payments'
-                  ? 'active'
-                  : ''
-              }
-              onClick={() =>
-                setWorkspaceView('adbn_payments')
-              }
-            >
-              Payments
-            </button>
-
-            <button
-              type="button"
-              className={
-                workspaceView === 'adbn_purchases'
-                  ? 'active'
-                  : ''
-              }
-              onClick={() =>
-                setWorkspaceView('adbn_purchases')
-              }
-            >
-              Purchases
-            </button>
-          </>
+          <button
+            type="button"
+            className={
+              workspaceView === 'adbn'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setAdbnTechWorkspaceTab(
+                adbnTechWorkspaceTab,
+              )
+            }
+          >
+            ADBN TECH
+          </button>
         )}
 
         {posSettings && (
@@ -1100,38 +1131,142 @@ export function BusinessHomePage() {
         )}
       </nav>
 
-      {workspaceView === 'adbn_customers'
+      {workspaceView === 'adbn'
         && canManageAdbnTechConnection
         ? (
-          <AdbnTechMirrorWorkspace
-            spaceId={space.id}
-            view="customers"
-          />
-        )
-        : workspaceView === 'adbn_invoices'
-        && canManageAdbnTechConnection
-        ? (
-          <AdbnTechMirrorWorkspace
-            spaceId={space.id}
-            view="invoices"
-          />
-        )
-        : workspaceView === 'adbn_payments'
-        && canManageAdbnTechConnection
-        ? (
-          <AdbnTechPaymentsWorkspace
-            spaceId={space.id}
-            onFinancialSync={
-              refreshBusinessTransactions
-            }
-          />
-        )
-        : workspaceView === 'adbn_purchases'
-        && canManageAdbnTechConnection
-        ? (
-          <AdbnTechPurchasesWorkspace
-            spaceId={space.id}
-          />
+          <section
+            className="business-workspace-embedded-v115"
+            data-adbn-tech-unified-workspace
+          >
+            <div className="business-home-v115-section-heading">
+              <div>
+                <span>Connected business system</span>
+                <h2>ADBN TECH</h2>
+              </div>
+
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() =>
+                  setWorkspaceView(
+                    'setup',
+                  )
+                }
+              >
+                Integration setup
+              </button>
+            </div>
+
+            <p className="muted">
+              Customers, invoices, payments and purchases are grouped in one ADBN TECH workspace.
+            </p>
+
+            <nav
+              className="business-finance-nav-v115"
+              aria-label="ADBN TECH workspace"
+              data-adbn-tech-workspace-tabs
+            >
+              <button
+                type="button"
+                className={
+                  adbnTechWorkspaceTab
+                    === 'customers'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setAdbnTechWorkspaceTab(
+                    'customers',
+                  )
+                }
+              >
+                Customers
+              </button>
+
+              <button
+                type="button"
+                className={
+                  adbnTechWorkspaceTab
+                    === 'invoices'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setAdbnTechWorkspaceTab(
+                    'invoices',
+                  )
+                }
+              >
+                Invoices
+              </button>
+
+              <button
+                type="button"
+                className={
+                  adbnTechWorkspaceTab
+                    === 'payments'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setAdbnTechWorkspaceTab(
+                    'payments',
+                  )
+                }
+              >
+                Payments
+              </button>
+
+              <button
+                type="button"
+                className={
+                  adbnTechWorkspaceTab
+                    === 'purchases'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setAdbnTechWorkspaceTab(
+                    'purchases',
+                  )
+                }
+              >
+                Purchases
+              </button>
+            </nav>
+
+            {adbnTechWorkspaceTab
+              === 'customers'
+              ? (
+                <AdbnTechMirrorWorkspace
+                  spaceId={space.id}
+                  view="customers"
+                />
+              )
+              : adbnTechWorkspaceTab
+                === 'invoices'
+                ? (
+                  <AdbnTechMirrorWorkspace
+                    spaceId={space.id}
+                    view="invoices"
+                  />
+                )
+                : adbnTechWorkspaceTab
+                  === 'payments'
+                  ? (
+                    <AdbnTechPaymentsWorkspace
+                      spaceId={space.id}
+                      onFinancialSync={
+                        refreshBusinessTransactions
+                      }
+                    />
+                  )
+                  : (
+                    <AdbnTechPurchasesWorkspace
+                      spaceId={space.id}
+                    />
+                  )}
+          </section>
         )
         : workspaceView === 'reports'
         && canViewFinancials
@@ -1262,7 +1397,7 @@ export function BusinessHomePage() {
                 </h3>
 
                 <p className="muted">
-                  Use this Business Space as the BajetBN home for ADBN TECH. Customers, invoices, payments and supplier purchases can be viewed through a separate read-only ADBN TECH sign-in. Expenses, refunds and inventory posting remain isolated for later integration slices.
+                  Connection and integration setup lives here. Day-to-day ADBN TECH records are grouped into one workspace with Customers, Invoices, Payments and Purchases tabs.
                 </p>
 
                 {adbnTechPrepared && (
@@ -1295,10 +1430,24 @@ export function BusinessHomePage() {
                       : 'Prepare ADBN TECH connection'}
                   </button>
                 )}
+
+                {adbnTechPrepared && (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() =>
+                      setAdbnTechWorkspaceTab(
+                        'customers',
+                      )
+                    }
+                  >
+                    Open ADBN TECH workspace
+                  </button>
+                )}
               </div>
 
                 <small className="muted">
-                  Slice 24A keeps the ADBN TECH bridge read-only. Purchases are mirrored from supplierPartPurchases only; BajetBN transactions, POS stock and inventory are not changed.
+                  ADBN TECH remains the source of truth for mirrored operational records. Existing payment sync safeguards and account mappings are unchanged.
                 </small>
               </section>
             )}
