@@ -14,6 +14,7 @@ import {
   disconnectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
   loadAdbnTechPaymentsReadOnly,
+  type AdbnTechPaymentMirror,
   type AdbnTechPaymentsReadOnlySnapshot,
 } from '../../repositories/adbnTechIntegrationRepository';
 import {
@@ -21,7 +22,15 @@ import {
   markAdbnTechIntegrationConnected,
   setAdbnTechAccountMappings,
 } from '../../repositories/spaceRepository';
-import type { Account } from '../../types/models';
+import {
+  listBusinessTransactionsForSpace,
+  postTransactionWithIdempotencyKey,
+} from '../../repositories/transactionRepository';
+import type {
+  Account,
+  FinancialTransaction,
+  PaymentMethodCode,
+} from '../../types/models';
 
 function bnd(value: number) {
   return new Intl.NumberFormat('en-BN', {
@@ -72,10 +81,170 @@ function accountLabel(
   );
 }
 
+function externalPaymentToken(
+  value: string,
+) {
+  let first = 2166136261;
+  let second = 5381;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+
+    first = Math.imul(
+      first ^ code,
+      16777619,
+    );
+
+    second = (
+      Math.imul(second, 33)
+      ^ code
+    );
+  }
+
+  return (
+    (first >>> 0)
+      .toString(16)
+      .padStart(8, '0')
+    + (second >>> 0)
+      .toString(16)
+      .padStart(8, '0')
+  );
+}
+
+function adbnPaymentSyncLabel(
+  paymentId: string,
+) {
+  return (
+    'adbn_pay_'
+    + externalPaymentToken(paymentId)
+  );
+}
+
+function adbnPaymentSyncKey(
+  paymentId: string,
+) {
+  return (
+    'adbn-payment-'
+    + externalPaymentToken(paymentId)
+  );
+}
+
+function normalizedPaymentDate(
+  value: string,
+) {
+  const direct =
+    value.match(
+      /^\d{4}-\d{2}-\d{2}/,
+    )?.[0];
+
+  if (direct) return direct;
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return parsed
+    .toISOString()
+    .slice(0, 10);
+}
+
+function adbnPaymentCanPost(
+  payment: AdbnTechPaymentMirror,
+) {
+  const status =
+    payment.status
+      .trim()
+      .toLowerCase();
+
+  return (
+    payment.amount > 0
+    && Boolean(
+      normalizedPaymentDate(
+        payment.paymentDate,
+      ),
+    )
+    && ![
+      'cancel',
+      'void',
+      'reverse',
+      'refund',
+      'reject',
+      'delete',
+      'failed',
+    ].some(
+      (blocked) =>
+        status.includes(blocked),
+    )
+  );
+}
+
+function paymentMethodFromAdbn(
+  value: string,
+): {
+  paymentMethod: PaymentMethodCode;
+  paymentMethodLabel?: string;
+} {
+  const normalized =
+    value.trim().toLowerCase();
+
+  if (
+    normalized.includes('bank')
+    || normalized.includes('transfer')
+  ) {
+    return {
+      paymentMethod: 'bank_transfer',
+    };
+  }
+
+  if (normalized.includes('cash')) {
+    return {
+      paymentMethod: 'cash',
+    };
+  }
+
+  if (normalized.includes('debit')) {
+    return {
+      paymentMethod: 'debit_card',
+    };
+  }
+
+  if (normalized.includes('credit')) {
+    return {
+      paymentMethod: 'credit_card',
+    };
+  }
+
+  if (
+    normalized.includes('wallet')
+    || normalized.includes('e-wallet')
+  ) {
+    return {
+      paymentMethod: 'e_wallet',
+    };
+  }
+
+  if (normalized.includes('qr')) {
+    return {
+      paymentMethod: 'qr_payment',
+    };
+  }
+
+  return {
+    paymentMethod: 'other',
+    paymentMethodLabel:
+      value.trim()
+      || 'ADBN TECH',
+  };
+}
+
 export function AdbnTechPaymentsWorkspace({
   spaceId,
+  onFinancialSync,
 }: {
   spaceId: string;
+  onFinancialSync?: () => void | Promise<void>;
 }) {
   const { user } = useAuth();
 
@@ -96,6 +265,11 @@ export function AdbnTechPaymentsWorkspace({
   const [savedMappings, setSavedMappings] =
     useState<Record<string, string>>({});
 
+  const [
+    businessTransactions,
+    setBusinessTransactions,
+  ] = useState<FinancialTransaction[]>([]);
+
   const [query, setQuery] =
     useState('');
 
@@ -105,10 +279,18 @@ export function AdbnTechPaymentsWorkspace({
   const [mappingBusy, setMappingBusy] =
     useState(false);
 
+  const [
+    syncBusyPaymentId,
+    setSyncBusyPaymentId,
+  ] = useState('');
+
   const [error, setError] =
     useState('');
 
   const [mappingMessage, setMappingMessage] =
+    useState('');
+
+  const [syncMessage, setSyncMessage] =
     useState('');
 
   const loadBajetBnSide = useCallback(
@@ -119,12 +301,16 @@ export function AdbnTechPaymentsWorkspace({
         const [
           nextAccounts,
           nextSpace,
+          nextTransactions,
         ] = await Promise.all([
           listAccountsForOwnerSpace(
             user.uid,
             spaceId,
           ),
           getSpace(spaceId),
+          listBusinessTransactionsForSpace(
+            spaceId,
+          ),
         ]);
 
         const nextMappings =
@@ -134,6 +320,9 @@ export function AdbnTechPaymentsWorkspace({
         setBajetAccounts(nextAccounts);
         setMappings(nextMappings);
         setSavedMappings(nextMappings);
+        setBusinessTransactions(
+          nextTransactions,
+        );
       } catch (nextError) {
         setError(
           nextError instanceof Error
@@ -222,6 +411,8 @@ export function AdbnTechPaymentsWorkspace({
     await disconnectAdbnTechReadOnly();
     setConnectedEmail('');
     setSnapshot(null);
+    setBusinessTransactions([]);
+    setSyncMessage('');
     setError('');
   };
 
@@ -273,6 +464,153 @@ export function AdbnTechPaymentsWorkspace({
       setMappingBusy(false);
     }
   };
+
+  const syncPaymentToBajetBn =
+    async (
+      payment: AdbnTechPaymentMirror,
+    ) => {
+      if (
+        syncBusyPaymentId
+        || !adbnPaymentCanPost(payment)
+      ) {
+        return;
+      }
+
+      const mappedAccountId =
+        payment.bankAccountId
+          ? savedMappings[
+              payment.bankAccountId
+            ]
+          : '';
+
+      if (!mappedAccountId) {
+        setError(
+          'Map this ADBN TECH receiving account to a BajetBN Business account first.',
+        );
+        return;
+      }
+
+      const syncLabel =
+        adbnPaymentSyncLabel(
+          payment.id,
+        );
+
+      const alreadySynced =
+        businessTransactions.some(
+          (item) =>
+            (item.labels || [])
+              .some(
+                (label) =>
+                  label.toLowerCase()
+                  === syncLabel.toLowerCase(),
+              ),
+        );
+
+      if (alreadySynced) {
+        setSyncMessage(
+          (payment.paymentNo || payment.id)
+          + ' is already synced to BajetBN.',
+        );
+        return;
+      }
+
+      setSyncBusyPaymentId(
+        payment.id,
+      );
+      setSyncMessage('');
+      setError('');
+
+      try {
+        const method =
+          paymentMethodFromAdbn(
+            payment.paymentMethod,
+          );
+
+        const outcome =
+          await postTransactionWithIdempotencyKey(
+            {
+              type: 'income',
+              accountId:
+                mappedAccountId,
+              spaceId,
+              amountMinor:
+                Math.round(
+                  payment.amount * 100,
+                ),
+              transactionDate:
+                normalizedPaymentDate(
+                  payment.paymentDate,
+                ),
+              categoryId:
+                'income-sales',
+              counterparty:
+                payment.customerName
+                || 'ADBN TECH customer',
+              note:
+                [
+                  'ADBN TECH payment '
+                    + (
+                      payment.paymentNo
+                      || payment.id
+                    ),
+                  payment.invoiceNo
+                    ? 'Invoice '
+                      + payment.invoiceNo
+                    : '',
+                  payment.reference
+                    ? 'Reference '
+                      + payment.reference
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' | '),
+              labels: [
+                'adbn_tech',
+                syncLabel,
+              ],
+              ...method,
+            },
+            adbnPaymentSyncKey(
+              payment.id,
+            ),
+          );
+
+        if (
+          outcome.mode
+          !== 'posted'
+        ) {
+          throw new Error(
+            'The payment did not post immediately.',
+          );
+        }
+
+        const nextTransactions =
+          await listBusinessTransactionsForSpace(
+            spaceId,
+          );
+
+        setBusinessTransactions(
+          nextTransactions,
+        );
+
+        if (onFinancialSync) {
+          await onFinancialSync();
+        }
+
+        setSyncMessage(
+          (payment.paymentNo || payment.id)
+          + ' synced to BajetBN Money activity.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN TECH payment could not be synced.',
+        );
+      } finally {
+        setSyncBusyPaymentId('');
+      }
+    };
 
   const normalizedQuery =
     query.trim().toLowerCase();
@@ -336,6 +674,39 @@ export function AdbnTechPaymentsWorkspace({
   const hasUnsavedMappings =
     JSON.stringify(mappings)
     !== JSON.stringify(savedMappings);
+
+  const syncedLabels =
+    useMemo(
+      () =>
+        new Set(
+          businessTransactions
+            .flatMap(
+              (item) =>
+                item.labels || [],
+            )
+            .map(
+              (label) =>
+                label.toLowerCase(),
+            ),
+        ),
+      [businessTransactions],
+    );
+
+  const syncedPaymentCount =
+    useMemo(
+      () =>
+        (snapshot?.payments || [])
+          .filter(
+            (payment) =>
+              syncedLabels.has(
+                adbnPaymentSyncLabel(
+                  payment.id,
+                ).toLowerCase(),
+              ),
+          )
+          .length,
+      [snapshot, syncedLabels],
+    );
 
   const bajetAccountById = useMemo(
     () =>
@@ -477,6 +848,13 @@ export function AdbnTechPaymentsWorkspace({
             {snapshot?.payments.length || 0}
           </strong>
         </span>
+
+        <span>
+          Synced{' '}
+          <strong>
+            {syncedPaymentCount}
+          </strong>
+        </span>
       </div>
 
       <section
@@ -616,6 +994,12 @@ export function AdbnTechPaymentsWorkspace({
             {mappingMessage}
           </div>
         )}
+
+        {syncMessage && (
+          <div className="notice success">
+            {syncMessage}
+          </div>
+        )}
       </section>
 
       <label className="adbn-tech-mirror-search-v115">
@@ -652,6 +1036,7 @@ export function AdbnTechPaymentsWorkspace({
                 <th>Date</th>
                 <th>Received Into</th>
                 <th>BajetBN Mapping</th>
+                <th>BajetBN Sync</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -666,6 +1051,24 @@ export function AdbnTechPaymentsWorkspace({
                         ],
                       )
                     : null;
+
+                const syncLabel =
+                  adbnPaymentSyncLabel(
+                    payment.id,
+                  );
+
+                const paymentSynced =
+                  syncedLabels.has(
+                    syncLabel.toLowerCase(),
+                  );
+
+                const paymentReady =
+                  Boolean(
+                    mappedBajetAccount,
+                  )
+                  && adbnPaymentCanPost(
+                    payment,
+                  );
 
                 return (
                   <tr key={payment.id}>
@@ -741,6 +1144,48 @@ export function AdbnTechPaymentsWorkspace({
                     </td>
 
                     <td>
+                      {paymentSynced ? (
+                        <>
+                          <strong>
+                            Synced
+                          </strong>
+                          <small>
+                            Money activity
+                          </small>
+                        </>
+                      ) : paymentReady ? (
+                        <button
+                          type="button"
+                          className="button secondary compact"
+                          disabled={
+                            Boolean(
+                              syncBusyPaymentId,
+                            )
+                          }
+                          onClick={() =>
+                            void syncPaymentToBajetBn(
+                              payment,
+                            )
+                          }
+                        >
+                          {syncBusyPaymentId
+                            === payment.id
+                            ? 'Syncing...'
+                            : 'Sync to BajetBN'}
+                        </button>
+                      ) : (
+                        <>
+                          <span>
+                            Blocked
+                          </span>
+                          <small>
+                            Map account / check payment
+                          </small>
+                        </>
+                      )}
+                    </td>
+
+                    <td>
                       <span>
                         {payment.status || '—'}
                       </span>
@@ -757,7 +1202,7 @@ export function AdbnTechPaymentsWorkspace({
               {!payments.length && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="muted"
                   >
                     No matching ADBN TECH payments.
@@ -770,7 +1215,7 @@ export function AdbnTechPaymentsWorkspace({
       )}
 
       <small className="muted">
-        Source of truth: ADBN TECH. Slice 23A stores only account-ID mappings in BajetBN. No BajetBN Money activity or ADBN TECH write is performed yet.
+        Source of truth: ADBN TECH. Slice 24B can explicitly post a mapped incoming payment into BajetBN Money activity. ADBN TECH remains read-only and is never edited by this sync.
       </small>
     </section>
   );
