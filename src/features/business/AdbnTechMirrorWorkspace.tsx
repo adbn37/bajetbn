@@ -7,7 +7,6 @@ import {
 import {
   ADBN_TECH_ADMIN_EMAIL,
   connectAdbnTechReadOnly,
-  disconnectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
   loadAdbnTechReadOnlySnapshot,
   type AdbnTechReadOnlySnapshot,
@@ -173,13 +172,6 @@ export function AdbnTechMirrorWorkspace({
     } finally {
       setLoading(false);
     }
-  };
-
-  const disconnect = async () => {
-    await disconnectAdbnTechReadOnly();
-    setConnectedEmail('');
-    setSnapshot(null);
-    setError('');
   };
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -390,23 +382,6 @@ export function AdbnTechMirrorWorkspace({
         <div>
           <span>ADBN TECH · Read-only mirror</span>
           <h2>{view === 'customers' ? 'Customers' : 'Invoices'}</h2>
-        </div>
-        <div className="adbn-tech-mirror-heading-actions-v115">
-          <button
-            type="button"
-            className="button secondary"
-            disabled={loading}
-            onClick={() => void load()}
-          >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => void disconnect()}
-          >
-            Disconnect
-          </button>
         </div>
       </div>
 

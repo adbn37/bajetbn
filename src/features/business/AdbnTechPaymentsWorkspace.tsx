@@ -12,7 +12,6 @@ import {
 import {
   ADBN_TECH_ADMIN_EMAIL,
   connectAdbnTechReadOnly,
-  disconnectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
   loadAdbnTechPaymentsReadOnly,
   type AdbnTechPaymentMirror,
@@ -310,15 +309,6 @@ export function AdbnTechPaymentsWorkspace({
     } finally {
       setLoading(false);
     }
-  };
-
-  const disconnect = async () => {
-    await disconnectAdbnTechReadOnly();
-    setConnectedEmail('');
-    setSnapshot(null);
-    setBusinessTransactions([]);
-    setSyncMessage('');
-    setError('');
   };
 
   const changeMapping = (
@@ -852,30 +842,6 @@ export function AdbnTechPaymentsWorkspace({
           <h2>Payments</h2>
         </div>
 
-        <div className="adbn-tech-mirror-heading-actions-v115">
-          <button
-            type="button"
-            className="button secondary"
-            disabled={loading}
-            onClick={() =>
-              void loadPayments()
-            }
-          >
-            {loading
-              ? 'Refreshing…'
-              : 'Refresh'}
-          </button>
-
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() =>
-              void disconnect()
-            }
-          >
-            Disconnect
-          </button>
-        </div>
       </div>
 
       <div className="adbn-tech-mirror-meta-v115">
