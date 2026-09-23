@@ -10,6 +10,9 @@ import {
   connectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
   loadAdbnTechInventoryReadOnly,
+  loadAdbnTechInventoryMovementsReadOnly,
+  type AdbnTechInventoryMovementMirror,
+  type AdbnTechInventoryMovementsReadOnlySnapshot,
   type AdbnTechInventoryProductMirror,
   type AdbnTechInventoryReadOnlySnapshot,
 } from '../../repositories/adbnTechIntegrationRepository';
@@ -22,6 +25,14 @@ type StockFilter =
   | 'in_stock'
   | 'low_stock'
   | 'out_of_stock';
+
+type InventoryView = 'stock' | 'history';
+
+type MovementFilter =
+  | 'all'
+  | 'stock_in'
+  | 'stock_out'
+  | 'other';
 
 function bnd(value: number) {
   return new Intl.NumberFormat('en-BN', {
@@ -37,6 +48,112 @@ function availableStock(
     item.stock - item.reservedStock,
     0,
   );
+}
+
+function movementDirection(
+  item: AdbnTechInventoryMovementMirror,
+) {
+  const type =
+    item.type.trim().toLowerCase();
+
+  if (
+    type.includes('stock in')
+    || (
+      !type.includes('stock out')
+      && item.quantity > 0
+    )
+  ) {
+    return 'Stock In';
+  }
+
+  if (
+    type.includes('stock out')
+    || item.quantity < 0
+  ) {
+    return 'Stock Out';
+  }
+
+  return 'Other';
+}
+
+function movementQuantityLabel(
+  item: AdbnTechInventoryMovementMirror,
+) {
+  const direction =
+    movementDirection(item);
+
+  if (direction === 'Stock In') {
+    return '+' + Math.abs(item.quantity);
+  }
+
+  if (direction === 'Stock Out') {
+    return '-' + Math.abs(item.quantity);
+  }
+
+  return String(item.quantity);
+}
+
+function dateTime(value: unknown) {
+  let date: Date | null = null;
+
+  if (
+    value
+    && typeof value === 'object'
+    && 'toDate' in value
+    && typeof (
+      value as {
+        toDate?: unknown;
+      }
+    ).toDate === 'function'
+  ) {
+    date = (
+      value as {
+        toDate: () => Date;
+      }
+    ).toDate();
+  } else if (
+    value
+    && typeof value === 'object'
+    && 'seconds' in value
+  ) {
+    const seconds =
+      Number(
+        (
+          value as {
+            seconds?: unknown;
+          }
+        ).seconds,
+      );
+
+    if (Number.isFinite(seconds)) {
+      date = new Date(
+        seconds * 1000,
+      );
+    }
+  } else if (
+    typeof value === 'string'
+    || typeof value === 'number'
+  ) {
+    date = new Date(value);
+  }
+
+  if (
+    !date
+    || Number.isNaN(date.getTime())
+  ) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-BN',
+    {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  ).format(date);
 }
 
 function stockState(
@@ -80,6 +197,18 @@ export function AdbnTechInventoryWorkspace({
     AdbnTechInventoryReadOnlySnapshot | null
   >(null);
 
+  const [
+    movementSnapshot,
+    setMovementSnapshot,
+  ] = useState<
+    AdbnTechInventoryMovementsReadOnlySnapshot | null
+  >(null);
+
+  const [
+    inventoryView,
+    setInventoryView,
+  ] = useState<InventoryView>('stock');
+
   const [query, setQuery] =
     useState('');
 
@@ -87,6 +216,11 @@ export function AdbnTechInventoryWorkspace({
     stockFilter,
     setStockFilter,
   ] = useState<StockFilter>('all');
+
+  const [
+    movementFilter,
+    setMovementFilter,
+  ] = useState<MovementFilter>('all');
 
   const [loading, setLoading] =
     useState(false);
@@ -103,6 +237,7 @@ export function AdbnTechInventoryWorkspace({
         ) {
           setConnectedEmail('');
           setSnapshot(null);
+          setMovementSnapshot(null);
           return;
         }
 
@@ -110,10 +245,18 @@ export function AdbnTechInventoryWorkspace({
         setError('');
 
         try {
-          const next =
-            await loadAdbnTechInventoryReadOnly();
+          const [
+            next,
+            nextMovements,
+          ] = await Promise.all([
+            loadAdbnTechInventoryReadOnly(),
+            loadAdbnTechInventoryMovementsReadOnly(),
+          ]);
 
           setSnapshot(next);
+          setMovementSnapshot(
+            nextMovements,
+          );
           setConnectedEmail(
             next.connectedEmail,
           );
@@ -166,6 +309,104 @@ export function AdbnTechInventoryWorkspace({
 
   const normalizedQuery =
     query.trim().toLowerCase();
+
+  const movements =
+    useMemo(
+      () => {
+        const rows =
+          movementSnapshot?.movements
+          || [];
+
+        return rows.filter(
+          (item) => {
+            const matchesSearch =
+              !normalizedQuery
+              || [
+                item.productName,
+                item.sku,
+                item.type,
+                item.movementType,
+                item.sourceType,
+                item.sourceNo,
+                item.supplierName,
+                item.notes,
+                item.performedByName,
+                item.performedByEmail,
+              ].some(
+                (value) =>
+                  value
+                    .toLowerCase()
+                    .includes(
+                      normalizedQuery,
+                    ),
+              );
+
+            const direction =
+              movementDirection(item);
+
+            const matchesFilter =
+              movementFilter === 'all'
+              || (
+                movementFilter
+                  === 'stock_in'
+                && direction === 'Stock In'
+              )
+              || (
+                movementFilter
+                  === 'stock_out'
+                && direction === 'Stock Out'
+              )
+              || (
+                movementFilter
+                  === 'other'
+                && direction === 'Other'
+              );
+
+            return (
+              matchesSearch
+              && matchesFilter
+            );
+          },
+        );
+      },
+      [
+        movementFilter,
+        movementSnapshot,
+        normalizedQuery,
+      ],
+    );
+
+  const movementCounts =
+    useMemo(
+      () => {
+        const rows =
+          movementSnapshot?.movements
+          || [];
+
+        return {
+          all: rows.length,
+          stockIn:
+            rows.filter(
+              (item) =>
+                movementDirection(item)
+                === 'Stock In',
+            ).length,
+          stockOut:
+            rows.filter(
+              (item) =>
+                movementDirection(item)
+                === 'Stock Out',
+            ).length,
+          other:
+            rows.filter(
+              (item) =>
+                movementDirection(item)
+                === 'Other',
+            ).length,
+        };
+      },
+      [movementSnapshot],
+    );
 
   const products = useMemo(
     () => {
@@ -368,6 +609,41 @@ export function AdbnTechInventoryWorkspace({
         </div>
       </div>
 
+      <div
+        className="business-finance-nav-v115"
+        aria-label="Inventory view"
+      >
+        <button
+          type="button"
+          className={
+            inventoryView === 'stock'
+              ? 'active'
+              : ''
+          }
+          onClick={() => {
+            setInventoryView('stock');
+            setQuery('');
+          }}
+        >
+          Stock
+        </button>
+
+        <button
+          type="button"
+          className={
+            inventoryView === 'history'
+              ? 'active'
+              : ''
+          }
+          onClick={() => {
+            setInventoryView('history');
+            setQuery('');
+          }}
+        >
+          Stock History
+        </button>
+      </div>
+
       <div className="adbn-tech-mirror-meta-v115">
         <span>
           Products{' '}
@@ -406,7 +682,11 @@ export function AdbnTechInventoryWorkspace({
 
         <span>
           Source{' '}
-          <strong>products</strong>
+          <strong>
+            {inventoryView === 'history'
+              ? 'inventoryMovements'
+              : 'products'}
+          </strong>
         </span>
       </div>
 
@@ -419,10 +699,15 @@ export function AdbnTechInventoryWorkspace({
               event.target.value,
             )
           }
-          placeholder="SKU, barcode, brand, model, category, supplier…"
+          placeholder={
+            inventoryView === 'history'
+              ? 'Item, SKU, movement, source, supplier, notes, staff...'
+              : 'SKU, barcode, brand, model, category, supplier...'
+          }
         />
       </label>
 
+      {inventoryView === 'stock' ? (
       <div
         className="business-finance-nav-v115"
         aria-label="Inventory stock filter"
@@ -489,6 +774,74 @@ export function AdbnTechInventoryWorkspace({
           Out of Stock ({stateCounts.outOfStock})
         </button>
       </div>
+      ) : (
+        <div
+          className="business-finance-nav-v115"
+          aria-label="Inventory movement filter"
+        >
+          <button
+            type="button"
+            className={
+              movementFilter === 'all'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setMovementFilter('all')
+            }
+          >
+            All ({movementCounts.all})
+          </button>
+
+          <button
+            type="button"
+            className={
+              movementFilter === 'stock_in'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setMovementFilter(
+                'stock_in',
+              )
+            }
+          >
+            Stock In ({movementCounts.stockIn})
+          </button>
+
+          <button
+            type="button"
+            className={
+              movementFilter === 'stock_out'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setMovementFilter(
+                'stock_out',
+              )
+            }
+          >
+            Stock Out ({movementCounts.stockOut})
+          </button>
+
+          <button
+            type="button"
+            className={
+              movementFilter === 'other'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setMovementFilter(
+                'other',
+              )
+            }
+          >
+            Other ({movementCounts.other})
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="notice error">
@@ -500,7 +853,7 @@ export function AdbnTechInventoryWorkspace({
         <div className="loading-panel">
           Loading ADBN TECH inventory…
         </div>
-      ) : (
+      ) : inventoryView === 'stock' ? (
         <div className="adbn-tech-table-wrap-v115">
           <table className="adbn-tech-table-v115">
             <thead>
@@ -624,7 +977,7 @@ export function AdbnTechInventoryWorkspace({
                           {state}
                         </strong>
                         <small>
-                          {item.status
+                          ADBN status: {item.status
                             || 'Available'}
                         </small>
                       </td>
@@ -645,10 +998,153 @@ export function AdbnTechInventoryWorkspace({
             </tbody>
           </table>
         </div>
+      ) : (
+        <div
+          className="adbn-tech-table-wrap-v115"
+          data-adbn-tech-inventory-history
+        >
+          <table className="adbn-tech-table-v115">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Item</th>
+                <th>Movement</th>
+                <th>Qty</th>
+                <th>Stock</th>
+                <th>Source</th>
+                <th>Cost</th>
+                <th>By</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {movements.map(
+                (item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>
+                        {dateTime(item.createdAt)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {item.productName
+                          || item.sku
+                          || item.productId
+                          || 'Inventory item'}
+                      </strong>
+                      <small>
+                        {[
+                          item.sku,
+                          item.productId
+                            ? 'ID ' + item.productId
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                          || '—'}
+                      </small>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {movementDirection(item)}
+                      </strong>
+                      <small>
+                        {item.movementType
+                          || item.type
+                          || 'Inventory movement'}
+                      </small>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {movementQuantityLabel(item)}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {item.quantityBefore}
+                        {' -> '}
+                        {item.quantityAfter}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {item.sourceNo
+                          || item.sourceType
+                          || '—'}
+                      </strong>
+                      <small>
+                        {[
+                          item.sourceType,
+                          item.receiptId
+                            ? 'Receipt ' + item.receiptId
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                          || 'No source reference'}
+                      </small>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {item.unitCost > 0
+                          ? bnd(item.unitCost)
+                          : '—'}
+                      </strong>
+                      <small>
+                        {item.supplierName
+                          || 'No supplier'}
+                      </small>
+                    </td>
+
+                    <td>
+                      <strong>
+                        {item.performedByName
+                          || item.performedByEmail
+                          || '—'}
+                      </strong>
+                      <small>
+                        {item.performedByName
+                          && item.performedByEmail
+                          ? item.performedByEmail
+                          : 'ADBN TECH'}
+                      </small>
+                    </td>
+
+                    <td>
+                      <span>
+                        {item.notes
+                          || item.changes
+                          || '—'}
+                      </span>
+                    </td>
+                  </tr>
+                ),
+              )}
+
+              {!movements.length && (
+                <tr>
+                  <td colSpan={9}>
+                    <div className="empty-state">
+                      No ADBN TECH inventory movements match this view.
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <div className="notice">
-        Read-only inventory integration: ADBN TECH controls stock receiving, reservations, releases and deductions. BajetBN does not duplicate or mutate those quantities in Slice 24D.1.
+        Read-only inventory integration: ADBN TECH controls stock receiving, reservations, releases and deductions. Stock History mirrors inventoryMovements only; BajetBN does not write, replay or duplicate ADBN stock movements.
       </div>
     </section>
   );

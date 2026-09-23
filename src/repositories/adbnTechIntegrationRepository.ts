@@ -205,6 +205,37 @@ export interface AdbnTechInventoryReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechInventoryMovementMirror {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  type: string;
+  movementType: string;
+  quantity: number;
+  quantityBefore: number;
+  quantityAfter: number;
+  sourceType: string;
+  sourceId: string;
+  sourceNo: string;
+  receiptId: string;
+  unitCost: number;
+  previousUnitCost: number;
+  supplierName: string;
+  notes: string;
+  changes: string;
+  performedByEmail: string;
+  performedByName: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AdbnTechInventoryMovementsReadOnlySnapshot {
+  movements: AdbnTechInventoryMovementMirror[];
+  connectedEmail: string;
+  loadedAt: string;
+}
+
 function text(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
@@ -970,6 +1001,155 @@ export async function loadAdbnTechInventoryReadOnly(): Promise<
 
   return {
     products,
+    connectedEmail,
+    loadedAt:
+      new Date().toISOString(),
+  };
+}
+
+export async function loadAdbnTechInventoryMovementsReadOnly(): Promise<
+  AdbnTechInventoryMovementsReadOnlySnapshot
+> {
+  const {
+    auth,
+    db,
+  } = requireAdbnTechFirebase();
+
+  const connectedEmail =
+    normalizeEmail(
+      auth.currentUser?.email,
+    );
+
+  if (
+    connectedEmail
+    !== ADBN_TECH_ADMIN_EMAIL
+  ) {
+    throw new Error(
+      'Connect ADBN TECH with '
+      + ADBN_TECH_ADMIN_EMAIL
+      + ' first.',
+    );
+  }
+
+  /*
+   * Slice 24D.2 is read-only.
+   * ADBN TECH /inventoryMovements is the historical stock ledger.
+   * Do not write, repair, replay or duplicate movements from BajetBN.
+   */
+  const movementSnapshot =
+    await getDocs(
+      collection(
+        db,
+        'inventoryMovements',
+      ),
+    );
+
+  const movements =
+    movementSnapshot.docs
+      .map((record) => {
+        const data =
+          record.data();
+
+        return {
+          id: record.id,
+          productId:
+            text(data.productId),
+          productName:
+            text(
+              data.productName
+              ?? data.itemName
+              ?? data.description,
+            ),
+          sku:
+            text(data.sku),
+          type:
+            text(
+              data.type
+              ?? data.direction
+              ?? data.stockType,
+            ),
+          movementType:
+            text(
+              data.movementType
+              ?? data.reason
+              ?? data.action,
+            ),
+          quantity:
+            money(
+              data.quantity
+              ?? data.quantityDelta
+              ?? data.change,
+            ),
+          quantityBefore:
+            money(
+              data.quantityBefore
+              ?? data.stockBefore,
+            ),
+          quantityAfter:
+            money(
+              data.quantityAfter
+              ?? data.stockAfter,
+            ),
+          sourceType:
+            text(data.sourceType),
+          sourceId:
+            text(data.sourceId),
+          sourceNo:
+            text(
+              data.sourceNo
+              ?? data.referenceNo,
+            ),
+          receiptId:
+            text(data.receiptId),
+          unitCost:
+            money(
+              data.unitCost
+              ?? data.landedUnitCost,
+            ),
+          previousUnitCost:
+            money(data.previousUnitCost),
+          supplierName:
+            text(
+              data.supplierName
+              ?? data.sellerName,
+            ),
+          notes:
+            text(
+              data.notes
+              ?? data.note,
+            ),
+          changes:
+            text(data.changes),
+          performedByEmail:
+            text(
+              data.performedByEmail
+              ?? data.createdByEmail,
+            ),
+          performedByName:
+            text(
+              data.performedByName
+              ?? data.createdByName,
+            ),
+          createdAt:
+            data.createdAt,
+          updatedAt:
+            data.updatedAt,
+        } satisfies AdbnTechInventoryMovementMirror;
+      })
+      .sort(
+        (a, b) =>
+          Math.max(
+            timestampMillis(b.createdAt),
+            timestampMillis(b.updatedAt),
+          )
+          - Math.max(
+            timestampMillis(a.createdAt),
+            timestampMillis(a.updatedAt),
+          ),
+      );
+
+  return {
+    movements,
     connectedEmail,
     loadedAt:
       new Date().toISOString(),
