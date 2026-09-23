@@ -166,8 +166,33 @@ export interface AdbnTechPurchaseMirror {
   updatedAt?: unknown;
 }
 
+export interface AdbnTechSupplierPaymentMirror {
+  id: string;
+  paymentNo: string;
+  paymentAttemptId: string;
+  purchaseId: string;
+  purchaseIds: string[];
+  purchaseGroupId: string;
+  purchaseNo: string;
+  supplierId: string;
+  supplierName: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  reference: string;
+  note: string;
+  bankAccountId: string;
+  bankAccountName: string;
+  status: string;
+  isReversal: boolean;
+  reversalOfSupplierPaymentId: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 export interface AdbnTechPurchasesReadOnlySnapshot {
   purchases: AdbnTechPurchaseMirror[];
+  supplierPayments: AdbnTechSupplierPaymentMirror[];
   connectedEmail: string;
   loadedAt: string;
 }
@@ -776,12 +801,26 @@ export async function loadAdbnTechPurchasesReadOnly(): Promise<
   }
 
   /*
-   * Slice 24A is read-only. ADBN TECH supplierPartPurchases
-   * remains the source of truth. Do not add write APIs here.
+   * Slice 24E.1 keeps the ADBN side read-only.
+   * supplierPartPurchases and supplierPayments remain authoritative.
    */
-  const purchaseSnapshot = await getDocs(
-    collection(db, 'supplierPartPurchases'),
-  );
+  const [
+    purchaseSnapshot,
+    supplierPaymentSnapshot,
+  ] = await Promise.all([
+    getDocs(
+      collection(
+        db,
+        'supplierPartPurchases',
+      ),
+    ),
+    getDocs(
+      collection(
+        db,
+        'supplierPayments',
+      ),
+    ),
+  ]);
 
   const purchases = purchaseSnapshot.docs
     .map((record) => {
@@ -836,8 +875,123 @@ export async function loadAdbnTechPurchasesReadOnly(): Promise<
         - Math.max(timestampMillis(a.updatedAt), timestampMillis(a.createdAt)),
     );
 
+  const supplierPayments =
+    supplierPaymentSnapshot.docs
+      .map((record) => {
+        const data = record.data();
+
+        const rawPurchaseIds =
+          Array.isArray(
+            data.purchaseIds,
+          )
+            ? data.purchaseIds
+            : [];
+
+        return {
+          id: record.id,
+          paymentNo:
+            text(
+              data.paymentNo
+              ?? data.transactionNo
+              ?? data.referenceNo,
+            ),
+          paymentAttemptId:
+            text(data.paymentAttemptId),
+          purchaseId:
+            text(data.purchaseId),
+          purchaseIds:
+            rawPurchaseIds
+              .map((value) =>
+                text(value),
+              )
+              .filter(Boolean),
+          purchaseGroupId:
+            text(data.purchaseGroupId),
+          purchaseNo:
+            text(data.purchaseNo),
+          supplierId:
+            text(data.supplierId),
+          supplierName:
+            text(
+              data.supplierName
+              ?? data.sellerName
+              ?? data.supplier,
+            ),
+          amount:
+            money(data.amount),
+          paymentDate:
+            text(
+              data.paymentDate
+              ?? data.transactionDate
+              ?? data.date,
+            ),
+          paymentMethod:
+            text(
+              data.paymentMethod
+              ?? data.method,
+            ),
+          reference:
+            text(
+              data.reference
+              ?? data.paymentReference
+              ?? data.bankReference,
+            ),
+          note:
+            text(
+              data.notes
+              ?? data.note
+              ?? data.reason,
+            ),
+          bankAccountId:
+            text(data.bankAccountId),
+          bankAccountName:
+            text(
+              data.bankAccountName
+              ?? data.accountName
+              ?? data.bankName,
+            ),
+          status:
+            text(
+              data.status
+              ?? data.paymentStatus,
+            ),
+          isReversal:
+            data.isReversal === true
+            || money(data.amount) < 0,
+          reversalOfSupplierPaymentId:
+            text(
+              data.reversalOfSupplierPaymentId
+              ?? data.reversalOfPaymentId,
+            ),
+          createdAt:
+            data.createdAt,
+          updatedAt:
+            data.updatedAt,
+        } satisfies AdbnTechSupplierPaymentMirror;
+      })
+      .sort(
+        (a, b) =>
+          Math.max(
+            timestampMillis(
+              b.createdAt,
+            ),
+            timestampMillis(
+              b.updatedAt,
+            ),
+          )
+          - Math.max(
+            timestampMillis(
+              a.createdAt,
+            ),
+            timestampMillis(
+              a.updatedAt,
+            ),
+          ),
+      );
+
   return {
     purchases,
+    supplierPayments,
     connectedEmail,
     loadedAt: new Date().toISOString(),
   };
