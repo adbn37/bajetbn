@@ -122,9 +122,15 @@ need(
 
 need(
   mirror.includes(
-    'Record Payment write-back remains disabled until the ADBN TECH payment-write contract is verified.',
-  ),
-  'Invoice write-back remains explicitly gated pending verified ADBN contract.',
+    'Record Payment uses the authenticated ADBN TECH callable',
+  )
+    && mirror.includes(
+      'syncAdbnTechPaymentToBajetBn',
+    )
+    && mirror.includes(
+      'ADBN TECH remains the source of truth',
+    ),
+  'Invoice write-back uses the verified secured ADBN payment contract while ADBN remains authoritative.',
 );
 
 for (const forbidden of [
