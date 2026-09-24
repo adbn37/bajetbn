@@ -33362,3 +33362,626 @@ export const listMyPrivateDocuments = onCall(
     };
   },
 );
+
+// Slice 24F.1 - Secure ADBN customer link foundation
+// This slice links an ADBN customer identity to a BajetBN user-selected
+// Personal or Household Space. It intentionally does not read or write
+// Personal accounts, transactions, commitments, balances, or payment data.
+function adbnCustomerLinkEmail(
+  value: unknown,
+  field = 'Customer email',
+): string {
+  const email =
+    stringValue(value, field, 180)
+      .trim()
+      .toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Enter a valid email address.',
+    );
+  }
+
+  return email;
+}
+
+function adbnCustomerLinkDocumentId(
+  businessSpaceId: string,
+  adbnCustomerId: string,
+): string {
+  return Buffer.from(
+    businessSpaceId + '|' + adbnCustomerId,
+    'utf8',
+  ).toString('base64url');
+}
+
+async function requireAdbnCustomerLinkOwner(
+  businessSpaceId: string,
+  uid: string,
+): Promise<DocumentData> {
+  const snapshot =
+    await db.collection('spaces').doc(businessSpaceId).get();
+
+  if (!snapshot.exists || snapshot.data()?.archivedAt) {
+    throw new HttpsError(
+      'not-found',
+      'The ADBN TECH Business Space was not found.',
+    );
+  }
+
+  const space = snapshot.data() || {};
+
+  if (String(space.ownerId || '') !== uid) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the Business owner can manage ADBN customer links.',
+    );
+  }
+
+  if (
+    space.type !== 'sme'
+    || space.externalIntegrationProvider !== 'adbn_tech'
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'This Business Space is not connected to ADBN TECH.',
+    );
+  }
+
+  return space;
+}
+
+function requireVerifiedAuthEmail(
+  auth:
+    | {
+        token?: {
+          email?: unknown;
+          email_verified?: unknown;
+        };
+      }
+    | undefined,
+): string {
+  const email =
+    typeof auth?.token?.email === 'string'
+      ? auth.token.email.trim().toLowerCase()
+      : '';
+
+  if (!email || auth?.token?.email_verified !== true) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Verify your BajetBN email address before accepting an ADBN customer link.',
+    );
+  }
+
+  return email;
+}
+
+export const createAdbnCustomerLinkInvitation = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const businessSpaceId = stringValue(
+      request.data?.businessSpaceId,
+      'Business Space',
+      180,
+    );
+    const adbnCustomerId = stringValue(
+      request.data?.adbnCustomerId,
+      'ADBN customer',
+      220,
+    );
+    const customerNo = optionalString(
+      request.data?.customerNo,
+      120,
+    );
+    const customerName = stringValue(
+      request.data?.customerName,
+      'Customer name',
+      180,
+    );
+    const targetEmail = adbnCustomerLinkEmail(
+      request.data?.targetEmail,
+    );
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const businessSpace =
+      await requireAdbnCustomerLinkOwner(
+        businessSpaceId,
+        uid,
+      );
+
+    const registeredUsers =
+      await db.collection('users')
+        .where('email', '==', targetEmail)
+        .limit(1)
+        .get();
+
+    const invitedUserUid =
+      registeredUsers.empty
+        ? ''
+        : registeredUsers.docs[0].id;
+
+    const linkId =
+      adbnCustomerLinkDocumentId(
+        businessSpaceId,
+        adbnCustomerId,
+      );
+
+    const linkRef =
+      db.collection('adbnCustomerLinks').doc(linkId);
+
+    const commandRef =
+      db.collection('collaborationCommands').doc(
+        commandId(uid, key),
+      );
+
+    return db.runTransaction(async (transaction) => {
+      const [
+        commandSnapshot,
+        linkSnapshot,
+      ] = await Promise.all([
+        transaction.get(commandRef),
+        transaction.get(linkRef),
+      ]);
+
+      if (commandSnapshot.exists) {
+        return commandSnapshot.data()?.result;
+      }
+
+      const existing =
+        linkSnapshot.exists
+          ? linkSnapshot.data() || {}
+          : null;
+
+      if (existing?.status === 'accepted') {
+        throw new HttpsError(
+          'already-exists',
+          'This ADBN customer is already linked to a BajetBN customer.',
+        );
+      }
+
+      if (
+        existing?.status === 'pending'
+        && String(existing.targetEmail || '') !== targetEmail
+      ) {
+        throw new HttpsError(
+          'already-exists',
+          'This ADBN customer already has a pending link invitation for another email address.',
+        );
+      }
+
+      const now = FieldValue.serverTimestamp();
+
+      const result = {
+        linkId,
+        status: 'pending',
+        targetEmail,
+        recipientRegistered: Boolean(invitedUserUid),
+      };
+
+      if (
+        existing?.status === 'pending'
+        && String(existing.targetEmail || '') === targetEmail
+      ) {
+        transaction.create(commandRef, {
+          uid,
+          kind: 'create_adbn_customer_link_invitation',
+          idempotencyKey: key,
+          result,
+          createdAt: now,
+        });
+
+        return result;
+      }
+
+      transaction.set(
+        linkRef,
+        {
+          displayId: displayId('ADBNLINK'),
+          businessSpaceId,
+          businessSpaceName:
+            String(businessSpace.name || 'ADBN TECH'),
+          adbnCustomerId,
+          customerNo,
+          customerName,
+          targetEmail,
+          invitedUserUid: invitedUserUid || null,
+          recipientUid: null,
+          targetSpaceId: null,
+          targetSpaceName: null,
+          targetSpaceType: null,
+          status: 'pending',
+          invitedBy: uid,
+          invitedByName:
+            request.auth?.token.name
+            || request.auth?.token.email
+            || 'Business owner',
+          invitedAt: now,
+          acceptedAt: null,
+          declinedAt: null,
+          updatedAt: now,
+          createdAt:
+            linkSnapshot.exists
+              ? existing?.createdAt || now
+              : now,
+        },
+        {
+          merge: linkSnapshot.exists,
+        },
+      );
+
+      if (invitedUserUid) {
+        createNotification(
+          transaction,
+          {
+            uid: invitedUserUid,
+            spaceId: businessSpaceId,
+            type: 'adbn_customer_link_invitation',
+            title: 'ADBN TECH customer link',
+            message:
+              String(businessSpace.name || 'ADBN TECH')
+              + ' invited you to link customer '
+              + customerName
+              + ' to your BajetBN Bills & Instalments. No Personal financial data is shared with the Business.',
+            targetPath: '/adbn-links',
+            actionLabel: 'Review customer link',
+            now,
+          },
+        );
+      }
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'create_adbn_customer_link_invitation',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    });
+  },
+);
+
+export const getAdbnCustomerLinksForBusiness = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const businessSpaceId = stringValue(
+      request.data?.businessSpaceId,
+      'Business Space',
+      180,
+    );
+
+    await requireAdbnCustomerLinkOwner(
+      businessSpaceId,
+      uid,
+    );
+
+    const snapshot =
+      await db.collection('adbnCustomerLinks')
+        .where(
+          'businessSpaceId',
+          '==',
+          businessSpaceId,
+        )
+        .get();
+
+    const links =
+      snapshot.docs
+        .map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }))
+        .sort((a, b) =>
+          String(a.customerName || '')
+            .localeCompare(
+              String(b.customerName || ''),
+            ),
+        );
+
+    return { links };
+  },
+);
+
+export const getMyAdbnCustomerLinks = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const authEmail = requireVerifiedAuthEmail(
+      request.auth,
+    );
+
+    const [
+      emailSnapshot,
+      uidSnapshot,
+    ] = await Promise.all([
+      db.collection('adbnCustomerLinks')
+        .where('targetEmail', '==', authEmail)
+        .get(),
+      db.collection('adbnCustomerLinks')
+        .where('recipientUid', '==', uid)
+        .get(),
+    ]);
+
+    const byId =
+      new Map<string, DocumentData & { id: string }>();
+
+    for (
+      const item of [
+        ...emailSnapshot.docs,
+        ...uidSnapshot.docs,
+      ]
+    ) {
+      byId.set(item.id, {
+        id: item.id,
+        ...item.data(),
+      });
+    }
+
+    const links =
+      Array.from(byId.values())
+        .filter(
+          (item) =>
+            String(item.targetEmail || '') === authEmail
+            || String(item.recipientUid || '') === uid,
+        )
+        .sort(
+          (a, b) =>
+            Number(b.invitedAt?.toMillis?.() || 0)
+            - Number(a.invitedAt?.toMillis?.() || 0),
+        );
+
+    return { links };
+  },
+);
+
+export const respondAdbnCustomerLinkInvitation = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const authEmail = requireVerifiedAuthEmail(
+      request.auth,
+    );
+
+    const linkId = stringValue(
+      request.data?.linkId,
+      'ADBN customer link',
+      420,
+    );
+
+    const decision = oneOf(
+      request.data?.decision,
+      ['accept', 'decline'] as const,
+      'ADBN customer link decision',
+    );
+
+    const targetSpaceId =
+      decision === 'accept'
+        ? stringValue(
+            request.data?.targetSpaceId,
+            'Target Space',
+            180,
+          )
+        : '';
+
+    const key = stringValue(
+      request.data?.idempotencyKey,
+      'Idempotency key',
+      64,
+    );
+
+    const linkRef =
+      db.collection('adbnCustomerLinks').doc(linkId);
+
+    const targetSpaceRef =
+      targetSpaceId
+        ? db.collection('spaces').doc(targetSpaceId)
+        : null;
+
+    const commandRef =
+      db.collection('collaborationCommands').doc(
+        commandId(uid, key),
+      );
+
+    return db.runTransaction(async (transaction) => {
+      const commandSnapshot =
+        await transaction.get(commandRef);
+
+      if (commandSnapshot.exists) {
+        return commandSnapshot.data()?.result;
+      }
+
+      const linkSnapshot =
+        await transaction.get(linkRef);
+
+      if (!linkSnapshot.exists) {
+        throw new HttpsError(
+          'not-found',
+          'This ADBN customer link is unavailable.',
+        );
+      }
+
+      const link = linkSnapshot.data() || {};
+
+      if (
+        String(link.targetEmail || '') !== authEmail
+        && String(link.recipientUid || '') !== uid
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'This ADBN customer link belongs to another recipient.',
+        );
+      }
+
+      if (link.status !== 'pending') {
+        const result = {
+          linkId,
+          status: String(link.status || 'pending'),
+          targetSpaceId:
+            link.targetSpaceId || null,
+        };
+
+        transaction.create(commandRef, {
+          uid,
+          kind: 'respond_adbn_customer_link_invitation',
+          idempotencyKey: key,
+          result,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        return result;
+      }
+
+      const now = FieldValue.serverTimestamp();
+
+      if (decision === 'decline') {
+        transaction.update(linkRef, {
+          status: 'declined',
+          recipientUid: uid,
+          declinedAt: now,
+          updatedAt: now,
+        });
+
+        const result = {
+          linkId,
+          status: 'declined',
+          targetSpaceId: null,
+        };
+
+        if (link.invitedBy) {
+          createNotification(
+            transaction,
+            {
+              uid: String(link.invitedBy),
+              spaceId:
+                String(link.businessSpaceId || ''),
+              type: 'adbn_customer_link_declined',
+              title: 'ADBN customer link declined',
+              message:
+                String(link.customerName || 'Customer')
+                + ' declined the BajetBN customer link invitation.',
+              targetPath:
+                '/business/'
+                + String(link.businessSpaceId || '')
+                + '?workspace=adbn_customers',
+              actionLabel: 'Open ADBN customers',
+              now,
+            },
+          );
+        }
+
+        transaction.create(commandRef, {
+          uid,
+          kind: 'respond_adbn_customer_link_invitation',
+          idempotencyKey: key,
+          result,
+          createdAt: now,
+        });
+
+        return result;
+      }
+
+      if (!targetSpaceRef) {
+        throw new HttpsError(
+          'invalid-argument',
+          'Choose a Personal or Household Space.',
+        );
+      }
+
+      const targetSpaceSnapshot =
+        await transaction.get(targetSpaceRef);
+
+      if (
+        !targetSpaceSnapshot.exists
+        || targetSpaceSnapshot.data()?.archivedAt
+      ) {
+        throw new HttpsError(
+          'not-found',
+          'The selected Space is unavailable.',
+        );
+      }
+
+      const targetSpace =
+        targetSpaceSnapshot.data() || {};
+
+      if (
+        String(targetSpace.ownerId || '') !== uid
+        || ![
+          'personal',
+          'household',
+        ].includes(
+          String(targetSpace.type || ''),
+        )
+      ) {
+        throw new HttpsError(
+          'permission-denied',
+          'Choose one of your own Personal or Household Spaces.',
+        );
+      }
+
+      transaction.update(linkRef, {
+        status: 'accepted',
+        recipientUid: uid,
+        targetSpaceId,
+        targetSpaceName:
+          String(
+            targetSpace.name
+            || (
+              targetSpace.type === 'personal'
+                ? 'Personal'
+                : 'Household'
+            ),
+          ),
+        targetSpaceType:
+          String(targetSpace.type),
+        acceptedAt: now,
+        declinedAt: null,
+        updatedAt: now,
+      });
+
+      if (link.invitedBy) {
+        createNotification(
+          transaction,
+          {
+            uid: String(link.invitedBy),
+            spaceId:
+              String(link.businessSpaceId || ''),
+            type: 'adbn_customer_link_accepted',
+            title: 'ADBN customer linked',
+            message:
+              String(link.customerName || 'Customer')
+              + ' accepted the BajetBN customer link invitation.',
+            targetPath:
+              '/business/'
+              + String(link.businessSpaceId || '')
+              + '?workspace=adbn_customers',
+            actionLabel: 'Open ADBN customers',
+            now,
+          },
+        );
+      }
+
+      const result = {
+        linkId,
+        status: 'accepted',
+        targetSpaceId,
+      };
+
+      transaction.create(commandRef, {
+        uid,
+        kind: 'respond_adbn_customer_link_invitation',
+        idempotencyKey: key,
+        result,
+        createdAt: now,
+      });
+
+      return result;
+    });
+  },
+);
