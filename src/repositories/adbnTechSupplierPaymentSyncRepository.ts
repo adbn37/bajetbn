@@ -211,6 +211,9 @@ export function adbnSupplierPaymentCanPost(
     )
     && !payment.isReversal
     && !payment.reversalOfSupplierPaymentId
+    && payment.externalSource
+      .trim()
+      .toLowerCase() !== 'bajetbn'
     && !blockedStatus
   );
 }

@@ -184,6 +184,7 @@ export interface AdbnTechSupplierPaymentMirror {
   bankAccountId: string;
   bankAccountName: string;
   status: string;
+  externalSource: string;
   isReversal: boolean;
   reversalOfSupplierPaymentId: string;
   createdAt?: unknown;
@@ -195,6 +196,51 @@ export interface AdbnTechPurchasesReadOnlySnapshot {
   supplierPayments: AdbnTechSupplierPaymentMirror[];
   connectedEmail: string;
   loadedAt: string;
+}
+
+export interface AdbnTechSupplierPurchaseLineInput {
+  linkedProductId?: string;
+  category: string;
+  sku?: string;
+  barcode?: string;
+  brand: string;
+  model: string;
+  description?: string;
+  condition?: string;
+  quantity: number;
+  unitPrice: number;
+  sellingPrice?: number;
+  minimumStock?: number;
+}
+
+export interface AdbnTechSupplierPurchaseCreateInput {
+  requestId: string;
+  bajetBnTransactionId: string;
+  bajetBnAmount: number;
+  purchaseDate: string;
+  sellerName: string;
+  sellerType?: string;
+  supplierReference?: string;
+  paymentMethod: string;
+  bankAccountId: string;
+  note?: string;
+  deliveryCost?: number;
+  otherCost?: number;
+  items: AdbnTechSupplierPurchaseLineInput[];
+}
+
+export interface AdbnTechSupplierPurchaseCreateResult {
+  duplicatePrevented: boolean;
+  requestId: string;
+  purchaseGroupId: string;
+  purchaseNo: string;
+  purchaseIds: string[];
+  supplierPaymentId: string;
+  paymentNo: string;
+  bankTransactionId: string;
+  amount: number;
+  bajetBnTransactionId: string;
+  linkedExistingProductIds: string[];
 }
 
 export interface AdbnTechInventoryProductMirror {
@@ -504,6 +550,96 @@ export async function recordAdbnTechPayment(
       bankAccountId,
       note:
         input.note.trim(),
+    });
+
+  return result.data;
+}
+
+export async function createAdbnTechSupplierPurchase(
+  input: AdbnTechSupplierPurchaseCreateInput,
+): Promise<AdbnTechSupplierPurchaseCreateResult> {
+  const { functions } =
+    adbnTechConnectedSession();
+
+  if (
+    !input.requestId.trim()
+    || input.requestId.trim().length < 8
+  ) {
+    throw new Error(
+      'A valid ADBN TECH purchase request ID is required.',
+    );
+  }
+
+  if (
+    !input.bajetBnTransactionId.trim()
+  ) {
+    throw new Error(
+      'The BajetBN Money Out transaction is required.',
+    );
+  }
+
+  if (
+    input.bajetBnAmount <= 0
+  ) {
+    throw new Error(
+      'Purchase total must be greater than zero.',
+    );
+  }
+
+  if (
+    !input.sellerName.trim()
+  ) {
+    throw new Error(
+      'Supplier name is required.',
+    );
+  }
+
+  if (
+    !input.bankAccountId.trim()
+  ) {
+    throw new Error(
+      'Map the BajetBN account to an ADBN TECH bank or cash account first.',
+    );
+  }
+
+  if (
+    input.items.length < 1
+  ) {
+    throw new Error(
+      'Add at least one supplier purchase item.',
+    );
+  }
+
+  const call = httpsCallable<
+    AdbnTechSupplierPurchaseCreateInput,
+    AdbnTechSupplierPurchaseCreateResult
+  >(
+    functions,
+    'createBajetBnSupplierPurchase',
+  );
+
+  const result =
+    await call({
+      ...input,
+      requestId:
+        input.requestId.trim(),
+      bajetBnTransactionId:
+        input.bajetBnTransactionId.trim(),
+      sellerName:
+        input.sellerName.trim(),
+      sellerType:
+        input.sellerType?.trim()
+        || 'Supplier',
+      supplierReference:
+        input.supplierReference?.trim()
+        || '',
+      paymentMethod:
+        input.paymentMethod.trim(),
+      bankAccountId:
+        input.bankAccountId.trim(),
+      note:
+        input.note?.trim()
+        || '',
     });
 
   return result.data;
@@ -955,6 +1091,8 @@ export async function loadAdbnTechPurchasesReadOnly(): Promise<
               data.status
               ?? data.paymentStatus,
             ),
+          externalSource:
+            text(data.externalSource),
           isReversal:
             data.isReversal === true
             || money(data.amount) < 0,
