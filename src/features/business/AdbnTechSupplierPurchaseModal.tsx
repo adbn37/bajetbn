@@ -10,7 +10,10 @@ import {
   createAdbnTechSupplierPurchase,
   getAdbnTechConnectedEmail,
   loadAdbnTechInventoryReadOnly,
+  loadAdbnTechSuppliersReadOnly,
   type AdbnTechInventoryProductMirror,
+  type AdbnTechNewSupplierInput,
+  type AdbnTechSupplierMirror,
   type AdbnTechSupplierPurchaseLineInput,
 } from '../../repositories/adbnTechIntegrationRepository';
 import {
@@ -23,6 +26,25 @@ import type {
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
+
+type SupplierMode =
+  | 'search'
+  | 'existing'
+  | 'new';
+
+interface NewSupplierDraft {
+  name: string;
+  vendorType: string;
+  contactPerson: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  marketplace: string;
+  marketplaceLink: string;
+  paymentTerms: string;
+  address: string;
+  notes: string;
+}
 
 type LineMode =
   | 'search'
@@ -45,6 +67,32 @@ interface PurchaseLineDraft {
   unitPrice: string;
   sellingPrice: string;
   minimumStock: string;
+}
+
+const vendorTypes = [
+  'Registered Supplier',
+  'Regular / Fixed Vendor',
+  'Marketplace Seller',
+  'Personal / Individual Seller',
+] as const;
+
+function emptySupplierDraft(
+  name = '',
+): NewSupplierDraft {
+  return {
+    name,
+    vendorType:
+      'Registered Supplier',
+    contactPerson: '',
+    phone: '',
+    whatsapp: '',
+    email: '',
+    marketplace: '',
+    marketplaceLink: '',
+    paymentTerms: '',
+    address: '',
+    notes: '',
+  };
 }
 
 const paymentMethods: Array<{
@@ -112,6 +160,74 @@ function normalized(value: string) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
+}
+
+function supplierSearchText(
+  supplier: AdbnTechSupplierMirror,
+) {
+  return [
+    supplier.name,
+    supplier.vendorType,
+    supplier.contactPerson,
+    supplier.phone,
+    supplier.whatsapp,
+    supplier.email,
+    supplier.marketplace,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function supplierDuplicate(
+  supplier: AdbnTechSupplierMirror,
+  candidate: NewSupplierDraft,
+) {
+  const supplierName =
+    normalized(supplier.name);
+  const candidateName =
+    normalized(candidate.name);
+
+  const supplierEmail =
+    normalized(supplier.email);
+  const candidateEmail =
+    normalized(candidate.email);
+
+  const supplierPhone =
+    normalized(
+      supplier.phone
+      || supplier.whatsapp,
+    );
+  const candidatePhone =
+    normalized(
+      candidate.phone
+      || candidate.whatsapp,
+    );
+
+  if (
+    supplierEmail
+    && candidateEmail
+    && supplierEmail
+      === candidateEmail
+  ) {
+    return true;
+  }
+
+  if (
+    supplierPhone
+    && candidatePhone
+    && supplierPhone
+      === candidatePhone
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    supplierName
+    && candidateName
+    && supplierName
+      === candidateName
+  );
 }
 
 function productSearchText(
@@ -210,6 +326,11 @@ export function AdbnTechSupplierPurchaseModal({
       AdbnTechInventoryProductMirror[]
     >([]);
 
+  const [suppliers, setSuppliers] =
+    useState<
+      AdbnTechSupplierMirror[]
+    >([]);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -219,8 +340,33 @@ export function AdbnTechSupplierPurchaseModal({
   const [error, setError] =
     useState('');
 
-  const [supplier, setSupplier] =
+  const [
+    supplierMode,
+    setSupplierMode,
+  ] =
+    useState<SupplierMode>(
+      'search',
+    );
+
+  const [
+    supplierSearch,
+    setSupplierSearch,
+  ] =
     useState('');
+
+  const [
+    selectedSupplierId,
+    setSelectedSupplierId,
+  ] =
+    useState('');
+
+  const [
+    newSupplier,
+    setNewSupplier,
+  ] =
+    useState<NewSupplierDraft>(
+      emptySupplierDraft(),
+    );
 
   const [purchaseDate, setPurchaseDate] =
     useState(
@@ -310,6 +456,47 @@ export function AdbnTechSupplierPurchaseModal({
         item.account.id === accountId,
     );
 
+  const selectedSupplier =
+    suppliers.find(
+      (supplier) =>
+        supplier.id
+        === selectedSupplierId,
+    );
+
+  const supplierMatches =
+    useMemo(
+      () => {
+        const term =
+          supplierSearch
+            .trim()
+            .toLowerCase();
+
+        if (term.length < 2) {
+          return [];
+        }
+
+        return suppliers
+          .filter(
+            (supplier) =>
+              supplierSearchText(
+                supplier,
+              ).includes(term),
+          )
+          .slice(0, 8);
+      },
+      [
+        supplierSearch,
+        suppliers,
+      ],
+    );
+
+  const supplierDisplayName =
+    supplierMode === 'existing'
+      ? selectedSupplier?.name || ''
+      : supplierMode === 'new'
+        ? newSupplier.name.trim()
+        : '';
+
   useEffect(() => {
     if (
       !accountId
@@ -342,12 +529,21 @@ export function AdbnTechSupplierPurchaseModal({
           );
         }
 
-        const snapshot =
-          await loadAdbnTechInventoryReadOnly();
+        const [
+          inventorySnapshot,
+          supplierSnapshot,
+        ] =
+          await Promise.all([
+            loadAdbnTechInventoryReadOnly(),
+            loadAdbnTechSuppliersReadOnly(),
+          ]);
 
         if (!cancelled) {
           setProducts(
-            snapshot.products,
+            inventorySnapshot.products,
+          );
+          setSuppliers(
+            supplierSnapshot.suppliers,
           );
         }
       } catch (nextError) {
@@ -399,6 +595,67 @@ export function AdbnTechSupplierPurchaseModal({
       + decimal(deliveryCost)
       + decimal(otherCost),
     );
+
+  function useExistingSupplier(
+    supplier: AdbnTechSupplierMirror,
+  ) {
+    setSelectedSupplierId(
+      supplier.id,
+    );
+    setSupplierSearch(
+      supplier.name,
+    );
+    setSupplierMode(
+      'existing',
+    );
+    setNewSupplier(
+      emptySupplierDraft(),
+    );
+    setError('');
+  }
+
+  function startNewSupplier() {
+    if (
+      supplierSearch
+        .trim()
+        .length < 2
+    ) {
+      setError(
+        'Search ADBN suppliers first before creating a new supplier.',
+      );
+      return;
+    }
+
+    setSelectedSupplierId('');
+    setNewSupplier(
+      emptySupplierDraft(
+        supplierSearch.trim(),
+      ),
+    );
+    setSupplierMode('new');
+    setError('');
+  }
+
+  function resetSupplierSearch() {
+    setSelectedSupplierId('');
+    setSupplierMode('search');
+    setNewSupplier(
+      emptySupplierDraft(),
+    );
+    setError('');
+  }
+
+  function updateNewSupplier(
+    updates:
+      Partial<NewSupplierDraft>,
+  ) {
+    setNewSupplier(
+      (current) => ({
+        ...current,
+        ...updates,
+      }),
+    );
+  }
 
   function updateLine(
     id: string,
@@ -559,11 +816,49 @@ export function AdbnTechSupplierPurchaseModal({
     }
 
     if (
-      !supplier.trim()
+      supplierMode === 'search'
     ) {
       throw new Error(
-        'Enter the supplier name.',
+        'Search and choose an existing ADBN supplier, or create a new supplier.',
       );
+    }
+
+    if (
+      supplierMode === 'existing'
+      && !selectedSupplier
+    ) {
+      throw new Error(
+        'Choose an existing ADBN supplier.',
+      );
+    }
+
+    if (
+      supplierMode === 'new'
+    ) {
+      if (
+        !newSupplier.name
+          .trim()
+      ) {
+        throw new Error(
+          'Supplier name is required.',
+        );
+      }
+
+      const duplicate =
+        suppliers.find(
+          (supplier) =>
+            supplierDuplicate(
+              supplier,
+              newSupplier,
+            ),
+        );
+
+      if (duplicate) {
+        throw new Error(
+          `Supplier already exists: ${duplicate.name} `
+          + `(ADBN supplier ${duplicate.id}). Use the existing supplier instead.`,
+        );
+      }
     }
 
     if (
@@ -761,7 +1056,7 @@ export function AdbnTechSupplierPurchaseModal({
               categoryScope:
                 'business',
               counterparty:
-                supplier.trim(),
+                supplierDisplayName,
               note:
                 [
                   reference.trim()
@@ -817,10 +1112,41 @@ export function AdbnTechSupplierPurchaseModal({
             bajetBnAmount:
               total,
             purchaseDate,
+            supplierId:
+              supplierMode
+                === 'existing'
+                ? selectedSupplierId
+                : '',
+            newSupplier:
+              supplierMode
+                === 'new'
+                ? ({
+                    ...newSupplier,
+                    name:
+                      newSupplier.name
+                        .trim(),
+                    phone:
+                      (
+                        newSupplier.phone
+                        || newSupplier.whatsapp
+                      ).trim(),
+                    whatsapp:
+                      (
+                        newSupplier.whatsapp
+                        || newSupplier.phone
+                      ).trim(),
+                    status:
+                      'Active',
+                  } satisfies AdbnTechNewSupplierInput)
+                : undefined,
             sellerName:
-              supplier.trim(),
+              supplierDisplayName,
             sellerType:
-              'Supplier',
+              supplierMode
+                === 'existing'
+                ? selectedSupplier?.vendorType
+                  || 'Registered Supplier'
+                : newSupplier.vendorType,
             supplierReference:
               reference.trim(),
             paymentMethod:
@@ -893,11 +1219,11 @@ export function AdbnTechSupplierPurchaseModal({
       >
         <div className="info-banner">
           <strong>
-            Search ADBN inventory first
+            Search ADBN supplier and inventory first
           </strong>
           <span>
-            Existing PC parts keep the same ADBN product ID and category.
-            New products are allowed only after searching, with duplicate checks again on the ADBN server.
+            Existing suppliers keep the same ADBN supplier ID, and existing PC parts keep the same ADBN product ID.
+            New suppliers and products are allowed only after searching, with duplicate checks again on the ADBN server.
           </span>
         </div>
 
@@ -920,26 +1246,327 @@ export function AdbnTechSupplierPurchaseModal({
 
         {loading ? (
           <div className="loading-panel">
-            Loading ADBN TECH inventory…
+            Loading ADBN TECH suppliers and inventory…
           </div>
         ) : (
           <>
-            <div className="form-grid">
-              <label>
+            <section
+              className="panel"
+              data-adbn-tech-supplier-picker
+            >
+              <strong>
                 Supplier
-                <input
-                  value={supplier}
-                  onChange={(event) =>
-                    setSupplier(
-                      event.target.value,
-                    )
-                  }
-                  placeholder="Supplier / seller"
-                  maxLength={180}
-                  required
-                />
-              </label>
+              </strong>
 
+              {supplierMode
+                === 'search'
+                && (
+                  <>
+                    <label>
+                      Search ADBN suppliers
+                      <input
+                        value={supplierSearch}
+                        onChange={(event) =>
+                          setSupplierSearch(
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Supplier name, contact, phone, email, marketplace…"
+                        autoComplete="off"
+                      />
+                    </label>
+
+                    {supplierSearch
+                      .trim()
+                      .length < 2 ? (
+                      <small className="muted">
+                        Type at least 2 characters before creating a new supplier.
+                      </small>
+                    ) : (
+                      <>
+                        {supplierMatches.length > 0 ? (
+                          <div className="transaction-inline-file-list">
+                            {supplierMatches.map(
+                              (supplier) => (
+                                <div
+                                  className="transaction-inline-file-row"
+                                  key={supplier.id}
+                                >
+                                  <div>
+                                    <strong>
+                                      {supplier.name}
+                                    </strong>
+                                    <small>
+                                      {supplier.vendorType}
+                                      {supplier.phone
+                                        ? ` · ${supplier.phone}`
+                                        : ''}
+                                      {supplier.email
+                                        ? ` · ${supplier.email}`
+                                        : ''}
+                                      {' · ID '}
+                                      {supplier.id}
+                                    </small>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    className="button secondary compact"
+                                    onClick={() =>
+                                      useExistingSupplier(
+                                        supplier,
+                                      )
+                                    }
+                                  >
+                                    Use supplier
+                                  </button>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        ) : (
+                          <div className="notice">
+                            No matching ADBN supplier found.
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={
+                            startNewSupplier
+                          }
+                        >
+                          + Create new supplier
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+
+              {supplierMode
+                === 'existing'
+                && selectedSupplier
+                && (
+                  <>
+                    <div className="info-banner">
+                      <strong>
+                        Existing ADBN supplier linked
+                      </strong>
+                      <span>
+                        {selectedSupplier.name}
+                        {' · '}
+                        {selectedSupplier.vendorType}
+                        {' · ID '}
+                        {selectedSupplier.id}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="button secondary compact"
+                      onClick={
+                        resetSupplierSearch
+                      }
+                    >
+                      Search another supplier
+                    </button>
+                  </>
+                )}
+
+              {supplierMode
+                === 'new'
+                && (
+                  <>
+                    <div className="notice warning">
+                      This will create a new supplier in ADBN TECH when the purchase is saved.
+                      ADBN will re-check name, phone/WhatsApp and email for duplicates.
+                    </div>
+
+                    {(() => {
+                      const duplicate =
+                        suppliers.find(
+                          (supplier) =>
+                            supplierDuplicate(
+                              supplier,
+                              newSupplier,
+                            ),
+                        );
+
+                      return duplicate ? (
+                        <div className="notice error">
+                          Possible duplicate: {duplicate.name}
+                          {' · '}
+                          {duplicate.vendorType}
+                          {' · ID '}
+                          {duplicate.id}. Use the existing supplier instead.
+                        </div>
+                      ) : null;
+                    })()}
+
+                    <div className="form-grid">
+                      <label>
+                        Supplier name
+                        <input
+                          value={newSupplier.name}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              name:
+                                event.target.value,
+                            })
+                          }
+                          required
+                        />
+                      </label>
+
+                      <label>
+                        Vendor type
+                        <select
+                          value={newSupplier.vendorType}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              vendorType:
+                                event.target.value,
+                            })
+                          }
+                        >
+                          {vendorTypes.map(
+                            (value) => (
+                              <option
+                                key={value}
+                                value={value}
+                              >
+                                {value}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+
+                      <label>
+                        Contact person
+                        <input
+                          value={newSupplier.contactPerson}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              contactPerson:
+                                event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Phone / WhatsApp
+                        <input
+                          value={newSupplier.phone}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              phone:
+                                event.target.value,
+                              whatsapp:
+                                event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Email
+                        <input
+                          type="email"
+                          value={newSupplier.email}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              email:
+                                event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Marketplace
+                        <input
+                          value={newSupplier.marketplace}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              marketplace:
+                                event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Marketplace / profile link
+                        <input
+                          value={newSupplier.marketplaceLink}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              marketplaceLink:
+                                event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Payment terms
+                        <input
+                          value={newSupplier.paymentTerms}
+                          onChange={(event) =>
+                            updateNewSupplier({
+                              paymentTerms:
+                                event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+
+                    <label>
+                      Address
+                      <textarea
+                        value={newSupplier.address}
+                        onChange={(event) =>
+                          updateNewSupplier({
+                            address:
+                              event.target.value,
+                          })
+                        }
+                        rows={2}
+                      />
+                    </label>
+
+                    <label>
+                      Supplier notes
+                      <textarea
+                        value={newSupplier.notes}
+                        onChange={(event) =>
+                          updateNewSupplier({
+                            notes:
+                              event.target.value,
+                          })
+                        }
+                        rows={2}
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      className="button secondary compact"
+                      onClick={
+                        resetSupplierSearch
+                      }
+                    >
+                      Back to supplier search
+                    </button>
+                  </>
+                )}
+            </section>
+
+            <div className="form-grid">
               <label>
                 Purchase date
                 <input
