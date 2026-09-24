@@ -5,6 +5,9 @@ import {
   useState,
 } from 'react';
 import {
+  Modal,
+} from '../../components/Modal';
+import {
   ADBN_TECH_ADMIN_EMAIL,
   connectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
@@ -12,10 +15,16 @@ import {
   loadAdbnTechReadOnlySnapshot,
   recordAdbnTechPayment,
   type AdbnTechBankAccountMirror,
+  type AdbnTechCustomerMirror,
   type AdbnTechInvoiceMirror,
   type AdbnTechPaymentMirror,
   type AdbnTechReadOnlySnapshot,
 } from '../../repositories/adbnTechIntegrationRepository';
+import {
+  createAdbnCustomerLinkInvitation,
+  listAdbnCustomerLinksForBusiness,
+  type AdbnCustomerLink,
+} from '../../repositories/adbnCustomerLinkRepository';
 import {
   getSpace,
   markAdbnTechIntegrationConnected,
@@ -220,6 +229,33 @@ export function AdbnTechMirrorWorkspace({
     setPaymentWarning,
   ] = useState('');
 
+  const [
+    customerLinks,
+    setCustomerLinks,
+  ] = useState<AdbnCustomerLink[]>([]);
+
+  const [
+    linkCustomer,
+    setLinkCustomer,
+  ] = useState<
+    AdbnTechCustomerMirror | null
+  >(null);
+
+  const [
+    linkEmail,
+    setLinkEmail,
+  ] = useState('');
+
+  const [
+    customerLinkBusy,
+    setCustomerLinkBusy,
+  ] = useState(false);
+
+  const [
+    customerLinkMessage,
+    setCustomerLinkMessage,
+  ] = useState('');
+
   const load = useCallback(async () => {
     if (getAdbnTechConnectedEmail() !== ADBN_TECH_ADMIN_EMAIL) {
       setSnapshot(null);
@@ -231,8 +267,23 @@ export function AdbnTechMirrorWorkspace({
     setError('');
 
     try {
-      const next = await loadAdbnTechReadOnlySnapshot();
+      const [
+        next,
+        nextCustomerLinks,
+      ] =
+        await Promise.all([
+          loadAdbnTechReadOnlySnapshot(),
+          view === 'customers'
+            ? listAdbnCustomerLinksForBusiness(
+                spaceId,
+              )
+            : Promise.resolve(
+                [] as AdbnCustomerLink[],
+              ),
+        ]);
+
       setSnapshot(next);
+      setCustomerLinks(nextCustomerLinks);
       setConnectedEmail(next.connectedEmail);
       await markAdbnTechIntegrationConnected(spaceId);
     } catch (nextError) {
@@ -244,7 +295,7 @@ export function AdbnTechMirrorWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [spaceId]);
+  }, [spaceId, view]);
 
   useEffect(() => {
     void load();
@@ -269,6 +320,102 @@ export function AdbnTechMirrorWorkspace({
       setLoading(false);
     }
   };
+
+  const customerLinkByAdbnId =
+    useMemo(
+      () =>
+        new Map(
+          customerLinks.map(
+            (link) => [
+              link.adbnCustomerId,
+              link,
+            ],
+          ),
+        ),
+      [customerLinks],
+    );
+
+  const openCustomerLink =
+    (
+      customer: AdbnTechCustomerMirror,
+    ) => {
+      setLinkCustomer(customer);
+      setLinkEmail(
+        customer.email
+          .trim()
+          .toLowerCase(),
+      );
+      setCustomerLinkMessage('');
+      setError('');
+    };
+
+  const submitCustomerLink =
+    async () => {
+      if (
+        !linkCustomer
+        || customerLinkBusy
+      ) {
+        return;
+      }
+
+      if (!linkEmail.trim()) {
+        setError(
+          'Enter the customer BajetBN email address.',
+        );
+        return;
+      }
+
+      setCustomerLinkBusy(true);
+      setCustomerLinkMessage('');
+      setError('');
+
+      try {
+        const result =
+          await createAdbnCustomerLinkInvitation({
+            businessSpaceId: spaceId,
+            adbnCustomerId: linkCustomer.id,
+            customerNo:
+              linkCustomer.customerNo,
+            customerName:
+              linkCustomer.name
+              || linkCustomer.customerNo
+              || 'ADBN customer',
+            targetEmail: linkEmail,
+          });
+
+        setCustomerLinkMessage(
+          (
+            result.recipientRegistered
+              ? 'BajetBN customer-link invitation sent to '
+              : 'Customer link prepared for '
+          )
+          + result.targetEmail
+          + (
+            result.recipientRegistered
+              ? '.'
+              : '. The customer will see it after signing in with that verified email.'
+          ),
+        );
+
+        setLinkCustomer(null);
+        setLinkEmail('');
+
+        const nextLinks =
+          await listAdbnCustomerLinksForBusiness(
+            spaceId,
+          );
+
+        setCustomerLinks(nextLinks);
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'Customer link invitation could not be created.',
+        );
+      } finally {
+        setCustomerLinkBusy(false);
+      }
+    };
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -1140,6 +1287,92 @@ export function AdbnTechMirrorWorkspace({
 
       {error && <div className="notice error">{error}</div>}
 
+      {customerLinkMessage && (
+        <div
+          className="notice success"
+          data-adbn-customer-link-success
+        >
+          {customerLinkMessage}
+        </div>
+      )}
+
+      {linkCustomer && (
+        <Modal
+          title={
+            'Link ADBN customer · '
+            + (
+              linkCustomer.name
+              || linkCustomer.customerNo
+              || linkCustomer.id
+            )
+          }
+          onClose={() => {
+            if (!customerLinkBusy) {
+              setLinkCustomer(null);
+              setLinkEmail('');
+            }
+          }}
+        >
+          <div
+            className="form-stack"
+            data-adbn-customer-link-modal
+          >
+            <div className="info-banner">
+              <strong>
+                Secure customer link only
+              </strong>
+              <span>
+                The customer must sign in to BajetBN with this verified email and explicitly accept. ADBN TECH will not gain access to the customer's Personal accounts, balances, transactions or other private BajetBN records.
+              </span>
+            </div>
+
+            <label>
+              Customer BajetBN email
+              <input
+                type="email"
+                value={linkEmail}
+                onChange={(event) =>
+                  setLinkEmail(
+                    event.target.value,
+                  )
+                }
+                placeholder="customer@example.com"
+              />
+            </label>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={customerLinkBusy}
+                onClick={() => {
+                  setLinkCustomer(null);
+                  setLinkEmail('');
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="button primary"
+                disabled={
+                  customerLinkBusy
+                  || !linkEmail.trim()
+                }
+                onClick={() =>
+                  void submitCustomerLink()
+                }
+              >
+                {customerLinkBusy
+                  ? 'Sending…'
+                  : 'Send secure link'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {paymentMessage && (
         <div
           className="notice success"
@@ -1169,26 +1402,68 @@ export function AdbnTechMirrorWorkspace({
                 <th>Contact</th>
                 <th>Status</th>
                 <th>Since</th>
+                <th>BajetBN Link</th>
               </tr>
             </thead>
             <tbody>
-              {customers.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <strong>{item.name || 'Unnamed customer'}</strong>
-                    <small>{item.customerNo || item.id}</small>
-                  </td>
-                  <td>
-                    <span>{item.phone || item.whatsapp || '—'}</span>
-                    <small>{item.email || 'No email'}</small>
-                  </td>
-                  <td>{item.status || '—'}</td>
-                  <td>{simpleDate(item.customerSince)}</td>
-                </tr>
-              ))}
+              {customers.map((item) => {
+                const customerLink =
+                  customerLinkByAdbnId.get(
+                    item.id,
+                  );
+
+                return (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.name || 'Unnamed customer'}</strong>
+                      <small>{item.customerNo || item.id}</small>
+                    </td>
+                    <td>
+                      <span>{item.phone || item.whatsapp || '—'}</span>
+                      <small>{item.email || 'No email'}</small>
+                    </td>
+                    <td>{item.status || '—'}</td>
+                    <td>{simpleDate(item.customerSince)}</td>
+                    <td>
+                      {customerLink?.status === 'accepted' ? (
+                        <>
+                          <strong>
+                            Linked
+                          </strong>
+                          <small>
+                            {customerLink.targetEmail}
+                          </small>
+                        </>
+                      ) : customerLink?.status === 'pending' ? (
+                        <>
+                          <span>
+                            Pending
+                          </span>
+                          <small>
+                            {customerLink.targetEmail}
+                          </small>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button secondary compact"
+                          data-adbn-customer-link-action
+                          onClick={() =>
+                            openCustomerLink(item)
+                          }
+                        >
+                          {customerLink?.status === 'declined'
+                            ? 'Invite again'
+                            : 'Link customer'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {!customers.length && (
                 <tr>
-                  <td colSpan={4} className="muted">No matching ADBN TECH customers.</td>
+                  <td colSpan={5} className="muted">No matching ADBN TECH customers.</td>
                 </tr>
               )}
             </tbody>
