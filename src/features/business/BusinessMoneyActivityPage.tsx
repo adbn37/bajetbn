@@ -36,6 +36,7 @@ import {
   categoryIconGlyph,
 } from '../categories/defaultCategories';
 import { MoneyActivityModal, MoneyScopeSwitch } from '../transactions/TransactionsPage';
+import { AdbnTechSupplierPurchaseModal } from './AdbnTechSupplierPurchaseModal';
 
 type PrimaryType = 'income' | 'expense' | 'transfer';
 type TypeFilter = 'all' | PrimaryType;
@@ -181,6 +182,16 @@ function managedSourceLabel(item: FinancialTransaction): string | null {
     return 'Space work item';
   }
 
+  if (
+    (item.labels || [])
+      .some(
+        (label) =>
+          label.toLowerCase() === 'adbn_purchase',
+      )
+  ) {
+    return 'ADBN TECH supplier purchase';
+  }
+
   return null;
 }
 
@@ -255,6 +266,10 @@ export function BusinessMoneyActivityPage() {
   const [customTo, setCustomTo] = useState(today);
 
   const [showAdd, setShowAdd] = useState(false);
+  const [
+    showSupplierPurchase,
+    setShowSupplierPurchase,
+  ] = useState(false);
   const [detail, setDetail] =
     useState<FinancialTransaction | null>(null);
   const [editItem, setEditItem] =
@@ -858,6 +873,25 @@ export function BusinessMoneyActivityPage() {
               Business money reports
             </Link>
 
+            {canManage
+              && space.externalIntegrationProvider === 'adbn_tech'
+              && space.externalIntegrationStatus === 'connected'
+              && (
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={
+                    !online
+                    || writableAccounts.length === 0
+                  }
+                  onClick={() =>
+                    setShowSupplierPurchase(true)
+                  }
+                >
+                  + Supplier purchase
+                </button>
+              )}
+
             {canManage && (
               <button
                 className="button primary"
@@ -1367,6 +1401,22 @@ export function BusinessMoneyActivityPage() {
             );
           })}
         </section>
+      )}
+
+      {showSupplierPurchase && (
+        <AdbnTechSupplierPurchaseModal
+          space={space}
+          accounts={writableAccounts}
+          online={online}
+          onClose={() =>
+            setShowSupplierPurchase(false)
+          }
+          onComplete={async (message) => {
+            setShowSupplierPurchase(false);
+            setFeedback(message);
+            await load();
+          }}
+        />
       )}
 
       {showAdd && (

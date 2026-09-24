@@ -1006,7 +1006,11 @@ export function AdbnTechPurchasesWorkspace({
                               Blocked
                             </span>
                             <small>
-                              {payment.isReversal
+                              {payment.externalSource
+                                .trim()
+                                .toLowerCase() === 'bajetbn'
+                                ? 'Created from BajetBN'
+                                : payment.isReversal
                                 || payment.amount < 0
                                 || payment.reversalOfSupplierPaymentId
                                 ? 'Reversal stays manual'
