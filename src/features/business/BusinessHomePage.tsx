@@ -953,7 +953,24 @@ export function BusinessHomePage() {
               {currentRole} · Business
             </p>
           </div>
-        </div>      </header>
+        </div>
+
+        <div
+          className="header-actions"
+          data-space-home-add-shortcut
+        >
+          <Link
+            className="button primary"
+            to={
+              '/spaces/'
+              + space.id
+              + '/business/money?quick=1'
+            }
+          >
+            + Add
+          </Link>
+        </div>
+      </header>
 
       {error && (
         <div className="notice error">

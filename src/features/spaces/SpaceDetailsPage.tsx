@@ -1749,7 +1749,31 @@ export function SpaceDetailsPage() {
           ? `${businessAccessLabel} · Business`
           : spaceDescription(space)
       }
-      action={<Link className="button secondary" to="/spaces">Back</Link>}
+      action={
+        <div className="header-actions">
+          {!space.archivedAt && (
+            <Link
+              className="button primary"
+              data-space-home-add-shortcut
+              to={
+                '/transactions?quick=1&spaceId='
+                + encodeURIComponent(
+                  space.id,
+                )
+              }
+            >
+              + Add
+            </Link>
+          )}
+
+          <Link
+            className="button secondary"
+            to="/spaces"
+          >
+            Back
+          </Link>
+        </div>
+      }
     />
     {error && <div className="notice error">{error}</div>}
     {space.archivedAt && <div className="notice">This Space is hidden. Its previous money records are still kept.</div>}

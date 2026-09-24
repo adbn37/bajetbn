@@ -384,7 +384,10 @@ function transactionHasManagedSource(item: FinancialTransaction): boolean {
 export function TransactionsPage() {
   const { user, profile } = useAuth();
   const { online, lastCompletedAt } = useOfflineSync();
-  const [searchParams] = useSearchParams();
+  const [
+    searchParams,
+    setSearchParams,
+  ] = useSearchParams();
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [writableAccounts, setWritableAccounts] = useState<Account[]>([]);
@@ -401,6 +404,10 @@ export function TransactionsPage() {
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [
+    quickLockedSpaceId,
+    setQuickLockedSpaceId,
+  ] = useState('');
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
   const [receiptTransaction, setReceiptTransaction] = useState<FinancialTransaction | null>(null);
@@ -428,6 +435,16 @@ export function TransactionsPage() {
     searchParams.get(
       'approvals',
     ) === '1';
+
+  const requestedQuickAdd =
+    searchParams.get(
+      'quick',
+    ) === '1';
+
+  const requestedQuickSpaceId =
+    searchParams.get(
+      'spaceId',
+    ) || '';
 
   const deepLinkOpenedRef =
     useRef(
@@ -836,6 +853,60 @@ export function TransactionsPage() {
     ),
     [activeWritableAccounts, spaces],
   );
+
+  useEffect(() => {
+    if (
+      !requestedQuickAdd
+      || loading
+    ) {
+      return;
+    }
+
+    const targetSpace =
+      writableSpaces.find(
+        (space) =>
+          space.id
+          === requestedQuickSpaceId,
+      );
+
+    if (
+      !targetSpace
+      || targetSpace.type === 'sme'
+    ) {
+      if (requestedQuickSpaceId) {
+        setError(
+          'This Space cannot accept Money Activity from this account.',
+        );
+      }
+
+      return;
+    }
+
+    setQuickLockedSpaceId(
+      targetSpace.id,
+    );
+    setShowForm(true);
+
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    next.delete('quick');
+    next.delete('spaceId');
+
+    setSearchParams(
+      next,
+      { replace: true },
+    );
+  }, [
+    loading,
+    requestedQuickAdd,
+    requestedQuickSpaceId,
+    searchParams,
+    setSearchParams,
+    writableSpaces,
+  ]);
 
   const spaceMap = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
 
@@ -1284,10 +1355,18 @@ export function TransactionsPage() {
         timezone={profile.timezone}
         online={online}
         scopeControls={<MoneyScopeSwitch mode="personal" businessSpaces={businessSpaces} compact />}
-        onClose={() => setShowForm(false)}
+        lockedSpaceId={
+          quickLockedSpaceId
+          || undefined
+        }
+        onClose={() => {
+          setShowForm(false);
+          setQuickLockedSpaceId('');
+        }}
         onSubmit={postTransaction}
         onComplete={async (message, refresh) => {
           setShowForm(false);
+          setQuickLockedSpaceId('');
           setFeedback(message);
           if (refresh) await load();
         }}
