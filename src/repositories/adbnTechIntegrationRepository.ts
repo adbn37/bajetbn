@@ -198,6 +198,45 @@ export interface AdbnTechPurchasesReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechSupplierMirror {
+  id: string;
+  name: string;
+  vendorType: string;
+  contactPerson: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  marketplace: string;
+  marketplaceLink: string;
+  paymentTerms: string;
+  address: string;
+  notes: string;
+  status: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AdbnTechSuppliersReadOnlySnapshot {
+  suppliers: AdbnTechSupplierMirror[];
+  connectedEmail: string;
+  loadedAt: string;
+}
+
+export interface AdbnTechNewSupplierInput {
+  name: string;
+  vendorType: string;
+  contactPerson?: string;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  marketplace?: string;
+  marketplaceLink?: string;
+  paymentTerms?: string;
+  address?: string;
+  notes?: string;
+  status?: string;
+}
+
 export interface AdbnTechSupplierPurchaseLineInput {
   linkedProductId?: string;
   category: string;
@@ -218,6 +257,8 @@ export interface AdbnTechSupplierPurchaseCreateInput {
   bajetBnTransactionId: string;
   bajetBnAmount: number;
   purchaseDate: string;
+  supplierId?: string;
+  newSupplier?: AdbnTechNewSupplierInput;
   sellerName: string;
   sellerType?: string;
   supplierReference?: string;
@@ -240,6 +281,9 @@ export interface AdbnTechSupplierPurchaseCreateResult {
   bankTransactionId: string;
   amount: number;
   bajetBnTransactionId: string;
+  supplierId: string;
+  supplierName: string;
+  supplierCreated: boolean;
   linkedExistingProductIds: string[];
 }
 
@@ -1132,6 +1176,87 @@ export async function loadAdbnTechPurchasesReadOnly(): Promise<
     supplierPayments,
     connectedEmail,
     loadedAt: new Date().toISOString(),
+  };
+}
+
+export async function loadAdbnTechSuppliersReadOnly(): Promise<
+  AdbnTechSuppliersReadOnlySnapshot
+> {
+  const {
+    db,
+    connectedEmail,
+  } =
+    adbnTechConnectedSession();
+
+  const snapshot =
+    await getDocs(
+      collection(
+        db,
+        'suppliers',
+      ),
+    );
+
+  const suppliers =
+    snapshot.docs
+      .map((record) => {
+        const data =
+          record.data();
+
+        return {
+          id: record.id,
+          name:
+            text(
+              data.name
+              ?? data.supplierName,
+            ),
+          vendorType:
+            text(data.vendorType)
+            || 'Registered Supplier',
+          contactPerson:
+            text(data.contactPerson),
+          phone:
+            text(
+              data.phone
+              ?? data.whatsapp,
+            ),
+          whatsapp:
+            text(
+              data.whatsapp
+              ?? data.phone,
+            ),
+          email:
+            text(data.email),
+          marketplace:
+            text(data.marketplace),
+          marketplaceLink:
+            text(data.marketplaceLink),
+          paymentTerms:
+            text(data.paymentTerms),
+          address:
+            text(data.address),
+          notes:
+            text(data.notes),
+          status:
+            text(data.status)
+            || 'Active',
+          createdAt:
+            data.createdAt,
+          updatedAt:
+            data.updatedAt,
+        } satisfies AdbnTechSupplierMirror;
+      })
+      .sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name,
+          ),
+      );
+
+  return {
+    suppliers,
+    connectedEmail,
+    loadedAt:
+      new Date().toISOString(),
   };
 }
 
