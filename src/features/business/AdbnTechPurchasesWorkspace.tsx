@@ -3,8 +3,10 @@ import {
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
 } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { Modal } from '../../components/Modal';
 import {
   listAccountsForOwnerSpace,
 } from '../../repositories/accountRepository';
@@ -13,6 +15,7 @@ import {
   connectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
   loadAdbnTechPurchasesReadOnly,
+  receiveAdbnTechSupplierPurchase,
   type AdbnTechPurchaseMirror,
   type AdbnTechPurchasesReadOnlySnapshot,
   type AdbnTechSupplierPaymentMirror,
@@ -33,6 +36,47 @@ import type {
   Account,
   FinancialTransaction,
 } from '../../types/models';
+
+interface PurchaseReceiveForm {
+  quantity: string;
+  receivedDate: string;
+  deliveryReference: string;
+  serialNumbers: string;
+  conditionNotes: string;
+}
+
+function bruneiToday() {
+  const parts =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone: 'Asia/Brunei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      },
+    ).formatToParts(
+      new Date(),
+    );
+
+  const values =
+    Object.fromEntries(
+      parts.map(
+        (part) => [
+          part.type,
+          part.value,
+        ],
+      ),
+    );
+
+  return (
+    values.year
+    + '-'
+    + values.month
+    + '-'
+    + values.day
+  );
+}
 
 type PurchaseView =
   | 'purchases'
@@ -137,6 +181,40 @@ export function AdbnTechPurchasesWorkspace({
 
   const [error, setError] =
     useState('');
+
+  const [
+    receiveReview,
+    setReceiveReview,
+  ] = useState<
+    AdbnTechPurchaseMirror | null
+  >(null);
+
+  const [
+    receiveForm,
+    setReceiveForm,
+  ] = useState<PurchaseReceiveForm>({
+    quantity: '1',
+    receivedDate:
+      bruneiToday(),
+    deliveryReference: '',
+    serialNumbers: '',
+    conditionNotes: '',
+  });
+
+  const [
+    receiveConfirmed,
+    setReceiveConfirmed,
+  ] = useState(false);
+
+  const [
+    receiveBusy,
+    setReceiveBusy,
+  ] = useState(false);
+
+  const [
+    receiveRequestId,
+    setReceiveRequestId,
+  ] = useState('');
 
   const [syncMessage, setSyncMessage] =
     useState('');
@@ -381,6 +459,147 @@ export function AdbnTechPurchasesWorkspace({
         );
       } finally {
         setSyncBusyPaymentId('');
+      }
+    };
+
+  const openReceivePurchase =
+    (
+      item: AdbnTechPurchaseMirror,
+    ) => {
+      if (
+        item.externalSource
+          .trim()
+          .toLowerCase()
+        !== 'bajetbn'
+      ) {
+        setError(
+          'Receive this purchase from ADBN TECH. Only BajetBN-originated purchases can be received here.',
+        );
+        return;
+      }
+
+      if (item.quantityOutstanding <= 0) {
+        setError('All ordered units are already received.');
+        return;
+      }
+
+      if (
+        ['Cancelled', 'Returned']
+          .includes(item.orderStatus)
+      ) {
+        setError(
+          'Cancelled or returned purchases cannot receive more stock.',
+        );
+        return;
+      }
+
+      setError('');
+      setSyncMessage('');
+      setReceiveReview(item);
+      setReceiveConfirmed(false);
+      setReceiveRequestId(
+        'bajetbn-receive-'
+        + crypto.randomUUID().replace(/-/g, ''),
+      );
+      setReceiveForm({
+        quantity: String(item.quantityOutstanding),
+        receivedDate: bruneiToday(),
+        deliveryReference: '',
+        serialNumbers: '',
+        conditionNotes: '',
+      });
+    };
+
+  const closeReceivePurchase =
+    () => {
+      if (receiveBusy) return;
+
+      setReceiveReview(null);
+      setReceiveConfirmed(false);
+      setReceiveRequestId('');
+    };
+
+  const submitReceivePurchase =
+    async (event: FormEvent) => {
+      event.preventDefault();
+
+      if (!receiveReview || receiveBusy) return;
+
+      const quantity =
+        Math.floor(Number(receiveForm.quantity));
+
+      if (
+        !Number.isSafeInteger(quantity)
+        || quantity <= 0
+        || quantity > receiveReview.quantityOutstanding
+      ) {
+        setError(
+          'Receive between 1 and '
+          + receiveReview.quantityOutstanding
+          + ' unit(s).',
+        );
+        return;
+      }
+
+      if (!receiveConfirmed) {
+        setError(
+          'Confirm that the parts were physically received before changing ADBN stock.',
+        );
+        return;
+      }
+
+      setReceiveBusy(true);
+      setError('');
+      setSyncMessage('');
+
+      try {
+        const result =
+          await receiveAdbnTechSupplierPurchase({
+            requestId: receiveRequestId,
+            purchaseId: receiveReview.id,
+            quantity,
+            receivedDate: receiveForm.receivedDate,
+            deliveryReference: receiveForm.deliveryReference,
+            serialNumbers: receiveForm.serialNumbers,
+            conditionNotes: receiveForm.conditionNotes,
+          });
+
+        setSyncMessage(
+          'Received '
+          + result.quantityReceived
+          + ' unit(s) for '
+          + (result.purchaseNo || receiveReview.purchaseNo)
+          + '. Receipt '
+          + result.receiptNo
+          + '. Product '
+          + result.productId
+          + (
+            result.productCreated
+              ? ' created in ADBN inventory.'
+              : ' updated in ADBN inventory.'
+          )
+          + ' Stock '
+          + result.stockBefore
+          + ' → '
+          + result.stockAfter
+          + '. Outstanding '
+          + result.quantityOutstandingAfter
+          + '.',
+        );
+
+        setReceiveReview(null);
+        setReceiveConfirmed(false);
+        setReceiveRequestId('');
+
+        await loadPurchases();
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN TECH could not receive this purchase item.',
+        );
+      } finally {
+        setReceiveBusy(false);
       }
     };
 
@@ -704,6 +923,7 @@ export function AdbnTechPurchasesWorkspace({
                 <th>Receiving</th>
                 <th>Cost</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
 
@@ -813,13 +1033,47 @@ export function AdbnTechPurchasesWorkspace({
                           || 'Read only'}
                       </small>
                     </td>
+
+                    <td>
+                      {item.externalSource
+                        .trim()
+                        .toLowerCase()
+                        === 'bajetbn'
+                        && item.quantityOutstanding > 0
+                        && ![
+                          'Cancelled',
+                          'Returned',
+                        ].includes(item.orderStatus) ? (
+                          <button
+                            type="button"
+                            className="button primary compact"
+                            data-adbn-tech-receive-purchase
+                            onClick={() =>
+                              openReceivePurchase(item)
+                            }
+                          >
+                            Receive item
+                          </button>
+                        ) : item.externalSource
+                            .trim()
+                            .toLowerCase()
+                          !== 'bajetbn' ? (
+                          <small>
+                            Receive in ADBN TECH
+                          </small>
+                        ) : (
+                          <small>
+                            No stock outstanding
+                          </small>
+                        )}
+                    </td>
                   </tr>
                 ),
               )}
 
               {!purchases.length && (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <div className="empty-state">
                       No ADBN TECH purchase records match this view.
                     </div>
@@ -1055,6 +1309,184 @@ export function AdbnTechPurchasesWorkspace({
             </tbody>
           </table>
         </div>
+      )}
+
+      {receiveReview && (
+        <Modal
+          title={
+            'Receive purchase · '
+            + (receiveReview.purchaseNo || receiveReview.id)
+          }
+          onClose={closeReceivePurchase}
+        >
+          <form
+            className="transaction-form"
+            data-adbn-tech-purchase-receive-form
+            onSubmit={(event) =>
+              void submitReceivePurchase(event)
+            }
+          >
+            <div className="info-banner">
+              <strong>
+                This changes ADBN inventory stock
+              </strong>
+              <span>
+                Receiving creates an ADBN purchase receipt and Stock In movement.
+                {receiveReview.linkedProductId
+                  ? ' The exact linked product ID will be updated: '
+                    + receiveReview.linkedProductId
+                    + '.'
+                  : ' This purchase has no product ID yet; ADBN will create the new product only after its duplicate check passes.'}
+              </span>
+            </div>
+
+            <dl className="detail-list">
+              <div>
+                <dt>Part</dt>
+                <dd>
+                  {[
+                    receiveReview.brand,
+                    receiveReview.model,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                    || receiveReview.category}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Ordered</dt>
+                <dd>{receiveReview.quantity}</dd>
+              </div>
+
+              <div>
+                <dt>Already received</dt>
+                <dd>{receiveReview.quantityReceived}</dd>
+              </div>
+
+              <div>
+                <dt>Outstanding</dt>
+                <dd>{receiveReview.quantityOutstanding}</dd>
+              </div>
+            </dl>
+
+            <div className="form-grid">
+              <label>
+                Quantity received now
+                <input
+                  type="number"
+                  min="1"
+                  max={receiveReview.quantityOutstanding}
+                  step="1"
+                  value={receiveForm.quantity}
+                  onChange={(event) =>
+                    setReceiveForm((current) => ({
+                      ...current,
+                      quantity: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                Received date
+                <input
+                  type="date"
+                  value={receiveForm.receivedDate}
+                  onChange={(event) =>
+                    setReceiveForm((current) => ({
+                      ...current,
+                      receivedDate: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                Delivery / receipt reference
+                <input
+                  value={receiveForm.deliveryReference}
+                  onChange={(event) =>
+                    setReceiveForm((current) => ({
+                      ...current,
+                      deliveryReference: event.target.value,
+                    }))
+                  }
+                  placeholder="Optional"
+                />
+              </label>
+
+              <label>
+                Serial number(s)
+                <input
+                  value={receiveForm.serialNumbers}
+                  onChange={(event) =>
+                    setReceiveForm((current) => ({
+                      ...current,
+                      serialNumbers: event.target.value,
+                    }))
+                  }
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+
+            <label>
+              Condition / receiving notes
+              <textarea
+                value={receiveForm.conditionNotes}
+                onChange={(event) =>
+                  setReceiveForm((current) => ({
+                    ...current,
+                    conditionNotes: event.target.value,
+                  }))
+                }
+                rows={3}
+                placeholder="Optional"
+              />
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                checked={receiveConfirmed}
+                onChange={(event) =>
+                  setReceiveConfirmed(event.target.checked)
+                }
+              />
+              {' '}
+              I confirm these parts were physically received and ADBN stock should increase.
+            </label>
+
+            <div className="notice warning">
+              This action writes to ADBN TECH inventory.
+              It does not create another supplier payment or another BajetBN Money Out.
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={receiveBusy}
+                onClick={closeReceivePurchase}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="button primary"
+                disabled={receiveBusy || !receiveConfirmed}
+              >
+                {receiveBusy
+                  ? 'Receiving…'
+                  : 'Receive into ADBN inventory'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       <div className="notice">

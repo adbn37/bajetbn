@@ -162,6 +162,7 @@ export interface AdbnTechPurchaseMirror {
   linkedBuildId: string;
   linkedBuildNo: string;
   inventoryAdded: boolean;
+  externalSource: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -285,6 +286,38 @@ export interface AdbnTechSupplierPurchaseCreateResult {
   supplierName: string;
   supplierCreated: boolean;
   linkedExistingProductIds: string[];
+}
+
+export interface AdbnTechSupplierPurchaseReceiveInput {
+  requestId: string;
+  purchaseId: string;
+  quantity: number;
+  receivedDate: string;
+  deliveryReference?: string;
+  serialNumbers?: string;
+  conditionNotes?: string;
+}
+
+export interface AdbnTechSupplierPurchaseReceiveResult {
+  duplicatePrevented: boolean;
+  requestId: string;
+  purchaseId: string;
+  purchaseNo: string;
+  productId: string;
+  productCreated: boolean;
+  receiptId: string;
+  receiptNo: string;
+  movementId: string;
+  quantityReceived: number;
+  totalReceivedAfter: number;
+  quantityOutstandingAfter: number;
+  orderStatus: string;
+  stockBefore: number;
+  stockAfter: number;
+  previousAverageCost: number;
+  newAverageCost: number;
+  landedUnitCost: number;
+  receivedDate: string;
 }
 
 export interface AdbnTechInventoryProductMirror {
@@ -689,6 +722,85 @@ export async function createAdbnTechSupplierPurchase(
   return result.data;
 }
 
+export async function receiveAdbnTechSupplierPurchase(
+  input: AdbnTechSupplierPurchaseReceiveInput,
+): Promise<AdbnTechSupplierPurchaseReceiveResult> {
+  const { functions } =
+    adbnTechConnectedSession();
+
+  const requestId =
+    input.requestId.trim();
+  const purchaseId =
+    input.purchaseId.trim();
+  const quantity =
+    Math.floor(
+      Number(
+        input.quantity,
+      ),
+    );
+  const receivedDate =
+    input.receivedDate.trim();
+
+  if (
+    requestId.length < 8
+  ) {
+    throw new Error(
+      'A valid ADBN TECH receipt request ID is required.',
+    );
+  }
+
+  if (!purchaseId) {
+    throw new Error(
+      'Choose an ADBN TECH purchase item first.',
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(quantity)
+    || quantity <= 0
+  ) {
+    throw new Error(
+      'Quantity received must be at least 1.',
+    );
+  }
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/
+      .test(receivedDate)
+  ) {
+    throw new Error(
+      'Choose a valid received date.',
+    );
+  }
+
+  const call = httpsCallable<
+    AdbnTechSupplierPurchaseReceiveInput,
+    AdbnTechSupplierPurchaseReceiveResult
+  >(
+    functions,
+    'receiveBajetBnSupplierPurchase',
+  );
+
+  const result =
+    await call({
+      requestId,
+      purchaseId,
+      quantity,
+      receivedDate,
+      deliveryReference:
+        input.deliveryReference?.trim()
+        || '',
+      serialNumbers:
+        input.serialNumbers?.trim()
+        || '',
+      conditionNotes:
+        input.conditionNotes?.trim()
+        || '',
+    });
+
+  return result.data;
+}
+
 export async function loadAdbnTechReadOnlySnapshot(): Promise<
   AdbnTechReadOnlySnapshot
 > {
@@ -1045,6 +1157,7 @@ export async function loadAdbnTechPurchasesReadOnly(): Promise<
         linkedBuildId: text(data.linkedBuildId),
         linkedBuildNo: text(data.linkedBuildNo),
         inventoryAdded: data.inventoryAdded === true,
+        externalSource: text(data.externalSource),
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       } satisfies AdbnTechPurchaseMirror;
