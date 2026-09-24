@@ -11630,6 +11630,578 @@ export const recordBusinessInvoicePayment = onCall(
   },
 );
 
+function adbnPaymentSyncMarker(
+  labels: unknown,
+): string {
+  if (!Array.isArray(labels)) {
+    return '';
+  }
+
+  const normalized =
+    labels
+      .filter(
+        (value): value is string =>
+          typeof value === 'string',
+      )
+      .map(
+        (value) =>
+          value
+            .trim()
+            .toLowerCase(),
+      );
+
+  if (
+    !normalized.includes(
+      'adbn_tech',
+    )
+  ) {
+    return '';
+  }
+
+  return (
+    normalized.find(
+      (value) =>
+        /^adbn_pay_[a-f0-9]{16}$/
+          .test(value),
+    )
+    || ''
+  );
+}
+
+export const deleteStaleAdbnPaymentMoneyActivity = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const transactionId =
+      stringValue(
+        request.data?.transactionId,
+        'Money activity',
+        120,
+      );
+
+    const reason =
+      optionalString(
+        request.data?.reason,
+        500,
+      )
+      || 'ADBN TECH source payment was deleted.';
+
+    const key =
+      stringValue(
+        request.data?.idempotencyKey,
+        'Idempotency key',
+        64,
+      );
+
+    const originalRef =
+      db.collection(
+        'transactions',
+      ).doc(
+        transactionId,
+      );
+
+    const auditRef =
+      db.collection(
+        'adbnStalePaymentDeletions',
+      ).doc(
+        transactionId,
+      );
+
+    const commandRef =
+      db.collection(
+        'financialCommands',
+      ).doc(
+        commandId(
+          uid,
+          key,
+        ),
+      );
+
+    const ledgerQuery =
+      db.collection(
+        'ledgerEntries',
+      )
+        .where(
+          'transactionId',
+          '==',
+          transactionId,
+        )
+        .limit(5);
+
+    const attachmentQuery =
+      db.collection(
+        'transactionAttachments',
+      )
+        .where(
+          'transactionId',
+          '==',
+          transactionId,
+        )
+        .limit(1);
+
+    const shareQuery =
+      db.collection(
+        'transactionShareLinks',
+      )
+        .where(
+          'transactionId',
+          '==',
+          transactionId,
+        )
+        .limit(20);
+
+    return db.runTransaction(
+      async (transaction) => {
+        const [
+          commandSnapshot,
+          auditSnapshot,
+          originalSnapshot,
+          ledgerSnapshot,
+          attachmentSnapshot,
+          shareSnapshot,
+        ] =
+          await Promise.all([
+            transaction.get(
+              commandRef,
+            ),
+            transaction.get(
+              auditRef,
+            ),
+            transaction.get(
+              originalRef,
+            ),
+            transaction.get(
+              ledgerQuery,
+            ),
+            transaction.get(
+              attachmentQuery,
+            ),
+            transaction.get(
+              shareQuery,
+            ),
+          ]);
+
+        if (
+          commandSnapshot.exists
+        ) {
+          return commandSnapshot
+            .data()?.result;
+        }
+
+        if (
+          auditSnapshot.exists
+          && !originalSnapshot.exists
+        ) {
+          const result = {
+            transactionId,
+            deleted: true,
+            alreadyDeleted: true,
+          };
+
+          transaction.create(
+            commandRef,
+            {
+              uid,
+              kind:
+                'delete_stale_adbn_payment_money_activity',
+              idempotencyKey:
+                key,
+              result,
+              createdAt:
+                FieldValue
+                  .serverTimestamp(),
+            },
+          );
+
+          return result;
+        }
+
+        if (
+          !originalSnapshot.exists
+        ) {
+          throw new HttpsError(
+            'not-found',
+            'Money activity not found.',
+          );
+        }
+
+        const original =
+          originalSnapshot.data()
+          || {};
+
+        if (
+          String(
+            original.ownerId
+            || '',
+          ) !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'Only the Business owner can remove this stale ADBN record.',
+          );
+        }
+
+        const syncLabel =
+          adbnPaymentSyncMarker(
+            original.labels,
+          );
+
+        if (!syncLabel) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only an ADBN TECH payment sync can use this manual delete.',
+          );
+        }
+
+        if (
+          original.type !== 'income'
+          || original.status !== 'posted'
+          || original.reversedBy
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only an active ADBN TECH payment Money In record can be removed here.',
+          );
+        }
+
+        const managedKeys = [
+          'commitmentId',
+          'commitmentPaymentId',
+          'businessInvoiceId',
+          'businessInvoicePaymentId',
+          'spaceWorkItemId',
+          'sharedBillAssignmentId',
+          'sharedBillPaymentId',
+          'recurringTemplateId',
+          'recurringRunId',
+          'smePosSaleId',
+          'posSaleId',
+          'smePosReturnId',
+          'smePosPayoutId',
+          'reservationId',
+        ];
+
+        if (
+          managedKeys.some(
+            (managedKey) =>
+              Boolean(
+                original[
+                  managedKey
+                ],
+              ),
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This ADBN payment is also linked to another BajetBN workflow and cannot be removed here.',
+          );
+        }
+
+        if (
+          !attachmentSnapshot.empty
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Remove the attached receipt or document before deleting this stale ADBN record.',
+          );
+        }
+
+        if (
+          ledgerSnapshot.size !== 1
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This ADBN sync has unexpected ledger history and cannot be removed automatically.',
+          );
+        }
+
+        const ledgerRef =
+          ledgerSnapshot.docs[0].ref;
+
+        const ledgerEntrySnapshot =
+          await transaction.get(
+            ledgerRef,
+          );
+
+        const syncToken =
+          syncLabel.slice(
+            'adbn_pay_'.length,
+          );
+
+        const originalSyncKey =
+          'adbn-payment-'
+          + syncToken;
+
+        const originalSyncCommandRef =
+          db.collection(
+            'financialCommands',
+          ).doc(
+            commandId(
+              uid,
+              originalSyncKey,
+            ),
+          );
+
+        const originalSyncCommandSnapshot =
+          await transaction.get(
+            originalSyncCommandRef,
+          );
+
+        const originalSyncCommand =
+          originalSyncCommandSnapshot.data()
+          || {};
+
+        if (
+          !originalSyncCommandSnapshot.exists
+          || originalSyncCommand.kind
+            !== 'post_transaction'
+          || originalSyncCommand.idempotencyKey
+            !== originalSyncKey
+          || String(
+            originalSyncCommand.result
+              ?.transactionId
+            || '',
+          ) !== transactionId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'This Money In record cannot be verified as an original ADBN TECH payment sync.',
+          );
+        }
+
+        const spaceId =
+          stringValue(
+            original.spaceId,
+            'Business Space',
+            120,
+          );
+
+        const accountId =
+          stringValue(
+            original.accountId,
+            'Business Account',
+            120,
+          );
+
+        const spaceRef =
+          db.collection(
+            'spaces',
+          ).doc(
+            spaceId,
+          );
+
+        const accountRef =
+          db.collection(
+            'accounts',
+          ).doc(
+            accountId,
+          );
+
+        const [
+          spaceSnapshot,
+          accountSnapshot,
+        ] =
+          await Promise.all([
+            transaction.get(
+              spaceRef,
+            ),
+            transaction.get(
+              accountRef,
+            ),
+          ]);
+
+        if (
+          !spaceSnapshot.exists
+          || spaceSnapshot.data()
+            ?.archivedAt
+          || spaceSnapshot.data()
+            ?.type !== 'sme'
+          || String(
+            spaceSnapshot.data()
+              ?.ownerId
+            || '',
+          ) !== uid
+          || spaceSnapshot.data()
+            ?.externalIntegrationProvider
+              !== 'adbn_tech'
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'This money activity is not owned by the connected ADBN TECH Business Space.',
+          );
+        }
+
+        const account =
+          assertAccount(
+            accountSnapshot.data(),
+            uid,
+            'Business Account',
+            true,
+          );
+
+        const accountData =
+          accountSnapshot.data()
+          || {};
+
+        if (
+          accountData.classification
+            !== 'business'
+          || !accountLinkedToBusinessSpace(
+              accountData,
+              spaceId,
+            )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The linked Business Account is no longer valid for this ADBN TECH Space.',
+          );
+        }
+
+        if (
+          !ledgerEntrySnapshot.exists
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The linked ledger entry is missing.',
+          );
+        }
+
+        const ledgerEntry =
+          ledgerEntrySnapshot.data()
+          || {};
+
+        if (
+          String(
+            ledgerEntry.transactionId
+            || '',
+          ) !== transactionId
+          || String(
+            ledgerEntry.ownerId
+            || '',
+          ) !== uid
+          || String(
+            ledgerEntry.accountId
+            || '',
+          ) !== accountId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The linked ledger entry does not match this ADBN payment.',
+          );
+        }
+
+        const amountMinor =
+          positiveMoney(
+            original.amountMinor,
+          );
+
+        const removeDelta =
+          -accountEffect(
+            account.type,
+            'in',
+            amountMinor,
+          );
+
+        const now =
+          FieldValue
+            .serverTimestamp();
+
+        updateAccountBalance(
+          transaction,
+          accountRef,
+          account,
+          removeDelta,
+        );
+
+        transaction.delete(
+          ledgerRef,
+        );
+
+        shareSnapshot.docs
+          .forEach(
+            (document) =>
+              transaction.delete(
+                document.ref,
+              ),
+          );
+
+        /*
+         * Remove the original deterministic sync command too.
+         * If the ADBN payment still exists, auto-sync can recreate
+         * the row. If it was truly deleted in ADBN, it stays gone.
+         */
+        transaction.delete(
+          originalSyncCommandRef,
+        );
+
+        transaction.delete(
+          originalRef,
+        );
+
+        transaction.create(
+          auditRef,
+          {
+            transactionId,
+            displayId:
+              String(
+                original.displayId
+                || transactionId,
+              ),
+            spaceId,
+            accountId,
+            amountMinor,
+            currency:
+              String(
+                original.currency
+                || account.currency,
+              ),
+            counterparty:
+              String(
+                original.counterparty
+                || '',
+              ),
+            syncLabel,
+            reason,
+            deletedBy:
+              uid,
+            deletedAt:
+              now,
+          },
+        );
+
+        const result = {
+          transactionId,
+          deleted: true,
+          alreadyDeleted: false,
+          amountMinor,
+          accountId,
+          syncLabel,
+        };
+
+        transaction.create(
+          commandRef,
+          {
+            uid,
+            kind:
+              'delete_stale_adbn_payment_money_activity',
+            idempotencyKey:
+              key,
+            result,
+            createdAt:
+              now,
+          },
+        );
+
+        return result;
+      },
+    );
+  },
+);
+
 export const reverseTransaction = onCall({ region }, async (request) => {
   const uid = requireAuth(request.auth?.uid);
   const originalTransactionId = stringValue(request.data?.transactionId, 'Transaction ID');
