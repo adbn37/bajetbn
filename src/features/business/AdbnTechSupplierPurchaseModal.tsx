@@ -403,7 +403,7 @@ export function AdbnTechSupplierPurchaseModal({
   const [requestId] =
     useState(
       () =>
-        'adbn_purchase_'
+        'adbn-purchase-'
         + crypto
           .randomUUID()
           .replace(/-/g, ''),
