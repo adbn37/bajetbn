@@ -21577,3 +21577,11 @@ select.trip-sheet-cell-input {
     width: 100%;
   }
 }
+
+/* BAJETBN SPACE HOME ADD DESKTOP ONLY */
+@media (max-width: 780px) {
+  [data-space-home-add-shortcut] {
+    display: none !important;
+  }
+}
+/* END BAJETBN SPACE HOME ADD DESKTOP ONLY */
