@@ -27,6 +27,10 @@ export interface AdbnCustomerLink {
   targetSpaceType?:
     | 'personal'
     | 'household'
+    | 'custom'
+    | null;
+  targetSpaceProvider?:
+    | 'adbn_tech'
     | null;
   status: AdbnCustomerLinkStatus;
   invitedAt?: unknown;
@@ -160,7 +164,6 @@ export async function respondAdbnCustomerLinkInvitation(
     | {
         linkId: string;
         decision: 'accept';
-        targetSpaceId: string;
       }
     | {
         linkId: string;
@@ -170,6 +173,9 @@ export async function respondAdbnCustomerLinkInvitation(
   linkId: string;
   status: AdbnCustomerLinkStatus;
   targetSpaceId?: string | null;
+  targetSpaceName?: string | null;
+  targetSpaceType?: string | null;
+  spaceCreated?: boolean;
 }> {
   const { functions } =
     requireFirebase();
@@ -191,5 +197,8 @@ export async function respondAdbnCustomerLinkInvitation(
     linkId: string;
     status: AdbnCustomerLinkStatus;
     targetSpaceId?: string | null;
+    targetSpaceName?: string | null;
+    targetSpaceType?: string | null;
+    spaceCreated?: boolean;
   };
 }

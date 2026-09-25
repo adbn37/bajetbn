@@ -44,6 +44,7 @@ const ClosedAccountsPage = lazy(() => import('../features/accounts/ClosedAccount
 const TransactionsPage = lazy(() => import('../features/transactions/TransactionsPage').then((module) => ({ default: module.TransactionsPage })));
 const LinkedMoneyPage = lazy(() => import('../features/linked-money/LinkedMoneyPage').then((module) => ({ default: module.LinkedMoneyPage })));
 const AdbnCustomerLinksPage = lazy(() => import('../features/linked-adbn/AdbnCustomerLinksPage').then((module) => ({ default: module.AdbnCustomerLinksPage })));
+const AdbnCustomerSpacePage = lazy(() => import('../features/linked-adbn/AdbnCustomerSpacePage').then((module) => ({ default: module.AdbnCustomerSpacePage })));
 const PublicTransactionSharePage = lazy(() => import('../features/transactions/PublicTransactionSharePage').then((module) => ({ default: module.PublicTransactionSharePage })));
 const RecurringTransactionsPage = lazy(() => import('../features/recurring/RecurringTransactionsPage').then((module) => ({ default: module.RecurringTransactionsPage })));
 const StoppedRecurringTransactionsPage = lazy(() => import('../features/recurring/StoppedRecurringTransactionsPage').then((module) => ({ default: module.StoppedRecurringTransactionsPage })));
@@ -121,6 +122,7 @@ export default function App() {
                   <Route path="transactions" element={<TransactionsPage />} />
                   <Route path="linked-money" element={<LinkedMoneyPage />} />
                   <Route path="adbn-links" element={<AdbnCustomerLinksPage />} />
+                  <Route path="spaces/:spaceId/adbn" element={<AdbnCustomerSpacePage />} />
                   <Route path="recurring" element={<RecurringTransactionsPage />} />
                   <Route path="recurring/stopped" element={<StoppedRecurringTransactionsPage />} />
                   <Route path="budgets" element={<BudgetsPage />} />

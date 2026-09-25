@@ -61,10 +61,11 @@ check(
 );
 
 check(
-  block.includes("'personal'")
-  && block.includes("'household'")
-  && block.includes('targetSpace.ownerId'),
-  'Recipient can choose only an owned Personal or Household Space.',
+  block.includes('adbnCustomerSpaceDocumentId')
+  && block.includes("'custom'")
+  && block.includes('externalIntegrationRole')
+  && block.includes("'customer'"),
+  'Recipient acceptance provisions a dedicated private ADBN customer Space.',
 );
 
 check(
@@ -93,9 +94,9 @@ check(
 
 check(
   page.includes('data-adbn-customer-links-page')
-  && page.includes('Personal or Household Space')
+  && page.includes('Accept & create ADBN Space')
   && page.includes('Your Personal money stays private.'),
-  'Recipient page requires explicit Space choice and explains privacy.',
+  'Recipient page creates the dedicated ADBN Space and explains privacy.',
 );
 
 check(

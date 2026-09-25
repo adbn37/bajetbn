@@ -33936,9 +33936,10 @@ export const listMyPrivateDocuments = onCall(
 );
 
 // Slice 24F.1 - Secure ADBN customer link foundation
-// This slice links an ADBN customer identity to a BajetBN user-selected
-// Personal or Household Space. It intentionally does not read or write
-// Personal accounts, transactions, commitments, balances, or payment data.
+// 24F.1 established the verified customer identity link.
+// Slice 24F.2 now provisions a dedicated private ADBN TECH customer Space.
+// The integration still does not read or write the customer's Personal
+// accounts, transactions, commitments, balances, or payment data.
 function adbnCustomerLinkEmail(
   value: unknown,
   field = 'Customer email',
@@ -34315,6 +34316,18 @@ export const getMyAdbnCustomerLinks = onCall(
   },
 );
 
+function adbnCustomerSpaceDocumentId(
+  linkId: string,
+): string {
+  return 'adbn_customer_' + linkId;
+}
+
+function adbnCustomerSpaceIntegrationKey(
+  linkId: string,
+): string {
+  return 'customer_link:' + linkId;
+}
+
 export const respondAdbnCustomerLinkInvitation = onCall(
   { region },
   async (request) => {
@@ -34335,15 +34348,6 @@ export const respondAdbnCustomerLinkInvitation = onCall(
       'ADBN customer link decision',
     );
 
-    const targetSpaceId =
-      decision === 'accept'
-        ? stringValue(
-            request.data?.targetSpaceId,
-            'Target Space',
-            180,
-          )
-        : '';
-
     const key = stringValue(
       request.data?.idempotencyKey,
       'Idempotency key',
@@ -34353,26 +34357,23 @@ export const respondAdbnCustomerLinkInvitation = onCall(
     const linkRef =
       db.collection('adbnCustomerLinks').doc(linkId);
 
-    const targetSpaceRef =
-      targetSpaceId
-        ? db.collection('spaces').doc(targetSpaceId)
-        : null;
-
     const commandRef =
       db.collection('collaborationCommands').doc(
         commandId(uid, key),
       );
 
     return db.runTransaction(async (transaction) => {
-      const commandSnapshot =
-        await transaction.get(commandRef);
+      const [
+        commandSnapshot,
+        linkSnapshot,
+      ] = await Promise.all([
+        transaction.get(commandRef),
+        transaction.get(linkRef),
+      ]);
 
       if (commandSnapshot.exists) {
         return commandSnapshot.data()?.result;
       }
-
-      const linkSnapshot =
-        await transaction.get(linkRef);
 
       if (!linkSnapshot.exists) {
         throw new HttpsError(
@@ -34393,12 +34394,26 @@ export const respondAdbnCustomerLinkInvitation = onCall(
         );
       }
 
-      if (link.status !== 'pending') {
+      const linkStatus =
+        String(link.status || 'pending');
+
+      if (
+        linkStatus !== 'pending'
+        && !(
+          linkStatus === 'accepted'
+          && decision === 'accept'
+        )
+      ) {
         const result = {
           linkId,
-          status: String(link.status || 'pending'),
+          status: linkStatus,
           targetSpaceId:
             link.targetSpaceId || null,
+          targetSpaceName:
+            link.targetSpaceName || null,
+          targetSpaceType:
+            link.targetSpaceType || null,
+          spaceCreated: false,
         };
 
         transaction.create(commandRef, {
@@ -34426,6 +34441,9 @@ export const respondAdbnCustomerLinkInvitation = onCall(
           linkId,
           status: 'declined',
           targetSpaceId: null,
+          targetSpaceName: null,
+          targetSpaceType: null,
+          spaceCreated: false,
         };
 
         if (link.invitedBy) {
@@ -34461,65 +34479,177 @@ export const respondAdbnCustomerLinkInvitation = onCall(
         return result;
       }
 
-      if (!targetSpaceRef) {
-        throw new HttpsError(
-          'invalid-argument',
-          'Choose a Personal or Household Space.',
+      const targetSpaceId =
+        adbnCustomerSpaceDocumentId(
+          linkId,
+        );
+
+      const targetSpaceRef =
+        db.collection('spaces').doc(
+          targetSpaceId,
+        );
+
+      const targetMemberRef =
+        db.collection('spaceMembers').doc(
+          targetSpaceId + '_' + uid,
+        );
+
+      const [
+        targetSpaceSnapshot,
+        targetMemberSnapshot,
+      ] = await Promise.all([
+        transaction.get(targetSpaceRef),
+        transaction.get(targetMemberRef),
+      ]);
+
+      const integrationKey =
+        adbnCustomerSpaceIntegrationKey(
+          linkId,
+        );
+
+      if (targetSpaceSnapshot.exists) {
+        const existingSpace =
+          targetSpaceSnapshot.data() || {};
+
+        if (
+          String(existingSpace.ownerId || '') !== uid
+          || existingSpace.type !== 'custom'
+          || existingSpace.externalIntegrationProvider
+            !== 'adbn_tech'
+          || existingSpace.externalIntegrationRole
+            !== 'customer'
+          || String(
+            existingSpace.externalIntegrationKey
+            || '',
+          ) !== integrationKey
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The reserved ADBN TECH customer Space is already used by another record.',
+          );
+        }
+      }
+
+      if (targetMemberSnapshot.exists) {
+        const existingMember =
+          targetMemberSnapshot.data() || {};
+
+        if (
+          String(existingMember.uid || '') !== uid
+          || String(
+            existingMember.spaceId
+            || '',
+          ) !== targetSpaceId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The ADBN TECH Space membership is inconsistent.',
+          );
+        }
+      }
+
+      const spaceCreated =
+        !targetSpaceSnapshot.exists;
+
+      if (spaceCreated) {
+        transaction.create(
+          targetSpaceRef,
+          {
+            displayId: displayId('SPC'),
+            name: 'ADBN TECH',
+            type: 'custom',
+            ownerId: uid,
+            collaborationMode: 'private',
+            approvalMode: 'none',
+            headWhatsapp: '',
+            currency: 'BND',
+            timezone: 'Asia/Brunei',
+            description:
+              'ADBN TECH customer portal'
+              + (
+                link.customerNo
+                  ? ' · ' + String(link.customerNo)
+                  : ''
+              ),
+            customModules: [
+              'bills',
+              'calendar',
+            ],
+            externalIntegrationProvider:
+              'adbn_tech',
+            externalIntegrationStatus:
+              'connected',
+            externalIntegrationKey:
+              integrationKey,
+            externalIntegrationRole:
+              'customer',
+            externalIntegrationCustomerLinkId:
+              linkId,
+            externalIntegrationBusinessSpaceId:
+              String(link.businessSpaceId || ''),
+            externalIntegrationAdbnCustomerId:
+              String(link.adbnCustomerId || ''),
+            externalIntegrationCustomerNo:
+              String(link.customerNo || ''),
+            externalIntegrationCustomerName:
+              String(link.customerName || ''),
+            archivedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        );
+      } else {
+        transaction.update(
+          targetSpaceRef,
+          {
+            archivedAt: null,
+            updatedAt: now,
+          },
         );
       }
 
-      const targetSpaceSnapshot =
-        await transaction.get(targetSpaceRef);
+      transaction.set(
+        targetMemberRef,
+        {
+          spaceId: targetSpaceId,
+          uid,
+          role: 'owner',
+          status: 'active',
+          canUseAccounts: true,
+          canViewBalances: true,
+          canViewLedger: true,
+          joinedAt:
+            targetMemberSnapshot.exists
+              ? targetMemberSnapshot.data()?.joinedAt
+                || now
+              : now,
+          updatedAt: now,
+        },
+        {
+          merge: true,
+        },
+      );
 
-      if (
-        !targetSpaceSnapshot.exists
-        || targetSpaceSnapshot.data()?.archivedAt
-      ) {
-        throw new HttpsError(
-          'not-found',
-          'The selected Space is unavailable.',
-        );
-      }
-
-      const targetSpace =
-        targetSpaceSnapshot.data() || {};
-
-      if (
-        String(targetSpace.ownerId || '') !== uid
-        || ![
-          'personal',
-          'household',
-        ].includes(
-          String(targetSpace.type || ''),
-        )
-      ) {
-        throw new HttpsError(
-          'permission-denied',
-          'Choose one of your own Personal or Household Spaces.',
-        );
-      }
+      const firstAcceptance =
+        linkStatus === 'pending';
 
       transaction.update(linkRef, {
         status: 'accepted',
         recipientUid: uid,
         targetSpaceId,
-        targetSpaceName:
-          String(
-            targetSpace.name
-            || (
-              targetSpace.type === 'personal'
-                ? 'Personal'
-                : 'Household'
-            ),
-          ),
-        targetSpaceType:
-          String(targetSpace.type),
-        acceptedAt: now,
+        targetSpaceName: 'ADBN TECH',
+        targetSpaceType: 'custom',
+        targetSpaceProvider: 'adbn_tech',
+        acceptedAt:
+          link.acceptedAt || now,
         declinedAt: null,
         updatedAt: now,
       });
 
-      if (link.invitedBy) {
+      if (
+        firstAcceptance
+        && link.invitedBy
+      ) {
         createNotification(
           transaction,
           {
@@ -34541,10 +34671,33 @@ export const respondAdbnCustomerLinkInvitation = onCall(
         );
       }
 
+      if (spaceCreated) {
+        createNotification(
+          transaction,
+          {
+            uid,
+            spaceId: targetSpaceId,
+            type: 'adbn_customer_space_ready',
+            title: 'ADBN TECH Space ready',
+            message:
+              'Your private ADBN TECH Space is ready. Future ADBN invoices, monthly payments and reminders will appear here as those sync features are enabled.',
+            targetPath:
+              '/spaces/'
+              + targetSpaceId
+              + '/adbn',
+            actionLabel: 'Open ADBN TECH',
+            now,
+          },
+        );
+      }
+
       const result = {
         linkId,
         status: 'accepted',
         targetSpaceId,
+        targetSpaceName: 'ADBN TECH',
+        targetSpaceType: 'custom',
+        spaceCreated,
       };
 
       transaction.create(commandRef, {
