@@ -34913,9 +34913,14 @@ export const syncAdbnCustomerBillingMirror = onCall(
         ? invoice.balanceMinor
         : Math.max(0, invoice.totalMinor - invoice.paidMinor);
       const status = outstandingMinor > 0 ? 'active' : 'completed';
+      const billTotalMinor = Math.max(
+        invoice.totalMinor,
+        invoice.paidMinor + outstandingMinor,
+        outstandingMinor,
+      );
       const amountMinor = invoice.monthlyPlan
         ? invoice.monthlyMinor
-        : Math.max(1, outstandingMinor || invoice.totalMinor);
+        : Math.max(1, billTotalMinor);
 
       writer.set(db.collection('commitments').doc(commitmentId), {
         displayId: invoice.invoiceNo || commitmentId,
