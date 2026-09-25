@@ -1320,6 +1320,7 @@ export interface Space {
   externalIntegrationAdbnCustomerId?: string | null;
   externalIntegrationCustomerNo?: string | null;
   externalIntegrationCustomerName?: string | null;
+  externalIntegrationBillingSyncedAt?: Timestamp | null;
   externalIntegrationAccountMappings?: Record<string, string>;
   externalIntegrationPaymentAutoSyncEnabled?: boolean;
   externalIntegrationPaymentAutoSyncCutoffIso?: string | null;
@@ -1833,6 +1834,12 @@ export interface Commitment {
   reminderDays: number;
   status: CommitmentStatus;
   note?: string;
+  externalIntegrationProvider?: 'adbn_tech' | null;
+  externalIntegrationSourceType?: 'adbn_invoice' | null;
+  externalIntegrationSourceId?: string | null;
+  externalIntegrationSourceNo?: string | null;
+  externalIntegrationCustomerLinkId?: string | null;
+  externalIntegrationMirrorStatus?: 'active' | 'stale' | null;
   archivedAt?: Timestamp | null;
   stoppedAt?: Timestamp | null;
   stoppedPreviousNextRunDate?: string | null;
@@ -1855,7 +1862,12 @@ export interface CommitmentPayment {
   dueDateApplied?: string | null;
   previousNextDueDate?: string | null;
   previousStatus: CommitmentStatus;
-  source?: 'direct' | 'shared_bill';
+  source?: 'direct' | 'shared_bill' | 'adbn_tech';
+  externalIntegrationProvider?: 'adbn_tech' | null;
+  externalIntegrationSourceId?: string | null;
+  externalIntegrationSourceNo?: string | null;
+  externalIntegrationCustomerLinkId?: string | null;
+  externalIntegrationMirrorStatus?: 'active' | 'stale' | null;
   sharedBillAssignmentId?: string | null;
   sharedBillPaymentId?: string | null;
   paidByUid?: string | null;

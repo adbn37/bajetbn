@@ -33,9 +33,20 @@ check(
   '24F.1 server block exists.',
 );
 
+const end =
+  functions.indexOf(
+    'export const syncAdbnCustomerBillingMirror',
+    start,
+  );
+
 const block =
   start >= 0
-    ? functions.slice(start)
+    ? functions.slice(
+        start,
+        end >= 0
+          ? end
+          : functions.length,
+      )
     : '';
 
 check(
