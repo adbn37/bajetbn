@@ -9,6 +9,7 @@ import {
 import type {
   AdbnTechInvoiceMirror,
   AdbnTechPaymentMirror,
+  AdbnTechPaymentPlanMirror,
 } from './adbnTechIntegrationRepository';
 
 export async function syncAdbnCustomerBillingToBajetBn(
@@ -16,12 +17,15 @@ export async function syncAdbnCustomerBillingToBajetBn(
     businessSpaceId: string;
     adbnCustomerId: string;
     invoices: AdbnTechInvoiceMirror[];
+    plans: AdbnTechPaymentPlanMirror[];
     payments: AdbnTechPaymentMirror[];
   },
 ): Promise<{
   linkId: string;
   targetSpaceId: string;
   commitmentsSynced: number;
+  invoicesSynced: number;
+  plansSynced: number;
   paymentsSynced: number;
   staleCommitments: number;
   stalePayments: number;
@@ -53,12 +57,34 @@ export async function syncAdbnCustomerBillingToBajetBn(
       termMonths: item.termMonths,
     }));
 
+  const plans = input.plans
+    .slice(0, 100)
+    .map((item) => ({
+      id: item.id,
+      planNo: item.planNo,
+      customerId: item.customerId,
+      customerNo: item.customerNo,
+      invoiceId: item.invoiceId,
+      invoiceNo: item.invoiceNo,
+      title: item.title,
+      total: item.total,
+      paid: item.paid,
+      balance: item.balance,
+      monthlyAmount: item.monthlyAmount,
+      termMonths: item.termMonths,
+      startDate: item.startDate,
+      nextDueDate: item.nextDueDate,
+      status: item.status,
+    }));
+
   const payments = input.payments
     .slice(0, 500)
     .map((item) => ({
       id: item.id,
       paymentNo: item.paymentNo,
       invoiceId: item.invoiceId,
+      planId: item.planId,
+      planNo: item.planNo,
       customerId: item.customerId,
       customerNo: item.customerNo,
       amount: item.amount,
@@ -72,6 +98,7 @@ export async function syncAdbnCustomerBillingToBajetBn(
     businessSpaceId: input.businessSpaceId,
     adbnCustomerId: input.adbnCustomerId,
     invoices,
+    plans,
     payments,
   });
 
@@ -79,6 +106,8 @@ export async function syncAdbnCustomerBillingToBajetBn(
     linkId: string;
     targetSpaceId: string;
     commitmentsSynced: number;
+    invoicesSynced: number;
+    plansSynced: number;
     paymentsSynced: number;
     staleCommitments: number;
     stalePayments: number;

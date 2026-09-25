@@ -687,11 +687,53 @@ export function AdbnTechMirrorWorkspace({
             ),
           );
 
+        const invoiceNos =
+          new Set(
+            invoices
+              .map(
+                (invoice) =>
+                  invoice.invoiceNo,
+              )
+              .filter(Boolean),
+          );
+
+        const customerPlans =
+          snapshot.paymentPlans.filter(
+            (plan) =>
+              plan.customerId === customer.id
+              || (
+                !plan.customerId
+                && customer.customerNo
+                && plan.customerNo === customer.customerNo
+              ),
+          );
+
+        const plans =
+          customerPlans.filter(
+            (plan) =>
+              !(
+                plan.invoiceId
+                && invoiceIds.has(plan.invoiceId)
+              )
+              && !(
+                plan.invoiceNo
+                && invoiceNos.has(plan.invoiceNo)
+              ),
+          );
+
+        const planIds =
+          new Set(
+            plans.map(
+              (plan) => plan.id,
+            ),
+          );
+
         const payments =
           paymentSnapshot.payments.filter(
             (payment) =>
               payment.customerId === customer.id
-              || invoiceIds.has(payment.invoiceId),
+              || invoiceIds.has(payment.invoiceId)
+              || planIds.has(payment.planId),
           );
 
         const result =
@@ -699,6 +741,7 @@ export function AdbnTechMirrorWorkspace({
             businessSpaceId: spaceId,
             adbnCustomerId: customer.id,
             invoices,
+            plans,
             payments,
           });
 
@@ -707,7 +750,15 @@ export function AdbnTechMirrorWorkspace({
           + result.commitmentsSynced
           + ' billing record'
           + (result.commitmentsSynced === 1 ? '' : 's')
-          + ' and '
+          + ' ('
+          + result.invoicesSynced
+          + ' invoice'
+          + (result.invoicesSynced === 1 ? '' : 's')
+          + ', '
+          + result.plansSynced
+          + ' legacy plan'
+          + (result.plansSynced === 1 ? '' : 's')
+          + ') and '
           + result.paymentsSynced
           + ' payment'
           + (result.paymentsSynced === 1 ? '' : 's')
@@ -1097,6 +1148,12 @@ export function AdbnTechMirrorWorkspace({
           invoiceNo:
             result.invoiceNo
             || invoice.invoiceNo,
+          planId:
+            result.planId
+            || '',
+          planNo:
+            result.planNo
+            || '',
           customerId:
             invoice.customerId,
           customerNo:

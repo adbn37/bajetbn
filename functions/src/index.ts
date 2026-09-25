@@ -34770,9 +34770,26 @@ type AdbnBillingInvoiceMirrorInput = {
   sourceStatus: string;
 };
 
+type AdbnBillingPaymentPlanMirrorInput = {
+  id: string;
+  planNo: string;
+  invoiceId: string;
+  invoiceNo: string;
+  title: string;
+  totalMinor: number;
+  paidMinor: number;
+  balanceMinor: number;
+  monthlyMinor: number;
+  termMonths: number;
+  startDate: string;
+  nextDueDate: string;
+  sourceStatus: string;
+};
+
 type AdbnBillingPaymentMirrorInput = {
   id: string;
   invoiceId: string;
+  planId: string;
   paymentNo: string;
   amountMinor: number;
   paymentDate: string;
@@ -34862,6 +34879,114 @@ export const syncAdbnCustomerBillingMirror = onCall(
           [item.id, item] as const,
       ),
     );
+
+    const invoiceNos = new Set(
+      invoices
+        .map((item) => item.invoiceNo)
+        .filter(Boolean),
+    );
+
+    const rawPlans = Array.isArray(request.data?.plans)
+      ? request.data.plans.slice(0, 100)
+      : [];
+
+    const plans: AdbnBillingPaymentPlanMirrorInput[] =
+      rawPlans
+        .map(
+          (raw: unknown): AdbnBillingPaymentPlanMirrorInput | null => {
+            const item = raw && typeof raw === 'object' && !Array.isArray(raw)
+              ? raw as Record<string, unknown>
+              : {};
+
+            const id = adbnBillingMirrorText(item.id, 220);
+            if (!id) {
+              throw new HttpsError(
+                'invalid-argument',
+                'An ADBN payment plan is missing its source ID.',
+              );
+            }
+
+            const customerId = adbnBillingMirrorText(item.customerId, 220);
+            const customerNo = adbnBillingMirrorText(item.customerNo, 120);
+
+            if (customerId && customerId !== adbnCustomerId) {
+              throw new HttpsError(
+                'permission-denied',
+                'A payment plan belongs to another ADBN customer.',
+              );
+            }
+
+            if (
+              !customerId
+              && link.customerNo
+              && customerNo
+              && customerNo !== String(link.customerNo)
+            ) {
+              throw new HttpsError(
+                'permission-denied',
+                'A payment plan customer number does not match this ADBN link.',
+              );
+            }
+
+            const invoiceId = adbnBillingMirrorText(item.invoiceId, 220);
+            const invoiceNo = adbnBillingMirrorText(item.invoiceNo, 120);
+
+            if (
+              (invoiceId && invoiceById.has(invoiceId))
+              || (invoiceNo && invoiceNos.has(invoiceNo))
+            ) {
+              return null;
+            }
+
+            const totalMinor = adbnBillingMirrorMinor(item.total);
+            const paidMinor = adbnBillingMirrorMinor(item.paid);
+            const balanceMinor = adbnBillingMirrorMinor(item.balance);
+            const monthlyMinor = adbnBillingMirrorMinor(item.monthlyAmount);
+            const derivedTotalMinor = Math.max(
+              totalMinor,
+              paidMinor + balanceMinor,
+            );
+
+            if (monthlyMinor <= 0 || derivedTotalMinor <= 0) {
+              return null;
+            }
+
+            return {
+              id,
+              planNo: adbnBillingMirrorText(item.planNo, 120),
+              invoiceId,
+              invoiceNo,
+              title:
+                adbnBillingMirrorText(item.title, 180)
+                || 'ADBN TECH monthly payment plan',
+              totalMinor: derivedTotalMinor,
+              paidMinor,
+              balanceMinor:
+                balanceMinor > 0
+                  ? balanceMinor
+                  : Math.max(0, derivedTotalMinor - paidMinor),
+              monthlyMinor,
+              termMonths: Math.max(
+                0,
+                Math.min(600, Math.round(Number(item.termMonths || 0))),
+              ),
+              startDate: adbnBillingMirrorDate(item.startDate),
+              nextDueDate: adbnBillingMirrorDate(item.nextDueDate),
+              sourceStatus: adbnBillingMirrorText(item.status, 80),
+            };
+          },
+        )
+        .filter(
+          (
+            item: AdbnBillingPaymentPlanMirrorInput | null,
+          ): item is AdbnBillingPaymentPlanMirrorInput =>
+            item !== null,
+        );
+
+    const planById = new Map<string, AdbnBillingPaymentPlanMirrorInput>(
+      plans.map((item) => [item.id, item] as const),
+    );
+
     const rawPayments = Array.isArray(request.data?.payments) ? request.data.payments.slice(0, 500) : [];
     const payments: AdbnBillingPaymentMirrorInput[] =
       rawPayments.map(
@@ -34870,8 +34995,11 @@ export const syncAdbnCustomerBillingMirror = onCall(
         ? raw as Record<string, unknown> : {};
       const id = adbnBillingMirrorText(item.id, 220);
       const invoiceId = adbnBillingMirrorText(item.invoiceId, 220);
+      const planId = adbnBillingMirrorText(item.planId, 220);
       const customerId = adbnBillingMirrorText(item.customerId, 220);
-      if (!id || !invoiceId || !invoiceById.has(invoiceId)) return null;
+      const matchesInvoice = Boolean(invoiceId && invoiceById.has(invoiceId));
+      const matchesPlan = Boolean(planId && planById.has(planId));
+      if (!id || (!matchesInvoice && !matchesPlan)) return null;
       if (customerId && customerId !== adbnCustomerId) {
         throw new HttpsError('permission-denied', 'A payment belongs to another ADBN customer.');
       }
@@ -34882,6 +35010,7 @@ export const syncAdbnCustomerBillingMirror = onCall(
       return {
         id,
         invoiceId,
+        planId,
         paymentNo: adbnBillingMirrorText(item.paymentNo, 120),
         amountMinor,
         paymentDate: adbnBillingMirrorDate(item.paymentDate),
@@ -34968,10 +35097,73 @@ export const syncAdbnCustomerBillingMirror = onCall(
       }, { merge: true });
     }
 
+    for (const plan of plans) {
+      const commitmentId = adbnBillingMirrorDocumentId(
+        'adbn_plan_commitment',
+        linkId,
+        plan.id,
+      );
+      activeCommitmentIds.add(commitmentId);
+
+      const outstandingMinor = plan.balanceMinor > 0
+        ? plan.balanceMinor
+        : Math.max(0, plan.totalMinor - plan.paidMinor);
+      const status = outstandingMinor > 0 ? 'active' : 'completed';
+
+      writer.set(db.collection('commitments').doc(commitmentId), {
+        displayId: plan.planNo || commitmentId,
+        ownerId: recipientUid,
+        type: 'instalment',
+        name: plan.title,
+        payee: 'ADBN TECH',
+        spaceId: targetSpaceId,
+        accountId: null,
+        categoryId: 'expense-shopping',
+        categoryName: 'Shopping',
+        categoryIcon: 'bag',
+        categoryColor: 'rose',
+        amountMinor: plan.monthlyMinor,
+        totalAmountMinor: plan.totalMinor,
+        amountPaidMinor: plan.paidMinor,
+        sharedCycleDueDate: plan.nextDueDate || plan.startDate || null,
+        sharedAssignedMinor: 0,
+        sharedSettledMinor: 0,
+        currency: 'BND',
+        frequency: 'monthly',
+        startDate: plan.startDate || plan.nextDueDate || bruneiLocalDate(),
+        nextDueDate: status === 'active' ? plan.nextDueDate || null : null,
+        endDate: null,
+        reminderDays: 3,
+        status,
+        note: 'ADBN TECH legacy monthly-payment plan synced from payment plan '
+          + (plan.planNo || plan.id),
+        externalIntegrationProvider: 'adbn_tech',
+        externalIntegrationSourceType: 'adbn_payment_plan',
+        externalIntegrationSourceId: plan.id,
+        externalIntegrationSourceNo: plan.planNo || null,
+        externalIntegrationCustomerLinkId: linkId,
+        externalIntegrationMirrorStatus: 'active',
+        archivedAt: null,
+        stoppedAt: null,
+        stoppedPreviousNextDueDate: null,
+        sourceStatus: plan.sourceStatus || null,
+        sourceTermMonths: plan.termMonths || null,
+        sourceInvoiceId: plan.invoiceId || null,
+        sourceInvoiceNo: plan.invoiceNo || null,
+        updatedAt: now,
+        mirrorSyncedAt: now,
+      }, { merge: true });
+    }
+
     for (const payment of payments) {
       const invoice = invoiceById.get(payment.invoiceId);
-      if (!invoice) continue;
-      const commitmentId = adbnBillingMirrorDocumentId('adbn_commitment', linkId, invoice.id);
+      const plan = planById.get(payment.planId);
+      const commitmentId = invoice
+        ? adbnBillingMirrorDocumentId('adbn_commitment', linkId, invoice.id)
+        : plan
+          ? adbnBillingMirrorDocumentId('adbn_plan_commitment', linkId, plan.id)
+          : '';
+      if (!commitmentId) continue;
       const paymentId = adbnBillingMirrorDocumentId('adbn_payment', linkId, payment.id);
       activePaymentIds.add(paymentId);
       writer.set(db.collection('commitmentPayments').doc(paymentId), {
@@ -35038,7 +35230,9 @@ export const syncAdbnCustomerBillingMirror = onCall(
     return {
       linkId,
       targetSpaceId,
-      commitmentsSynced: invoices.length,
+      commitmentsSynced: invoices.length + plans.length,
+      invoicesSynced: invoices.length,
+      plansSynced: plans.length,
       paymentsSynced: payments.length,
       staleCommitments,
       stalePayments,
