@@ -198,6 +198,46 @@ function whatsappNumber(
   return digits;
 }
 
+function bajetBnAdbnCustomerSpaceUrl(
+  link: AdbnCustomerLink | undefined,
+) {
+  if (
+    link?.status !== 'accepted'
+    || !link.targetSpaceId
+  ) {
+    return bajetBnAdbnCustomerLinkUrl();
+  }
+
+  const path =
+    '/spaces/'
+    + encodeURIComponent(
+      link.targetSpaceId,
+    )
+    + '/adbn';
+
+  if (
+    import.meta.env.VITE_APP_ENV
+      === 'staging'
+  ) {
+    return (
+      'https://bajetbn-staging.pages.dev'
+      + path
+    );
+  }
+
+  if (
+    typeof window !== 'undefined'
+    && window.location.origin
+  ) {
+    return (
+      window.location.origin
+      + path
+    );
+  }
+
+  return path;
+}
+
 function openAdbnCustomerWhatsappInvite(
   customer: AdbnTechCustomerMirror,
   link: AdbnCustomerLink | undefined,
@@ -209,7 +249,7 @@ function openAdbnCustomerWhatsappInvite(
       || '',
     );
 
-  if (!number || !link) {
+  if (!number) {
     return;
   }
 
@@ -219,38 +259,110 @@ function openAdbnCustomerWhatsappInvite(
     || 'customer';
 
   const email =
-    link.targetEmail
+    link?.targetEmail
     || customer.email
     || '';
 
-  const message = [
-    'Assalamualaikum '
-      + customerLabel
-      + '.',
-    '',
-    'ADBN TECH has invited you to connect your customer account'
-      + (
-        customer.customerNo
-          ? ' (' + customer.customerNo + ')'
-          : ''
-      )
-      + ' with BajetBN.',
-    '',
-    'Open your secure invitation:',
-    bajetBnAdbnCustomerLinkUrl(),
-    '',
-    email
-      ? 'Please sign in using ' + email + ' and accept the link.'
-      : 'Please sign in using the email registered with ADBN TECH and accept the link.',
-    '',
-    'After acceptance, BajetBN will create a private ADBN TECH Space for your ADBN invoices, monthly payments and reminders as those sync features are enabled.',
-  ].join('\n');
+  const customerRef =
+    customer.customerNo
+      ? ' (' + customer.customerNo + ')'
+      : '';
+
+  let message: string[];
+
+  if (
+    link?.status === 'accepted'
+  ) {
+    message = [
+      'Assalamualaikum '
+        + customerLabel
+        + '.',
+      '',
+      'Your ADBN TECH customer account'
+        + customerRef
+        + ' is connected to BajetBN.',
+      '',
+      'Open your ADBN TECH customer Space:',
+      bajetBnAdbnCustomerSpaceUrl(
+        link,
+      ),
+      '',
+      email
+        ? 'Please sign in using ' + email + '.'
+        : 'Please sign in using your registered BajetBN email.',
+      '',
+      'You can view your synced ADBN TECH bills, instalments, payment history and due reminders there.',
+    ];
+  } else if (
+    link?.status === 'pending'
+  ) {
+    message = [
+      'Assalamualaikum '
+        + customerLabel
+        + '.',
+      '',
+      'ADBN TECH has invited you to connect your customer account'
+        + customerRef
+        + ' with BajetBN.',
+      '',
+      'Open your secure invitation:',
+      bajetBnAdbnCustomerLinkUrl(),
+      '',
+      email
+        ? 'Please sign in using ' + email + ' and accept the link.'
+        : 'Please sign in using the email registered with ADBN TECH and accept the link.',
+      '',
+      'After acceptance, BajetBN will create your private ADBN TECH customer Space.',
+    ];
+  } else if (
+    link?.status === 'declined'
+  ) {
+    message = [
+      'Assalamualaikum '
+        + customerLabel
+        + '.',
+      '',
+      'ADBN TECH uses BajetBN for its customer portal'
+        + customerRef
+        + '.',
+      '',
+      'Open BajetBN:',
+      bajetBnAdbnCustomerLinkUrl(),
+      '',
+      email
+        ? 'Please sign in using ' + email + '.'
+        : 'Please sign in using your registered email.',
+      '',
+      'If you would like to reconnect your ADBN TECH account, ADBN TECH can issue a new customer-link invitation.',
+    ];
+  } else {
+    message = [
+      'Assalamualaikum '
+        + customerLabel
+        + '.',
+      '',
+      'ADBN TECH uses BajetBN for its customer portal'
+        + customerRef
+        + '.',
+      '',
+      'Open BajetBN:',
+      bajetBnAdbnCustomerLinkUrl(),
+      '',
+      email
+        ? 'Please register or sign in using ' + email + '.'
+        : 'Please register or sign in using your email address.',
+      '',
+      'ADBN TECH can then send your secure customer-link invitation for bills, instalments, payment history and due reminders.',
+    ];
+  }
 
   window.open(
     'https://wa.me/'
       + number
       + '?text='
-      + encodeURIComponent(message),
+      + encodeURIComponent(
+        message.join('\n'),
+      ),
     '_blank',
     'noopener,noreferrer',
   );
@@ -1698,19 +1810,26 @@ export function AdbnTechMirrorWorkspace({
                           className="button secondary compact"
                           data-adbn-customer-whatsapp-share
                           disabled={
-                            customerLink?.status !== 'pending'
-                            || !whatsappNumber(
+                            !whatsappNumber(
                               item.whatsapp
                               || item.phone
                               || '',
                             )
                           }
                           title={
-                            !customerLink
-                              ? 'Create the BajetBN link first'
-                              : customerLink.status !== 'pending'
-                                ? 'WhatsApp invitation is only available while the link is pending'
-                                : 'Share BajetBN invitation on WhatsApp'
+                            !whatsappNumber(
+                              item.whatsapp
+                              || item.phone
+                              || '',
+                            )
+                              ? 'No WhatsApp or phone number is available for this customer'
+                              : customerLink?.status === 'accepted'
+                                ? 'Share the linked ADBN TECH customer Space on WhatsApp'
+                                : customerLink?.status === 'pending'
+                                  ? 'Share or resend the BajetBN invitation on WhatsApp'
+                                  : customerLink?.status === 'declined'
+                                    ? 'Share BajetBN reconnect instructions on WhatsApp'
+                                    : 'Share BajetBN onboarding on WhatsApp'
                           }
                           onClick={() =>
                             openAdbnCustomerWhatsappInvite(

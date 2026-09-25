@@ -147,8 +147,20 @@ check(
   )
   && workspace.includes(
     'https://bajetbn-staging.pages.dev',
+  )
+  && workspace.includes(
+    'bajetBnAdbnCustomerSpaceUrl',
+  )
+  && workspace.includes(
+    "link?.status === 'accepted'",
+  )
+  && workspace.includes(
+    'Share or resend the BajetBN invitation on WhatsApp',
+  )
+  && !workspace.includes(
+    "customerLink?.status !== 'pending'\n                            || !whatsappNumber",
   ),
-  'ADBN admin customer list exposes a WhatsApp invitation/share action.',
+  'ADBN admin WhatsApp action works for onboarding, pending invitations and linked customer Spaces.',
 );
 
 check(
