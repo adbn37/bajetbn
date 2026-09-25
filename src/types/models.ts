@@ -1835,7 +1835,7 @@ export interface Commitment {
   status: CommitmentStatus;
   note?: string;
   externalIntegrationProvider?: 'adbn_tech' | null;
-  externalIntegrationSourceType?: 'adbn_invoice' | null;
+  externalIntegrationSourceType?: 'adbn_invoice' | 'adbn_payment_plan' | null;
   externalIntegrationSourceId?: string | null;
   externalIntegrationSourceNo?: string | null;
   externalIntegrationCustomerLinkId?: string | null;

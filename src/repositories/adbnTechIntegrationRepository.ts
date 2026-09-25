@@ -58,9 +58,31 @@ export interface AdbnTechInvoiceMirror {
   updatedAt?: unknown;
 }
 
+export interface AdbnTechPaymentPlanMirror {
+  id: string;
+  planNo: string;
+  customerId: string;
+  customerNo: string;
+  customerName: string;
+  invoiceId: string;
+  invoiceNo: string;
+  title: string;
+  total: number;
+  paid: number;
+  balance: number;
+  monthlyAmount: number;
+  termMonths: number;
+  startDate: string;
+  nextDueDate: string;
+  status: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 export interface AdbnTechReadOnlySnapshot {
   customers: AdbnTechCustomerMirror[];
   invoices: AdbnTechInvoiceMirror[];
+  paymentPlans: AdbnTechPaymentPlanMirror[];
   connectedEmail: string;
   loadedAt: string;
 }
@@ -83,6 +105,8 @@ export interface AdbnTechPaymentMirror {
   paymentNo: string;
   invoiceId: string;
   invoiceNo: string;
+  planId: string;
+  planNo: string;
   customerId: string;
   customerNo: string;
   customerName: string;
@@ -817,9 +841,14 @@ export async function loadAdbnTechReadOnlySnapshot(): Promise<
    * Slice 22 is intentionally read-only. Do not add Firestore write methods
    * here. ADBN TECH remains the source of truth for these records.
    */
-  const [customerSnapshot, invoiceSnapshot] = await Promise.all([
+  const [
+    customerSnapshot,
+    invoiceSnapshot,
+    paymentPlanSnapshot,
+  ] = await Promise.all([
     getDocs(collection(db, 'customers')),
     getDocs(collection(db, 'invoices')),
+    getDocs(collection(db, 'paymentPlans')),
   ]);
 
   const customers = customerSnapshot.docs
@@ -884,9 +913,98 @@ export async function loadAdbnTechReadOnlySnapshot(): Promise<
         - timestampMillis(a.createdAt),
     );
 
+  const paymentPlans = paymentPlanSnapshot.docs
+    .map((record) => {
+      const data = record.data();
+      const total = money(
+        data.total
+        ?? data.totalAmount
+        ?? data.originalTotal
+        ?? data.planTotal
+        ?? data.contractTotal,
+      );
+      const paid = money(
+        data.paid
+        ?? data.paidAmount
+        ?? data.amountPaid
+        ?? data.totalPaid,
+      );
+      const balance = money(
+        data.balance
+        ?? data.remainingBalance
+        ?? data.outstandingBalance
+        ?? Math.max(0, total - paid),
+      );
+
+      return {
+        id: record.id,
+        planNo: text(
+          data.planNo
+          ?? data.paymentPlanNo
+          ?? data.planNumber,
+        ),
+        customerId: text(
+          data.customerId
+          ?? data.customerID,
+        ),
+        customerNo: text(data.customerNo),
+        customerName: text(
+          data.customerName
+          ?? data.name,
+        ),
+        invoiceId: text(
+          data.invoiceId
+          ?? data.linkedInvoiceId
+          ?? data.invoiceID,
+        ),
+        invoiceNo: text(data.invoiceNo),
+        title: text(
+          data.title
+          ?? data.description
+          ?? data.itemName
+          ?? data.productName,
+        ),
+        total,
+        paid,
+        balance,
+        monthlyAmount: money(
+          data.monthlyAmount
+          ?? data.monthlyPayment
+          ?? data.installmentAmount
+          ?? data.instalmentAmount,
+        ),
+        termMonths: money(
+          data.termMonths
+          ?? data.term
+          ?? data.months,
+        ),
+        startDate: text(
+          data.startDate
+          ?? data.planStartDate
+          ?? data.createdDate,
+        ),
+        nextDueDate: text(
+          data.nextDueDate
+          ?? data.dueDate,
+        ),
+        status: text(
+          data.status
+          ?? data.planStatus,
+        ),
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      } satisfies AdbnTechPaymentPlanMirror;
+    })
+    .sort(
+      (a, b) =>
+        timestampMillis(b.updatedAt || b.createdAt)
+        - timestampMillis(a.updatedAt || a.createdAt),
+    );
+
   return {
     customers,
     invoices,
+    paymentPlans,
     connectedEmail,
     loadedAt: new Date().toISOString(),
   };
@@ -913,10 +1031,12 @@ export async function loadAdbnTechPaymentsReadOnly(): Promise<
     bankAccountSnapshot,
     paymentSnapshot,
     invoiceSnapshot,
+    paymentPlanSnapshot,
   ] = await Promise.all([
     getDocs(collection(db, 'bankAccounts')),
     getDocs(collection(db, 'payments')),
     getDocs(collection(db, 'invoices')),
+    getDocs(collection(db, 'paymentPlans')),
   ]);
 
   const bankAccounts = bankAccountSnapshot.docs
@@ -982,6 +1102,32 @@ export async function loadAdbnTechPaymentsReadOnly(): Promise<
     }),
   );
 
+  const paymentPlanById = new Map(
+    paymentPlanSnapshot.docs.map((record) => {
+      const data = record.data();
+
+      return [
+        record.id,
+        {
+          planNo: text(
+            data.planNo
+            ?? data.paymentPlanNo
+            ?? data.planNumber,
+          ),
+          customerId: text(
+            data.customerId
+            ?? data.customerID,
+          ),
+          customerNo: text(data.customerNo),
+          customerName: text(
+            data.customerName
+            ?? data.name,
+          ),
+        },
+      ] as const;
+    }),
+  );
+
   const payments = paymentSnapshot.docs
     .map((record) => {
       const data = record.data();
@@ -993,6 +1139,14 @@ export async function loadAdbnTechPaymentsReadOnly(): Promise<
       );
 
       const invoice = invoiceById.get(invoiceId);
+
+      const planId = text(
+        data.planId
+        ?? data.paymentPlanId
+        ?? data.planID,
+      );
+
+      const plan = paymentPlanById.get(planId);
 
       const bankAccountId = text(data.bankAccountId);
       const bankAccount =
@@ -1010,17 +1164,28 @@ export async function loadAdbnTechPaymentsReadOnly(): Promise<
           text(data.invoiceNo)
           || invoice?.invoiceNo
           || '',
+        planId,
+        planNo:
+          text(
+            data.planNo
+            ?? data.paymentPlanNo,
+          )
+          || plan?.planNo
+          || '',
         customerId:
           text(data.customerId)
           || invoice?.customerId
+          || plan?.customerId
           || '',
         customerNo:
           text(data.customerNo)
           || invoice?.customerNo
+          || plan?.customerNo
           || '',
         customerName:
           text(data.customerName)
           || invoice?.customerName
+          || plan?.customerName
           || '',
         amount: money(
           data.amount

@@ -69,7 +69,9 @@ check(
   'Customer ADBN portal displays synced billing and payment history.',
 );
 check(
-  models.includes("externalIntegrationSourceType?: 'adbn_invoice' | null;")
+  models.includes('externalIntegrationSourceType?:')
+  && models.includes("'adbn_invoice'")
+  && models.includes("'adbn_payment_plan'")
   && models.includes("'direct' | 'shared_bill' | 'adbn_tech'"),
   'Models distinguish ADBN-managed commitments and mirrored payments.',
 );
