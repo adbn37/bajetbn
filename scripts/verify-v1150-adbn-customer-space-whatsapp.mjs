@@ -17,6 +17,7 @@ const portal = read('src/features/linked-adbn/AdbnCustomerSpacePage.tsx');
 const workspace = read('src/features/business/AdbnTechMirrorWorkspace.tsx');
 const app = read('src/app/App.tsx');
 const details = read('src/features/spaces/SpaceDetailsPage.tsx');
+const spacesPage = read('src/features/spaces/SpacesPage.tsx');
 const models = read('src/types/models.ts');
 
 const start =
@@ -127,6 +128,19 @@ check(
     'https://bajetbn-staging.pages.dev',
   ),
   'ADBN admin customer list exposes a WhatsApp invitation/share action.',
+);
+
+check(
+  spacesPage.includes(
+    "item.externalIntegrationRole"
+  )
+  && spacesPage.includes(
+    "=== 'customer'"
+  )
+  && spacesPage.includes(
+    'canProvisionAdbnTechSpace'
+  ),
+  'Dedicated ADBN customer Spaces remain visible in the normal Spaces list.',
 );
 
 check(
