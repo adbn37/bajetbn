@@ -147,6 +147,111 @@ function suggestedPaymentAmount(
   return invoice.balance;
 }
 
+function bajetBnAdbnCustomerLinkUrl() {
+  const path = '/adbn-links';
+
+  if (
+    import.meta.env.VITE_APP_ENV
+      === 'staging'
+  ) {
+    return (
+      'https://bajetbn-staging.pages.dev'
+      + path
+    );
+  }
+
+  if (
+    typeof window !== 'undefined'
+    && window.location.origin
+  ) {
+    return (
+      window.location.origin
+      + path
+    );
+  }
+
+  return path;
+}
+
+function whatsappNumber(
+  value: string,
+) {
+  const digits =
+    value.replace(/\D/g, '');
+
+  if (!digits) return '';
+
+  if (
+    digits.startsWith('00')
+  ) {
+    return digits.slice(2);
+  }
+
+  if (digits.length === 7) {
+    return '673' + digits;
+  }
+
+  return digits;
+}
+
+function openAdbnCustomerWhatsappInvite(
+  customer: AdbnTechCustomerMirror,
+  link: AdbnCustomerLink | undefined,
+) {
+  const number =
+    whatsappNumber(
+      customer.whatsapp
+      || customer.phone
+      || '',
+    );
+
+  if (!number || !link) {
+    return;
+  }
+
+  const customerLabel =
+    customer.name
+    || customer.customerNo
+    || 'customer';
+
+  const email =
+    link.targetEmail
+    || customer.email
+    || '';
+
+  const message = [
+    'Assalamualaikum '
+      + customerLabel
+      + '.',
+    '',
+    'ADBN TECH has invited you to connect your customer account'
+      + (
+        customer.customerNo
+          ? ' (' + customer.customerNo + ')'
+          : ''
+      )
+      + ' with BajetBN.',
+    '',
+    'Open your secure invitation:',
+    bajetBnAdbnCustomerLinkUrl(),
+    '',
+    email
+      ? 'Please sign in using ' + email + ' and accept the link.'
+      : 'Please sign in using the email registered with ADBN TECH and accept the link.',
+    '',
+    'After acceptance, BajetBN will create a private ADBN TECH Space for your ADBN invoices, monthly payments and reminders as those sync features are enabled.',
+  ].join('\n');
+
+  window.open(
+    'https://wa.me/'
+      + number
+      + '?text='
+      + encodeURIComponent(message),
+    '_blank',
+    'noopener,noreferrer',
+  );
+}
+
 export function AdbnTechMirrorWorkspace({
   spaceId,
   view,
@@ -1425,38 +1530,82 @@ export function AdbnTechMirrorWorkspace({
                     <td>{item.status || '—'}</td>
                     <td>{simpleDate(item.customerSince)}</td>
                     <td>
-                      {customerLink?.status === 'accepted' ? (
-                        <>
-                          <strong>
-                            Linked
-                          </strong>
-                          <small>
-                            {customerLink.targetEmail}
-                          </small>
-                        </>
-                      ) : customerLink?.status === 'pending' ? (
-                        <>
-                          <span>
-                            Pending
-                          </span>
-                          <small>
-                            {customerLink.targetEmail}
-                          </small>
-                        </>
-                      ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                        }}
+                      >
+                        <div>
+                          {customerLink?.status === 'accepted' ? (
+                            <>
+                              <strong>
+                                Linked
+                              </strong>
+                              <small>
+                                {customerLink.targetEmail}
+                              </small>
+                            </>
+                          ) : customerLink?.status === 'pending' ? (
+                            <>
+                              <span>
+                                Pending
+                              </span>
+                              <small>
+                                {customerLink.targetEmail}
+                              </small>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button secondary compact"
+                              data-adbn-customer-link-action
+                              onClick={() =>
+                                openCustomerLink(item)
+                              }
+                            >
+                              {customerLink?.status === 'declined'
+                                ? 'Invite again'
+                                : 'Link customer'}
+                            </button>
+                          )}
+                        </div>
+
                         <button
                           type="button"
                           className="button secondary compact"
-                          data-adbn-customer-link-action
+                          data-adbn-customer-whatsapp-share
+                          disabled={
+                            customerLink?.status !== 'pending'
+                            || !whatsappNumber(
+                              item.whatsapp
+                              || item.phone
+                              || '',
+                            )
+                          }
+                          title={
+                            !customerLink
+                              ? 'Create the BajetBN link first'
+                              : customerLink.status !== 'pending'
+                                ? 'WhatsApp invitation is only available while the link is pending'
+                                : 'Share BajetBN invitation on WhatsApp'
+                          }
                           onClick={() =>
-                            openCustomerLink(item)
+                            openAdbnCustomerWhatsappInvite(
+                              item,
+                              customerLink,
+                            )
                           }
                         >
-                          {customerLink?.status === 'declined'
-                            ? 'Invite again'
-                            : 'Link customer'}
+                          <span aria-hidden="true">
+                            💬
+                          </span>
+                          {' '}
+                          WhatsApp
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );

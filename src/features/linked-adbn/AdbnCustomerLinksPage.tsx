@@ -1,12 +1,12 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from 'react';
 
 import {
   Link,
+  useNavigate,
 } from 'react-router-dom';
 
 import {
@@ -24,30 +24,28 @@ import {
 } from '../../repositories/adbnCustomerLinkRepository';
 
 import {
-  listSpaces,
-} from '../../repositories/spaceRepository';
-
-import type {
-  Space,
-} from '../../types/models';
-
-import {
   getErrorMessage,
 } from '../../utils/errors';
 
+function needsDedicatedAdbnSpace(
+  link: AdbnCustomerLink,
+) {
+  return (
+    link.status === 'accepted'
+    && (
+      !link.targetSpaceId
+      || link.targetSpaceType !== 'custom'
+      || link.targetSpaceProvider !== 'adbn_tech'
+    )
+  );
+}
+
 export function AdbnCustomerLinksPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [links, setLinks] =
     useState<AdbnCustomerLink[]>([]);
-
-  const [spaces, setSpaces] =
-    useState<Space[]>([]);
-
-  const [
-    selectedSpaces,
-    setSelectedSpaces,
-  ] = useState<Record<string, string>>({});
 
   const [loading, setLoading] =
     useState(true);
@@ -61,24 +59,6 @@ export function AdbnCustomerLinksPage() {
   const [feedback, setFeedback] =
     useState('');
 
-  const eligibleSpaces =
-    useMemo(
-      () =>
-        spaces.filter(
-          (space) =>
-            !space.archivedAt
-            && space.ownerId
-              === user?.uid
-            && (
-              space.type
-                === 'personal'
-              || space.type
-                === 'household'
-            ),
-        ),
-      [spaces, user],
-    );
-
   const load =
     useCallback(
       async () => {
@@ -91,66 +71,30 @@ export function AdbnCustomerLinksPage() {
         setError('');
 
         try {
-          const [
-            nextLinks,
-            nextSpaces,
-          ] =
-            await Promise.all([
-              listMyAdbnCustomerLinks(),
-              listSpaces(user.uid),
-            ]);
+          let nextLinks =
+            await listMyAdbnCustomerLinks();
 
-          setLinks(nextLinks);
-          setSpaces(nextSpaces);
-
-          const eligible =
-            nextSpaces.filter(
-              (space) =>
-                !space.archivedAt
-                && space.ownerId
-                  === user.uid
-                && (
-                  space.type
-                    === 'personal'
-                  || space.type
-                    === 'household'
-                ),
+          const legacyAccepted =
+            nextLinks.filter(
+              needsDedicatedAdbnSpace,
             );
 
-          const preferred =
-            eligible.find(
-              (space) =>
-                space.type
-                  === 'personal',
-            )
-            || eligible[0]
-            || null;
+          if (legacyAccepted.length > 0) {
+            await Promise.all(
+              legacyAccepted.map(
+                (link) =>
+                  respondAdbnCustomerLinkInvitation({
+                    linkId: link.id,
+                    decision: 'accept',
+                  }),
+              ),
+            );
 
-          setSelectedSpaces(
-            (current) => {
-              const next = {
-                ...current,
-              };
+            nextLinks =
+              await listMyAdbnCustomerLinks();
+          }
 
-              nextLinks.forEach(
-                (link) => {
-                  if (
-                    link.status
-                      !== 'pending'
-                    || next[link.id]
-                  ) {
-                    return;
-                  }
-
-                  next[link.id] =
-                    preferred?.id
-                    || '';
-                },
-              );
-
-              return next;
-            },
-          );
+          setLinks(nextLinks);
         } catch (nextError) {
           setError(
             getErrorMessage(
@@ -189,35 +133,33 @@ export function AdbnCustomerLinksPage() {
       | 'accept'
       | 'decline',
   ) {
-    const targetSpaceId =
-      selectedSpaces[link.id]
-      || '';
-
-    if (
-      decision === 'accept'
-      && !targetSpaceId
-    ) {
-      setError(
-        'Choose a Personal or Household Space first.',
-      );
-      return;
-    }
-
     setBusyId(link.id);
     setError('');
     setFeedback('');
 
     try {
       if (decision === 'accept') {
-        await respondAdbnCustomerLinkInvitation({
-          linkId: link.id,
-          decision: 'accept',
-          targetSpaceId,
-        });
+        const result =
+          await respondAdbnCustomerLinkInvitation({
+            linkId: link.id,
+            decision: 'accept',
+          });
 
         setFeedback(
-          'ADBN TECH customer link accepted. No invoice or payment was copied yet.',
+          result.spaceCreated
+            ? 'ADBN TECH link accepted. Your private ADBN TECH Space was created.'
+            : 'ADBN TECH link accepted. Your private ADBN TECH Space is ready.',
         );
+
+        await load();
+
+        if (result.targetSpaceId) {
+          navigate(
+            '/spaces/'
+            + result.targetSpaceId
+            + '/adbn',
+          );
+        }
       } else {
         await respondAdbnCustomerLinkInvitation({
           linkId: link.id,
@@ -227,9 +169,9 @@ export function AdbnCustomerLinksPage() {
         setFeedback(
           'ADBN TECH customer link declined.',
         );
-      }
 
-      await load();
+        await load();
+      }
     } catch (nextError) {
       setError(
         getErrorMessage(
@@ -249,13 +191,13 @@ export function AdbnCustomerLinksPage() {
       <PageHeader
         eyebrow="ADBN TECH"
         title="Customer links"
-        description="Choose whether ADBN TECH can link your customer account to Bills & Instalments in one of your own Spaces."
+        description="Accept an ADBN TECH invitation to create your private ADBN TECH Space for future invoices, monthly payments and reminders."
         action={
           <Link
             className="button secondary"
-            to="/bills"
+            to="/spaces"
           >
-            Bills & Instalments
+            My Spaces
           </Link>
         }
       />
@@ -265,7 +207,7 @@ export function AdbnCustomerLinksPage() {
           Your Personal money stays private.
         </strong>
         <span>
-          ADBN TECH can only know that you accepted this customer link and which Personal or Household Space should receive future ADBN billing records. Your bank accounts, balances, transactions and other BajetBN records are not shared with ADBN TECH.
+          ADBN TECH gets its own dedicated BajetBN Space. Your Personal, Household and other Spaces, bank accounts, balances and transactions are not shared with ADBN TECH.
         </span>
       </div>
 
@@ -329,8 +271,7 @@ export function AdbnCustomerLinksPage() {
                       <p>
                         Linked to{' '}
                         <strong>
-                          {link.targetSpaceName
-                            || 'your selected Space'}
+                          ADBN TECH Space
                         </strong>
                       </p>
                     )}
@@ -339,50 +280,13 @@ export function AdbnCustomerLinksPage() {
                 {link.status
                   === 'pending'
                   && (
-                    <div className="business-contact-actions">
-                      {eligibleSpaces.length > 0 ? (
-                        <label>
-                          Future ADBN bills should appear in
-                          <select
-                            value={
-                              selectedSpaces[
-                                link.id
-                              ]
-                              || ''
-                            }
-                            onChange={
-                              (event) =>
-                                setSelectedSpaces(
-                                  (current) => ({
-                                    ...current,
-                                    [link.id]:
-                                      event.target.value,
-                                  }),
-                                )
-                            }
-                          >
-                            {eligibleSpaces.map(
-                              (space) => (
-                                <option
-                                  key={space.id}
-                                  value={space.id}
-                                >
-                                  {space.name}
-                                  {' · '}
-                                  {space.type
-                                    === 'personal'
-                                    ? 'Personal'
-                                    : 'Household'}
-                                </option>
-                              ),
-                            )}
-                          </select>
-                        </label>
-                      ) : (
-                        <p>
-                          You need an active Personal or Household Space that you own before accepting this link.
-                        </p>
-                      )}
+                    <div
+                      className="business-contact-actions"
+                      data-adbn-dedicated-space-accept
+                    >
+                      <p>
+                        Accepting creates a private ADBN TECH Space automatically. No Personal or Household Space is used.
+                      </p>
 
                       <div className="modal-actions">
                         <button
@@ -407,11 +311,6 @@ export function AdbnCustomerLinksPage() {
                           className="button primary"
                           disabled={
                             busyId === link.id
-                            || eligibleSpaces.length
-                              === 0
-                            || !selectedSpaces[
-                              link.id
-                            ]
                           }
                           onClick={
                             () =>
@@ -422,10 +321,28 @@ export function AdbnCustomerLinksPage() {
                           }
                         >
                           {busyId === link.id
-                            ? 'Saving…'
-                            : 'Accept link'}
+                            ? 'Creating ADBN Space…'
+                            : 'Accept & create ADBN Space'}
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                {link.status
+                  === 'accepted'
+                  && link.targetSpaceId
+                  && (
+                    <div className="business-contact-actions">
+                      <Link
+                        className="button primary"
+                        to={
+                          '/spaces/'
+                          + link.targetSpaceId
+                          + '/adbn'
+                        }
+                      >
+                        Open ADBN TECH
+                      </Link>
                     </div>
                   )}
               </article>

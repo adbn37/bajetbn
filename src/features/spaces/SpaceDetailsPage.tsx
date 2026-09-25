@@ -969,6 +969,15 @@ export function SpaceDetailsPage() {
         return;
       }
 
+      if (
+        nextSpace.externalIntegrationProvider === 'adbn_tech'
+        && nextSpace.externalIntegrationRole === 'customer'
+      ) {
+        setMembers([]);
+        setSmePosRole(null);
+        return;
+      }
+
       const nextPosAccess =
         nextSpace.type === 'sme'
         && nextSpace.ownerId !== user.uid
@@ -1594,6 +1603,18 @@ export function SpaceDetailsPage() {
       {error && <div className="notice error">{error}</div>}
       <Link className="button primary" to="/spaces">Back to Spaces</Link>
     </main>;
+  }
+
+  if (
+    space.externalIntegrationProvider === 'adbn_tech'
+    && space.externalIntegrationRole === 'customer'
+  ) {
+    return (
+      <Navigate
+        to={'/spaces/' + space.id + '/adbn'}
+        replace
+      />
+    );
   }
 
   const tripWorkbookSheet =

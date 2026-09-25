@@ -1314,6 +1314,12 @@ export interface Space {
   externalIntegrationProvider?: SpaceExternalIntegrationProvider | null;
   externalIntegrationStatus?: SpaceExternalIntegrationStatus | null;
   externalIntegrationKey?: string | null;
+  externalIntegrationRole?: 'business' | 'customer' | null;
+  externalIntegrationCustomerLinkId?: string | null;
+  externalIntegrationBusinessSpaceId?: string | null;
+  externalIntegrationAdbnCustomerId?: string | null;
+  externalIntegrationCustomerNo?: string | null;
+  externalIntegrationCustomerName?: string | null;
   externalIntegrationAccountMappings?: Record<string, string>;
   externalIntegrationPaymentAutoSyncEnabled?: boolean;
   externalIntegrationPaymentAutoSyncCutoffIso?: string | null;
