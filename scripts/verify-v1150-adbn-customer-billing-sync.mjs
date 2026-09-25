@@ -35,6 +35,12 @@ check(
   'Customer billing sync does not touch bank account or ledger balances.',
 );
 check(
+  block.includes('const billTotalMinor = Math.max(')
+  && block.includes('invoice.paidMinor + outstandingMinor')
+  && block.includes(': Math.max(1, billTotalMinor)'),
+  'One-time ADBN bills mirror the original invoice total without double-subtracting prior payments.',
+);
+check(
   functions.includes("externalIntegrationProvider==='adbn_tech'")
   && functions.includes('Use the ADBN TECH payment flow for this managed billing record.')
   && functions.includes('cannot be edited here.')
