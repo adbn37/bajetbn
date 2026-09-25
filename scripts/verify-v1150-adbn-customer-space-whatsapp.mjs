@@ -25,9 +25,20 @@ const start =
     'export const respondAdbnCustomerLinkInvitation',
   );
 
+const end =
+  functions.indexOf(
+    'export const syncAdbnCustomerBillingMirror',
+    start,
+  );
+
 const block =
   start >= 0
-    ? functions.slice(start)
+    ? functions.slice(
+        start,
+        end >= 0
+          ? end
+          : functions.length,
+      )
     : '';
 
 check(
@@ -93,12 +104,22 @@ check(
     'data-adbn-customer-space',
   )
   && portal.includes(
-    'data-adbn-customer-space-billing-placeholder',
+    'ADBN TECH is the source of truth',
   )
-  && portal.includes(
-    'ADBN TECH remains the source of truth',
+  && (
+    portal.includes(
+      'data-adbn-customer-space-billing-placeholder',
+    )
+    || (
+      portal.includes(
+        'data-adbn-customer-billing-plans',
+      )
+      && portal.includes(
+        'data-adbn-customer-payment-history',
+      )
+    )
   ),
-  'Dedicated ADBN customer portal is present and clearly defers billing sync.',
+  'Dedicated ADBN customer portal is present and preserves the ADBN source-of-truth boundary before or after billing sync.',
 );
 
 check(

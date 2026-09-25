@@ -12,6 +12,7 @@ import {
   connectAdbnTechReadOnly,
   getAdbnTechConnectedEmail,
   loadAdbnTechBankAccountsReadOnly,
+  loadAdbnTechPaymentsReadOnly,
   loadAdbnTechReadOnlySnapshot,
   recordAdbnTechPayment,
   type AdbnTechBankAccountMirror,
@@ -32,6 +33,9 @@ import {
 import {
   syncAdbnTechPaymentToBajetBn,
 } from '../../repositories/adbnTechPaymentSyncRepository';
+import {
+  syncAdbnCustomerBillingToBajetBn,
+} from '../../repositories/adbnCustomerBillingSyncRepository';
 
 type MirrorView = 'customers' | 'invoices';
 
@@ -361,6 +365,16 @@ export function AdbnTechMirrorWorkspace({
     setCustomerLinkMessage,
   ] = useState('');
 
+  const [
+    billingSyncBusyCustomerId,
+    setBillingSyncBusyCustomerId,
+  ] = useState('');
+
+  const [
+    billingSyncMessage,
+    setBillingSyncMessage,
+  ] = useState('');
+
   const load = useCallback(async () => {
     if (getAdbnTechConnectedEmail() !== ADBN_TECH_ADMIN_EMAIL) {
       setSnapshot(null);
@@ -519,6 +533,84 @@ export function AdbnTechMirrorWorkspace({
         );
       } finally {
         setCustomerLinkBusy(false);
+      }
+    };
+
+  const syncCustomerBilling =
+    async (
+      customer: AdbnTechCustomerMirror,
+      link: AdbnCustomerLink,
+    ) => {
+      if (
+        !snapshot
+        || link.status !== 'accepted'
+        || billingSyncBusyCustomerId
+      ) {
+        return;
+      }
+
+      setBillingSyncBusyCustomerId(customer.id);
+      setBillingSyncMessage('');
+      setError('');
+
+      try {
+        const paymentSnapshot =
+          await loadAdbnTechPaymentsReadOnly();
+
+        const invoices =
+          snapshot.invoices.filter(
+            (invoice) =>
+              invoice.customerId === customer.id
+              || (
+                !invoice.customerId
+                && customer.customerNo
+                && invoice.customerNo === customer.customerNo
+              ),
+          );
+
+        const invoiceIds =
+          new Set(
+            invoices.map(
+              (invoice) => invoice.id,
+            ),
+          );
+
+        const payments =
+          paymentSnapshot.payments.filter(
+            (payment) =>
+              payment.customerId === customer.id
+              || invoiceIds.has(payment.invoiceId),
+          );
+
+        const result =
+          await syncAdbnCustomerBillingToBajetBn({
+            businessSpaceId: spaceId,
+            adbnCustomerId: customer.id,
+            invoices,
+            payments,
+          });
+
+        setBillingSyncMessage(
+          'Synced '
+          + result.commitmentsSynced
+          + ' billing record'
+          + (result.commitmentsSynced === 1 ? '' : 's')
+          + ' and '
+          + result.paymentsSynced
+          + ' payment'
+          + (result.paymentsSynced === 1 ? '' : 's')
+          + ' for '
+          + (customer.name || customer.customerNo || 'customer')
+          + '.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN customer billing could not be synced.',
+        );
+      } finally {
+        setBillingSyncBusyCustomerId('');
       }
     };
 
@@ -1401,6 +1493,15 @@ export function AdbnTechMirrorWorkspace({
         </div>
       )}
 
+      {billingSyncMessage && (
+        <div
+          className="notice success"
+          data-adbn-customer-billing-sync-success
+        >
+          {billingSyncMessage}
+        </div>
+      )}
+
       {linkCustomer && (
         <Modal
           title={
@@ -1572,6 +1673,25 @@ export function AdbnTechMirrorWorkspace({
                             </button>
                           )}
                         </div>
+
+                        {customerLink?.status === 'accepted' && (
+                          <button
+                            type="button"
+                            className="button secondary compact"
+                            data-adbn-customer-billing-sync
+                            disabled={Boolean(billingSyncBusyCustomerId)}
+                            onClick={() =>
+                              void syncCustomerBilling(
+                                item,
+                                customerLink,
+                              )
+                            }
+                          >
+                            {billingSyncBusyCustomerId === item.id
+                              ? 'Syncing…'
+                              : 'Sync billing'}
+                          </button>
+                        )}
 
                         <button
                           type="button"

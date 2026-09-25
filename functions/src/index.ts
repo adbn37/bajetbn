@@ -12985,7 +12985,7 @@ export const getSpaceCommitmentWorkspace = onCall(
 export const createCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const type=oneOf(request.data?.type,commitmentTypes,'commitment type');const name=stringValue(request.data?.name,'Commitment name',80);const payee=optionalString(request.data?.payee,120);const spaceId=stringValue(request.data?.spaceId,'Space');const accountId=optionalString(request.data?.accountId,80)||null;const categoryId=stringValue(request.data?.categoryId,'Category ID',80);const amountMinor=positiveMoney(request.data?.amountMinor);const totalAmountMinor=type==='instalment'?positiveMoney(request.data?.totalAmountMinor):null;if(type==='instalment'&&Number(totalAmountMinor)<amountMinor)throw new HttpsError('invalid-argument','Instalment total must be at least one payment amount.');const frequency=oneOf(request.data?.frequency,commitmentFrequencies,'frequency');const startDate=localDate(request.data?.startDate,'Start date');const endDate=optionalLocalDate(request.data?.endDate,'End date');const reminderDays=integerBetween(request.data?.reminderDays,'Reminder days',0,60);const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);
   const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const spaceRef=db.collection('spaces').doc(spaceId);const memberRef=db.collection('spaceMembers').doc(`${spaceId}_${uid}`);const accountRef=accountId?db.collection('accounts').doc(accountId):null;const categoryRef=categoryId.startsWith('custom-')?db.collection('categories').doc(categoryId):null;
-  return db.runTransaction(async transaction=>{const[command,space,member,account,custom]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef),accountRef?transaction.get(accountRef):Promise.resolve(null),categoryRef?transaction.get(categoryRef):Promise.resolve(null)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});const ref=db.collection('commitments').doc();const now=FieldValue.serverTimestamp();const result={commitmentId:ref.id};transaction.create(ref,{displayId:displayId(type==='bill'?'BIL':'INS'),ownerId:uid,type,name,payee,spaceId,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,amountPaidMinor:0,sharedCycleDueDate:startDate,sharedAssignedMinor:0,sharedSettledMinor:0,currency:space.data()?.currency,frequency,startDate,nextDueDate:startDate,endDate,reminderDays,status:'active',note,archivedAt:null,stoppedAt:null,stoppedPreviousNextDueDate:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+  return db.runTransaction(async transaction=>{const[command,space,member,account,custom]=await Promise.all([transaction.get(commandRef),transaction.get(spaceRef),transaction.get(memberRef),accountRef?transaction.get(accountRef):Promise.resolve(null),categoryRef?transaction.get(categoryRef):Promise.resolve(null)]);if(command.exists)return command.data()?.result;if(!space.exists||space.data()?.archivedAt)throw new HttpsError('failed-precondition','The selected Space is unavailable.');if(space.data()?.externalIntegrationProvider==='adbn_tech'&&space.data()?.externalIntegrationRole==='customer')throw new HttpsError('failed-precondition','ADBN TECH billing records are managed by the ADBN integration.');if(!member.exists)throw new HttpsError('permission-denied','You are not a member of this Space.');if(account){const data=assertAccount(account.data(),uid,'Account');if(data.currency!==space.data()?.currency)throw new HttpsError('failed-precondition','Account and Space currencies must match.');}const scope:Exclude<CategoryScope,'both'>=space.data()?.type==='sme'?'business':'personal';const category=categorySnapshotFromData({categoryId,requiredKind:'expense',selectedScope:scope,uid,customData:custom?.data()});const ref=db.collection('commitments').doc();const now=FieldValue.serverTimestamp();const result={commitmentId:ref.id};transaction.create(ref,{displayId:displayId(type==='bill'?'BIL':'INS'),ownerId:uid,type,name,payee,spaceId,accountId,categoryId:category.id,categoryName:category.name,categoryIcon:category.icon,categoryColor:category.color,amountMinor,totalAmountMinor,amountPaidMinor:0,sharedCycleDueDate:startDate,sharedAssignedMinor:0,sharedSettledMinor:0,currency:space.data()?.currency,frequency,startDate,nextDueDate:startDate,endDate,reminderDays,status:'active',note,archivedAt:null,stoppedAt:null,stoppedPreviousNextDueDate:null,createdAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'create_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 export const updateCommitment = onCall(
@@ -13098,6 +13098,15 @@ export const updateCommitment = onCall(
       throw new HttpsError(
         'permission-denied',
         'You do not own this commitment.',
+      );
+    }
+
+    if (
+      existing?.externalIntegrationProvider === 'adbn_tech'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This ADBN TECH billing record is managed by ADBN TECH and cannot be edited here.',
       );
     }
 
@@ -13398,7 +13407,7 @@ export const updateCommitment = onCall(
   },
 );
 
-export const archiveCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const ref=db.collection('commitments').doc(commitmentId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,i]=await Promise.all([transaction.get(commandRef),transaction.get(ref)]);if(c.exists)return c.data()?.result;if(!i.exists)throw new HttpsError('not-found','Commitment not found.');if(i.data()?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');const now=FieldValue.serverTimestamp();const result={commitmentId,archived:true};transaction.update(ref,{archivedAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'archive_commitment',idempotencyKey:key,result,createdAt:now});return result;});});
+export const archiveCommitment = onCall({ region }, async request=>{const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const ref=db.collection('commitments').doc(commitmentId);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));return db.runTransaction(async transaction=>{const[c,i]=await Promise.all([transaction.get(commandRef),transaction.get(ref)]);if(c.exists)return c.data()?.result;if(!i.exists)throw new HttpsError('not-found','Commitment not found.');if(i.data()?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(i.data()?.externalIntegrationProvider==='adbn_tech')throw new HttpsError('failed-precondition','This ADBN TECH billing record is managed by ADBN TECH and cannot be archived here.');const now=FieldValue.serverTimestamp();const result={commitmentId,archived:true};transaction.update(ref,{archivedAt:now,updatedAt:now});transaction.create(commandRef,{uid,kind:'archive_commitment',idempotencyKey:key,result,createdAt:now});return result;});});
 
 export const requestBusinessCommitmentPayment = onCall(
   { region },
@@ -13939,7 +13948,7 @@ export const requestBusinessCommitmentPayment = onCall(
 
 export const payCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const accountId=stringValue(request.data?.accountId,'Account');const requestedAmount=request.data?.amountMinor==null?null:positiveMoney(request.data?.amountMinor);const paymentDate=localDate(request.data?.paymentDate,'Payment date');const{paymentMethod,paymentMethodLabel}=paymentMethodValues(request.data||{});const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const commitmentRef=db.collection('commitments').doc(commitmentId);const accountRef=db.collection('accounts').doc(accountId);const budgetCandidateRefs=(await db.collection('budgets').where('ownerId','==',uid).get()).docs.map(item=>item.ref);
-  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');if(Number(commitment?.sharedAssignedMinor||0)>Number(commitment?.sharedSettledMinor||0))throw new HttpsError('failed-precondition','This commitment has open shared bill assignments. Complete or reverse them from Sharing first.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,paymentMethod,paymentMethodLabel,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,paymentMethod,paymentMethodLabel,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,sharedCycleDueDate:nextDueDate,sharedAssignedMinor:0,sharedSettledMinor:0,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.externalIntegrationProvider==='adbn_tech')throw new HttpsError('failed-precondition','Use the ADBN TECH payment flow for this managed billing record.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');if(Number(commitment?.sharedAssignedMinor||0)>Number(commitment?.sharedSettledMinor||0))throw new HttpsError('failed-precondition','This commitment has open shared bill assignments. Complete or reverse them from Sharing first.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,paymentMethod,paymentMethodLabel,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,paymentMethod,paymentMethodLabel,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,sharedCycleDueDate:nextDueDate,sharedAssignedMinor:0,sharedSettledMinor:0,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 // v0.7 Collaboration and WhatsApp coordination
@@ -19454,6 +19463,7 @@ function backgroundReminderCopy(input: {
   itemName: string;
   dueDate: string;
   days: number;
+  targetPath?: string | null;
 }): { kind: BackgroundReminderKind; title: string; message: string; targetPath: string } {
   const label =
     input.itemType === 'goal'
@@ -19465,11 +19475,14 @@ function backgroundReminderCopy(input: {
           : 'Instalment';
 
   const targetPath =
-    input.itemType === 'goal'
-      ? '/goals'
-      : input.itemType === 'debt'
-        ? '/debt'
-        : '/bills';
+    input.targetPath
+    || (
+      input.itemType === 'goal'
+        ? '/goals'
+        : input.itemType === 'debt'
+          ? '/debt'
+          : '/bills'
+    );
   if (input.days < 0) return {
     kind: 'late',
     title: input.itemType === 'goal' ? 'Goal date has passed' : `${label} is late`,
@@ -19498,6 +19511,7 @@ async function createBackgroundReminder(input: {
   itemName: string;
   dueDate: string;
   days: number;
+  targetPath?: string | null;
 }): Promise<PreparedBackgroundReminder | null> {
   const copy = backgroundReminderCopy(input);
   const reminderKey = [input.uid, input.itemType, input.itemId, input.dueDate, copy.kind].join('|');
@@ -20264,6 +20278,7 @@ async function processBackgroundRemindersForUser(
     itemName: string;
     dueDate: string;
     days: number;
+    targetPath?: string | null;
   }> = [];
 
   for (const row of commitments.docs) {
@@ -20282,6 +20297,11 @@ async function processBackgroundRemindersForUser(
       itemName: String(item.name || (item.type === 'instalment' ? 'Instalment' : 'Bill')),
       dueDate: item.nextDueDate,
       days,
+      targetPath:
+        item.externalIntegrationProvider === 'adbn_tech'
+        && item.spaceId
+          ? '/spaces/' + String(item.spaceId) + '/adbn'
+          : null,
     });
   }
 
@@ -34710,5 +34730,313 @@ export const respondAdbnCustomerLinkInvitation = onCall(
 
       return result;
     });
+  },
+);
+
+function adbnBillingMirrorMinor(value: unknown): number {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 99_999_999) return 0;
+  return Math.round(amount * 100);
+}
+
+function adbnBillingMirrorDate(value: unknown): string {
+  const next = typeof value === 'string' ? value.trim() : '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(next) ? next : '';
+}
+
+function adbnBillingMirrorText(value: unknown, max = 180): string {
+  return typeof value === 'string' ? value.trim().slice(0, max) : '';
+}
+
+function adbnBillingMirrorDocumentId(prefix: string, linkId: string, sourceId: string): string {
+  return prefix + '_' + createHash('sha256')
+    .update(linkId + '|' + sourceId)
+    .digest('hex')
+    .slice(0, 40);
+}
+
+type AdbnBillingInvoiceMirrorInput = {
+  id: string;
+  invoiceNo: string;
+  title: string;
+  totalMinor: number;
+  paidMinor: number;
+  balanceMinor: number;
+  monthlyMinor: number;
+  monthlyPlan: boolean;
+  termMonths: number;
+  invoiceDate: string;
+  nextDueDate: string;
+  sourceStatus: string;
+};
+
+type AdbnBillingPaymentMirrorInput = {
+  id: string;
+  invoiceId: string;
+  paymentNo: string;
+  amountMinor: number;
+  paymentDate: string;
+  paymentMethod: string;
+  reference: string;
+};
+
+export const syncAdbnCustomerBillingMirror = onCall(
+  { region },
+  async (request) => {
+    const uid = requireAuth(request.auth?.uid);
+    const businessSpaceId = stringValue(request.data?.businessSpaceId, 'Business Space', 180);
+    const adbnCustomerId = stringValue(request.data?.adbnCustomerId, 'ADBN customer', 220);
+
+    await requireAdbnCustomerLinkOwner(businessSpaceId, uid);
+
+    const linkId = adbnCustomerLinkDocumentId(businessSpaceId, adbnCustomerId);
+    const linkSnapshot = await db.collection('adbnCustomerLinks').doc(linkId).get();
+    if (!linkSnapshot.exists) throw new HttpsError('not-found', 'The ADBN customer link was not found.');
+
+    const link = linkSnapshot.data() || {};
+    if (link.status !== 'accepted' || !link.recipientUid || !link.targetSpaceId) {
+      throw new HttpsError('failed-precondition', 'The customer must accept the BajetBN link before billing can sync.');
+    }
+
+    const recipientUid = String(link.recipientUid);
+    const targetSpaceId = String(link.targetSpaceId);
+    const targetSpaceRef = db.collection('spaces').doc(targetSpaceId);
+    const targetMemberRef = db.collection('spaceMembers').doc(targetSpaceId + '_' + recipientUid);
+    const [targetSpaceSnapshot, targetMemberSnapshot] = await Promise.all([
+      targetSpaceRef.get(), targetMemberRef.get(),
+    ]);
+    const targetSpace = targetSpaceSnapshot.data() || {};
+
+    if (
+      !targetSpaceSnapshot.exists
+      || targetSpace.archivedAt
+      || targetSpace.type !== 'custom'
+      || targetSpace.externalIntegrationProvider !== 'adbn_tech'
+      || targetSpace.externalIntegrationRole !== 'customer'
+      || String(targetSpace.externalIntegrationCustomerLinkId || '') !== linkId
+      || String(targetSpace.ownerId || '') !== recipientUid
+      || !targetMemberSnapshot.exists
+    ) {
+      throw new HttpsError('failed-precondition', 'The dedicated ADBN TECH customer Space is unavailable.');
+    }
+
+    const rawInvoices = Array.isArray(request.data?.invoices) ? request.data.invoices.slice(0, 100) : [];
+    const invoices: AdbnBillingInvoiceMirrorInput[] = rawInvoices.map((raw: unknown): AdbnBillingInvoiceMirrorInput => {
+      const item = raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? raw as Record<string, unknown> : {};
+      const id = adbnBillingMirrorText(item.id, 220);
+      if (!id) throw new HttpsError('invalid-argument', 'An ADBN invoice is missing its source ID.');
+      const customerId = adbnBillingMirrorText(item.customerId, 220);
+      const customerNo = adbnBillingMirrorText(item.customerNo, 120);
+      if (customerId && customerId !== adbnCustomerId) {
+        throw new HttpsError('permission-denied', 'An invoice belongs to another ADBN customer.');
+      }
+      if (!customerId && link.customerNo && customerNo && customerNo !== String(link.customerNo)) {
+        throw new HttpsError('permission-denied', 'An invoice customer number does not match this ADBN link.');
+      }
+      const totalMinor = adbnBillingMirrorMinor(item.total);
+      const paidMinor = adbnBillingMirrorMinor(item.paid);
+      const balanceMinor = adbnBillingMirrorMinor(item.balance);
+      const monthlyMinor = adbnBillingMirrorMinor(item.monthlyAmount);
+      return {
+        id,
+        invoiceNo: adbnBillingMirrorText(item.invoiceNo, 120),
+        title: adbnBillingMirrorText(item.title, 180)
+          || adbnBillingMirrorText(item.saleType, 120)
+          || 'ADBN TECH purchase',
+        totalMinor,
+        paidMinor,
+        balanceMinor,
+        monthlyMinor,
+        monthlyPlan: monthlyMinor > 0,
+        termMonths: Math.max(0, Math.min(600, Math.round(Number(item.termMonths || 0)))),
+        invoiceDate: adbnBillingMirrorDate(item.invoiceDate),
+        nextDueDate: adbnBillingMirrorDate(item.nextDueDate) || adbnBillingMirrorDate(item.dueDate),
+        sourceStatus: adbnBillingMirrorText(item.status, 80),
+      };
+    });
+
+    const invoiceById = new Map<string, AdbnBillingInvoiceMirrorInput>(
+      invoices.map(
+        (item: AdbnBillingInvoiceMirrorInput) =>
+          [item.id, item] as const,
+      ),
+    );
+    const rawPayments = Array.isArray(request.data?.payments) ? request.data.payments.slice(0, 500) : [];
+    const payments: AdbnBillingPaymentMirrorInput[] =
+      rawPayments.map(
+        (raw: unknown): AdbnBillingPaymentMirrorInput | null => {
+      const item = raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? raw as Record<string, unknown> : {};
+      const id = adbnBillingMirrorText(item.id, 220);
+      const invoiceId = adbnBillingMirrorText(item.invoiceId, 220);
+      const customerId = adbnBillingMirrorText(item.customerId, 220);
+      if (!id || !invoiceId || !invoiceById.has(invoiceId)) return null;
+      if (customerId && customerId !== adbnCustomerId) {
+        throw new HttpsError('permission-denied', 'A payment belongs to another ADBN customer.');
+      }
+      const status = adbnBillingMirrorText(item.status, 80).toLowerCase();
+      if (status.includes('cancel') || status.includes('reverse') || status.includes('delete')) return null;
+      const amountMinor = adbnBillingMirrorMinor(item.amount);
+      if (amountMinor <= 0) return null;
+      return {
+        id,
+        invoiceId,
+        paymentNo: adbnBillingMirrorText(item.paymentNo, 120),
+        amountMinor,
+        paymentDate: adbnBillingMirrorDate(item.paymentDate),
+        paymentMethod: adbnBillingMirrorText(item.paymentMethod, 80),
+        reference: adbnBillingMirrorText(item.reference, 160),
+      };
+          },
+      ).filter(
+        (
+          item: AdbnBillingPaymentMirrorInput | null,
+        ): item is AdbnBillingPaymentMirrorInput =>
+          item !== null,
+      );
+
+    const [existingCommitments, existingPayments] = await Promise.all([
+      db.collection('commitments').where('externalIntegrationCustomerLinkId', '==', linkId).get(),
+      db.collection('commitmentPayments').where('externalIntegrationCustomerLinkId', '==', linkId).get(),
+    ]);
+
+    const activeCommitmentIds = new Set<string>();
+    const activePaymentIds = new Set<string>();
+    const now = FieldValue.serverTimestamp();
+    const writer = db.bulkWriter();
+
+    for (const invoice of invoices) {
+      const commitmentId = adbnBillingMirrorDocumentId('adbn_commitment', linkId, invoice.id);
+      activeCommitmentIds.add(commitmentId);
+      const outstandingMinor = invoice.balanceMinor > 0
+        ? invoice.balanceMinor
+        : Math.max(0, invoice.totalMinor - invoice.paidMinor);
+      const status = outstandingMinor > 0 ? 'active' : 'completed';
+      const amountMinor = invoice.monthlyPlan
+        ? invoice.monthlyMinor
+        : Math.max(1, outstandingMinor || invoice.totalMinor);
+
+      writer.set(db.collection('commitments').doc(commitmentId), {
+        displayId: invoice.invoiceNo || commitmentId,
+        ownerId: recipientUid,
+        type: invoice.monthlyPlan ? 'instalment' : 'bill',
+        name: invoice.title,
+        payee: 'ADBN TECH',
+        spaceId: targetSpaceId,
+        accountId: null,
+        categoryId: 'expense-shopping',
+        categoryName: 'Shopping',
+        categoryIcon: 'bag',
+        categoryColor: 'rose',
+        amountMinor,
+        totalAmountMinor: invoice.monthlyPlan
+          ? Math.max(invoice.totalMinor, invoice.paidMinor + outstandingMinor)
+          : null,
+        amountPaidMinor: invoice.paidMinor,
+        sharedCycleDueDate: invoice.nextDueDate || invoice.invoiceDate || null,
+        sharedAssignedMinor: 0,
+        sharedSettledMinor: 0,
+        currency: 'BND',
+        frequency: invoice.monthlyPlan ? 'monthly' : 'once',
+        startDate: invoice.invoiceDate || invoice.nextDueDate || bruneiLocalDate(),
+        nextDueDate: status === 'active' ? invoice.nextDueDate || null : null,
+        endDate: null,
+        reminderDays: 3,
+        status,
+        note: invoice.monthlyPlan
+          ? 'ADBN TECH monthly-payment plan synced from invoice ' + (invoice.invoiceNo || invoice.id)
+          : 'ADBN TECH billing record synced from invoice ' + (invoice.invoiceNo || invoice.id),
+        externalIntegrationProvider: 'adbn_tech',
+        externalIntegrationSourceType: 'adbn_invoice',
+        externalIntegrationSourceId: invoice.id,
+        externalIntegrationSourceNo: invoice.invoiceNo || null,
+        externalIntegrationCustomerLinkId: linkId,
+        externalIntegrationMirrorStatus: 'active',
+        archivedAt: null,
+        stoppedAt: null,
+        stoppedPreviousNextDueDate: null,
+        sourceStatus: invoice.sourceStatus || null,
+        sourceTermMonths: invoice.termMonths || null,
+        updatedAt: now,
+        mirrorSyncedAt: now,
+      }, { merge: true });
+    }
+
+    for (const payment of payments) {
+      const invoice = invoiceById.get(payment.invoiceId);
+      if (!invoice) continue;
+      const commitmentId = adbnBillingMirrorDocumentId('adbn_commitment', linkId, invoice.id);
+      const paymentId = adbnBillingMirrorDocumentId('adbn_payment', linkId, payment.id);
+      activePaymentIds.add(paymentId);
+      writer.set(db.collection('commitmentPayments').doc(paymentId), {
+        displayId: payment.paymentNo || paymentId,
+        ownerId: recipientUid,
+        commitmentId,
+        transactionId: null,
+        amountMinor: payment.amountMinor,
+        currency: 'BND',
+        paymentDate: payment.paymentDate || bruneiLocalDate(),
+        paymentMethod: null,
+        paymentMethodLabel: payment.paymentMethod || null,
+        dueDateApplied: null,
+        previousNextDueDate: null,
+        previousStatus: 'active',
+        source: 'adbn_tech',
+        externalIntegrationProvider: 'adbn_tech',
+        externalIntegrationSourceId: payment.id,
+        externalIntegrationSourceNo: payment.paymentNo || null,
+        externalIntegrationCustomerLinkId: linkId,
+        externalIntegrationMirrorStatus: 'active',
+        sharedBillAssignmentId: null,
+        sharedBillPaymentId: null,
+        paidByUid: recipientUid,
+        status: 'posted',
+        reversedBy: null,
+        reference: payment.reference || null,
+        updatedAt: now,
+        mirrorSyncedAt: now,
+      }, { merge: true });
+    }
+
+    let staleCommitments = 0;
+    for (const existing of existingCommitments.docs) {
+      if (existing.data()?.externalIntegrationProvider !== 'adbn_tech' || activeCommitmentIds.has(existing.id)) continue;
+      staleCommitments += 1;
+      writer.set(existing.ref, {
+        externalIntegrationMirrorStatus: 'stale',
+        archivedAt: now,
+        updatedAt: now,
+        mirrorSyncedAt: now,
+      }, { merge: true });
+    }
+
+    let stalePayments = 0;
+    for (const existing of existingPayments.docs) {
+      if (existing.data()?.externalIntegrationProvider !== 'adbn_tech' || activePaymentIds.has(existing.id)) continue;
+      stalePayments += 1;
+      writer.set(existing.ref, {
+        externalIntegrationMirrorStatus: 'stale',
+        status: 'reversed',
+        updatedAt: now,
+        mirrorSyncedAt: now,
+      }, { merge: true });
+    }
+
+    writer.set(targetSpaceRef, {
+      externalIntegrationBillingSyncedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+
+    await writer.close();
+
+    return {
+      linkId,
+      targetSpaceId,
+      commitmentsSynced: invoices.length,
+      paymentsSynced: payments.length,
+      staleCommitments,
+      stalePayments,
+    };
   },
 );
