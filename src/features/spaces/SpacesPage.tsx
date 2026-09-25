@@ -182,6 +182,8 @@ export function SpacesPage() {
           (item) =>
             item.externalIntegrationProvider
               !== 'adbn_tech'
+            || item.externalIntegrationRole
+              === 'customer'
             || canProvisionAdbnTechSpace,
         ),
       [
