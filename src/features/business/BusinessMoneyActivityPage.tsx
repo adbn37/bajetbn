@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import { listAccountsForSpace } from '../../repositories/accountRepository';
 import {
+  deleteStaleAdbnPaymentMoneyActivity,
   reverseBusinessMoneyActivity,
   updateBusinessMoneyActivityDetails,
 } from '../../repositories/businessMoneyActivityRepository';
@@ -140,6 +141,36 @@ function transactionCategorySnapshot(
   };
 }
 
+function adbnPaymentSyncLabel(
+  item: FinancialTransaction,
+): string {
+  const labels =
+    (item.labels || [])
+      .map(
+        (label) =>
+          label
+            .trim()
+            .toLowerCase(),
+      );
+
+  if (
+    !labels.includes(
+      'adbn_tech',
+    )
+  ) {
+    return '';
+  }
+
+  return (
+    labels.find(
+      (label) =>
+        /^adbn_pay_[a-f0-9]{16}$/
+          .test(label),
+    )
+    || ''
+  );
+}
+
 function managedSourceLabel(item: FinancialTransaction): string | null {
   const linked =
     item as FinancialTransaction
@@ -180,6 +211,14 @@ function managedSourceLabel(item: FinancialTransaction): string | null {
 
   if (item.spaceWorkItemId) {
     return 'Space work item';
+  }
+
+  if (
+    adbnPaymentSyncLabel(
+      item,
+    )
+  ) {
+    return 'ADBN TECH payment';
   }
 
   if (
@@ -279,6 +318,17 @@ export function BusinessMoneyActivityPage() {
   const [reverseDialog, setReverseDialog] =
     useState<ActionConfirmState<FinancialTransaction> | null>(null);
   const [reverseBusy, setReverseBusy] = useState(false);
+
+  const [
+    staleAdbnDeleteDialog,
+    setStaleAdbnDeleteDialog,
+  ] =
+    useState<ActionConfirmState<FinancialTransaction> | null>(null);
+
+  const [
+    staleAdbnDeleteBusy,
+    setStaleAdbnDeleteBusy,
+  ] = useState(false);
 
   const writableAccounts =
     useMemo(
@@ -750,6 +800,44 @@ export function BusinessMoneyActivityPage() {
       setError(getErrorMessage(nextError));
     } finally {
       setReverseBusy(false);
+    }
+  }
+
+  async function handleStaleAdbnDelete() {
+    if (
+      !staleAdbnDeleteDialog
+    ) {
+      return;
+    }
+
+    setStaleAdbnDeleteBusy(true);
+    setError('');
+
+    try {
+      await deleteStaleAdbnPaymentMoneyActivity({
+        transactionId:
+          staleAdbnDeleteDialog
+            .payload.id,
+        reason:
+          'ADBN TECH source payment was deleted; stale BajetBN sync removed manually.',
+      });
+
+      setStaleAdbnDeleteDialog(null);
+      setDetail(null);
+
+      setFeedback(
+        'Stale ADBN TECH payment was removed from BajetBN. The Business Account balance, ledger and reports were updated.',
+      );
+
+      await load();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setStaleAdbnDeleteBusy(false);
     }
   }
 
@@ -1491,7 +1579,14 @@ export function BusinessMoneyActivityPage() {
           accountMap={accountMap}
           canManage={canManage}
           online={online}
-          busy={reverseBusy}
+          busy={
+            reverseBusy
+            || staleAdbnDeleteBusy
+          }
+          canDeleteStaleAdbn={
+            space.ownerId
+              === user?.uid
+          }
           onClose={() =>
             setDetail(null)
           }
@@ -1503,6 +1598,23 @@ export function BusinessMoneyActivityPage() {
               detail,
             )
           }
+          onDeleteStaleAdbn={() => {
+            setError('');
+            setStaleAdbnDeleteDialog({
+              payload:
+                detail,
+              title:
+                'Remove this stale ADBN TECH payment?',
+              description:
+                'Use this only when the source payment has already been deleted or cancelled in ADBN TECH.',
+              note:
+                'BajetBN will permanently remove this synced Money In row, remove its ledger entry and subtract its amount from the mapped Business Account. If the payment still exists in ADBN TECH, auto-sync may create it again.',
+              confirmLabel:
+                'Remove stale ADBN record',
+              tone:
+                'danger',
+            });
+          }}
           onReverse={() => {
             setError('');
             setReverseDialog({
@@ -1539,6 +1651,29 @@ export function BusinessMoneyActivityPage() {
         />
       )}
 
+      {staleAdbnDeleteDialog && (
+        <ActionConfirmModal
+          state={
+            staleAdbnDeleteDialog
+          }
+          busy={
+            staleAdbnDeleteBusy
+          }
+          error={error}
+          onClose={() => {
+            if (
+              !staleAdbnDeleteBusy
+            ) {
+              setStaleAdbnDeleteDialog(null);
+              setError('');
+            }
+          }}
+          onConfirm={() =>
+            void handleStaleAdbnDelete()
+          }
+        />
+      )}
+
       {reverseDialog && (
         <ActionConfirmModal
           state={reverseDialog}
@@ -1565,9 +1700,11 @@ function BusinessMoneyDetailsModal({
   canManage,
   online,
   busy,
+  canDeleteStaleAdbn,
   onClose,
   onEdit,
   onCorrect,
+  onDeleteStaleAdbn,
   onReverse,
 }: {
   item: FinancialTransaction;
@@ -1575,9 +1712,11 @@ function BusinessMoneyDetailsModal({
   canManage: boolean;
   online: boolean;
   busy: boolean;
+  canDeleteStaleAdbn: boolean;
   onClose: () => void;
   onEdit: () => void;
   onCorrect: () => void;
+  onDeleteStaleAdbn: () => void;
   onReverse: () => void;
 }) {
   const source =
@@ -1592,6 +1731,21 @@ function BusinessMoneyDetailsModal({
 
   const managedSource =
     managedSourceLabel(item);
+
+  const staleAdbnPayment =
+    Boolean(
+      adbnPaymentSyncLabel(
+        item,
+      ),
+    );
+
+  const canRemoveStaleAdbn =
+    canDeleteStaleAdbn
+    && online
+    && !busy
+    && item.status === 'posted'
+    && item.type === 'income'
+    && staleAdbnPayment;
 
   const canChange =
     canManage
@@ -1647,8 +1801,9 @@ function BusinessMoneyDetailsModal({
             Managed by {managedSource}
           </strong>
           <span>
-            This financial record is linked to another BajetBN workflow.
-            Open that source to change the underlying record safely.
+            {staleAdbnPayment
+              ? 'This Money In was synced from ADBN TECH. If the source payment was deleted in ADBN TECH, the Business owner can remove this stale BajetBN copy below.'
+              : 'This financial record is linked to another BajetBN workflow. Open that source to change the underlying record safely.'}
           </span>
         </div>
       )}
@@ -1746,6 +1901,17 @@ function BusinessMoneyDetailsModal({
             onClick={onCorrect}
           >
             Correct transaction
+          </button>
+        )}
+
+        {canRemoveStaleAdbn && (
+          <button
+            className="button danger"
+            type="button"
+            data-adbn-stale-payment-delete
+            onClick={onDeleteStaleAdbn}
+          >
+            Remove stale ADBN record
           </button>
         )}
 

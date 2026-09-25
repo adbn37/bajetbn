@@ -35,3 +35,28 @@ export async function reverseBusinessMoneyActivity(input: {
     idempotencyKey: crypto.randomUUID(),
   });
 }
+
+export async function deleteStaleAdbnPaymentMoneyActivity(input: {
+  transactionId: string;
+  reason?: string;
+}) {
+  const {
+    functions,
+  } = requireFirebase();
+
+  const call =
+    httpsCallable(
+      functions,
+      'deleteStaleAdbnPaymentMoneyActivity',
+    );
+
+  return call({
+    transactionId:
+      input.transactionId,
+    reason:
+      input.reason?.trim()
+      || 'ADBN TECH source payment was deleted.',
+    idempotencyKey:
+      crypto.randomUUID(),
+  });
+}
