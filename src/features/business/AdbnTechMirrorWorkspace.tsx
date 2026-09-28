@@ -36,8 +36,25 @@ import {
 import {
   syncAdbnCustomerBillingToBajetBn,
 } from '../../repositories/adbnCustomerBillingSyncRepository';
+import {
+  buildTransactionShareUrl,
+} from '../../services/transactionShare';
 
 type MirrorView = 'customers' | 'invoices';
+
+type AdbnRecordedPaymentShare = {
+  receiptNo: string;
+  amount: number;
+  paymentDate: string;
+  invoiceNo: string;
+  customerName: string;
+  customerPhone: string;
+  remainingBalance: number;
+  nextDueDate: string;
+  transactionId: string;
+  customerSpaceUrl: string;
+};
+
 
 function bnd(value: number) {
   return new Intl.NumberFormat('en-BN', {
@@ -510,6 +527,12 @@ export function AdbnTechMirrorWorkspace({
     paymentWarning,
     setPaymentWarning,
   ] = useState('');
+
+  const [
+    paymentShare,
+    setPaymentShare,
+  ] = useState<AdbnRecordedPaymentShare | null>(null);
+
 
   const [
     customerLinks,
@@ -1106,6 +1129,119 @@ export function AdbnTechMirrorWorkspace({
       }
     };
 
+  const openPaymentReceiptWhatsApp =
+    async () => {
+      if (!paymentShare) {
+        return;
+      }
+
+      const popup =
+        window.open(
+          '',
+          '_blank',
+        );
+
+      try {
+        let viewUrl =
+          paymentShare.customerSpaceUrl;
+
+        if (
+          !viewUrl
+          && paymentShare.transactionId
+        ) {
+          viewUrl =
+            await buildTransactionShareUrl({
+              transactionId:
+                paymentShare.transactionId,
+              type: 'income',
+              amountMinor:
+                Math.round(
+                  paymentShare.amount * 100,
+                ),
+              currency: 'BND',
+              transactionDate:
+                paymentShare.paymentDate,
+              category:
+                'ADBN TECH payment',
+              counterparty:
+                paymentShare.customerName
+                || 'ADBN TECH customer',
+              note:
+                'ADBN TECH receipt '
+                + paymentShare.receiptNo,
+              spaceName:
+                'ADBN TECH',
+            });
+        }
+
+        const lines = [
+          'Assalamualaikum'
+            + (
+              paymentShare.customerName
+                ? ' ' + paymentShare.customerName
+                : ''
+            )
+            + '.',
+          '',
+          'Payment received. Thank you.',
+          '',
+          'Amount: ' + bnd(paymentShare.amount),
+          'Receipt: ' + paymentShare.receiptNo,
+          paymentShare.invoiceNo
+            ? 'Invoice: ' + paymentShare.invoiceNo
+            : '',
+          'Payment date: ' + simpleDate(paymentShare.paymentDate),
+          'Remaining balance: ' + bnd(paymentShare.remainingBalance),
+          paymentShare.nextDueDate
+            ? 'Next due: ' + simpleDate(paymentShare.nextDueDate)
+            : '',
+          viewUrl ? '' : '',
+          viewUrl ? 'View payment details:' : '',
+          viewUrl || '',
+          '',
+          'ADBN TECH',
+        ].filter(
+          (line, index, values) =>
+            line !== ''
+            || (
+              index > 0
+              && values[index - 1] !== ''
+            ),
+        );
+
+        const number =
+          whatsappNumber(
+            paymentShare.customerPhone,
+          );
+
+        const target =
+          'https://wa.me/'
+          + number
+          + '?text='
+          + encodeURIComponent(
+            lines.join('\n'),
+          );
+
+        if (popup) {
+          popup.opener = null;
+          popup.location.href = target;
+          return;
+        }
+
+        window.location.assign(target);
+      } catch (shareError) {
+        if (popup) {
+          popup.close();
+        }
+
+        setPaymentWarning(
+          shareError instanceof Error
+            ? shareError.message
+            : 'WhatsApp receipt message could not be prepared.',
+        );
+      }
+    };
+
   const submitRecordPayment =
     async () => {
       const invoice =
@@ -1163,6 +1299,7 @@ export function AdbnTechMirrorWorkspace({
       setRecordPaymentBusy(true);
       setPaymentMessage('');
       setPaymentWarning('');
+      setPaymentShare(null);
       setError('');
 
       let result:
@@ -1261,6 +1398,7 @@ export function AdbnTechMirrorWorkspace({
         + '.';
 
       let syncMessage = '';
+      let bajetBnTransactionId = '';
 
       try {
         const currentSpace =
@@ -1283,6 +1421,10 @@ export function AdbnTechMirrorWorkspace({
           if (
             outcome.mode === 'posted'
           ) {
+            bajetBnTransactionId =
+              outcome.transactionId
+              || '';
+
             syncMessage =
               ' Synced to BajetBN Money activity.';
 
@@ -1316,6 +1458,10 @@ export function AdbnTechMirrorWorkspace({
       }
 
       let customerPortalMessage = '';
+      let customerSpaceUrl = '';
+      let customerWhatsApp =
+        invoice.customerPhone
+        || '';
 
       try {
         const [refreshedSnapshot, refreshedLinks] = await Promise.all([
@@ -1339,6 +1485,25 @@ export function AdbnTechMirrorWorkspace({
                 && item.status === 'accepted',
             ) || null
           : null;
+
+        if (linkedCustomer) {
+          customerWhatsApp =
+            linkedCustomer.whatsapp
+            || linkedCustomer.phone
+            || customerWhatsApp;
+        }
+
+        if (
+          acceptedLink?.targetSpaceId
+        ) {
+          customerSpaceUrl =
+            window.location.origin
+            + '/spaces/'
+            + encodeURIComponent(
+                acceptedLink.targetSpaceId,
+              )
+            + '/adbn';
+        }
 
         if (linkedCustomer && acceptedLink) {
           const mirrorResult = await syncLinkedCustomerBillingAfterPayment({
@@ -1380,6 +1545,30 @@ export function AdbnTechMirrorWorkspace({
           ].filter(Boolean).join(' '),
         );
       }
+
+      setPaymentShare({
+        receiptNo:
+          result.receiptNo
+          || result.paymentId,
+        amount:
+          result.amount,
+        paymentDate:
+          result.paymentDate,
+        invoiceNo:
+          result.invoiceNo
+          || invoice.invoiceNo,
+        customerName:
+          invoice.customerName,
+        customerPhone:
+          customerWhatsApp,
+        remainingBalance:
+          result.remainingBalanceAfter,
+        nextDueDate:
+          result.nextDueDateAfter,
+        transactionId:
+          bajetBnTransactionId,
+        customerSpaceUrl,
+      });
 
       setPaymentMessage(
         recordedMessage
@@ -1881,7 +2070,32 @@ export function AdbnTechMirrorWorkspace({
           className="notice success"
           data-adbn-tech-record-payment-success
         >
-          {paymentMessage}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>
+              {paymentMessage}
+            </span>
+
+            {paymentShare && (
+              <button
+                type="button"
+                className="button secondary compact"
+                data-adbn-tech-manual-whatsapp-receipt
+                onClick={() =>
+                  void openPaymentReceiptWhatsApp()
+                }
+              >
+                WhatsApp receipt
+              </button>
+            )}
+          </div>
         </div>
       )}
 
