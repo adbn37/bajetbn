@@ -57,7 +57,7 @@ export function adbnSupplierPaymentSyncLabel(
   paymentId: string,
 ) {
   return (
-    'adbn_supplier_pay_'
+    'adbn_suppay_'
     + externalSupplierPaymentToken(
       paymentId,
     )
