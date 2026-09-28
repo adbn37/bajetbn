@@ -368,6 +368,67 @@ function openAdbnCustomerWhatsappInvite(
   );
 }
 
+async function syncLinkedCustomerBillingAfterPayment(
+  input: {
+    businessSpaceId: string;
+    customer: AdbnTechCustomerMirror;
+    link: AdbnCustomerLink;
+    snapshot: AdbnTechReadOnlySnapshot;
+  },
+) {
+  if (input.link.status !== 'accepted') return null;
+
+  const paymentSnapshot = await loadAdbnTechPaymentsReadOnly();
+
+  const invoices = input.snapshot.invoices.filter(
+    (invoice) =>
+      invoice.customerId === input.customer.id
+      || (
+        !invoice.customerId
+        && Boolean(input.customer.customerNo)
+        && invoice.customerNo === input.customer.customerNo
+      ),
+  );
+
+  const invoiceIds = new Set(invoices.map((invoice) => invoice.id));
+  const invoiceNos = new Set(
+    invoices.map((invoice) => invoice.invoiceNo).filter(Boolean),
+  );
+
+  const plans = input.snapshot.paymentPlans
+    .filter(
+      (plan) =>
+        plan.customerId === input.customer.id
+        || (
+          !plan.customerId
+          && Boolean(input.customer.customerNo)
+          && plan.customerNo === input.customer.customerNo
+        ),
+    )
+    .filter(
+      (plan) =>
+        !(plan.invoiceId && invoiceIds.has(plan.invoiceId))
+        && !(plan.invoiceNo && invoiceNos.has(plan.invoiceNo)),
+    );
+
+  const planIds = new Set(plans.map((plan) => plan.id));
+
+  const payments = paymentSnapshot.payments.filter(
+    (payment) =>
+      payment.customerId === input.customer.id
+      || invoiceIds.has(payment.invoiceId)
+      || planIds.has(payment.planId),
+  );
+
+  return syncAdbnCustomerBillingToBajetBn({
+    businessSpaceId: input.businessSpaceId,
+    adbnCustomerId: input.customer.id,
+    invoices,
+    plans,
+    payments,
+  });
+}
+
 export function AdbnTechMirrorWorkspace({
   spaceId,
   view,
@@ -1254,9 +1315,76 @@ export function AdbnTechMirrorWorkspace({
         );
       }
 
+      let customerPortalMessage = '';
+
+      try {
+        const [refreshedSnapshot, refreshedLinks] = await Promise.all([
+          loadAdbnTechReadOnlySnapshot(),
+          listAdbnCustomerLinksForBusiness(spaceId),
+        ]);
+
+        const linkedCustomer = refreshedSnapshot.customers.find(
+          (customer) =>
+            customer.id === invoice.customerId
+            || (
+              Boolean(invoice.customerNo)
+              && customer.customerNo === invoice.customerNo
+            ),
+        ) || null;
+
+        const acceptedLink = linkedCustomer
+          ? refreshedLinks.find(
+              (item) =>
+                item.adbnCustomerId === linkedCustomer.id
+                && item.status === 'accepted',
+            ) || null
+          : null;
+
+        if (linkedCustomer && acceptedLink) {
+          const mirrorResult = await syncLinkedCustomerBillingAfterPayment({
+            businessSpaceId: spaceId,
+            customer: linkedCustomer,
+            link: acceptedLink,
+            snapshot: refreshedSnapshot,
+          });
+
+          if (mirrorResult) {
+            customerPortalMessage =
+              ' Customer BajetBN Space updated with '
+              + mirrorResult.commitmentsSynced
+              + ' billing record'
+              + (mirrorResult.commitmentsSynced === 1 ? '' : 's')
+              + ' and '
+              + mirrorResult.paymentsSynced
+              + ' payment'
+              + (mirrorResult.paymentsSynced === 1 ? '' : 's')
+              + '.';
+          }
+        } else if (linkedCustomer) {
+          customerPortalMessage =
+            ' Customer has no accepted BajetBN link, so no private customer Space needed refreshing.';
+        }
+
+        setSnapshot(refreshedSnapshot);
+        setCustomerLinks(refreshedLinks);
+      } catch (customerSyncError) {
+        setPaymentWarning((current) =>
+          [
+            current,
+            'The official ADBN TECH payment is saved, but the linked customer BajetBN Space did not refresh automatically: '
+              + (
+                customerSyncError instanceof Error
+                  ? customerSyncError.message
+                  : 'Customer billing sync needs review.'
+              ),
+          ].filter(Boolean).join(' '),
+        );
+      }
+
       setPaymentMessage(
         recordedMessage
-        + syncMessage,
+        + syncMessage
+        + customerPortalMessage,
       );
 
       setRecordPaymentInvoiceId('');
