@@ -15,6 +15,8 @@ import {
   createAdbnTechPaymentReceiptShare,
   getAdbnTechConnectedEmail,
   loadAdbnTechPaymentsReadOnly,
+  loadAdbnTechReadOnlySnapshot,
+  type AdbnTechCustomerMirror,
   type AdbnTechPaymentMirror,
   type AdbnTechPaymentsReadOnlySnapshot,
 } from '../../repositories/adbnTechIntegrationRepository';
@@ -34,6 +36,7 @@ import {
   listBusinessTransactionsForSpace,
 } from '../../repositories/transactionRepository';
 import {
+  createAdbnCustomerLinkInvitation,
   listAdbnCustomerLinksForBusiness,
   type AdbnCustomerLink,
 } from '../../repositories/adbnCustomerLinkRepository';
@@ -191,6 +194,11 @@ export function AdbnTechPaymentsWorkspace({
   ] = useState<AdbnCustomerLink[]>([]);
 
   const [
+    adbnCustomers,
+    setAdbnCustomers,
+  ] = useState<AdbnTechCustomerMirror[]>([]);
+
+  const [
     receiptShareBusyPaymentId,
     setReceiptShareBusyPaymentId,
   ] = useState('');
@@ -312,10 +320,18 @@ export function AdbnTechPaymentsWorkspace({
       setError('');
 
       try {
-        const next =
-          await loadAdbnTechPaymentsReadOnly();
+        const [
+          next,
+          customerSnapshot,
+        ] = await Promise.all([
+          loadAdbnTechPaymentsReadOnly(),
+          loadAdbnTechReadOnlySnapshot(),
+        ]);
 
         setSnapshot(next);
+        setAdbnCustomers(
+          customerSnapshot.customers,
+        );
         setConnectedEmail(
           next.connectedEmail,
         );
@@ -600,23 +616,102 @@ export function AdbnTechPaymentsWorkspace({
             payment.id,
           );
 
-        const linked =
+        const customerMatches =
+          (item: {
+            adbnCustomerId?: string;
+            customerNo?: string;
+          }) =>
+            item.adbnCustomerId
+              === payment.customerId
+            || (
+              Boolean(
+                payment.customerNo,
+              )
+              && item.customerNo
+                === payment.customerNo
+            );
+
+        let customerLink =
           customerLinks.find(
+            customerMatches,
+          )
+          || null;
+
+        const linked =
+          customerLink?.status === 'accepted'
+            && customerLink.targetSpaceId
+              ? customerLink
+              : null;
+
+        const adbnCustomer =
+          adbnCustomers.find(
             (item) =>
-              item.status === 'accepted'
-              && (
-                item.adbnCustomerId
-                  === payment.customerId
-                || (
-                  Boolean(
-                    payment.customerNo,
-                  )
-                  && item.customerNo
-                    === payment.customerNo
+              item.id
+                === payment.customerId
+              || (
+                Boolean(
+                  payment.customerNo,
                 )
+                && item.customerNo
+                  === payment.customerNo
               ),
           )
           || null;
+
+        if (!linked) {
+          if (
+            !customerLink
+            || customerLink.status
+              === 'declined'
+          ) {
+            if (
+              !adbnCustomer?.email
+                ?.trim()
+            ) {
+              throw new Error(
+                'Add the customer email in ADBN TECH before sharing the BajetBN onboarding link.',
+              );
+            }
+
+            await createAdbnCustomerLinkInvitation({
+              businessSpaceId:
+                spaceId,
+              adbnCustomerId:
+                adbnCustomer.id,
+              customerNo:
+                adbnCustomer.customerNo,
+              customerName:
+                adbnCustomer.name
+                || payment.customerName,
+              targetEmail:
+                adbnCustomer.email,
+            });
+
+            const nextLinks =
+              await listAdbnCustomerLinksForBusiness(
+                spaceId,
+              );
+
+            setCustomerLinks(
+              nextLinks,
+            );
+
+            customerLink =
+              nextLinks.find(
+                customerMatches,
+              )
+              || null;
+          }
+
+          if (
+            customerLink?.status
+              !== 'pending'
+          ) {
+            throw new Error(
+              'The BajetBN customer invitation could not be prepared.',
+            );
+          }
+        }
 
         const bajetBnUrl =
           linked?.targetSpaceId
@@ -630,7 +725,12 @@ export function AdbnTechPaymentsWorkspace({
               )
             : (
                 window.location.origin
-                + '/register?source=adbn-receipt'
+                + '/register'
+                + '?source=adbn-receipt'
+                + '&returnTo='
+                + encodeURIComponent(
+                    '/adbn-links?source=adbn-receipt',
+                  )
               );
 
         const receipt =
@@ -684,7 +784,7 @@ export function AdbnTechPaymentsWorkspace({
           '',
           linked?.targetSpaceId
             ? 'View your ADBN TECH payment history in BajetBN:'
-            : 'Track your ADBN TECH payments and instalments in BajetBN:',
+            : 'Create or sign in to BajetBN, then accept your ADBN TECH customer link:',
           bajetBnUrl,
           '',
           'ADBN TECH',

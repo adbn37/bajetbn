@@ -13,11 +13,25 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const returnTo =
+  const stateReturnTo =
     typeof location.state?.from === 'string'
     && location.state.from.startsWith('/')
       ? location.state.from
       : '';
+
+  const queryReturnTo =
+    new URLSearchParams(
+      location.search,
+    ).get('returnTo') || '';
+
+  const returnTo =
+    stateReturnTo
+    || (
+      queryReturnTo.startsWith('/')
+        && !queryReturnTo.startsWith('//')
+        ? queryReturnTo
+        : ''
+    );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');

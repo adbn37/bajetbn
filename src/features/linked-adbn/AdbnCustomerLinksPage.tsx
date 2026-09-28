@@ -6,6 +6,7 @@ import {
 
 import {
   Link,
+  useLocation,
   useNavigate,
 } from 'react-router-dom';
 
@@ -43,6 +44,13 @@ function needsDedicatedAdbnSpace(
 export function AdbnCustomerLinksPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const fromReceipt =
+    new URLSearchParams(
+      location.search,
+    ).get('source')
+      === 'adbn-receipt';
 
   const [links, setLinks] =
     useState<AdbnCustomerLink[]>([]);
@@ -201,6 +209,15 @@ export function AdbnCustomerLinksPage() {
           </Link>
         }
       />
+
+      {fromReceipt && (
+        <div
+          className="notice success"
+          data-adbn-receipt-onboarding-arrival
+        >
+          Your ADBN TECH receipt is already available. Accept the customer link below to create your private ADBN TECH Space and keep future payments and instalments together.
+        </div>
+      )}
 
       <div className="info-banner">
         <strong>
