@@ -49,6 +49,12 @@ check(
 );
 
 check(
+  repository.includes("'adbn_suppay_'")
+  && !repository.includes("'adbn_supplier_pay_'"),
+  'Supplier payment sync label stays within BajetBN 32-character limit.',
+);
+
+check(
   workspace.includes('autoSyncAdbnTechSupplierPaymentsToBajetBn')
   && workspace.includes('data-adbn-supplier-payment-auto-sync')
   && workspace.includes('Automatic Money Out from 25 Sep 2026'),
