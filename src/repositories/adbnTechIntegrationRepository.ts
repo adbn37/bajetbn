@@ -130,6 +130,36 @@ export interface AdbnTechPaymentsReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechPaymentReceiptPublic {
+  paymentId: string;
+  receiptNo: string;
+  customerName: string;
+  customerNo: string;
+  amount: number;
+  method: string;
+  date: string;
+  invoiceNo: string;
+  planNo: string;
+  bankAccountName: string;
+  customerBankReference: string;
+  previousPaidTotal: number;
+  totalPaidAfter: number;
+  remainingBalanceAfter: number;
+  nextDueDateAfter: string;
+  paymentClassification: string;
+  approvedByName: string;
+  issuedAt?: unknown;
+}
+
+export interface AdbnTechPaymentReceiptShare {
+  token: string;
+  url: string;
+  expiresAt: string;
+  customerPhone: string;
+  receipt: AdbnTechPaymentReceiptPublic;
+}
+
+
 export interface AdbnTechRecordPaymentInput {
   requestId: string;
   invoiceId: string;
@@ -651,6 +681,39 @@ export async function recordAdbnTechPayment(
       bankAccountId,
       note:
         input.note.trim(),
+    });
+
+  return result.data;
+}
+
+export async function createAdbnTechPaymentReceiptShare(
+  paymentIdInput: string,
+): Promise<AdbnTechPaymentReceiptShare> {
+  const { functions } =
+    adbnTechConnectedSession();
+
+  const paymentId =
+    paymentIdInput.trim();
+
+  if (!paymentId) {
+    throw new Error(
+      'Choose an ADBN TECH payment first.',
+    );
+  }
+
+  const call = httpsCallable<
+    {
+      paymentId: string;
+    },
+    AdbnTechPaymentReceiptShare
+  >(
+    functions,
+    'createBajetBnPaymentReceiptShare',
+  );
+
+  const result =
+    await call({
+      paymentId,
     });
 
   return result.data;

@@ -10,6 +10,7 @@ import {
 import {
   ADBN_TECH_ADMIN_EMAIL,
   connectAdbnTechReadOnly,
+  createAdbnTechPaymentReceiptShare,
   getAdbnTechConnectedEmail,
   loadAdbnTechBankAccountsReadOnly,
   loadAdbnTechPaymentsReadOnly,
@@ -36,9 +37,6 @@ import {
 import {
   syncAdbnCustomerBillingToBajetBn,
 } from '../../repositories/adbnCustomerBillingSyncRepository';
-import {
-  buildTransactionShareUrl,
-} from '../../services/transactionShare';
 
 type MirrorView = 'customers' | 'invoices';
 
@@ -51,7 +49,7 @@ type AdbnRecordedPaymentShare = {
   customerPhone: string;
   remainingBalance: number;
   nextDueDate: string;
-  transactionId: string;
+  paymentId: string;
   customerSpaceUrl: string;
 };
 
@@ -1142,37 +1140,13 @@ export function AdbnTechMirrorWorkspace({
         );
 
       try {
-        let viewUrl =
-          paymentShare.customerSpaceUrl;
+        const receiptShare =
+          await createAdbnTechPaymentReceiptShare(
+            paymentShare.paymentId,
+          );
 
-        if (
-          !viewUrl
-          && paymentShare.transactionId
-        ) {
-          viewUrl =
-            await buildTransactionShareUrl({
-              transactionId:
-                paymentShare.transactionId,
-              type: 'income',
-              amountMinor:
-                Math.round(
-                  paymentShare.amount * 100,
-                ),
-              currency: 'BND',
-              transactionDate:
-                paymentShare.paymentDate,
-              category:
-                'ADBN TECH payment',
-              counterparty:
-                paymentShare.customerName
-                || 'ADBN TECH customer',
-              note:
-                'ADBN TECH receipt '
-                + paymentShare.receiptNo,
-              spaceName:
-                'ADBN TECH',
-            });
-        }
+        const viewUrl =
+          receiptShare.url;
 
         const lines = [
           'Assalamualaikum'
@@ -1196,8 +1170,17 @@ export function AdbnTechMirrorWorkspace({
             ? 'Next due: ' + simpleDate(paymentShare.nextDueDate)
             : '',
           viewUrl ? '' : '',
-          viewUrl ? 'View payment details:' : '',
+          viewUrl ? 'View or download your official ADBN TECH receipt:' : '',
           viewUrl || '',
+          '',
+          paymentShare.customerSpaceUrl
+            ? 'View your ADBN TECH payment history in BajetBN:'
+            : 'Track your ADBN TECH payments and instalments in BajetBN:',
+          paymentShare.customerSpaceUrl
+            || (
+              window.location.origin
+              + '/register?source=adbn-receipt'
+            ),
           '',
           'ADBN TECH',
         ].filter(
@@ -1398,7 +1381,6 @@ export function AdbnTechMirrorWorkspace({
         + '.';
 
       let syncMessage = '';
-      let bajetBnTransactionId = '';
 
       try {
         const currentSpace =
@@ -1421,10 +1403,6 @@ export function AdbnTechMirrorWorkspace({
           if (
             outcome.mode === 'posted'
           ) {
-            bajetBnTransactionId =
-              outcome.transactionId
-              || '';
-
             syncMessage =
               ' Synced to BajetBN Money activity.';
 
@@ -1565,8 +1543,8 @@ export function AdbnTechMirrorWorkspace({
           result.remainingBalanceAfter,
         nextDueDate:
           result.nextDueDateAfter,
-        transactionId:
-          bajetBnTransactionId,
+        paymentId:
+          result.paymentId,
         customerSpaceUrl,
       });
 

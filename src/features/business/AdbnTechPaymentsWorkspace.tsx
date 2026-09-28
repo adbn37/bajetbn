@@ -12,6 +12,7 @@ import {
 import {
   ADBN_TECH_ADMIN_EMAIL,
   connectAdbnTechReadOnly,
+  createAdbnTechPaymentReceiptShare,
   getAdbnTechConnectedEmail,
   loadAdbnTechPaymentsReadOnly,
   type AdbnTechPaymentMirror,
@@ -32,6 +33,10 @@ import {
 import {
   listBusinessTransactionsForSpace,
 } from '../../repositories/transactionRepository';
+import {
+  listAdbnCustomerLinksForBusiness,
+  type AdbnCustomerLink,
+} from '../../repositories/adbnCustomerLinkRepository';
 import type {
   Account,
   FinancialTransaction,
@@ -68,6 +73,43 @@ function simpleDate(value: string) {
       day: '2-digit',
     },
   ).format(parsed);
+}
+
+function whatsappNumber(
+  value: string,
+) {
+  let digits =
+    value.replace(/\D/g, '');
+
+  if (!digits) {
+    return '';
+  }
+
+  if (
+    digits.startsWith('00')
+  ) {
+    digits =
+      digits.slice(2);
+  }
+
+  if (
+    digits.startsWith('0')
+  ) {
+    digits =
+      '673'
+      + digits.slice(1);
+  }
+
+  if (
+    digits.length <= 8
+    && !digits.startsWith('673')
+  ) {
+    digits =
+      '673'
+      + digits;
+  }
+
+  return digits;
 }
 
 function accountLabel(
@@ -143,6 +185,16 @@ export function AdbnTechPaymentsWorkspace({
     setBusinessTransactions,
   ] = useState<FinancialTransaction[]>([]);
 
+  const [
+    customerLinks,
+    setCustomerLinks,
+  ] = useState<AdbnCustomerLink[]>([]);
+
+  const [
+    receiptShareBusyPaymentId,
+    setReceiptShareBusyPaymentId,
+  ] = useState('');
+
   const [query, setQuery] =
     useState('');
 
@@ -194,6 +246,7 @@ export function AdbnTechPaymentsWorkspace({
           nextAccounts,
           nextSpace,
           nextTransactions,
+          nextCustomerLinks,
         ] = await Promise.all([
           listAccountsForOwnerSpace(
             user.uid,
@@ -201,6 +254,9 @@ export function AdbnTechPaymentsWorkspace({
           ),
           getSpace(spaceId),
           listBusinessTransactionsForSpace(
+            spaceId,
+          ),
+          listAdbnCustomerLinksForBusiness(
             spaceId,
           ),
         ]);
@@ -214,6 +270,9 @@ export function AdbnTechPaymentsWorkspace({
         setSavedMappings(nextMappings);
         setBusinessTransactions(
           nextTransactions,
+        );
+        setCustomerLinks(
+          nextCustomerLinks,
         );
 
         setAutoSyncEnabled(
@@ -459,6 +518,221 @@ export function AdbnTechPaymentsWorkspace({
         );
       } finally {
         setSyncBusyPaymentId('');
+      }
+    };
+
+  const openOfficialReceipt =
+    async (
+      payment: AdbnTechPaymentMirror,
+    ) => {
+      if (
+        receiptShareBusyPaymentId
+      ) {
+        return;
+      }
+
+      const popup =
+        window.open(
+          '',
+          '_blank',
+        );
+
+      setReceiptShareBusyPaymentId(
+        payment.id,
+      );
+      setError('');
+
+      try {
+        const share =
+          await createAdbnTechPaymentReceiptShare(
+            payment.id,
+          );
+
+        if (popup) {
+          popup.opener = null;
+          popup.location.href =
+            share.url;
+          return;
+        }
+
+        window.location.assign(
+          share.url,
+        );
+      } catch (nextError) {
+        if (popup) {
+          popup.close();
+        }
+
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'Official ADBN TECH receipt could not be opened.',
+        );
+      } finally {
+        setReceiptShareBusyPaymentId('');
+      }
+    };
+
+  const shareOfficialReceiptToWhatsApp =
+    async (
+      payment: AdbnTechPaymentMirror,
+    ) => {
+      if (
+        receiptShareBusyPaymentId
+      ) {
+        return;
+      }
+
+      const popup =
+        window.open(
+          '',
+          '_blank',
+        );
+
+      setReceiptShareBusyPaymentId(
+        payment.id,
+      );
+      setError('');
+
+      try {
+        const share =
+          await createAdbnTechPaymentReceiptShare(
+            payment.id,
+          );
+
+        const linked =
+          customerLinks.find(
+            (item) =>
+              item.status === 'accepted'
+              && (
+                item.adbnCustomerId
+                  === payment.customerId
+                || (
+                  Boolean(
+                    payment.customerNo,
+                  )
+                  && item.customerNo
+                    === payment.customerNo
+                )
+              ),
+          )
+          || null;
+
+        const bajetBnUrl =
+          linked?.targetSpaceId
+            ? (
+                window.location.origin
+                + '/spaces/'
+                + encodeURIComponent(
+                    linked.targetSpaceId,
+                  )
+                + '/adbn'
+              )
+            : (
+                window.location.origin
+                + '/register?source=adbn-receipt'
+              );
+
+        const receipt =
+          share.receipt;
+
+        const lines = [
+          'Assalamualaikum'
+            + (
+              receipt.customerName
+                ? ' '
+                  + receipt.customerName
+                : ''
+            )
+            + '.',
+          '',
+          'Payment received. Thank you.',
+          '',
+          'Amount: '
+            + bnd(
+              receipt.amount,
+            ),
+          'Receipt: '
+            + (
+              receipt.receiptNo
+              || payment.paymentNo
+              || payment.id
+            ),
+          receipt.invoiceNo
+            ? 'Invoice: '
+              + receipt.invoiceNo
+            : '',
+          receipt.date
+            ? 'Payment date: '
+              + simpleDate(
+                receipt.date,
+              )
+            : '',
+          'Remaining balance: '
+            + bnd(
+              receipt.remainingBalanceAfter,
+            ),
+          receipt.nextDueDateAfter
+            ? 'Next payment due: '
+              + simpleDate(
+                receipt.nextDueDateAfter,
+              )
+            : '',
+          '',
+          'View or download your official ADBN TECH receipt:',
+          share.url,
+          '',
+          linked?.targetSpaceId
+            ? 'View your ADBN TECH payment history in BajetBN:'
+            : 'Track your ADBN TECH payments and instalments in BajetBN:',
+          bajetBnUrl,
+          '',
+          'ADBN TECH',
+        ].filter(
+          (line, index, values) =>
+            line !== ''
+            || (
+              index > 0
+              && values[index - 1]
+                !== ''
+            ),
+        );
+
+        const number =
+          whatsappNumber(
+            share.customerPhone,
+          );
+
+        const target =
+          'https://wa.me/'
+          + number
+          + '?text='
+          + encodeURIComponent(
+            lines.join('\n'),
+          );
+
+        if (popup) {
+          popup.opener = null;
+          popup.location.href =
+            target;
+          return;
+        }
+
+        window.location.assign(
+          target,
+        );
+      } catch (nextError) {
+        if (popup) {
+          popup.close();
+        }
+
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'WhatsApp receipt could not be prepared.',
+        );
+      } finally {
+        setReceiptShareBusyPaymentId('');
       }
     };
 
@@ -1146,6 +1420,7 @@ export function AdbnTechPaymentsWorkspace({
                 <th>BajetBN Mapping</th>
                 <th>BajetBN Sync</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
 
@@ -1303,6 +1578,57 @@ export function AdbnTechPaymentsWorkspace({
                           || ''}
                       </small>
                     </td>
+
+                    <td>
+                      {adbnPaymentCanPost(payment) ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '0.4rem',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="button secondary compact"
+                            data-adbn-payment-official-receipt
+                            disabled={Boolean(
+                              receiptShareBusyPaymentId,
+                            )}
+                            onClick={() =>
+                              void openOfficialReceipt(
+                                payment,
+                              )
+                            }
+                          >
+                            {receiptShareBusyPaymentId
+                              === payment.id
+                              ? 'Preparing…'
+                              : 'Receipt'}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="button secondary compact"
+                            data-adbn-payment-whatsapp-receipt
+                            disabled={Boolean(
+                              receiptShareBusyPaymentId,
+                            )}
+                            onClick={() =>
+                              void shareOfficialReceiptToWhatsApp(
+                                payment,
+                              )
+                            }
+                          >
+                            WhatsApp
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="muted">
+                          —
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -1310,7 +1636,7 @@ export function AdbnTechPaymentsWorkspace({
               {!payments.length && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="muted"
                   >
                     No matching ADBN TECH payments.
@@ -1323,7 +1649,7 @@ export function AdbnTechPaymentsWorkspace({
       )}
 
       <small className="muted">
-        Source of truth: ADBN TECH. Manual sync remains available for older receipts. When future-only auto-sync is enabled, only payments created after the stored cutoff can post automatically. ADBN TECH remains read-only.
+        Source of truth: ADBN TECH. Receipt and WhatsApp actions create or reuse ADBN TECH's customer-safe official receipt link; they do not create a second BajetBN receipt. Manual sync remains available for older receipts.
       </small>
     </section>
   );
