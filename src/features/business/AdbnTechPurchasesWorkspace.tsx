@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from 'react';
@@ -21,8 +22,10 @@ import {
   type AdbnTechSupplierPaymentMirror,
 } from '../../repositories/adbnTechIntegrationRepository';
 import {
+  ADBN_SUPPLIER_PURCHASE_AUTO_SYNC_CUTOFF,
   adbnSupplierPaymentCanPost,
   adbnSupplierPaymentSyncLabel,
+  autoSyncAdbnTechSupplierPaymentsToBajetBn,
   syncAdbnTechSupplierPaymentToBajetBn,
 } from '../../repositories/adbnTechSupplierPaymentSyncRepository';
 import {
@@ -218,6 +221,19 @@ export function AdbnTechPurchasesWorkspace({
 
   const [syncMessage, setSyncMessage] =
     useState('');
+
+  const [
+    autoSyncMessage,
+    setAutoSyncMessage,
+  ] = useState('');
+
+  const [
+    autoSyncBusy,
+    setAutoSyncBusy,
+  ] = useState(false);
+
+  const autoSyncRunRef =
+    useRef('');
 
   const loadBajetBnSide =
     useCallback(
@@ -461,6 +477,121 @@ export function AdbnTechPurchasesWorkspace({
         setSyncBusyPaymentId('');
       }
     };
+
+  const runSupplierPaymentAutoSync =
+    useCallback(
+      async () => {
+        if (!snapshot) {
+          return;
+        }
+
+        setAutoSyncBusy(true);
+        setAutoSyncMessage('');
+
+        try {
+          const summary =
+            await autoSyncAdbnTechSupplierPaymentsToBajetBn(
+              {
+                spaceId,
+                mappings:
+                  savedMappings,
+                purchases:
+                  snapshot.purchases,
+                supplierPayments:
+                  snapshot.supplierPayments,
+                cutoff:
+                  ADBN_SUPPLIER_PURCHASE_AUTO_SYNC_CUTOFF,
+              },
+            );
+
+          setBusinessTransactions(
+            summary.transactions,
+          );
+
+          if (
+            summary.posted > 0
+            && onFinancialSync
+          ) {
+            await onFinancialSync();
+          }
+
+          if (
+            summary.posted > 0
+            || summary.failed > 0
+            || summary.blocked > 0
+          ) {
+            setAutoSyncMessage(
+              summary.posted
+              + ' supplier payment'
+              + (
+                summary.posted === 1
+                  ? ''
+                  : 's'
+              )
+              + ' auto-synced from ADBN purchases dated '
+              + ADBN_SUPPLIER_PURCHASE_AUTO_SYNC_CUTOFF
+              + ' onward. '
+              + summary.blocked
+              + ' blocked. '
+              + summary.failed
+              + ' failed.',
+            );
+          }
+
+          if (summary.firstError) {
+            setError(
+              summary.firstError,
+            );
+          }
+        } catch (nextError) {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : 'ADBN TECH supplier payment auto-sync failed.',
+          );
+        } finally {
+          setAutoSyncBusy(false);
+        }
+      },
+      [
+        onFinancialSync,
+        savedMappings,
+        snapshot,
+        spaceId,
+      ],
+    );
+
+  useEffect(
+    () => {
+      if (!snapshot) {
+        return;
+      }
+
+      const signature =
+        snapshot.loadedAt
+        + '|'
+        + JSON.stringify(
+          savedMappings,
+        );
+
+      if (
+        autoSyncRunRef.current
+        === signature
+      ) {
+        return;
+      }
+
+      autoSyncRunRef.current =
+        signature;
+
+      void runSupplierPaymentAutoSync();
+    },
+    [
+      runSupplierPaymentAutoSync,
+      savedMappings,
+      snapshot,
+    ],
+  );
 
   const openReceivePurchase =
     (
@@ -899,6 +1030,30 @@ export function AdbnTechPurchasesWorkspace({
       {syncMessage && (
         <div className="notice success">
           {syncMessage}
+        </div>
+      )}
+
+      <div
+        className="info-banner"
+        data-adbn-supplier-payment-auto-sync
+      >
+        <strong>
+          Automatic Money Out from 25 Sep 2026
+        </strong>
+        <span>
+          ADBN-originated supplier payments linked to purchases dated 25 Sep 2026 or later are posted automatically to the mapped BajetBN Business account. Earlier purchases stay manual, and BajetBN-originated purchases are never duplicated.
+        </span>
+      </div>
+
+      {autoSyncBusy && (
+        <div className="notice">
+          Checking ADBN supplier payments for automatic Money Out…
+        </div>
+      )}
+
+      {autoSyncMessage && (
+        <div className="notice success">
+          {autoSyncMessage}
         </div>
       )}
 
@@ -1490,7 +1645,7 @@ export function AdbnTechPurchasesWorkspace({
       )}
 
       <div className="notice">
-        ADBN TECH remains the purchase and supplier-payment source of truth. Slice 24E.1 only posts eligible positive supplier payments to BajetBN Money Activity as Money Out. Reversals and credits stay blocked for manual review.
+        ADBN TECH remains the purchase and supplier-payment source of truth. ADBN-originated purchases dated 25 Sep 2026 onward can auto-post their eligible positive supplier payment to BajetBN Money Activity as Money Out. Earlier purchases, reversals and credits stay manual.
       </div>
     </section>
   );
