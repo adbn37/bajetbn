@@ -188,6 +188,50 @@ export async function setAdbnTechPaymentAutoSync(
   );
 }
 
+export async function setAdbnTechExpenseAutoSync(
+  spaceId: string,
+  input: {
+    enabled: boolean;
+    cutoffIso?: string;
+  },
+): Promise<void> {
+  const { db } = requireFirebase();
+
+  const cutoffIso =
+    input.cutoffIso?.trim()
+    || '';
+
+  if (
+    input.enabled
+    && (
+      !cutoffIso
+      || !Number.isFinite(
+        Date.parse(cutoffIso),
+      )
+    )
+  ) {
+    throw new Error(
+      'A valid ADBN TECH expense auto-sync cutoff is required.',
+    );
+  }
+
+  await updateDoc(
+    doc(db, 'spaces', spaceId),
+    {
+      externalIntegrationExpenseAutoSyncEnabled:
+        input.enabled,
+      ...(cutoffIso
+        ? {
+            externalIntegrationExpenseAutoSyncCutoffIso:
+              cutoffIso,
+          }
+        : {}),
+      updatedAt:
+        serverTimestamp(),
+    },
+  );
+}
+
 export async function setAdbnTechAccountMappings(
   spaceId: string,
   mappings: Record<string, string>,

@@ -2,8 +2,11 @@ import type {
   FinancialTransaction,
   PaymentMethodCode,
 } from '../types/models';
-import type {
-  AdbnTechExpenseMirror,
+import {
+  ADBN_TECH_ADMIN_EMAIL,
+  getAdbnTechConnectedEmail,
+  loadAdbnTechExpensesReadOnly,
+  type AdbnTechExpenseMirror,
 } from './adbnTechIntegrationRepository';
 import {
   listBusinessTransactionsForSpace,
@@ -235,6 +238,73 @@ function categoryIdFromAdbn(
   }
 
   return 'expense-other';
+}
+
+function timestampMillis(
+  value: unknown,
+) {
+  if (
+    value
+    && typeof value === 'object'
+    && 'toMillis' in value
+    && typeof (
+      value as {
+        toMillis?: unknown;
+      }
+    ).toMillis === 'function'
+  ) {
+    return (
+      value as {
+        toMillis: () => number;
+      }
+    ).toMillis();
+  }
+
+  if (
+    typeof value === 'string'
+  ) {
+    const parsed =
+      Date.parse(value);
+
+    return Number.isFinite(parsed)
+      ? parsed
+      : 0;
+  }
+
+  if (
+    value instanceof Date
+  ) {
+    return value.getTime();
+  }
+
+  return 0;
+}
+
+export function adbnExpenseIsAfterCutoff(
+  expense: AdbnTechExpenseMirror,
+  cutoffIso: string,
+) {
+  const cutoffMillis =
+    Date.parse(cutoffIso);
+
+  if (
+    !Number.isFinite(
+      cutoffMillis,
+    )
+  ) {
+    return false;
+  }
+
+  const createdMillis =
+    timestampMillis(
+      expense.createdAt,
+    );
+
+  return (
+    createdMillis > 0
+    && createdMillis
+      >= cutoffMillis
+  );
 }
 
 export function adbnExpenseCanPost(
@@ -618,6 +688,175 @@ export async function countSyncedAdbnExpenses(
             ).toLowerCase(),
           ),
       ).length,
+    transactions,
+  };
+}
+
+
+export interface AdbnTechExpenseAutoSyncSummary {
+  connected: boolean;
+  posted: number;
+  alreadySynced: number;
+  beforeCutoff: number;
+  blocked: number;
+  failed: number;
+  firstError: string;
+  transactions: FinancialTransaction[];
+}
+
+export async function autoSyncNewAdbnTechExpensesToBajetBn(
+  input: {
+    spaceId: string;
+    mappings: Record<string, string>;
+    cutoffIso: string;
+    expenses?: AdbnTechExpenseMirror[];
+  },
+): Promise<AdbnTechExpenseAutoSyncSummary> {
+  const currentTransactions =
+    await listBusinessTransactionsForSpace(
+      input.spaceId,
+    );
+
+  if (
+    getAdbnTechConnectedEmail()
+    !== ADBN_TECH_ADMIN_EMAIL
+  ) {
+    return {
+      connected: false,
+      posted: 0,
+      alreadySynced: 0,
+      beforeCutoff: 0,
+      blocked: 0,
+      failed: 0,
+      firstError: '',
+      transactions:
+        currentTransactions,
+    };
+  }
+
+  const expenses =
+    input.expenses
+    || (
+      await loadAdbnTechExpensesReadOnly()
+    ).expenses;
+
+  const knownLabels =
+    new Set(
+      currentTransactions
+        .flatMap(
+          (item) =>
+            item.labels || [],
+        )
+        .map(
+          (label) =>
+            label
+              .trim()
+              .toLowerCase(),
+        ),
+    );
+
+  let posted = 0;
+  let alreadySynced = 0;
+  let beforeCutoff = 0;
+  let blocked = 0;
+  let failed = 0;
+  let firstError = '';
+
+  for (
+    const expense
+    of expenses
+  ) {
+    const syncLabel =
+      adbnExpenseSyncLabel(
+        expense.id,
+      );
+
+    if (
+      knownLabels.has(
+        syncLabel.toLowerCase(),
+      )
+    ) {
+      alreadySynced += 1;
+      continue;
+    }
+
+    if (
+      !adbnExpenseIsAfterCutoff(
+        expense,
+        input.cutoffIso,
+      )
+    ) {
+      beforeCutoff += 1;
+      continue;
+    }
+
+    const mappedAccountId =
+      expense.bankAccountId
+        ? input.mappings[
+            expense.bankAccountId
+          ]
+        : '';
+
+    if (
+      !mappedAccountId
+      || !adbnExpenseCanPost(
+        expense,
+      )
+    ) {
+      blocked += 1;
+      continue;
+    }
+
+    try {
+      const outcome =
+        await syncAdbnTechExpenseToBajetBn(
+          {
+            expense,
+            spaceId:
+              input.spaceId,
+            mappedAccountId,
+          },
+        );
+
+      if (
+        outcome.mode === 'posted'
+      ) {
+        posted += 1;
+
+        knownLabels.add(
+          syncLabel
+            .toLowerCase(),
+        );
+      } else {
+        failed += 1;
+      }
+    } catch (error) {
+      failed += 1;
+
+      if (!firstError) {
+        firstError =
+          error instanceof Error
+            ? error.message
+            : 'ADBN TECH expense auto-sync failed.';
+      }
+    }
+  }
+
+  const transactions =
+    posted > 0
+      ? await listBusinessTransactionsForSpace(
+          input.spaceId,
+        )
+      : currentTransactions;
+
+  return {
+    connected: true,
+    posted,
+    alreadySynced,
+    beforeCutoff,
+    blocked,
+    failed,
+    firstError,
     transactions,
   };
 }

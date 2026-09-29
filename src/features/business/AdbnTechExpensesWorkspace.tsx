@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +20,7 @@ import {
 import {
   adbnExpenseCanPost,
   adbnExpenseTransactionMatches,
+  autoSyncNewAdbnTechExpensesToBajetBn,
   findPostedAdbnExpenseTransaction,
   reconcileAdbnTechExpenseToBajetBn,
   syncAdbnTechExpenseToBajetBn,
@@ -26,6 +28,7 @@ import {
 import {
   getSpace,
   markAdbnTechIntegrationConnected,
+  setAdbnTechExpenseAutoSync,
 } from '../../repositories/spaceRepository';
 import {
   listBusinessTransactionsForSpace,
@@ -53,6 +56,32 @@ function simpleDate(value: string) {
   }).format(parsed);
 }
 
+function simpleDateTime(
+  value: string,
+) {
+  const parsed =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      parsed.getTime(),
+    )
+  ) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-BN',
+    {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    },
+  ).format(parsed);
+}
+
 function accountLabel(account: Account | undefined) {
   return account?.name || account?.id || '';
 }
@@ -75,6 +104,11 @@ export function AdbnTechExpensesWorkspace({
   const [syncBusyExpenseId, setSyncBusyExpenseId] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [error, setError] = useState('');
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [autoSyncCutoffIso, setAutoSyncCutoffIso] = useState('');
+  const [autoSyncBusy, setAutoSyncBusy] = useState(false);
+  const [autoSyncMessage, setAutoSyncMessage] = useState('');
+  const autoSyncRunRef = useRef('');
 
   const load = useCallback(async () => {
     if (getAdbnTechConnectedEmail() !== ADBN_TECH_ADMIN_EMAIL) {
@@ -101,6 +135,14 @@ export function AdbnTechExpensesWorkspace({
       setBajetAccounts(nextAccounts);
       setSavedMappings(nextSpace?.externalIntegrationAccountMappings || {});
       setBusinessTransactions(nextTransactions);
+      setAutoSyncEnabled(
+        nextSpace?.externalIntegrationExpenseAutoSyncEnabled
+        === true,
+      );
+      setAutoSyncCutoffIso(
+        nextSpace?.externalIntegrationExpenseAutoSyncCutoffIso
+        || '',
+      );
       await markAdbnTechIntegrationConnected(spaceId);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'ADBN TECH expenses could not be loaded.');
@@ -126,6 +168,205 @@ export function AdbnTechExpensesWorkspace({
       setLoading(false);
     }
   };
+
+  const enableAutoSync =
+    async () => {
+      const cutoffIso =
+        new Date()
+          .toISOString();
+
+      setAutoSyncBusy(true);
+      setAutoSyncMessage('');
+      setError('');
+
+      try {
+        await setAdbnTechExpenseAutoSync(
+          spaceId,
+          {
+            enabled: true,
+            cutoffIso,
+          },
+        );
+
+        setAutoSyncEnabled(true);
+        setAutoSyncCutoffIso(
+          cutoffIso,
+        );
+        autoSyncRunRef.current = '';
+        setAutoSyncMessage(
+          'Expense auto-sync enabled. Only ADBN TECH expense records created after this moment can post automatically.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN TECH expense auto-sync could not be enabled.',
+        );
+      } finally {
+        setAutoSyncBusy(false);
+      }
+    };
+
+  const disableAutoSync =
+    async () => {
+      setAutoSyncBusy(true);
+      setAutoSyncMessage('');
+      setError('');
+
+      try {
+        await setAdbnTechExpenseAutoSync(
+          spaceId,
+          {
+            enabled: false,
+          },
+        );
+
+        setAutoSyncEnabled(false);
+        setAutoSyncMessage(
+          'Expense auto-sync is off. Manual Sync to BajetBN remains available.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN TECH expense auto-sync could not be disabled.',
+        );
+      } finally {
+        setAutoSyncBusy(false);
+      }
+    };
+
+  const runFutureExpenseAutoSync =
+    useCallback(
+      async (
+        expenses:
+          AdbnTechExpenseMirror[],
+      ) => {
+        if (
+          !autoSyncEnabled
+          || !autoSyncCutoffIso
+        ) {
+          return;
+        }
+
+        setAutoSyncBusy(true);
+        setAutoSyncMessage('');
+
+        try {
+          const summary =
+            await autoSyncNewAdbnTechExpensesToBajetBn(
+              {
+                spaceId,
+                mappings:
+                  savedMappings,
+                cutoffIso:
+                  autoSyncCutoffIso,
+                expenses,
+              },
+            );
+
+          setBusinessTransactions(
+            summary.transactions,
+          );
+
+          if (
+            summary.posted > 0
+            && onFinancialSync
+          ) {
+            await onFinancialSync();
+          }
+
+          if (
+            summary.connected
+            && (
+              summary.posted > 0
+              || summary.failed > 0
+              || summary.blocked > 0
+            )
+          ) {
+            setAutoSyncMessage(
+              summary.posted
+              + ' new expense'
+              + (
+                summary.posted === 1
+                  ? ''
+                  : 's'
+              )
+              + ' auto-synced. '
+              + summary.blocked
+              + ' blocked. '
+              + summary.failed
+              + ' failed.',
+            );
+          }
+
+          if (
+            summary.firstError
+          ) {
+            setError(
+              summary.firstError,
+            );
+          }
+        } catch (nextError) {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : 'ADBN TECH expense auto-sync check failed.',
+          );
+        } finally {
+          setAutoSyncBusy(false);
+        }
+      },
+      [
+        autoSyncCutoffIso,
+        autoSyncEnabled,
+        onFinancialSync,
+        savedMappings,
+        spaceId,
+      ],
+    );
+
+  useEffect(
+    () => {
+      if (
+        !snapshot
+        || !autoSyncEnabled
+        || !autoSyncCutoffIso
+      ) {
+        return;
+      }
+
+      const signature =
+        snapshot.loadedAt
+        + '|'
+        + autoSyncCutoffIso
+        + '|'
+        + JSON.stringify(
+          savedMappings,
+        );
+
+      if (
+        autoSyncRunRef.current
+        === signature
+      ) {
+        return;
+      }
+
+      autoSyncRunRef.current =
+        signature;
+
+      void runFutureExpenseAutoSync(
+        snapshot.expenses,
+      );
+    },
+    [
+      autoSyncCutoffIso,
+      autoSyncEnabled,
+      runFutureExpenseAutoSync,
+      savedMappings,
+      snapshot,
+    ],
+  );
 
   const accountById = useMemo(
     () => new Map(bajetAccounts.map((account) => [account.id, account])),
@@ -404,6 +645,88 @@ export function AdbnTechExpensesWorkspace({
         <span>
           ADBN TECH expenses are already paid bank-ledger debits. Historical import remains manual. After a synced expense is edited in ADBN TECH, BajetBN marks it Changed and lets you reconcile it by reversing the old Money Out and posting the corrected source values. If an expense is deleted in ADBN TECH, use Reverse stale ADBN expense from Money Activity; a missing snapshot is never auto-reversed.
         </span>
+      </div>
+
+      <div
+        className="panel adbn-tech-account-mapping-v115"
+        data-adbn-tech-expense-auto-sync
+      >
+        <div>
+          <span className="eyebrow">
+            Future expenses
+          </span>
+          <h3>
+            Auto-sync new ADBN TECH expenses
+          </h3>
+          <p className="muted">
+            Existing expenses stay manual. When enabled, only ADBN TECH expense records created after the activation time can post automatically to the mapped BajetBN Business account. The source createdAt timestamp controls this boundary, not the expense date.
+          </p>
+        </div>
+
+        {autoSyncEnabled ? (
+          <div className="adbn-tech-account-mapping-footer-v115">
+            <div>
+              <strong>
+                Auto-sync on
+              </strong>
+              <span>
+                {' · from '}
+                {simpleDateTime(
+                  autoSyncCutoffIso,
+                )}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="button secondary"
+              disabled={autoSyncBusy}
+              onClick={() =>
+                void disableAutoSync()
+              }
+            >
+              {autoSyncBusy
+                ? 'Updating...'
+                : 'Turn off auto-sync'}
+            </button>
+          </div>
+        ) : (
+          <div className="adbn-tech-account-mapping-footer-v115">
+            <div>
+              <strong>
+                Auto-sync off
+              </strong>
+              <span>
+                {' '}
+                Older expenses will never be imported automatically.
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="button primary"
+              disabled={
+                autoSyncBusy
+                || !Object.keys(
+                  savedMappings,
+                ).length
+              }
+              onClick={() =>
+                void enableAutoSync()
+              }
+            >
+              {autoSyncBusy
+                ? 'Enabling...'
+                : 'Enable auto-sync from now'}
+            </button>
+          </div>
+        )}
+
+        {autoSyncMessage && (
+          <div className="notice success">
+            {autoSyncMessage}
+          </div>
+        )}
       </div>
 
       {syncMessage && <div className="notice success">{syncMessage}</div>}
