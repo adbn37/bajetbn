@@ -16,6 +16,9 @@ const payments =
 const purchases =
   read('src/features/business/AdbnTechPurchasesWorkspace.tsx');
 
+const expenses =
+  read('src/features/business/AdbnTechExpensesWorkspace.tsx');
+
 const checks = [];
 
 function need(condition, label) {
@@ -39,10 +42,13 @@ need(
     && home.includes(
       "| 'adbn_purchases'",
     )
+    && home.includes(
+      "| 'adbn_expenses'",
+    )
     && !home.includes(
       "| 'adbn'",
     ),
-  'Customers, Invoices, Payments and Purchases are normal Business workspace views.',
+  'Customers, Invoices, Payments, Purchases and Expenses are normal Business workspace views.',
 );
 
 for (const [view, label] of [
@@ -50,6 +56,7 @@ for (const [view, label] of [
   ['adbn_invoices', 'Invoices'],
   ['adbn_payments', 'Payments'],
   ['adbn_purchases', 'Purchases'],
+  ['adbn_expenses', 'Expenses'],
 ]) {
   need(
     home.includes(
@@ -104,6 +111,7 @@ for (const [label, source] of [
   ['Customers / Invoices', mirror],
   ['Payments', payments],
   ['Purchases', purchases],
+  ['Expenses', expenses],
 ]) {
   need(
     !source.includes(
@@ -131,6 +139,9 @@ need(
     )
     && home.includes(
       '<AdbnTechPurchasesWorkspace',
+    )
+    && home.includes(
+      '<AdbnTechExpensesWorkspace',
     )
     && home.includes(
       '<AdbnTechMirrorWorkspace',
