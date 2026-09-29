@@ -545,6 +545,18 @@ export function AdbnTechPurchasesWorkspace({
               + ' applied. '
               + summary.blocked
               + ' blocked. '
+              + (
+                summary.blockedDetails.length
+                  ? 'Blocked reason'
+                    + (
+                      summary.blockedDetails.length === 1
+                        ? ': '
+                        : 's: '
+                    )
+                    + summary.blockedDetails.join('; ')
+                    + '. '
+                  : ''
+              )
               + summary.failed
               + ' failed.',
             );
