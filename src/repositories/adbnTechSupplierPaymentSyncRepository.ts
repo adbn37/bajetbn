@@ -5,6 +5,7 @@ import type {
 import {
   listBusinessTransactionsForSpace,
   postTransactionWithIdempotencyKey,
+  reverseTransactionWithIdempotencyKey,
   type PostTransactionOutcome,
 } from './transactionRepository';
 import type {
@@ -267,6 +268,19 @@ function paymentMethodFromAdbn(
   };
 }
 
+export function adbnSupplierPaymentIsReversal(
+  payment: AdbnTechSupplierPaymentMirror,
+) {
+  return (
+    payment.isReversal
+    || Boolean(
+      payment.reversalOfSupplierPaymentId
+        .trim(),
+    )
+    || payment.amount < 0
+  );
+}
+
 export function adbnSupplierPaymentCanPost(
   payment: AdbnTechSupplierPaymentMirror,
 ) {
@@ -401,7 +415,10 @@ export async function syncAdbnTechSupplierPaymentToBajetBn(
 
 export interface AdbnTechSupplierPaymentAutoSyncSummary {
   posted: number;
+  reversed: number;
   alreadySynced: number;
+  alreadyReversed: number;
+  reversalNotSynced: number;
   beforeCutoff: number;
   sourceSkipped: number;
   blocked: number;
@@ -441,18 +458,44 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
         ),
     );
 
+  const paymentById =
+    new Map(
+      input.supplierPayments.map(
+        (payment) => [
+          payment.id,
+          payment,
+        ],
+      ),
+    );
+
   let posted = 0;
+  let reversed = 0;
   let alreadySynced = 0;
+  let alreadyReversed = 0;
+  let reversalNotSynced = 0;
   let beforeCutoff = 0;
   let sourceSkipped = 0;
   let blocked = 0;
   let failed = 0;
   let firstError = '';
 
+  /*
+   * Pass 1: post positive ADBN-originated supplier payments.
+   * Reversal rows are handled only after the refreshed ledger is
+   * available, so an original and its reversal can arrive together.
+   */
   for (
     const payment
     of input.supplierPayments
   ) {
+    if (
+      adbnSupplierPaymentIsReversal(
+        payment,
+      )
+    ) {
+      continue;
+    }
+
     const syncLabel =
       adbnSupplierPaymentSyncLabel(
         payment.id,
@@ -568,16 +611,221 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
     }
   }
 
-  const transactions =
+  let transactions =
     posted > 0
       ? await listBusinessTransactionsForSpace(
           input.spaceId,
         )
       : currentTransactions;
 
+  const reversedOriginalTransactionIds =
+    new Set(
+      transactions
+        .filter(
+          (item) =>
+            item.status === 'reversed'
+            || Boolean(
+              item.reversedBy,
+            ),
+        )
+        .map(
+          (item) =>
+            item.id,
+        ),
+    );
+
+  /*
+   * Pass 2: reverse the exact BajetBN Money Out that belongs to
+   * the original ADBN supplier payment. We require an explicit
+   * reversalOfSupplierPaymentId; credits without a target are not
+   * allowed to guess which Money Out should be restored.
+   */
+  for (
+    const reversal
+    of input.supplierPayments
+  ) {
+    if (
+      !adbnSupplierPaymentIsReversal(
+        reversal,
+      )
+    ) {
+      continue;
+    }
+
+    const originalPaymentId =
+      reversal
+        .reversalOfSupplierPaymentId
+        .trim();
+
+    if (!originalPaymentId) {
+      blocked += 1;
+      continue;
+    }
+
+    const originalPayment =
+      paymentById.get(
+        originalPaymentId,
+      );
+
+    if (!originalPayment) {
+      blocked += 1;
+      continue;
+    }
+
+    if (
+      originalPayment.externalSource
+        .trim()
+        .toLowerCase()
+      === 'bajetbn'
+    ) {
+      sourceSkipped += 1;
+      continue;
+    }
+
+    const linkedPurchases =
+      linkedPurchasesForSupplierPayment(
+        originalPayment,
+        input.purchases,
+      );
+
+    if (!linkedPurchases.length) {
+      blocked += 1;
+      continue;
+    }
+
+    const purchaseDates =
+      linkedPurchases.map(
+        (purchase) =>
+          normalizedPurchaseDate(
+            purchase.purchaseDate,
+          ),
+      );
+
+    if (
+      purchaseDates.some(
+        (date) => !date,
+      )
+    ) {
+      blocked += 1;
+      continue;
+    }
+
+    if (
+      purchaseDates.some(
+        (date) =>
+          date < cutoff,
+      )
+    ) {
+      beforeCutoff += 1;
+      continue;
+    }
+
+    const originalSyncLabel =
+      adbnSupplierPaymentSyncLabel(
+        originalPayment.id,
+      ).toLowerCase();
+
+    const originalTransaction =
+      transactions.find(
+        (item) =>
+          (item.labels || [])
+            .some(
+              (label) =>
+                label
+                  .toLowerCase()
+                === originalSyncLabel,
+            ),
+      );
+
+    if (!originalTransaction) {
+      reversalNotSynced += 1;
+      continue;
+    }
+
+    if (
+      reversedOriginalTransactionIds.has(
+        originalTransaction.id,
+      )
+    ) {
+      alreadyReversed += 1;
+      continue;
+    }
+
+    if (
+      originalTransaction.type
+        !== 'expense'
+      || originalTransaction.status
+        !== 'posted'
+    ) {
+      blocked += 1;
+      continue;
+    }
+
+    const reversalDate =
+      normalizedPaymentDate(
+        reversal.paymentDate,
+      );
+
+    if (!reversalDate) {
+      blocked += 1;
+      continue;
+    }
+
+    const reversalKey =
+      'adbn-supplier-reversal-'
+      + externalSupplierPaymentToken(
+        reversal.id,
+      );
+
+    const reason =
+      'ADBN TECH supplier payment reversal '
+      + (
+        reversal.paymentNo
+        || reversal.id
+      )
+      + ' for '
+      + (
+        originalPayment.paymentNo
+        || originalPayment.id
+      );
+
+    try {
+      await reverseTransactionWithIdempotencyKey(
+        originalTransaction.id,
+        reversalDate,
+        reason,
+        reversalKey,
+      );
+
+      reversed += 1;
+      reversedOriginalTransactionIds.add(
+        originalTransaction.id,
+      );
+    } catch (error) {
+      failed += 1;
+
+      if (!firstError) {
+        firstError =
+          error instanceof Error
+            ? error.message
+            : 'ADBN TECH supplier payment reversal sync failed.';
+      }
+    }
+  }
+
+  if (reversed > 0) {
+    transactions =
+      await listBusinessTransactionsForSpace(
+        input.spaceId,
+      );
+  }
+
   return {
     posted,
+    reversed,
     alreadySynced,
+    alreadyReversed,
+    reversalNotSynced,
     beforeCutoff,
     sourceSkipped,
     blocked,
