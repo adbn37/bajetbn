@@ -523,6 +523,7 @@ export function AdbnTechPurchasesWorkspace({
             || summary.reversed > 0
             || summary.failed > 0
             || summary.blocked > 0
+            || summary.manualReversals > 0
           ) {
             setAutoSyncMessage(
               summary.posted
@@ -554,6 +555,26 @@ export function AdbnTechPurchasesWorkspace({
                         : 's: '
                     )
                     + summary.blockedDetails.join('; ')
+                    + '. '
+                  : ''
+              )
+              + summary.manualReversals
+              + ' manual/unlinked reversal'
+              + (
+                summary.manualReversals === 1
+                  ? ''
+                  : 's'
+              )
+              + '. '
+              + (
+                summary.manualReversalDetails.length
+                  ? 'Manual reversal'
+                    + (
+                      summary.manualReversalDetails.length === 1
+                        ? ': '
+                        : 's: '
+                    )
+                    + summary.manualReversalDetails.join('; ')
                     + '. '
                   : ''
               )
@@ -1446,7 +1467,11 @@ export function AdbnTechPurchasesWorkspace({
                                 : payment.isReversal
                                 || payment.amount < 0
                                 || payment.reversalOfSupplierPaymentId
-                                ? 'Reversal stays manual'
+                                ? (
+                                    payment.reversalOfSupplierPaymentId
+                                      ? 'Linked reversal'
+                                      : 'Manual / unlinked reversal'
+                                  )
                                 : !payment.bankAccountId
                                   ? 'No ADBN account'
                                   : 'Map account / check payment'}
