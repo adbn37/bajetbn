@@ -1,6 +1,9 @@
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../services/firebase';
 import type { PaymentMethodCode } from '../types/models';
+import {
+  reverseTransactionWithIdempotencyKey,
+} from './transactionRepository';
 
 export async function updateBusinessMoneyActivityDetails(input: {
   transactionId: string;
@@ -59,4 +62,46 @@ export async function deleteStaleAdbnPaymentMoneyActivity(input: {
     idempotencyKey:
       crypto.randomUUID(),
   });
+}
+
+function staleAdbnSupplierReversalToken(
+  value: string,
+) {
+  let hash = 2166136261;
+
+  for (
+    let index = 0;
+    index < value.length;
+    index += 1
+  ) {
+    hash =
+      Math.imul(
+        hash
+        ^ value.charCodeAt(index),
+        16777619,
+      );
+  }
+
+  return (hash >>> 0)
+    .toString(16)
+    .padStart(8, '0');
+}
+
+export async function reverseStaleAdbnSupplierPaymentMoneyActivity(
+  input: {
+    transactionId: string;
+    transactionDate: string;
+    reason?: string;
+  },
+) {
+  return reverseTransactionWithIdempotencyKey(
+    input.transactionId,
+    input.transactionDate,
+    input.reason?.trim()
+      || 'ADBN TECH supplier payment was deleted or cancelled without a source reversal.',
+    'adbn-stale-supplier-'
+      + staleAdbnSupplierReversalToken(
+        input.transactionId,
+      ),
+  );
 }

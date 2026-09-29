@@ -10,6 +10,7 @@ import { listAccountsForSpace } from '../../repositories/accountRepository';
 import {
   deleteStaleAdbnPaymentMoneyActivity,
   reverseBusinessMoneyActivity,
+  reverseStaleAdbnSupplierPaymentMoneyActivity,
   updateBusinessMoneyActivityDetails,
 } from '../../repositories/businessMoneyActivityRepository';
 import { listSpaceMembers } from '../../repositories/collaborationRepository';
@@ -171,6 +172,39 @@ function adbnPaymentSyncLabel(
   );
 }
 
+function adbnSupplierPaymentSyncLabel(
+  item: FinancialTransaction,
+): string {
+  const labels =
+    (item.labels || [])
+      .map(
+        (label) =>
+          label
+            .trim()
+            .toLowerCase(),
+      );
+
+  if (
+    !labels.includes(
+      'adbn_tech',
+    )
+    || !labels.includes(
+      'adbn_supplier_payment',
+    )
+  ) {
+    return '';
+  }
+
+  return (
+    labels.find(
+      (label) =>
+        /^adbn_suppay_[a-f0-9]{16}$/
+          .test(label),
+    )
+    || ''
+  );
+}
+
 function managedSourceLabel(item: FinancialTransaction): string | null {
   const linked =
     item as FinancialTransaction
@@ -219,6 +253,14 @@ function managedSourceLabel(item: FinancialTransaction): string | null {
     )
   ) {
     return 'ADBN TECH payment';
+  }
+
+  if (
+    adbnSupplierPaymentSyncLabel(
+      item,
+    )
+  ) {
+    return 'ADBN TECH supplier payment';
   }
 
   if (
@@ -328,6 +370,17 @@ export function BusinessMoneyActivityPage() {
   const [
     staleAdbnDeleteBusy,
     setStaleAdbnDeleteBusy,
+  ] = useState(false);
+
+  const [
+    staleAdbnSupplierReverseDialog,
+    setStaleAdbnSupplierReverseDialog,
+  ] =
+    useState<ActionConfirmState<FinancialTransaction> | null>(null);
+
+  const [
+    staleAdbnSupplierReverseBusy,
+    setStaleAdbnSupplierReverseBusy,
   ] = useState(false);
 
   const writableAccounts =
@@ -838,6 +891,46 @@ export function BusinessMoneyActivityPage() {
       );
     } finally {
       setStaleAdbnDeleteBusy(false);
+    }
+  }
+
+  async function handleStaleAdbnSupplierReverse() {
+    if (
+      !staleAdbnSupplierReverseDialog
+    ) {
+      return;
+    }
+
+    setStaleAdbnSupplierReverseBusy(true);
+    setError('');
+
+    try {
+      await reverseStaleAdbnSupplierPaymentMoneyActivity({
+        transactionId:
+          staleAdbnSupplierReverseDialog
+            .payload.id,
+        transactionDate:
+          today,
+        reason:
+          'ADBN TECH supplier payment was deleted or cancelled without an explicit source reversal; stale BajetBN Money Out reversed manually.',
+      });
+
+      setStaleAdbnSupplierReverseDialog(null);
+      setDetail(null);
+
+      setFeedback(
+        'Stale ADBN TECH supplier Money Out was reversed. Its history was preserved and the Business Account, ledger, budgets and reports were updated.',
+      );
+
+      await load();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setStaleAdbnSupplierReverseBusy(false);
     }
   }
 
@@ -1582,8 +1675,13 @@ export function BusinessMoneyActivityPage() {
           busy={
             reverseBusy
             || staleAdbnDeleteBusy
+            || staleAdbnSupplierReverseBusy
           }
           canDeleteStaleAdbn={
+            space.ownerId
+              === user?.uid
+          }
+          canReverseStaleAdbnSupplier={
             space.ownerId
               === user?.uid
           }
@@ -1611,6 +1709,23 @@ export function BusinessMoneyActivityPage() {
                 'BajetBN will permanently remove this synced Money In row, remove its ledger entry and subtract its amount from the mapped Business Account. If the payment still exists in ADBN TECH, auto-sync may create it again.',
               confirmLabel:
                 'Remove stale ADBN record',
+              tone:
+                'danger',
+            });
+          }}
+          onReverseStaleAdbnSupplier={() => {
+            setError('');
+            setStaleAdbnSupplierReverseDialog({
+              payload:
+                detail,
+              title:
+                'Reverse this stale ADBN TECH supplier payment?',
+              description:
+                'Use this only when the supplier payment was deleted or cancelled in ADBN TECH and no explicit ADBN reversal record exists.',
+              note:
+                'BajetBN will keep the original Money Out in history as reversed, restore its financial effect to the mapped Business Account, and update budgets and reports. It will not permanently erase accounting history.',
+              confirmLabel:
+                'Reverse stale supplier payment',
               tone:
                 'danger',
             });
@@ -1674,6 +1789,29 @@ export function BusinessMoneyActivityPage() {
         />
       )}
 
+      {staleAdbnSupplierReverseDialog && (
+        <ActionConfirmModal
+          state={
+            staleAdbnSupplierReverseDialog
+          }
+          busy={
+            staleAdbnSupplierReverseBusy
+          }
+          error={error}
+          onClose={() => {
+            if (
+              !staleAdbnSupplierReverseBusy
+            ) {
+              setStaleAdbnSupplierReverseDialog(null);
+              setError('');
+            }
+          }}
+          onConfirm={() =>
+            void handleStaleAdbnSupplierReverse()
+          }
+        />
+      )}
+
       {reverseDialog && (
         <ActionConfirmModal
           state={reverseDialog}
@@ -1701,10 +1839,12 @@ function BusinessMoneyDetailsModal({
   online,
   busy,
   canDeleteStaleAdbn,
+  canReverseStaleAdbnSupplier,
   onClose,
   onEdit,
   onCorrect,
   onDeleteStaleAdbn,
+  onReverseStaleAdbnSupplier,
   onReverse,
 }: {
   item: FinancialTransaction;
@@ -1713,10 +1853,12 @@ function BusinessMoneyDetailsModal({
   online: boolean;
   busy: boolean;
   canDeleteStaleAdbn: boolean;
+  canReverseStaleAdbnSupplier: boolean;
   onClose: () => void;
   onEdit: () => void;
   onCorrect: () => void;
   onDeleteStaleAdbn: () => void;
+  onReverseStaleAdbnSupplier: () => void;
   onReverse: () => void;
 }) {
   const source =
@@ -1739,6 +1881,13 @@ function BusinessMoneyDetailsModal({
       ),
     );
 
+  const staleAdbnSupplierPayment =
+    Boolean(
+      adbnSupplierPaymentSyncLabel(
+        item,
+      ),
+    );
+
   const canRemoveStaleAdbn =
     canDeleteStaleAdbn
     && online
@@ -1746,6 +1895,14 @@ function BusinessMoneyDetailsModal({
     && item.status === 'posted'
     && item.type === 'income'
     && staleAdbnPayment;
+
+  const canReverseStaleAdbnSupplierAction =
+    canReverseStaleAdbnSupplier
+    && online
+    && !busy
+    && item.status === 'posted'
+    && item.type === 'expense'
+    && staleAdbnSupplierPayment;
 
   const canChange =
     canManage
@@ -1803,7 +1960,9 @@ function BusinessMoneyDetailsModal({
           <span>
             {staleAdbnPayment
               ? 'This Money In was synced from ADBN TECH. If the source payment was deleted in ADBN TECH, the Business owner can remove this stale BajetBN copy below.'
-              : 'This financial record is linked to another BajetBN workflow. Open that source to change the underlying record safely.'}
+              : staleAdbnSupplierPayment
+                ? 'This Money Out was synced from an ADBN TECH supplier payment. If that source payment was deleted or cancelled without an explicit reversal, the Business owner can reverse this stale BajetBN copy below while preserving its accounting history.'
+                : 'This financial record is linked to another BajetBN workflow. Open that source to change the underlying record safely.'}
           </span>
         </div>
       )}
@@ -1912,6 +2071,19 @@ function BusinessMoneyDetailsModal({
             onClick={onDeleteStaleAdbn}
           >
             Remove stale ADBN record
+          </button>
+        )}
+
+        {canReverseStaleAdbnSupplierAction && (
+          <button
+            className="button danger"
+            type="button"
+            data-adbn-stale-supplier-payment-reverse
+            onClick={
+              onReverseStaleAdbnSupplier
+            }
+          >
+            Reverse stale supplier payment
           </button>
         )}
 
