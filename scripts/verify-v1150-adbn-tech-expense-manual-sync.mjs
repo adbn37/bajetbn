@@ -52,15 +52,15 @@ check(
   workspace.includes('Manual Money Out sync')
   && workspace.includes('Sync to BajetBN')
   && workspace.includes('Set account mapping in Payments')
-  && workspace.includes('Expense edits and deletions remain controlled in ADBN TECH'),
-  'First expense slice stays manual and clearly explains its reconciliation boundary.',
+  && workspace.includes('Historical import remains manual')
+  && workspace.includes('a missing snapshot is never auto-reversed'),
+  'Expense import stays manual while reconciliation remains audit-safe.',
 );
 
 check(
-  workspace.includes('syncedLabels')
-  && workspace.includes('adbnExpenseSyncLabel(')
+  workspace.includes('findPostedAdbnExpenseTransaction(')
   && workspace.includes('Synced Money Out'),
-  'Expenses workspace detects already-synced Money Out records.',
+  'Expenses workspace detects active already-synced Money Out records.',
 );
 
 check(
