@@ -24,6 +24,7 @@ import {
 import {
   ADBN_SUPPLIER_PURCHASE_AUTO_SYNC_CUTOFF,
   adbnSupplierPaymentCanPost,
+  adbnSupplierPaymentIsLegacyUnlinkedBeforeCutoff,
   adbnSupplierPaymentSyncLabel,
   autoSyncAdbnTechSupplierPaymentsToBajetBn,
   syncAdbnTechSupplierPaymentToBajetBn,
@@ -1331,8 +1332,16 @@ export function AdbnTechPurchasesWorkspace({
                         .toLowerCase(),
                     );
 
+                  const legacyUnlinkedBeforeCutoff =
+                    adbnSupplierPaymentIsLegacyUnlinkedBeforeCutoff(
+                      payment,
+                      snapshot?.purchases || [],
+                      ADBN_SUPPLIER_PURCHASE_AUTO_SYNC_CUTOFF,
+                    );
+
                   const ready =
-                    Boolean(mappedAccountId)
+                    !legacyUnlinkedBeforeCutoff
+                    && Boolean(mappedAccountId)
                     && adbnSupplierPaymentCanPost(
                       payment,
                     );
@@ -1399,7 +1408,16 @@ export function AdbnTechPurchasesWorkspace({
                       </td>
 
                       <td>
-                        {mappedAccountId ? (
+                        {legacyUnlinkedBeforeCutoff ? (
+                          <>
+                            <span>
+                              Not required
+                            </span>
+                            <small>
+                              Legacy payment before 25 Sep 2026
+                            </small>
+                          </>
+                        ) : mappedAccountId ? (
                           <>
                             <strong>
                               {accountLabel(
@@ -1432,6 +1450,15 @@ export function AdbnTechPurchasesWorkspace({
                             </strong>
                             <small>
                               Money Out
+                            </small>
+                          </>
+                        ) : legacyUnlinkedBeforeCutoff ? (
+                          <>
+                            <span>
+                              Manual
+                            </span>
+                            <small>
+                              Legacy payment before automatic cutoff
                             </small>
                           </>
                         ) : ready ? (
