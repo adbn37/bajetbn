@@ -69,7 +69,8 @@ for (const marker of [
   'syncAdbnTechSupplierPaymentToBajetBn',
   'Set account mapping in Payments',
   'Money Out',
-  'Reversal stays manual',
+  'Linked reversal',
+  'Manual / unlinked reversal',
 ]) {
   must(
     workspace,
