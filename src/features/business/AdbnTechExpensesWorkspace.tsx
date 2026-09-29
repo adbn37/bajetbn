@@ -18,7 +18,9 @@ import {
 } from '../../repositories/adbnTechIntegrationRepository';
 import {
   adbnExpenseCanPost,
-  adbnExpenseSyncLabel,
+  adbnExpenseTransactionMatches,
+  findPostedAdbnExpenseTransaction,
+  reconcileAdbnTechExpenseToBajetBn,
   syncAdbnTechExpenseToBajetBn,
 } from '../../repositories/adbnTechExpenseSyncRepository';
 import {
@@ -130,15 +132,6 @@ export function AdbnTechExpensesWorkspace({
     [bajetAccounts],
   );
 
-  const syncedLabels = useMemo(
-    () => new Set(
-      businessTransactions
-        .flatMap((item) => item.labels || [])
-        .map((label) => label.trim().toLowerCase()),
-    ),
-    [businessTransactions],
-  );
-
   const filteredExpenses = useMemo(() => {
     const source = snapshot?.expenses || [];
     const needle = query.trim().toLowerCase();
@@ -166,9 +159,48 @@ export function AdbnTechExpensesWorkspace({
 
   const syncedCount = useMemo(
     () => (snapshot?.expenses || []).filter((expense) =>
-      syncedLabels.has(adbnExpenseSyncLabel(expense.id).toLowerCase()),
+      Boolean(
+        findPostedAdbnExpenseTransaction(
+          expense.id,
+          businessTransactions,
+        ),
+      ),
     ).length,
-    [snapshot, syncedLabels],
+    [snapshot, businessTransactions],
+  );
+
+  const changedCount = useMemo(
+    () => (snapshot?.expenses || []).filter((expense) => {
+      const currentTransaction =
+        findPostedAdbnExpenseTransaction(
+          expense.id,
+          businessTransactions,
+        );
+
+      if (!currentTransaction) {
+        return false;
+      }
+
+      const mappedAccountId =
+        expense.bankAccountId
+          ? savedMappings[
+              expense.bankAccountId
+            ]
+          : '';
+
+      return !adbnExpenseTransactionMatches(
+        expense,
+        currentTransaction,
+        spaceId,
+        mappedAccountId,
+      );
+    }).length,
+    [
+      snapshot,
+      businessTransactions,
+      savedMappings,
+      spaceId,
+    ],
   );
 
   const syncExpense = async (expense: AdbnTechExpenseMirror) => {
@@ -219,6 +251,103 @@ export function AdbnTechExpensesWorkspace({
     }
   };
 
+
+  const reconcileExpense = async (
+    expense: AdbnTechExpenseMirror,
+    currentTransaction: FinancialTransaction,
+  ) => {
+    if (syncBusyExpenseId) return;
+
+    const mappedAccountId =
+      expense.bankAccountId
+        ? savedMappings[
+            expense.bankAccountId
+          ]
+        : '';
+
+    if (!expense.bankAccountId) {
+      setError(
+        'This ADBN TECH expense has no paying bank/cash account.',
+      );
+      return;
+    }
+
+    if (!mappedAccountId) {
+      setError(
+        'Map the ADBN TECH paying account in Payments first.',
+      );
+      return;
+    }
+
+    setSyncBusyExpenseId(
+      expense.id,
+    );
+    setSyncMessage('');
+    setError('');
+
+    try {
+      const outcome =
+        await reconcileAdbnTechExpenseToBajetBn({
+          expense,
+          currentTransaction,
+          spaceId,
+          mappedAccountId,
+          reversalDate:
+            new Intl.DateTimeFormat(
+              'en-CA',
+              {
+                timeZone:
+                  'Asia/Brunei',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              },
+            )
+              .format(
+                new Date(),
+              ),
+        });
+
+      if (
+        outcome.mode
+        !== 'posted'
+      ) {
+        throw new Error(
+          'ADBN TECH expense correction did not post immediately.',
+        );
+      }
+
+      const nextTransactions =
+        await listBusinessTransactionsForSpace(
+          spaceId,
+        );
+
+      setBusinessTransactions(
+        nextTransactions,
+      );
+
+      if (onFinancialSync) {
+        await onFinancialSync();
+      }
+
+      setSyncMessage(
+        (
+          expense.expenseNo
+          || expense.id
+        )
+        + ' reconciled. The previous Money Out was reversed and the corrected ADBN expense was posted.',
+      );
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'ADBN TECH expense change could not be reconciled.',
+      );
+    } finally {
+      setSyncBusyExpenseId('');
+    }
+  };
+
   if (user?.email?.trim().toLowerCase() !== 'zardeerwandy@gmail.com') {
     return null;
   }
@@ -256,6 +385,7 @@ export function AdbnTechExpensesWorkspace({
         <span>Connected as <strong>{connectedEmail}</strong></span>
         <span>Expenses <strong>{snapshot?.expenses.length || 0}</strong></span>
         <span>Synced Money Out <strong>{syncedCount}</strong></span>
+        <span>Changed <strong>{changedCount}</strong></span>
         <span>Visible total <strong>{bnd(visibleTotal)}</strong></span>
         <span>Source <strong>expenses</strong></span>
       </div>
@@ -272,7 +402,7 @@ export function AdbnTechExpensesWorkspace({
       <div className="info-banner" data-adbn-expense-manual-sync>
         <strong>Manual Money Out sync</strong>
         <span>
-          ADBN TECH expenses are already paid bank-ledger debits. This first slice keeps historical import manual: choose Sync to BajetBN only for the records you want in Money Activity. Account mapping is reused from Payments. Expense edits and deletions remain controlled in ADBN TECH and are not reconciled automatically in this slice.
+          ADBN TECH expenses are already paid bank-ledger debits. Historical import remains manual. After a synced expense is edited in ADBN TECH, BajetBN marks it Changed and lets you reconcile it by reversing the old Money Out and posting the corrected source values. If an expense is deleted in ADBN TECH, use Reverse stale ADBN expense from Money Activity; a missing snapshot is never auto-reversed.
         </span>
       </div>
 
@@ -304,9 +434,28 @@ export function AdbnTechExpensesWorkspace({
                 const mappedAccount = mappedAccountId
                   ? accountById.get(mappedAccountId)
                   : undefined;
-                const synced = syncedLabels.has(
-                  adbnExpenseSyncLabel(expense.id).toLowerCase(),
-                );
+                const currentTransaction =
+                  findPostedAdbnExpenseTransaction(
+                    expense.id,
+                    businessTransactions,
+                  );
+
+                const synced =
+                  Boolean(
+                    currentTransaction,
+                  );
+
+                const changed =
+                  Boolean(
+                    currentTransaction,
+                  )
+                  && !adbnExpenseTransactionMatches(
+                    expense,
+                    currentTransaction as FinancialTransaction,
+                    spaceId,
+                    mappedAccountId,
+                  );
+
                 const ready = Boolean(mappedAccountId)
                   && Boolean(expense.bankAccountId)
                   && adbnExpenseCanPost(expense);
@@ -327,8 +476,27 @@ export function AdbnTechExpensesWorkspace({
                       )}
                     </td>
                     <td>
-                      {synced ? (
-                        <><strong>Synced</strong><small>Money Out</small></>
+                      {synced && !changed ? (
+                        <><strong>Synced</strong><small>Money Out matches ADBN</small></>
+                      ) : synced && changed && ready ? (
+                        <button
+                          type="button"
+                          className="button secondary compact"
+                          data-adbn-expense-reconcile
+                          disabled={Boolean(syncBusyExpenseId)}
+                          onClick={() =>
+                            void reconcileExpense(
+                              expense,
+                              currentTransaction as FinancialTransaction,
+                            )
+                          }
+                        >
+                          {syncBusyExpenseId === expense.id
+                            ? 'Reconciling...'
+                            : 'Reconcile change'}
+                        </button>
+                      ) : synced && changed ? (
+                        <><strong>Changed</strong><small>{!expense.bankAccountId ? 'No ADBN account' : !adbnExpenseCanPost(expense) ? 'Check date / amount' : 'Map account in Payments'}</small></>
                       ) : ready ? (
                         <button
                           type="button"

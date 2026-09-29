@@ -8,7 +8,9 @@ import type {
 import {
   listBusinessTransactionsForSpace,
   postTransactionWithIdempotencyKey,
+  reverseTransactionWithIdempotencyKey,
   type PostTransactionOutcome,
+  type TransactionInput,
 } from './transactionRepository';
 
 function externalExpenseToken(
@@ -248,19 +250,203 @@ export function adbnExpenseCanPost(
   );
 }
 
-export async function syncAdbnTechExpenseToBajetBn(
-  input: {
-    expense: AdbnTechExpenseMirror;
-    spaceId: string;
-    mappedAccountId: string;
-  },
-): Promise<PostTransactionOutcome> {
-  const {
-    expense,
-    spaceId,
-    mappedAccountId,
-  } = input;
+function expenseTransactionInput(
+  expense: AdbnTechExpenseMirror,
+  spaceId: string,
+  mappedAccountId: string,
+): TransactionInput {
+  const method =
+    paymentMethodFromAdbn(
+      expense.paymentMethod,
+    );
 
+  return {
+    type: 'expense',
+    accountId:
+      mappedAccountId,
+    spaceId,
+    amountMinor:
+      Math.round(
+        expense.amount * 100,
+      ),
+    transactionDate:
+      normalizedExpenseDate(
+        expense.date,
+      ),
+    categoryId:
+      categoryIdFromAdbn(
+        expense.category,
+      ),
+    counterparty:
+      expense.supplier
+      || expense.description
+      || 'ADBN TECH expense',
+    note:
+      [
+        'ADBN TECH expense '
+          + (
+            expense.expenseNo
+            || expense.id
+          ),
+        expense.category
+          ? 'Category '
+            + expense.category
+          : '',
+        expense.description
+          ? expense.description
+          : '',
+        expense.reference
+          ? 'Reference '
+            + expense.reference
+          : '',
+        expense.linkedJobNo
+          ? 'Job '
+            + expense.linkedJobNo
+          : '',
+        expense.linkedInvoiceNo
+          ? 'Invoice '
+            + expense.linkedInvoiceNo
+          : '',
+        expense.notes
+          ? expense.notes
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' | '),
+    labels: [
+      'adbn_tech',
+      'adbn_expense',
+      adbnExpenseSyncLabel(
+        expense.id,
+      ),
+    ],
+    ...method,
+  };
+}
+
+function expenseRevisionToken(
+  expense: AdbnTechExpenseMirror,
+  spaceId: string,
+  mappedAccountId: string,
+) {
+  const input =
+    expenseTransactionInput(
+      expense,
+      spaceId,
+      mappedAccountId,
+    );
+
+  return externalExpenseToken(
+    JSON.stringify([
+      input.accountId,
+      input.amountMinor,
+      input.transactionDate,
+      input.categoryId || '',
+      input.counterparty || '',
+      input.note || '',
+      input.paymentMethod || '',
+      input.paymentMethodLabel || '',
+    ]),
+  );
+}
+
+export function findPostedAdbnExpenseTransaction(
+  expenseId: string,
+  transactions: FinancialTransaction[],
+) {
+  const label =
+    adbnExpenseSyncLabel(
+      expenseId,
+    ).toLowerCase();
+
+  return transactions.find(
+    (item) =>
+      item.status === 'posted'
+      && item.type === 'expense'
+      && (item.labels || [])
+        .some(
+          (value) =>
+            value
+              .trim()
+              .toLowerCase()
+            === label,
+        ),
+  );
+}
+
+export function adbnExpenseTransactionMatches(
+  expense: AdbnTechExpenseMirror,
+  transaction: FinancialTransaction,
+  spaceId: string,
+  mappedAccountId: string,
+) {
+  if (
+    !mappedAccountId
+    || !adbnExpenseCanPost(
+      expense,
+    )
+  ) {
+    return false;
+  }
+
+  const expected =
+    expenseTransactionInput(
+      expense,
+      spaceId,
+      mappedAccountId,
+    );
+
+  return (
+    transaction.status === 'posted'
+    && transaction.type === 'expense'
+    && transaction.accountId
+      === expected.accountId
+    && transaction.amountMinor
+      === expected.amountMinor
+    && transaction.transactionDate
+      === expected.transactionDate
+    && (
+      transaction.categoryId
+      || ''
+    ) === (
+      expected.categoryId
+      || ''
+    )
+    && (
+      transaction.counterparty
+      || ''
+    ) === (
+      expected.counterparty
+      || ''
+    )
+    && (
+      transaction.note
+      || ''
+    ) === (
+      expected.note
+      || ''
+    )
+    && (
+      transaction.paymentMethod
+      || ''
+    ) === (
+      expected.paymentMethod
+      || ''
+    )
+    && (
+      transaction.paymentMethodLabel
+      || ''
+    ) === (
+      expected.paymentMethodLabel
+      || ''
+    )
+  );
+}
+
+function validateExpensePosting(
+  expense: AdbnTechExpenseMirror,
+  mappedAccountId: string,
+) {
   if (
     !adbnExpenseCanPost(
       expense,
@@ -282,78 +468,114 @@ export async function syncAdbnTechExpenseToBajetBn(
       'Map the ADBN TECH paying account to a BajetBN Business account first.',
     );
   }
+}
 
-  const method =
-    paymentMethodFromAdbn(
-      expense.paymentMethod,
-    );
+export async function syncAdbnTechExpenseToBajetBn(
+  input: {
+    expense: AdbnTechExpenseMirror;
+    spaceId: string;
+    mappedAccountId: string;
+  },
+): Promise<PostTransactionOutcome> {
+  const {
+    expense,
+    spaceId,
+    mappedAccountId,
+  } = input;
+
+  validateExpensePosting(
+    expense,
+    mappedAccountId,
+  );
 
   return postTransactionWithIdempotencyKey(
-    {
-      type: 'expense',
-      accountId:
-        mappedAccountId,
+    expenseTransactionInput(
+      expense,
       spaceId,
-      amountMinor:
-        Math.round(
-          expense.amount * 100,
-        ),
-      transactionDate:
-        normalizedExpenseDate(
-          expense.date,
-        ),
-      categoryId:
-        categoryIdFromAdbn(
-          expense.category,
-        ),
-      counterparty:
-        expense.supplier
-        || expense.description
-        || 'ADBN TECH expense',
-      note:
-        [
-          'ADBN TECH expense '
-            + (
-              expense.expenseNo
-              || expense.id
-            ),
-          expense.category
-            ? 'Category '
-              + expense.category
-            : '',
-          expense.description
-            ? expense.description
-            : '',
-          expense.reference
-            ? 'Reference '
-              + expense.reference
-            : '',
-          expense.linkedJobNo
-            ? 'Job '
-              + expense.linkedJobNo
-            : '',
-          expense.linkedInvoiceNo
-            ? 'Invoice '
-              + expense.linkedInvoiceNo
-            : '',
-          expense.notes
-            ? expense.notes
-            : '',
-        ]
-          .filter(Boolean)
-          .join(' | '),
-      labels: [
-        'adbn_tech',
-        'adbn_expense',
-        adbnExpenseSyncLabel(
-          expense.id,
-        ),
-      ],
-      ...method,
-    },
+      mappedAccountId,
+    ),
     adbnExpenseSyncKey(
       expense.id,
     ),
+  );
+}
+
+export async function reconcileAdbnTechExpenseToBajetBn(
+  input: {
+    expense: AdbnTechExpenseMirror;
+    currentTransaction: FinancialTransaction;
+    spaceId: string;
+    mappedAccountId: string;
+    reversalDate: string;
+  },
+): Promise<PostTransactionOutcome> {
+  const {
+    expense,
+    currentTransaction,
+    spaceId,
+    mappedAccountId,
+    reversalDate,
+  } = input;
+
+  validateExpensePosting(
+    expense,
+    mappedAccountId,
+  );
+
+  if (
+    currentTransaction.status
+      !== 'posted'
+    || currentTransaction.type
+      !== 'expense'
+  ) {
+    throw new Error(
+      'The current BajetBN expense transaction is no longer active.',
+    );
+  }
+
+  if (
+    adbnExpenseTransactionMatches(
+      expense,
+      currentTransaction,
+      spaceId,
+      mappedAccountId,
+    )
+  ) {
+    throw new Error(
+      'This ADBN TECH expense already matches BajetBN.',
+    );
+  }
+
+  const revision =
+    expenseRevisionToken(
+      expense,
+      spaceId,
+      mappedAccountId,
+    );
+
+  const transition =
+    externalExpenseToken(
+      currentTransaction.id
+      + '|'
+      + revision,
+    );
+
+  await reverseTransactionWithIdempotencyKey(
+    currentTransaction.id,
+    reversalDate,
+    'ADBN TECH expense was edited; previous BajetBN Money Out reversed before posting the corrected source values.',
+    'adbn-expense-reconcile-reverse-'
+      + transition,
+  );
+
+  return postTransactionWithIdempotencyKey(
+    expenseTransactionInput(
+      expense,
+      spaceId,
+      mappedAccountId,
+    ),
+    'adbn-expense-reconcile-post-'
+      + transition,
   );
 }
 

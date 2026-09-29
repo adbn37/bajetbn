@@ -105,3 +105,46 @@ export async function reverseStaleAdbnSupplierPaymentMoneyActivity(
       ),
   );
 }
+
+
+function staleAdbnExpenseReversalToken(
+  value: string,
+) {
+  let hash = 2166136261;
+
+  for (
+    let index = 0;
+    index < value.length;
+    index += 1
+  ) {
+    hash =
+      Math.imul(
+        hash
+        ^ value.charCodeAt(index),
+        16777619,
+      );
+  }
+
+  return (hash >>> 0)
+    .toString(16)
+    .padStart(8, '0');
+}
+
+export async function reverseStaleAdbnExpenseMoneyActivity(
+  input: {
+    transactionId: string;
+    transactionDate: string;
+    reason?: string;
+  },
+) {
+  return reverseTransactionWithIdempotencyKey(
+    input.transactionId,
+    input.transactionDate,
+    input.reason?.trim()
+      || 'ADBN TECH expense was deleted from the source; stale BajetBN Money Out reversed manually.',
+    'adbn-stale-expense-'
+      + staleAdbnExpenseReversalToken(
+        input.transactionId,
+      ),
+  );
+}
