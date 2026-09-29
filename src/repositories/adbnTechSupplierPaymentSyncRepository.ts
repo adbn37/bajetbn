@@ -426,6 +426,8 @@ export interface AdbnTechSupplierPaymentAutoSyncSummary {
   alreadySynced: number;
   alreadyReversed: number;
   reversalNotSynced: number;
+  manualReversals: number;
+  manualReversalDetails: string[];
   beforeCutoff: number;
   sourceSkipped: number;
   blocked: number;
@@ -481,6 +483,8 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
   let alreadySynced = 0;
   let alreadyReversed = 0;
   let reversalNotSynced = 0;
+  let manualReversals = 0;
+  const manualReversalDetails: string[] = [];
   let beforeCutoff = 0;
   let sourceSkipped = 0;
   let blocked = 0;
@@ -499,6 +503,21 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
         (payment.paymentNo || payment.id)
         + ': '
         + reason,
+      );
+    }
+  };
+
+  const recordManualReversal = (
+    payment: AdbnTechSupplierPaymentMirror,
+  ) => {
+    manualReversals += 1;
+
+    if (
+      manualReversalDetails.length < 3
+    ) {
+      manualReversalDetails.push(
+        payment.paymentNo
+        || payment.id,
       );
     }
   };
@@ -700,9 +719,8 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
         .trim();
 
     if (!originalPaymentId) {
-      recordBlocked(
+      recordManualReversal(
         reversal,
-        'reversal has no original supplier payment ID',
       );
       continue;
     }
@@ -886,6 +904,8 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
     alreadySynced,
     alreadyReversed,
     reversalNotSynced,
+    manualReversals,
+    manualReversalDetails,
     beforeCutoff,
     sourceSkipped,
     blocked,
