@@ -20,6 +20,7 @@ import {
 import {
   adbnExpenseCanPost,
   adbnExpenseTransactionMatches,
+  autoReconcileChangedAdbnTechExpenses,
   autoSyncNewAdbnTechExpensesToBajetBn,
   findPostedAdbnExpenseTransaction,
   reconcileAdbnTechExpenseToBajetBn,
@@ -194,7 +195,7 @@ export function AdbnTechExpensesWorkspace({
         );
         autoSyncRunRef.current = '';
         setAutoSyncMessage(
-          'Expense auto-sync enabled. Only ADBN TECH expense records created after this moment can post automatically.',
+          'Expense auto-sync enabled. New ADBN TECH expenses can post from now, and changed synced expenses can reconcile automatically.',
         );
       } catch (nextError) {
         setError(
@@ -253,7 +254,7 @@ export function AdbnTechExpensesWorkspace({
         setAutoSyncMessage('');
 
         try {
-          const summary =
+          const syncSummary =
             await autoSyncNewAdbnTechExpensesToBajetBn(
               {
                 spaceId,
@@ -265,53 +266,100 @@ export function AdbnTechExpensesWorkspace({
               },
             );
 
+          const reconciliationSummary =
+            await autoReconcileChangedAdbnTechExpenses(
+              {
+                spaceId,
+                mappings:
+                  savedMappings,
+                expenses,
+                transactions:
+                  syncSummary.transactions,
+                reversalDate:
+                  new Intl.DateTimeFormat(
+                    'en-CA',
+                    {
+                      timeZone:
+                        'Asia/Brunei',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    },
+                  )
+                    .format(
+                      new Date(),
+                    ),
+              },
+            );
+
           setBusinessTransactions(
-            summary.transactions,
+            reconciliationSummary.transactions,
           );
 
           if (
-            summary.posted > 0
+            (
+              syncSummary.posted > 0
+              || reconciliationSummary.reconciled > 0
+            )
             && onFinancialSync
           ) {
             await onFinancialSync();
           }
 
           if (
-            summary.connected
+            syncSummary.connected
+            && reconciliationSummary.connected
             && (
-              summary.posted > 0
-              || summary.failed > 0
-              || summary.blocked > 0
+              syncSummary.posted > 0
+              || syncSummary.failed > 0
+              || syncSummary.blocked > 0
+              || reconciliationSummary.reconciled > 0
+              || reconciliationSummary.failed > 0
+              || reconciliationSummary.blocked > 0
             )
           ) {
             setAutoSyncMessage(
-              summary.posted
+              syncSummary.posted
               + ' new expense'
               + (
-                summary.posted === 1
+                syncSummary.posted === 1
                   ? ''
                   : 's'
               )
               + ' auto-synced. '
-              + summary.blocked
+              + reconciliationSummary.reconciled
+              + ' changed expense'
+              + (
+                reconciliationSummary.reconciled === 1
+                  ? ''
+                  : 's'
+              )
+              + ' auto-reconciled. '
+              + (
+                syncSummary.blocked
+                + reconciliationSummary.blocked
+              )
               + ' blocked. '
-              + summary.failed
+              + (
+                syncSummary.failed
+                + reconciliationSummary.failed
+              )
               + ' failed.',
             );
           }
 
-          if (
-            summary.firstError
-          ) {
-            setError(
-              summary.firstError,
-            );
+          const firstError =
+            syncSummary.firstError
+            || reconciliationSummary.firstError;
+
+          if (firstError) {
+            setError(firstError);
           }
         } catch (nextError) {
           setError(
             nextError instanceof Error
               ? nextError.message
-              : 'ADBN TECH expense auto-sync check failed.',
+              : 'ADBN TECH expense auto-sync and reconciliation check failed.',
           );
         } finally {
           setAutoSyncBusy(false);
@@ -659,7 +707,7 @@ export function AdbnTechExpensesWorkspace({
             Auto-sync new ADBN TECH expenses
           </h3>
           <p className="muted">
-            Existing expenses stay manual. When enabled, only ADBN TECH expense records created after the activation time can post automatically to the mapped BajetBN Business account. The source createdAt timestamp controls this boundary, not the expense date.
+            Existing expenses stay manual. When enabled, only ADBN TECH expense records created after the activation time can post automatically to the mapped BajetBN Business account. The source createdAt timestamp controls this boundary, not the expense date. Already-synced expenses are automatically reconciled if their ADBN source values change. Deleted or missing source expenses are never reversed automatically.
           </p>
         </div>
 

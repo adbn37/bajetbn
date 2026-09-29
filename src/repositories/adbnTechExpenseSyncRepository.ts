@@ -860,3 +860,145 @@ export async function autoSyncNewAdbnTechExpensesToBajetBn(
     transactions,
   };
 }
+
+
+export interface AdbnTechExpenseAutoReconcileSummary {
+  connected: boolean;
+  reconciled: number;
+  unchanged: number;
+  blocked: number;
+  failed: number;
+  firstError: string;
+  transactions: FinancialTransaction[];
+}
+
+export async function autoReconcileChangedAdbnTechExpenses(
+  input: {
+    spaceId: string;
+    mappings: Record<string, string>;
+    reversalDate: string;
+    expenses?: AdbnTechExpenseMirror[];
+    transactions?: FinancialTransaction[];
+  },
+): Promise<AdbnTechExpenseAutoReconcileSummary> {
+  const startingTransactions =
+    input.transactions
+    || await listBusinessTransactionsForSpace(
+      input.spaceId,
+    );
+
+  if (
+    getAdbnTechConnectedEmail()
+    !== ADBN_TECH_ADMIN_EMAIL
+  ) {
+    return {
+      connected: false,
+      reconciled: 0,
+      unchanged: 0,
+      blocked: 0,
+      failed: 0,
+      firstError: '',
+      transactions: startingTransactions,
+    };
+  }
+
+  const expenses =
+    input.expenses
+    || (
+      await loadAdbnTechExpensesReadOnly()
+    ).expenses;
+
+  let reconciled = 0;
+  let unchanged = 0;
+  let blocked = 0;
+  let failed = 0;
+  let firstError = '';
+
+  for (const expense of expenses) {
+    const currentTransaction =
+      findPostedAdbnExpenseTransaction(
+        expense.id,
+        startingTransactions,
+      );
+
+    if (!currentTransaction) {
+      continue;
+    }
+
+    const mappedAccountId =
+      expense.bankAccountId
+        ? input.mappings[
+            expense.bankAccountId
+          ]
+        : '';
+
+    if (
+      adbnExpenseTransactionMatches(
+        expense,
+        currentTransaction,
+        input.spaceId,
+        mappedAccountId,
+      )
+    ) {
+      unchanged += 1;
+      continue;
+    }
+
+    if (
+      !mappedAccountId
+      || !expense.bankAccountId
+      || !adbnExpenseCanPost(
+        expense,
+      )
+    ) {
+      blocked += 1;
+      continue;
+    }
+
+    try {
+      const outcome =
+        await reconcileAdbnTechExpenseToBajetBn(
+          {
+            expense,
+            currentTransaction,
+            spaceId: input.spaceId,
+            mappedAccountId,
+            reversalDate:
+              input.reversalDate,
+          },
+        );
+
+      if (outcome.mode === 'posted') {
+        reconciled += 1;
+      } else {
+        failed += 1;
+      }
+    } catch (error) {
+      failed += 1;
+
+      if (!firstError) {
+        firstError =
+          error instanceof Error
+            ? error.message
+            : 'ADBN TECH expense automatic reconciliation failed.';
+      }
+    }
+  }
+
+  const transactions =
+    reconciled > 0
+      ? await listBusinessTransactionsForSpace(
+          input.spaceId,
+        )
+      : startingTransactions;
+
+  return {
+    connected: true,
+    reconciled,
+    unchanged,
+    blocked,
+    failed,
+    firstError,
+    transactions,
+  };
+}
