@@ -1324,6 +1324,8 @@ export interface Space {
   externalIntegrationAccountMappings?: Record<string, string>;
   externalIntegrationPaymentAutoSyncEnabled?: boolean;
   externalIntegrationPaymentAutoSyncCutoffIso?: string | null;
+  externalIntegrationExpenseAutoSyncEnabled?: boolean;
+  externalIntegrationExpenseAutoSyncCutoffIso?: string | null;
   archivedAt?: Timestamp | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
