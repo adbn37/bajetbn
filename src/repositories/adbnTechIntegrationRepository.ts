@@ -130,6 +130,33 @@ export interface AdbnTechPaymentsReadOnlySnapshot {
   loadedAt: string;
 }
 
+export interface AdbnTechExpenseMirror {
+  id: string;
+  expenseNo: string;
+  date: string;
+  category: string;
+  accountType: string;
+  description: string;
+  supplier: string;
+  amount: number;
+  paymentMethod: string;
+  bankAccountId: string;
+  bankAccountName: string;
+  bankAccountType: string;
+  reference: string;
+  linkedJobNo: string;
+  linkedInvoiceNo: string;
+  notes: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AdbnTechExpensesReadOnlySnapshot {
+  expenses: AdbnTechExpenseMirror[];
+  connectedEmail: string;
+  loadedAt: string;
+}
+
 export interface AdbnTechPaymentReceiptPublic {
   paymentId: string;
   receiptNo: string;
@@ -1306,6 +1333,130 @@ export async function loadAdbnTechPaymentsReadOnly(): Promise<
     payments,
     connectedEmail,
     loadedAt: new Date().toISOString(),
+  };
+}
+
+export async function loadAdbnTechExpensesReadOnly(): Promise<
+  AdbnTechExpensesReadOnlySnapshot
+> {
+  const {
+    auth,
+    db,
+  } = requireAdbnTechFirebase();
+
+  const connectedEmail =
+    normalizeEmail(
+      auth.currentUser?.email,
+    );
+
+  if (
+    connectedEmail
+    !== ADBN_TECH_ADMIN_EMAIL
+  ) {
+    throw new Error(
+      'Connect ADBN TECH with '
+      + ADBN_TECH_ADMIN_EMAIL
+      + ' first.',
+    );
+  }
+
+  /*
+   * ADBN TECH remains authoritative for expenses.
+   * This slice is read-only against the ADBN expenses collection.
+   */
+  const expenseSnapshot =
+    await getDocs(
+      collection(
+        db,
+        'expenses',
+      ),
+    );
+
+  const expenses =
+    expenseSnapshot.docs
+      .map((record) => {
+        const data =
+          record.data();
+
+        return {
+          id: record.id,
+          expenseNo:
+            text(data.expenseNo),
+          date:
+            text(
+              data.date
+              ?? data.expenseDate
+              ?? data.transactionDate,
+            ),
+          category:
+            text(data.category),
+          accountType:
+            text(data.accountType),
+          description:
+            text(data.description),
+          supplier:
+            text(
+              data.supplier
+              ?? data.payee,
+            ),
+          amount:
+            money(data.amount),
+          paymentMethod:
+            text(
+              data.paymentMethod
+              ?? data.method,
+            ),
+          bankAccountId:
+            text(data.bankAccountId),
+          bankAccountName:
+            text(
+              data.bankAccountName
+              ?? data.accountName,
+            ),
+          bankAccountType:
+            text(data.bankAccountType),
+          reference:
+            text(data.reference),
+          linkedJobNo:
+            text(data.linkedJobNo),
+          linkedInvoiceNo:
+            text(data.linkedInvoiceNo),
+          notes:
+            text(
+              data.notes
+              ?? data.note,
+            ),
+          createdAt:
+            data.createdAt,
+          updatedAt:
+            data.updatedAt,
+        } satisfies AdbnTechExpenseMirror;
+      })
+      .sort(
+        (a, b) =>
+          Math.max(
+            timestampMillis(
+              b.updatedAt,
+            ),
+            timestampMillis(
+              b.createdAt,
+            ),
+          )
+          - Math.max(
+            timestampMillis(
+              a.updatedAt,
+            ),
+            timestampMillis(
+              a.createdAt,
+            ),
+          ),
+      );
+
+  return {
+    expenses,
+    connectedEmail,
+    loadedAt:
+      new Date().toISOString(),
   };
 }
 

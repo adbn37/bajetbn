@@ -205,6 +205,39 @@ function adbnSupplierPaymentSyncLabel(
   );
 }
 
+function adbnExpenseSyncLabel(
+  item: FinancialTransaction,
+): string {
+  const labels =
+    (item.labels || [])
+      .map(
+        (label) =>
+          label
+            .trim()
+            .toLowerCase(),
+      );
+
+  if (
+    !labels.includes(
+      'adbn_tech',
+    )
+    || !labels.includes(
+      'adbn_expense',
+    )
+  ) {
+    return '';
+  }
+
+  return (
+    labels.find(
+      (label) =>
+        /^adbn_exp_[a-f0-9]{16}$/
+          .test(label),
+    )
+    || ''
+  );
+}
+
 function managedSourceLabel(item: FinancialTransaction): string | null {
   const linked =
     item as FinancialTransaction
@@ -261,6 +294,14 @@ function managedSourceLabel(item: FinancialTransaction): string | null {
     )
   ) {
     return 'ADBN TECH supplier payment';
+  }
+
+  if (
+    adbnExpenseSyncLabel(
+      item,
+    )
+  ) {
+    return 'ADBN TECH expense';
   }
 
   if (
