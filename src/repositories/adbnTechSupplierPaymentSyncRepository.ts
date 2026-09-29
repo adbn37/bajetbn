@@ -288,6 +288,48 @@ export function adbnSupplierPaymentIsReversal(
   );
 }
 
+export function adbnSupplierPaymentIsLegacyUnlinkedBeforeCutoff(
+  payment: AdbnTechSupplierPaymentMirror,
+  purchases: AdbnTechPurchaseMirror[],
+  cutoff =
+    ADBN_SUPPLIER_PURCHASE_AUTO_SYNC_CUTOFF,
+) {
+  if (
+    adbnSupplierPaymentIsReversal(
+      payment,
+    )
+  ) {
+    return false;
+  }
+
+  const linkedPurchases =
+    linkedPurchasesForSupplierPayment(
+      payment,
+      purchases,
+    );
+
+  if (linkedPurchases.length) {
+    return false;
+  }
+
+  const paymentDate =
+    normalizedPaymentDate(
+      payment.paymentDate,
+    );
+
+  /*
+   * This is diagnostic classification only. Automatic eligibility
+   * still depends on the linked purchase date. When an orphaned
+   * supplier payment itself predates the automation boundary, keep
+   * it manual instead of presenting it as a current integration
+   * failure.
+   */
+  return Boolean(
+    paymentDate,
+  )
+  && paymentDate < cutoff;
+}
+
 export function adbnSupplierPaymentCanPost(
   payment: AdbnTechSupplierPaymentMirror,
 ) {
@@ -560,6 +602,17 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
       );
 
     if (!linkedPurchases.length) {
+      if (
+        adbnSupplierPaymentIsLegacyUnlinkedBeforeCutoff(
+          payment,
+          input.purchases,
+          cutoff,
+        )
+      ) {
+        beforeCutoff += 1;
+        continue;
+      }
+
       recordBlocked(
         payment,
         'no linked purchase (ID, group ID or purchase number)',
