@@ -562,6 +562,32 @@ export async function reverseTransaction(transactionId: string, transactionDate:
   return call({ transactionId, transactionDate, reason, idempotencyKey: idempotencyKey() });
 }
 
+export async function reverseTransactionWithIdempotencyKey(
+  transactionId: string,
+  transactionDate: string,
+  reason: string,
+  key: string,
+) {
+  if (!navigator.onLine) {
+    throw new Error(
+      'ADBN TECH supplier payment reversal sync requires an online connection.',
+    );
+  }
+
+  const { functions } = requireFirebase();
+  const call = httpsCallable(
+    functions,
+    'reverseTransaction',
+  );
+
+  return call({
+    transactionId,
+    transactionDate,
+    reason,
+    idempotencyKey: key,
+  });
+}
+
 export async function updateTransactionDetails(input: {
   transactionId: string;
   counterparty?: string;

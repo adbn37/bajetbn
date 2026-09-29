@@ -509,7 +509,10 @@ export function AdbnTechPurchasesWorkspace({
           );
 
           if (
-            summary.posted > 0
+            (
+              summary.posted > 0
+              || summary.reversed > 0
+            )
             && onFinancialSync
           ) {
             await onFinancialSync();
@@ -517,6 +520,7 @@ export function AdbnTechPurchasesWorkspace({
 
           if (
             summary.posted > 0
+            || summary.reversed > 0
             || summary.failed > 0
             || summary.blocked > 0
           ) {
@@ -531,6 +535,14 @@ export function AdbnTechPurchasesWorkspace({
               + ' auto-synced from ADBN purchases dated '
               + ADBN_SUPPLIER_PURCHASE_AUTO_SYNC_CUTOFF
               + ' onward. '
+              + summary.reversed
+              + ' reversal'
+              + (
+                summary.reversed === 1
+                  ? ''
+                  : 's'
+              )
+              + ' applied. '
               + summary.blocked
               + ' blocked. '
               + summary.failed
@@ -1041,7 +1053,7 @@ export function AdbnTechPurchasesWorkspace({
           Automatic Money Out from 25 Sep 2026
         </strong>
         <span>
-          ADBN-originated supplier payments linked to purchases dated 25 Sep 2026 or later are posted automatically to the mapped BajetBN Business account. Earlier purchases stay manual, and BajetBN-originated purchases are never duplicated.
+          ADBN-originated supplier payments linked to purchases dated 25 Sep 2026 or later are posted automatically to the mapped BajetBN Business account. Explicit ADBN reversals restore the exact synced Money Out once. Earlier purchases stay manual, and BajetBN-originated purchases are never duplicated.
         </span>
       </div>
 
@@ -1645,7 +1657,7 @@ export function AdbnTechPurchasesWorkspace({
       )}
 
       <div className="notice">
-        ADBN TECH remains the purchase and supplier-payment source of truth. ADBN-originated purchases dated 25 Sep 2026 onward can auto-post their eligible positive supplier payment to BajetBN Money Activity as Money Out. Earlier purchases, reversals and credits stay manual.
+        ADBN TECH remains the purchase and supplier-payment source of truth. ADBN-originated purchases dated 25 Sep 2026 onward can auto-post their eligible positive supplier payment to BajetBN Money Activity as Money Out, and explicit linked reversals can automatically restore that Money Out. Earlier purchases and untargeted credits stay manual.
       </div>
     </section>
   );
