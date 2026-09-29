@@ -123,6 +123,13 @@ function linkedPurchasesForSupplierPayment(
       )
       || (
         Boolean(
+          payment.purchaseGroupId,
+        )
+        && purchase.purchaseGroupId
+          === payment.purchaseGroupId
+      )
+      || (
+        Boolean(
           payment.purchaseNo,
         )
         && purchase.purchaseNo
@@ -422,6 +429,7 @@ export interface AdbnTechSupplierPaymentAutoSyncSummary {
   beforeCutoff: number;
   sourceSkipped: number;
   blocked: number;
+  blockedDetails: string[];
   failed: number;
   firstError: string;
   transactions: FinancialTransaction[];
@@ -476,8 +484,24 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
   let beforeCutoff = 0;
   let sourceSkipped = 0;
   let blocked = 0;
+  const blockedDetails: string[] = [];
   let failed = 0;
   let firstError = '';
+
+  const recordBlocked = (
+    payment: AdbnTechSupplierPaymentMirror,
+    reason: string,
+  ) => {
+    blocked += 1;
+
+    if (blockedDetails.length < 3) {
+      blockedDetails.push(
+        (payment.paymentNo || payment.id)
+        + ': '
+        + reason,
+      );
+    }
+  };
 
   /*
    * Pass 1: post positive ADBN-originated supplier payments.
@@ -517,7 +541,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
       );
 
     if (!linkedPurchases.length) {
-      blocked += 1;
+      recordBlocked(
+        payment,
+        'no linked purchase (ID, group ID or purchase number)',
+      );
       continue;
     }
 
@@ -547,7 +574,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
         (date) => !date,
       )
     ) {
-      blocked += 1;
+      recordBlocked(
+        payment,
+        'linked purchase has no valid purchase date',
+      );
       continue;
     }
 
@@ -568,13 +598,25 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
           ]
         : '';
 
+    if (!mappedAccountId) {
+      recordBlocked(
+        payment,
+        payment.bankAccountId
+          ? 'ADBN account is not mapped to a BajetBN Business account'
+          : 'supplier payment has no ADBN bank/cash account',
+      );
+      continue;
+    }
+
     if (
-      !mappedAccountId
-      || !adbnSupplierPaymentCanPost(
+      !adbnSupplierPaymentCanPost(
         payment,
       )
     ) {
-      blocked += 1;
+      recordBlocked(
+        payment,
+        'supplier payment is not eligible for Money Out posting',
+      );
       continue;
     }
 
@@ -658,7 +700,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
         .trim();
 
     if (!originalPaymentId) {
-      blocked += 1;
+      recordBlocked(
+        reversal,
+        'reversal has no original supplier payment ID',
+      );
       continue;
     }
 
@@ -668,7 +713,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
       );
 
     if (!originalPayment) {
-      blocked += 1;
+      recordBlocked(
+        reversal,
+        'original supplier payment is not available in the ADBN snapshot',
+      );
       continue;
     }
 
@@ -689,7 +737,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
       );
 
     if (!linkedPurchases.length) {
-      blocked += 1;
+      recordBlocked(
+        reversal,
+        'original supplier payment has no linked purchase',
+      );
       continue;
     }
 
@@ -706,7 +757,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
         (date) => !date,
       )
     ) {
-      blocked += 1;
+      recordBlocked(
+        reversal,
+        'original linked purchase has no valid purchase date',
+      );
       continue;
     }
 
@@ -757,7 +811,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
       || originalTransaction.status
         !== 'posted'
     ) {
-      blocked += 1;
+      recordBlocked(
+        reversal,
+        'original BajetBN supplier Money Out is not active',
+      );
       continue;
     }
 
@@ -767,7 +824,10 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
       );
 
     if (!reversalDate) {
-      blocked += 1;
+      recordBlocked(
+        reversal,
+        'reversal has no valid payment date',
+      );
       continue;
     }
 
@@ -829,6 +889,7 @@ export async function autoSyncAdbnTechSupplierPaymentsToBajetBn(
     beforeCutoff,
     sourceSkipped,
     blocked,
+    blockedDetails,
     failed,
     firstError,
     transactions,

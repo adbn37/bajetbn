@@ -193,6 +193,7 @@ export interface AdbnTechRecordPaymentResult {
 
 export interface AdbnTechPurchaseMirror {
   id: string;
+  purchaseGroupId: string;
   purchaseNo: string;
   purchaseDate: string;
   sellerName: string;
@@ -1358,6 +1359,8 @@ export async function loadAdbnTechPurchasesReadOnly(): Promise<
 
       return {
         id: record.id,
+        purchaseGroupId:
+          text(data.purchaseGroupId),
         purchaseNo: text(data.purchaseNo ?? data.poNo ?? data.referenceNo),
         purchaseDate: text(data.purchaseDate ?? data.orderDate ?? data.date),
         sellerName: text(data.sellerName ?? data.supplierName ?? data.vendorName),
