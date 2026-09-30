@@ -53,6 +53,14 @@ import type {
   FinancialTransaction,
 } from '../../types/models';
 
+type PaymentViewFilter =
+  | 'all'
+  | 'attention'
+  | 'ready'
+  | 'synced'
+  | 'changed'
+  | 'blocked';
+
 function bnd(value: number) {
   return new Intl.NumberFormat('en-BN', {
     style: 'currency',
@@ -216,6 +224,11 @@ export function AdbnTechPaymentsWorkspace({
 
   const [query, setQuery] =
     useState('');
+
+  const [
+    paymentViewFilter,
+    setPaymentViewFilter,
+  ] = useState<PaymentViewFilter>('all');
 
   const [loading, setLoading] =
     useState(false);
@@ -1247,7 +1260,7 @@ export function AdbnTechPaymentsWorkspace({
   const normalizedQuery =
     query.trim().toLowerCase();
 
-  const payments = useMemo(
+  const searchedPayments = useMemo(
     () => {
       const rows =
         snapshot?.payments || [];
@@ -1301,6 +1314,203 @@ export function AdbnTechPaymentsWorkspace({
           ),
         ),
       [bajetAccounts],
+    );
+
+  const paymentFilterCounts =
+    useMemo(
+      () => {
+        const counts = {
+          all:
+            snapshot?.payments.length
+            || 0,
+          attention: 0,
+          ready: 0,
+          synced: 0,
+          changed: 0,
+          blocked: 0,
+        };
+
+        for (
+          const payment
+          of snapshot?.payments || []
+        ) {
+          const currentTransaction =
+            findPostedAdbnPaymentTransaction(
+              payment.id,
+              businessTransactions,
+            );
+
+          const mappedAccountId =
+            payment.bankAccountId
+              ? savedMappings[
+                  payment.bankAccountId
+                ]
+              : '';
+
+          const postingIssue =
+            adbnPaymentPostingIssue(
+              payment,
+              mappedAccountId,
+              mappedAccountId
+                ? bajetAccountIds.has(
+                    mappedAccountId,
+                  )
+                : true,
+            );
+
+          const changed =
+            Boolean(
+              currentTransaction,
+            )
+            && !adbnPaymentTransactionMatches(
+              payment,
+              currentTransaction as FinancialTransaction,
+              spaceId,
+              mappedAccountId,
+            );
+
+          const blocked =
+            Boolean(
+              postingIssue,
+            );
+
+          if (currentTransaction) {
+            counts.synced += 1;
+          }
+
+          if (changed) {
+            counts.changed += 1;
+          }
+
+          if (blocked) {
+            counts.blocked += 1;
+          }
+
+          if (
+            changed
+            || blocked
+          ) {
+            counts.attention += 1;
+          }
+
+          if (
+            !currentTransaction
+            && !postingIssue
+          ) {
+            counts.ready += 1;
+          }
+        }
+
+        return counts;
+      },
+      [
+        bajetAccountIds,
+        businessTransactions,
+        savedMappings,
+        snapshot,
+        spaceId,
+      ],
+    );
+
+  const payments =
+    useMemo(
+      () => {
+        if (
+          paymentViewFilter
+          === 'all'
+        ) {
+          return searchedPayments;
+        }
+
+        return searchedPayments.filter(
+          (payment) => {
+            const currentTransaction =
+              findPostedAdbnPaymentTransaction(
+                payment.id,
+                businessTransactions,
+              );
+
+            const mappedAccountId =
+              payment.bankAccountId
+                ? savedMappings[
+                    payment.bankAccountId
+                  ]
+                : '';
+
+            const postingIssue =
+              adbnPaymentPostingIssue(
+                payment,
+                mappedAccountId,
+                mappedAccountId
+                  ? bajetAccountIds.has(
+                      mappedAccountId,
+                    )
+                  : true,
+              );
+
+            const changed =
+              Boolean(
+                currentTransaction,
+              )
+              && !adbnPaymentTransactionMatches(
+                payment,
+                currentTransaction as FinancialTransaction,
+                spaceId,
+                mappedAccountId,
+              );
+
+            if (
+              paymentViewFilter
+              === 'attention'
+            ) {
+              return (
+                changed
+                || Boolean(
+                  postingIssue,
+                )
+              );
+            }
+
+            if (
+              paymentViewFilter
+              === 'ready'
+            ) {
+              return (
+                !currentTransaction
+                && !postingIssue
+              );
+            }
+
+            if (
+              paymentViewFilter
+              === 'synced'
+            ) {
+              return Boolean(
+                currentTransaction,
+              );
+            }
+
+            if (
+              paymentViewFilter
+              === 'changed'
+            ) {
+              return changed;
+            }
+
+            return Boolean(
+              postingIssue,
+            );
+          },
+        );
+      },
+      [
+        bajetAccountIds,
+        businessTransactions,
+        paymentViewFilter,
+        savedMappings,
+        searchedPayments,
+        spaceId,
+      ],
     );
 
   const paymentIssueCounts =
@@ -1860,6 +2070,130 @@ export function AdbnTechPaymentsWorkspace({
         />
       </label>
 
+      <div
+        className="header-actions"
+        data-adbn-payment-view-filters
+      >
+        <button
+          type="button"
+          className={
+            `button compact ${
+              paymentViewFilter === 'all'
+                ? 'primary'
+                : 'secondary'
+            }`
+          }
+          onClick={() =>
+            setPaymentViewFilter(
+              'all',
+            )
+          }
+        >
+          All ({paymentFilterCounts.all})
+        </button>
+
+        <button
+          type="button"
+          className={
+            `button compact ${
+              paymentViewFilter === 'attention'
+                ? 'primary'
+                : 'secondary'
+            }`
+          }
+          data-adbn-payment-filter-attention
+          onClick={() =>
+            setPaymentViewFilter(
+              'attention',
+            )
+          }
+        >
+          Needs attention ({paymentFilterCounts.attention})
+        </button>
+
+        <button
+          type="button"
+          className={
+            `button compact ${
+              paymentViewFilter === 'ready'
+                ? 'primary'
+                : 'secondary'
+            }`
+          }
+          onClick={() =>
+            setPaymentViewFilter(
+              'ready',
+            )
+          }
+        >
+          Ready to sync ({paymentFilterCounts.ready})
+        </button>
+
+        <button
+          type="button"
+          className={
+            `button compact ${
+              paymentViewFilter === 'synced'
+                ? 'primary'
+                : 'secondary'
+            }`
+          }
+          onClick={() =>
+            setPaymentViewFilter(
+              'synced',
+            )
+          }
+        >
+          Synced ({paymentFilterCounts.synced})
+        </button>
+
+        <button
+          type="button"
+          className={
+            `button compact ${
+              paymentViewFilter === 'changed'
+                ? 'primary'
+                : 'secondary'
+            }`
+          }
+          onClick={() =>
+            setPaymentViewFilter(
+              'changed',
+            )
+          }
+        >
+          Changed ({paymentFilterCounts.changed})
+        </button>
+
+        <button
+          type="button"
+          className={
+            `button compact ${
+              paymentViewFilter === 'blocked'
+                ? 'primary'
+                : 'secondary'
+            }`
+          }
+          data-adbn-payment-filter-blocked
+          onClick={() =>
+            setPaymentViewFilter(
+              'blocked',
+            )
+          }
+        >
+          Blocked ({paymentFilterCounts.blocked})
+        </button>
+      </div>
+
+      <small
+        className="muted"
+        data-adbn-payment-filter-summary
+      >
+        Showing {payments.length} of {snapshot?.payments.length || 0} source payments.
+        {' '}
+        Missing/deleted source payments stay in the separate review section below.
+      </small>
+
       {error && (
         <div className="notice error">
           {error}
@@ -2192,7 +2526,7 @@ export function AdbnTechPaymentsWorkspace({
                     colSpan={10}
                     className="muted"
                   >
-                    No matching ADBN TECH payments.
+                    No ADBN TECH payments match the current search and status filter.
                   </td>
                 </tr>
               )}
