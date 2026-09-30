@@ -21,6 +21,7 @@ import {
   type AdbnTechReadOnlySnapshot,
 } from '../../repositories/adbnTechIntegrationRepository';
 import { findStalePostedAdbnExpenseTransactions } from '../../repositories/adbnTechExpenseSyncRepository';
+import { findStalePostedAdbnPaymentTransactions } from '../../repositories/adbnTechPaymentSyncRepository';
 import { getSpace } from '../../repositories/spaceRepository';
 import { listBusinessTransactionsForSpace } from '../../repositories/transactionRepository';
 import type { Account, FinancialTransaction, Space } from '../../types/models';
@@ -144,6 +145,9 @@ export function AdbnTechIntegrationHealthWorkspace({
       && hasLabel(t, 'adbn_expense')
       && hasPattern(t, /^adbn_exp_[a-f0-9]{16}$/),
   ).length;
+  const stalePayments = payments
+    ? findStalePostedAdbnPaymentTransactions(payments.payments, transactions)
+    : [];
   const staleExpenses = expenses
     ? findStalePostedAdbnExpenseTransactions(expenses.expenses, transactions)
     : [];
@@ -183,13 +187,14 @@ export function AdbnTechIntegrationHealthWorkspace({
             <span>Mapped accounts <strong>{mapped}/{activeAdbnAccounts.length}</strong></span>
             <span>Unmapped <strong>{unmapped}</strong></span>
             <span>Broken mappings <strong>{broken}</strong></span>
+            <span>Missing payments <strong>{stalePayments.length}</strong></span>
             <span>Missing expenses <strong>{staleExpenses.length}</strong></span>
             <span>Last read <strong>{loadedAt ? dateTime(loadedAt) : '—'}</strong></span>
           </div>
 
-          {(unmapped > 0 || broken > 0 || staleExpenses.length > 0) && (
+          {(unmapped > 0 || broken > 0 || stalePayments.length > 0 || staleExpenses.length > 0) && (
             <div className="notice warning">
-              Review required: {unmapped} active ADBN account(s) unmapped, {broken} broken mapping(s), and {staleExpenses.length} stale expense Money Out record(s).
+              Review required: {unmapped} active ADBN account(s) unmapped, {broken} broken mapping(s), {stalePayments.length} stale customer payment Money In record(s), and {staleExpenses.length} stale expense Money Out record(s).
             </div>
           )}
 
@@ -207,7 +212,7 @@ export function AdbnTechIntegrationHealthWorkspace({
             <section className="panel">
               <span className="eyebrow">Customer payments</span>
               <h3>{payments?.payments.length || 0} source payments</h3>
-              <p className="muted">{syncedPayments} active BajetBN Money In record(s). Auto-sync is {space?.externalIntegrationPaymentAutoSyncEnabled === true ? 'ON' : 'OFF'}.</p>
+              <p className="muted">{syncedPayments} active BajetBN Money In record(s) · {stalePayments.length} missing in ADBN. Auto-sync is {space?.externalIntegrationPaymentAutoSyncEnabled === true ? 'ON' : 'OFF'}.</p>
               <small className="muted">
                 {space?.externalIntegrationPaymentAutoSyncEnabled === true
                   ? 'From ' + dateTime(space.externalIntegrationPaymentAutoSyncCutoffIso || '')

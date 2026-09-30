@@ -32,12 +32,16 @@ import {
   adbnPaymentTransactionMatches,
   autoSyncNewAdbnTechPaymentsToBajetBn,
   findPostedAdbnPaymentTransaction,
+  findStalePostedAdbnPaymentTransactions,
   reconcileAdbnTechPaymentToBajetBn,
   syncAdbnTechPaymentToBajetBn,
 } from '../../repositories/adbnTechPaymentSyncRepository';
 import {
   listBusinessTransactionsForSpace,
 } from '../../repositories/transactionRepository';
+import {
+  reverseStaleAdbnPaymentMoneyActivity,
+} from '../../repositories/businessMoneyActivityRepository';
 import {
   createAdbnCustomerLinkInvitation,
   listAdbnCustomerLinksForBusiness,
@@ -186,6 +190,9 @@ export function AdbnTechPaymentsWorkspace({
   const [savedMappings, setSavedMappings] =
     useState<Record<string, string>>({});
 
+  const [spaceOwnerId, setSpaceOwnerId] =
+    useState('');
+
   const [
     businessTransactions,
     setBusinessTransactions,
@@ -245,6 +252,16 @@ export function AdbnTechPaymentsWorkspace({
   const [autoSyncMessage, setAutoSyncMessage] =
     useState('');
 
+  const [
+    staleReverseConfirmId,
+    setStaleReverseConfirmId,
+  ] = useState('');
+
+  const [
+    staleReverseBusyId,
+    setStaleReverseBusyId,
+  ] = useState('');
+
   const autoSyncRunRef =
     useRef('');
 
@@ -279,6 +296,9 @@ export function AdbnTechPaymentsWorkspace({
         setBajetAccounts(nextAccounts);
         setMappings(nextMappings);
         setSavedMappings(nextMappings);
+        setSpaceOwnerId(
+          nextSpace?.ownerId || '',
+        );
         setBusinessTransactions(
           nextTransactions,
         );
@@ -635,6 +655,94 @@ export function AdbnTechPaymentsWorkspace({
         );
       } finally {
         setSyncBusyPaymentId('');
+      }
+    };
+
+  const reverseStalePaymentFromWorkspace =
+    async (
+      transaction: FinancialTransaction,
+    ) => {
+      if (
+        !user?.uid
+        || user.uid !== spaceOwnerId
+      ) {
+        setError(
+          'Only the Business Space owner can reverse a stale ADBN TECH payment.',
+        );
+        return;
+      }
+
+      if (staleReverseBusyId) {
+        return;
+      }
+
+      if (
+        staleReverseConfirmId
+        !== transaction.id
+      ) {
+        setStaleReverseConfirmId(
+          transaction.id,
+        );
+        setSyncMessage('');
+        setError('');
+        return;
+      }
+
+      setStaleReverseBusyId(
+        transaction.id,
+      );
+      setSyncMessage('');
+      setError('');
+
+      try {
+        const reversalDate =
+          new Intl.DateTimeFormat(
+            'en-CA',
+            {
+              timeZone:
+                'Asia/Brunei',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            },
+          ).format(
+            new Date(),
+          );
+
+        await reverseStaleAdbnPaymentMoneyActivity({
+          transactionId:
+            transaction.id,
+          transactionDate:
+            reversalDate,
+          reason:
+            'ADBN TECH payment is missing from the current source snapshot; stale BajetBN Money In reversed manually after owner review.',
+        });
+
+        const nextTransactions =
+          await listBusinessTransactionsForSpace(
+            spaceId,
+          );
+
+        setBusinessTransactions(
+          nextTransactions,
+        );
+        setStaleReverseConfirmId('');
+
+        if (onFinancialSync) {
+          await onFinancialSync();
+        }
+
+        setSyncMessage(
+          'Stale ADBN TECH payment Money In reversed. History is preserved and the Business Account, ledger and reports were updated.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'Stale ADBN TECH payment could not be reversed.',
+        );
+      } finally {
+        setStaleReverseBusyId('');
       }
     };
 
@@ -1271,6 +1379,19 @@ export function AdbnTechPaymentsWorkspace({
       ],
     );
 
+  const stalePaymentTransactions =
+    useMemo(
+      () =>
+        findStalePostedAdbnPaymentTransactions(
+          snapshot?.payments || [],
+          businessTransactions,
+        ),
+      [
+        businessTransactions,
+        snapshot,
+      ],
+    );
+
   const bajetAccountById = useMemo(
     () =>
       new Map(
@@ -1399,6 +1520,13 @@ export function AdbnTechPaymentsWorkspace({
           Changed{' '}
           <strong>
             {changedPaymentCount}
+          </strong>
+        </span>
+
+        <span>
+          Missing in ADBN{' '}
+          <strong>
+            {stalePaymentTransactions.length}
           </strong>
         </span>
       </div>
@@ -1562,7 +1690,7 @@ export function AdbnTechPaymentsWorkspace({
           </h3>
 
           <p className="muted">
-            Existing receipts stay manual. When enabled, only ADBN TECH payments created after the activation time can post automatically into the mapped BajetBN Business account. If a synced source payment is edited later, BajetBN marks it Changed and requires an explicit Reconcile change action.
+            Existing receipts stay manual. When enabled, only ADBN TECH payments created after the activation time can post automatically into the mapped BajetBN Business account. If a synced source payment is edited later, BajetBN marks it Changed and requires an explicit Reconcile change action. Deleted or missing source payments are never reversed automatically.
           </p>
         </div>
 
@@ -1949,8 +2077,171 @@ export function AdbnTechPaymentsWorkspace({
         </div>
       )}
 
+      {stalePaymentTransactions.length > 0 && (
+        <section
+          className="panel adbn-tech-account-mapping-v115"
+          data-adbn-payment-stale-review
+        >
+          <div>
+            <span className="eyebrow">
+              Needs review
+            </span>
+
+            <h3>
+              Missing ADBN TECH payments
+            </h3>
+
+            <p className="muted">
+              These active BajetBN Money In records still carry an ADBN TECH payment sync marker, but their source payment is absent from the current ADBN payment snapshot. Detection alone never changes money. Confirm the source was deleted or cancelled before reversing a row.
+            </p>
+          </div>
+
+          <div className="adbn-tech-table-wrap-v115">
+            <table className="adbn-tech-table-v115">
+              <thead>
+                <tr>
+                  <th>BajetBN record</th>
+                  <th>Date</th>
+                  <th>Customer / source</th>
+                  <th>Amount</th>
+                  <th>Account</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {stalePaymentTransactions.map(
+                  (transaction) => {
+                    const account =
+                      bajetAccountById.get(
+                        transaction.accountId,
+                      );
+
+                    const confirming =
+                      staleReverseConfirmId
+                      === transaction.id;
+
+                    const busy =
+                      staleReverseBusyId
+                      === transaction.id;
+
+                    const ownerCanReverse =
+                      Boolean(user?.uid)
+                      && user?.uid
+                        === spaceOwnerId;
+
+                    return (
+                      <tr
+                        key={transaction.id}
+                        data-adbn-payment-stale-row
+                      >
+                        <td>
+                          <strong>
+                            {transaction.note
+                              || transaction.id}
+                          </strong>
+                          <small>
+                            Missing source payment
+                          </small>
+                        </td>
+
+                        <td>
+                          {simpleDate(
+                            transaction.transactionDate,
+                          )}
+                        </td>
+
+                        <td>
+                          <span>
+                            {transaction.counterparty
+                              || 'ADBN TECH customer'}
+                          </span>
+                          <small>
+                            ADBN-managed Money In
+                          </small>
+                        </td>
+
+                        <td>
+                          <strong>
+                            {bnd(
+                              transaction.amountMinor
+                              / 100,
+                            )}
+                          </strong>
+                        </td>
+
+                        <td>
+                          <span>
+                            {account?.name
+                              || transaction.accountId}
+                          </span>
+                          <small>
+                            {account?.currency || ''}
+                          </small>
+                        </td>
+
+                        <td>
+                          {!ownerCanReverse ? (
+                            <span className="muted">
+                              Owner review required
+                            </span>
+                          ) : confirming ? (
+                            <div className="header-actions">
+                              <button
+                                type="button"
+                                className="button danger compact"
+                                data-adbn-payment-stale-confirm
+                                disabled={busy}
+                                onClick={() =>
+                                  void reverseStalePaymentFromWorkspace(
+                                    transaction,
+                                  )
+                                }
+                              >
+                                {busy
+                                  ? 'Reversing...'
+                                  : 'Confirm reverse'}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="button secondary compact"
+                                disabled={busy}
+                                onClick={() =>
+                                  setStaleReverseConfirmId('')
+                                }
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button danger compact"
+                              data-adbn-payment-stale-review-action
+                              disabled={Boolean(staleReverseBusyId)}
+                              onClick={() =>
+                                void reverseStalePaymentFromWorkspace(
+                                  transaction,
+                                )
+                              }
+                            >
+                              Reverse stale payment
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  },
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <small className="muted">
-        Source of truth: ADBN TECH. Receipt and WhatsApp actions create or reuse ADBN TECH's customer-safe official receipt link; they do not create a second BajetBN receipt. Manual sync remains available for older receipts. Changed synced payments reconcile by preserving the previous Money In as reversed, then posting the current ADBN source values.
+        Source of truth: ADBN TECH. Receipt and WhatsApp actions create or reuse ADBN TECH's customer-safe official receipt link; they do not create a second BajetBN receipt. Manual sync remains available for older receipts. Changed synced payments reconcile by preserving the previous Money In as reversed, then posting the current ADBN source values. Missing source payments are review-only until the Business Space owner explicitly reverses the stale Money In.
       </small>
     </section>
   );
