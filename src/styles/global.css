@@ -21585,3 +21585,605 @@ select.trip-sheet-cell-input {
   }
 }
 /* END BAJETBN SPACE HOME ADD DESKTOP ONLY */
+
+
+/* v1.15 ADBN customer portal v2 */
+
+.adbn-customer-portal-v2 {
+  max-width: 1380px;
+}
+
+.adbn-customer-hero-v2 {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: clamp(1.5rem, 3vw, 2.4rem);
+  border: 1px solid rgba(45, 212, 191, .26);
+  border-radius: 24px;
+  background:
+    radial-gradient(
+      circle at 88% 15%,
+      rgba(45, 212, 191, .18),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      var(--surface),
+      var(--surface-2)
+    );
+}
+
+.adbn-customer-hero-v2::after {
+  content: "";
+  position: absolute;
+  right: -110px;
+  bottom: -150px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  border: 1px solid rgba(45, 212, 191, .12);
+  pointer-events: none;
+}
+
+.adbn-customer-kicker-v2 {
+  display: block;
+  margin-bottom: .65rem;
+  color: var(--accent-2);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+
+.adbn-customer-hero-copy-v2 h1 {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  line-height: 1.02;
+}
+
+.adbn-customer-hero-copy-v2 > p {
+  max-width: 720px;
+  margin: .85rem 0 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.adbn-customer-hero-meta-v2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  margin-top: 1.15rem;
+}
+
+.adbn-customer-hero-meta-v2 span {
+  padding: .4rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(7, 17, 31, .28);
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.adbn-customer-hero-actions-v2 {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: end;
+  gap: 1.2rem;
+}
+
+.adbn-customer-brand-mark-v2 {
+  display: grid;
+  justify-items: end;
+  line-height: .88;
+  letter-spacing: -.06em;
+}
+
+.adbn-customer-brand-mark-v2 span,
+.adbn-customer-brand-mark-v2 strong {
+  font-size: clamp(1.8rem, 3.5vw, 3rem);
+}
+
+.adbn-customer-brand-mark-v2 span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.adbn-customer-brand-mark-v2 strong {
+  color: var(--text);
+  font-weight: 950;
+}
+
+.adbn-customer-privacy-v2 {
+  margin-bottom: 1rem;
+}
+
+.adbn-customer-overview-v2 {
+  display: grid;
+  grid-template-columns:
+    minmax(320px, .86fr)
+    minmax(0, 1.14fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.adbn-customer-next-payment-v2,
+.adbn-customer-progress-panel-v2,
+.adbn-customer-section-v2,
+.adbn-customer-reminder-card-v2,
+.adbn-customer-source-card-v2 {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.adbn-customer-next-payment-v2 {
+  display: flex;
+  flex-direction: column;
+  min-height: 285px;
+  padding: 1.4rem;
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      rgba(45, 212, 191, .2),
+      transparent 42%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(13, 148, 136, .13),
+      var(--surface)
+    );
+}
+
+.adbn-customer-next-top-v2 {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.adbn-customer-next-amount-v2 {
+  display: block;
+  margin-top: .55rem;
+  font-size: clamp(2.3rem, 5vw, 4rem);
+  line-height: 1;
+  letter-spacing: -.04em;
+}
+
+.adbn-customer-next-top-v2 p {
+  margin: .65rem 0 0;
+  color: var(--muted);
+}
+
+.adbn-customer-due-badge-v2 {
+  align-self: flex-start;
+  padding: .35rem .6rem;
+  border: 1px solid rgba(45, 212, 191, .28);
+  border-radius: 999px;
+  background: rgba(45, 212, 191, .09);
+  color: var(--accent-2);
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.adbn-customer-next-reference-v2 {
+  display: grid;
+  gap: .2rem;
+  margin: auto 0 1rem;
+  padding: .85rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.adbn-customer-next-reference-v2 span {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.adbn-customer-progress-panel-v2 {
+  padding: 1.4rem;
+}
+
+.adbn-customer-progress-heading-v2 {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.adbn-customer-progress-heading-v2 h2 {
+  margin: .35rem 0 0;
+}
+
+.adbn-customer-progress-percent-v2 {
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1;
+}
+
+.adbn-customer-progress-track-v2,
+.adbn-customer-mini-progress-v2 {
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.adbn-customer-progress-track-v2 {
+  height: 12px;
+  margin: 1.5rem 0;
+}
+
+.adbn-customer-progress-track-v2 span,
+.adbn-customer-mini-progress-v2 span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--accent),
+    var(--accent-2)
+  );
+}
+
+.adbn-customer-progress-stats-v2 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.adbn-customer-progress-stats-v2 > div {
+  padding: 1rem;
+  border-right: 1px solid var(--border);
+}
+
+.adbn-customer-progress-stats-v2 > div:last-child {
+  border-right: 0;
+}
+
+.adbn-customer-progress-stats-v2 span,
+.adbn-customer-progress-stats-v2 strong {
+  display: block;
+}
+
+.adbn-customer-progress-stats-v2 span {
+  margin-bottom: .35rem;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.adbn-customer-progress-stats-v2 strong {
+  font-size: 1.05rem;
+}
+
+.adbn-customer-section-v2 {
+  margin-top: 1rem;
+  padding: 1.4rem;
+}
+
+.adbn-customer-section-heading-v2 {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.adbn-customer-section-heading-v2 h2 {
+  margin: .3rem 0 0;
+}
+
+.adbn-customer-section-heading-v2 p {
+  margin: .45rem 0 0;
+}
+
+.adbn-customer-plan-grid-v2 {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  gap: .85rem;
+}
+
+.adbn-customer-plan-card-v2 {
+  padding: 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.adbn-customer-plan-header-v2 {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.adbn-customer-plan-header-v2 small {
+  color: var(--muted);
+}
+
+.adbn-customer-plan-header-v2 h3 {
+  margin: .35rem 0 0;
+  font-size: 1.05rem;
+}
+
+.adbn-customer-plan-status-v2 {
+  align-self: flex-start;
+  padding: .3rem .55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.adbn-customer-plan-status-v2.paid {
+  border-color: rgba(45, 212, 191, .3);
+  color: var(--accent-2);
+}
+
+.adbn-customer-plan-progress-v2 {
+  margin-top: 1rem;
+}
+
+.adbn-customer-plan-progress-v2 > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .4rem;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.adbn-customer-mini-progress-v2 {
+  height: 7px;
+}
+
+.adbn-customer-plan-metrics-v2 {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  gap: .65rem;
+  margin-top: 1rem;
+}
+
+.adbn-customer-plan-metrics-v2 > div {
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.adbn-customer-plan-metrics-v2 span,
+.adbn-customer-plan-metrics-v2 strong {
+  display: block;
+}
+
+.adbn-customer-plan-metrics-v2 span {
+  margin-bottom: .3rem;
+  color: var(--muted);
+  font-size: .66rem;
+}
+
+.adbn-customer-plan-metrics-v2 strong {
+  font-size: .83rem;
+  line-height: 1.35;
+}
+
+.adbn-customer-plan-footer-v2 {
+  margin-top: .85rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.adbn-customer-lower-grid-v2 {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.6fr)
+    minmax(280px, .7fr);
+  gap: 1rem;
+}
+
+.adbn-customer-payment-list-v2 {
+  display: grid;
+}
+
+.adbn-customer-payment-row-v2 {
+  display: grid;
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto;
+  gap: .85rem;
+  align-items: center;
+  padding: .9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.adbn-customer-payment-row-v2:last-child {
+  border-bottom: 0;
+}
+
+.adbn-customer-payment-icon-v2 {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(45, 212, 191, .28);
+  border-radius: 50%;
+  background: rgba(45, 212, 191, .08);
+  color: var(--accent-2);
+  font-weight: 900;
+}
+
+.adbn-customer-payment-main-v2 {
+  min-width: 0;
+}
+
+.adbn-customer-payment-main-v2 strong,
+.adbn-customer-payment-main-v2 span {
+  display: block;
+}
+
+.adbn-customer-payment-main-v2 strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adbn-customer-payment-main-v2 span {
+  margin-top: .2rem;
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.adbn-customer-payment-amount-v2 {
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+
+.adbn-customer-side-stack-v2 {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.adbn-customer-reminder-card-v2,
+.adbn-customer-source-card-v2 {
+  padding: 1.25rem;
+}
+
+.adbn-customer-reminder-card-v2 {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(45, 212, 191, .08),
+      var(--surface)
+    );
+}
+
+.adbn-customer-reminder-card-v2 h2,
+.adbn-customer-source-card-v2 h3 {
+  margin: .4rem 0 .65rem;
+}
+
+.adbn-customer-reminder-card-v2 p,
+.adbn-customer-source-card-v2 p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.adbn-customer-reminder-card-v2 .button {
+  margin-top: .4rem;
+}
+
+.adbn-customer-empty-v2 {
+  margin-top: 1rem;
+  min-height: 190px;
+  display: grid;
+  align-content: center;
+}
+
+@media (max-width: 980px) {
+  .adbn-customer-overview-v2,
+  .adbn-customer-lower-grid-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .adbn-customer-plan-grid-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .adbn-customer-side-stack-v2 {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .adbn-customer-hero-v2 {
+    grid-template-columns: 1fr;
+    padding: 1.3rem;
+  }
+
+  .adbn-customer-hero-actions-v2 {
+    grid-template-columns: 1fr auto;
+    justify-items: stretch;
+    align-items: end;
+  }
+
+  .adbn-customer-brand-mark-v2 {
+    justify-items: start;
+  }
+
+  .adbn-customer-overview-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .adbn-customer-progress-stats-v2,
+  .adbn-customer-plan-metrics-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .adbn-customer-progress-stats-v2 > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .adbn-customer-progress-stats-v2 > div:last-child {
+    border-bottom: 0;
+  }
+
+  .adbn-customer-section-heading-v2 {
+    flex-direction: column;
+  }
+
+  .adbn-customer-section-heading-v2 .button {
+    width: 100%;
+  }
+
+  .adbn-customer-payment-row-v2 {
+    grid-template-columns:
+      auto
+      minmax(0, 1fr);
+  }
+
+  .adbn-customer-payment-amount-v2 {
+    grid-column: 2;
+  }
+
+  .adbn-customer-privacy-v2 {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .adbn-customer-privacy-v2 strong {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 480px) {
+  .adbn-customer-hero-actions-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .adbn-customer-next-top-v2 {
+    flex-direction: column;
+  }
+
+  .adbn-customer-progress-heading-v2 {
+    flex-direction: column;
+  }
+}
