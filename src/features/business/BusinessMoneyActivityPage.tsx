@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import { listAccountsForSpace } from '../../repositories/accountRepository';
 import {
-  deleteStaleAdbnPaymentMoneyActivity,
+  reverseStaleAdbnPaymentMoneyActivity,
   reverseBusinessMoneyActivity,
   reverseStaleAdbnExpenseMoneyActivity,
   reverseStaleAdbnSupplierPaymentMoneyActivity,
@@ -404,14 +404,14 @@ export function BusinessMoneyActivityPage() {
   const [reverseBusy, setReverseBusy] = useState(false);
 
   const [
-    staleAdbnDeleteDialog,
-    setStaleAdbnDeleteDialog,
+    staleAdbnPaymentReverseDialog,
+    setStaleAdbnPaymentReverseDialog,
   ] =
     useState<ActionConfirmState<FinancialTransaction> | null>(null);
 
   const [
-    staleAdbnDeleteBusy,
-    setStaleAdbnDeleteBusy,
+    staleAdbnPaymentReverseBusy,
+    setStaleAdbnPaymentReverseBusy,
   ] = useState(false);
 
   const [
@@ -909,30 +909,32 @@ export function BusinessMoneyActivityPage() {
     }
   }
 
-  async function handleStaleAdbnDelete() {
+  async function handleStaleAdbnPaymentReverse() {
     if (
-      !staleAdbnDeleteDialog
+      !staleAdbnPaymentReverseDialog
     ) {
       return;
     }
 
-    setStaleAdbnDeleteBusy(true);
+    setStaleAdbnPaymentReverseBusy(true);
     setError('');
 
     try {
-      await deleteStaleAdbnPaymentMoneyActivity({
+      await reverseStaleAdbnPaymentMoneyActivity({
         transactionId:
-          staleAdbnDeleteDialog
+          staleAdbnPaymentReverseDialog
             .payload.id,
+        transactionDate:
+          today,
         reason:
-          'ADBN TECH source payment was deleted; stale BajetBN sync removed manually.',
+          'ADBN TECH source payment was deleted or cancelled; stale BajetBN Money In reversed manually.',
       });
 
-      setStaleAdbnDeleteDialog(null);
+      setStaleAdbnPaymentReverseDialog(null);
       setDetail(null);
 
       setFeedback(
-        'Stale ADBN TECH payment was removed from BajetBN. The Business Account balance, ledger and reports were updated.',
+        'Stale ADBN TECH payment Money In was reversed. Its history was preserved and the Business Account, ledger and reports were updated.',
       );
 
       await load();
@@ -943,7 +945,7 @@ export function BusinessMoneyActivityPage() {
         ),
       );
     } finally {
-      setStaleAdbnDeleteBusy(false);
+      setStaleAdbnPaymentReverseBusy(false);
     }
   }
 
@@ -1767,11 +1769,11 @@ export function BusinessMoneyActivityPage() {
           online={online}
           busy={
             reverseBusy
-            || staleAdbnDeleteBusy
+            || staleAdbnPaymentReverseBusy
             || staleAdbnSupplierReverseBusy
             || staleAdbnExpenseReverseBusy
           }
-          canDeleteStaleAdbn={
+          canReverseStaleAdbnPayment={
             space.ownerId
               === user?.uid
           }
@@ -1794,19 +1796,19 @@ export function BusinessMoneyActivityPage() {
               detail,
             )
           }
-          onDeleteStaleAdbn={() => {
+          onReverseStaleAdbnPayment={() => {
             setError('');
-            setStaleAdbnDeleteDialog({
+            setStaleAdbnPaymentReverseDialog({
               payload:
                 detail,
               title:
-                'Remove this stale ADBN TECH payment?',
+                'Reverse this stale ADBN TECH payment?',
               description:
                 'Use this only when the source payment has already been deleted or cancelled in ADBN TECH.',
               note:
-                'BajetBN will permanently remove this synced Money In row, remove its ledger entry and subtract its amount from the mapped Business Account. If the payment still exists in ADBN TECH, auto-sync may create it again.',
+                'BajetBN will preserve the original Money In as reversed, remove its financial effect from the mapped Business Account, and update the ledger and reports. A missing ADBN snapshot never triggers this automatically.',
               confirmLabel:
-                'Remove stale ADBN record',
+                'Reverse stale ADBN payment',
               tone:
                 'danger',
             });
@@ -1881,25 +1883,25 @@ export function BusinessMoneyActivityPage() {
         />
       )}
 
-      {staleAdbnDeleteDialog && (
+      {staleAdbnPaymentReverseDialog && (
         <ActionConfirmModal
           state={
-            staleAdbnDeleteDialog
+            staleAdbnPaymentReverseDialog
           }
           busy={
-            staleAdbnDeleteBusy
+            staleAdbnPaymentReverseBusy
           }
           error={error}
           onClose={() => {
             if (
-              !staleAdbnDeleteBusy
+              !staleAdbnPaymentReverseBusy
             ) {
-              setStaleAdbnDeleteDialog(null);
+              setStaleAdbnPaymentReverseDialog(null);
               setError('');
             }
           }}
           onConfirm={() =>
-            void handleStaleAdbnDelete()
+            void handleStaleAdbnPaymentReverse()
           }
         />
       )}
@@ -1976,13 +1978,13 @@ function BusinessMoneyDetailsModal({
   canManage,
   online,
   busy,
-  canDeleteStaleAdbn,
+  canReverseStaleAdbnPayment,
   canReverseStaleAdbnSupplier,
   canReverseStaleAdbnExpense,
   onClose,
   onEdit,
   onCorrect,
-  onDeleteStaleAdbn,
+  onReverseStaleAdbnPayment,
   onReverseStaleAdbnSupplier,
   onReverseStaleAdbnExpense,
   onReverse,
@@ -1992,13 +1994,13 @@ function BusinessMoneyDetailsModal({
   canManage: boolean;
   online: boolean;
   busy: boolean;
-  canDeleteStaleAdbn: boolean;
+  canReverseStaleAdbnPayment: boolean;
   canReverseStaleAdbnSupplier: boolean;
   canReverseStaleAdbnExpense: boolean;
   onClose: () => void;
   onEdit: () => void;
   onCorrect: () => void;
-  onDeleteStaleAdbn: () => void;
+  onReverseStaleAdbnPayment: () => void;
   onReverseStaleAdbnSupplier: () => void;
   onReverseStaleAdbnExpense: () => void;
   onReverse: () => void;
@@ -2037,8 +2039,8 @@ function BusinessMoneyDetailsModal({
       ),
     );
 
-  const canRemoveStaleAdbn =
-    canDeleteStaleAdbn
+  const canReverseStaleAdbnPaymentAction =
+    canReverseStaleAdbnPayment
     && online
     && !busy
     && item.status === 'posted'
@@ -2116,7 +2118,7 @@ function BusinessMoneyDetailsModal({
           </strong>
           <span>
             {staleAdbnPayment
-              ? 'This Money In was synced from ADBN TECH. If the source payment was deleted in ADBN TECH, the Business owner can remove this stale BajetBN copy below.'
+              ? 'This Money In was synced from ADBN TECH. If the source payment was deleted or cancelled in ADBN TECH, the Business owner can reverse this stale BajetBN copy below while preserving its accounting history.'
               : staleAdbnSupplierPayment
                 ? 'This Money Out was synced from an ADBN TECH supplier payment. If that source payment was deleted or cancelled without an explicit reversal, the Business owner can reverse this stale BajetBN copy below while preserving its accounting history.'
                 : staleAdbnExpense
@@ -2222,12 +2224,12 @@ function BusinessMoneyDetailsModal({
           </button>
         )}
 
-        {canRemoveStaleAdbn && (
+        {canReverseStaleAdbnPaymentAction && (
           <button
             className="button danger"
             type="button"
-            data-adbn-stale-payment-delete
-            onClick={onDeleteStaleAdbn}
+            data-adbn-stale-payment-reverse
+            onClick={onReverseStaleAdbnPayment}
           >
             Remove stale ADBN record
           </button>
