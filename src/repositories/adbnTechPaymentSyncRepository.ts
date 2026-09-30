@@ -7,7 +7,9 @@ import {
 import {
   listBusinessTransactionsForSpace,
   postTransactionWithIdempotencyKey,
+  reverseTransactionWithIdempotencyKey,
   type PostTransactionOutcome,
+  type TransactionInput,
 } from './transactionRepository';
 import type {
   FinancialTransaction,
@@ -279,6 +281,208 @@ function paymentMethodFromAdbn(
   };
 }
 
+function paymentTransactionInput(
+  payment: AdbnTechPaymentMirror,
+  spaceId: string,
+  mappedAccountId: string,
+): TransactionInput {
+  const method =
+    paymentMethodFromAdbn(
+      payment.paymentMethod,
+    );
+
+  return {
+    type: 'income',
+    accountId:
+      mappedAccountId,
+    spaceId,
+    amountMinor:
+      Math.round(
+        payment.amount * 100,
+      ),
+    transactionDate:
+      normalizedPaymentDate(
+        payment.paymentDate,
+      ),
+    categoryId:
+      'income-sales',
+    counterparty:
+      payment.customerName
+      || 'ADBN TECH customer',
+    note:
+      [
+        'ADBN TECH payment '
+          + (
+            payment.paymentNo
+            || payment.id
+          ),
+        payment.invoiceNo
+          ? 'Invoice '
+            + payment.invoiceNo
+          : '',
+        payment.reference
+          ? 'Reference '
+            + payment.reference
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' | '),
+    labels: [
+      'adbn_tech',
+      adbnPaymentSyncLabel(
+        payment.id,
+      ),
+    ],
+    ...method,
+  };
+}
+
+function paymentRevisionToken(
+  payment: AdbnTechPaymentMirror,
+  spaceId: string,
+  mappedAccountId: string,
+) {
+  const input =
+    paymentTransactionInput(
+      payment,
+      spaceId,
+      mappedAccountId,
+    );
+
+  return externalPaymentToken(
+    JSON.stringify([
+      input.accountId,
+      input.amountMinor,
+      input.transactionDate,
+      input.categoryId || '',
+      input.counterparty || '',
+      input.note || '',
+      input.paymentMethod || '',
+      input.paymentMethodLabel || '',
+    ]),
+  );
+}
+
+export function findPostedAdbnPaymentTransaction(
+  paymentId: string,
+  transactions: FinancialTransaction[],
+) {
+  const label =
+    adbnPaymentSyncLabel(
+      paymentId,
+    ).toLowerCase();
+
+  return transactions.find(
+    (item) =>
+      item.status === 'posted'
+      && item.type === 'income'
+      && (item.labels || [])
+        .some(
+          (value) =>
+            value
+              .trim()
+              .toLowerCase()
+            === label,
+        ),
+  );
+}
+
+export function adbnPaymentTransactionMatches(
+  payment: AdbnTechPaymentMirror,
+  transaction: FinancialTransaction,
+  spaceId: string,
+  mappedAccountId: string,
+) {
+  if (
+    !mappedAccountId
+    || !adbnPaymentCanPost(
+      payment,
+    )
+  ) {
+    return false;
+  }
+
+  const expected =
+    paymentTransactionInput(
+      payment,
+      spaceId,
+      mappedAccountId,
+    );
+
+  return (
+    transaction.status === 'posted'
+    && transaction.type === 'income'
+    && transaction.accountId
+      === expected.accountId
+    && transaction.amountMinor
+      === expected.amountMinor
+    && transaction.transactionDate
+      === expected.transactionDate
+    && (
+      transaction.categoryId
+      || ''
+    ) === (
+      expected.categoryId
+      || ''
+    )
+    && (
+      transaction.counterparty
+      || ''
+    ) === (
+      expected.counterparty
+      || ''
+    )
+    && (
+      transaction.note
+      || ''
+    ) === (
+      expected.note
+      || ''
+    )
+    && (
+      transaction.paymentMethod
+      || ''
+    ) === (
+      expected.paymentMethod
+      || ''
+    )
+    && (
+      transaction.paymentMethodLabel
+      || ''
+    ) === (
+      expected.paymentMethodLabel
+      || ''
+    )
+  );
+}
+
+function validatePaymentPosting(
+  payment: AdbnTechPaymentMirror,
+  mappedAccountId: string,
+) {
+  if (
+    !adbnPaymentCanPost(
+      payment,
+    )
+  ) {
+    throw new Error(
+      'This ADBN TECH payment is not eligible for posting.',
+    );
+  }
+
+  if (!payment.bankAccountId) {
+    throw new Error(
+      'This ADBN TECH payment has no receiving bank/cash account.',
+    );
+  }
+
+  if (!mappedAccountId) {
+    throw new Error(
+      'Map the ADBN TECH receiving account to a BajetBN Business account first.',
+    );
+  }
+}
+
 export async function syncAdbnTechPaymentToBajetBn(
   input: {
     payment: AdbnTechPaymentMirror;
@@ -292,75 +496,99 @@ export async function syncAdbnTechPaymentToBajetBn(
     mappedAccountId,
   } = input;
 
-  if (
-    !adbnPaymentCanPost(
-      payment,
-    )
-  ) {
-    throw new Error(
-      'This ADBN TECH payment is not eligible for posting.',
-    );
-  }
-
-  if (!mappedAccountId) {
-    throw new Error(
-      'Map the ADBN TECH receiving account to a BajetBN Business account first.',
-    );
-  }
-
-  const method =
-    paymentMethodFromAdbn(
-      payment.paymentMethod,
-    );
+  validatePaymentPosting(
+    payment,
+    mappedAccountId,
+  );
 
   return postTransactionWithIdempotencyKey(
-    {
-      type: 'income',
-      accountId:
-        mappedAccountId,
+    paymentTransactionInput(
+      payment,
       spaceId,
-      amountMinor:
-        Math.round(
-          payment.amount * 100,
-        ),
-      transactionDate:
-        normalizedPaymentDate(
-          payment.paymentDate,
-        ),
-      categoryId:
-        'income-sales',
-      counterparty:
-        payment.customerName
-        || 'ADBN TECH customer',
-      note:
-        [
-          'ADBN TECH payment '
-            + (
-              payment.paymentNo
-              || payment.id
-            ),
-          payment.invoiceNo
-            ? 'Invoice '
-              + payment.invoiceNo
-            : '',
-          payment.reference
-            ? 'Reference '
-              + payment.reference
-            : '',
-        ]
-          .filter(Boolean)
-          .join(' | '),
-      labels: [
-        'adbn_tech',
-        adbnPaymentSyncLabel(
-          payment.id,
-        ),
-      ],
-      ...method,
-    },
+      mappedAccountId,
+    ),
     adbnPaymentSyncKey(
       payment.id,
     ),
+  );
+}
+
+export async function reconcileAdbnTechPaymentToBajetBn(
+  input: {
+    payment: AdbnTechPaymentMirror;
+    currentTransaction: FinancialTransaction;
+    spaceId: string;
+    mappedAccountId: string;
+    reversalDate: string;
+  },
+): Promise<PostTransactionOutcome> {
+  const {
+    payment,
+    currentTransaction,
+    spaceId,
+    mappedAccountId,
+    reversalDate,
+  } = input;
+
+  validatePaymentPosting(
+    payment,
+    mappedAccountId,
+  );
+
+  if (
+    currentTransaction.status
+      !== 'posted'
+    || currentTransaction.type
+      !== 'income'
+  ) {
+    throw new Error(
+      'The current BajetBN payment transaction is no longer active.',
+    );
+  }
+
+  if (
+    adbnPaymentTransactionMatches(
+      payment,
+      currentTransaction,
+      spaceId,
+      mappedAccountId,
+    )
+  ) {
+    throw new Error(
+      'This ADBN TECH payment already matches BajetBN.',
+    );
+  }
+
+  const revision =
+    paymentRevisionToken(
+      payment,
+      spaceId,
+      mappedAccountId,
+    );
+
+  const transition =
+    externalPaymentToken(
+      currentTransaction.id
+      + '|'
+      + revision,
+    );
+
+  await reverseTransactionWithIdempotencyKey(
+    currentTransaction.id,
+    reversalDate,
+    'ADBN TECH payment was edited; previous BajetBN Money In reversed before posting the corrected source values.',
+    'adbn-payment-reconcile-reverse-'
+      + transition,
+  );
+
+  return postTransactionWithIdempotencyKey(
+    paymentTransactionInput(
+      payment,
+      spaceId,
+      mappedAccountId,
+    ),
+    'adbn-payment-reconcile-post-'
+      + transition,
   );
 }
 

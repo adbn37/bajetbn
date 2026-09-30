@@ -29,7 +29,10 @@ import {
 import {
   adbnPaymentCanPost,
   adbnPaymentSyncLabel,
+  adbnPaymentTransactionMatches,
   autoSyncNewAdbnTechPaymentsToBajetBn,
+  findPostedAdbnPaymentTransaction,
+  reconcileAdbnTechPaymentToBajetBn,
   syncAdbnTechPaymentToBajetBn,
 } from '../../repositories/adbnTechPaymentSyncRepository';
 import {
@@ -531,6 +534,104 @@ export function AdbnTechPaymentsWorkspace({
           nextError instanceof Error
             ? nextError.message
             : 'ADBN TECH payment could not be synced.',
+        );
+      } finally {
+        setSyncBusyPaymentId('');
+      }
+    };
+
+  const reconcilePayment =
+    async (
+      payment: AdbnTechPaymentMirror,
+      currentTransaction: FinancialTransaction,
+    ) => {
+      if (syncBusyPaymentId) {
+        return;
+      }
+
+      const mappedAccountId =
+        payment.bankAccountId
+          ? savedMappings[
+              payment.bankAccountId
+            ]
+          : '';
+
+      if (
+        !mappedAccountId
+        || !payment.bankAccountId
+        || !adbnPaymentCanPost(
+          payment,
+        )
+      ) {
+        setError(
+          'Map the receiving account and make sure the ADBN TECH payment is valid before reconciling.',
+        );
+        return;
+      }
+
+      setSyncBusyPaymentId(
+        payment.id,
+      );
+      setSyncMessage('');
+      setError('');
+
+      try {
+        const reversalDate =
+          new Intl.DateTimeFormat(
+            'en-CA',
+            {
+              timeZone:
+                'Asia/Brunei',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            },
+          ).format(
+            new Date(),
+          );
+
+        const outcome =
+          await reconcileAdbnTechPaymentToBajetBn(
+            {
+              payment,
+              currentTransaction,
+              spaceId,
+              mappedAccountId,
+              reversalDate,
+            },
+          );
+
+        if (
+          outcome.mode
+          !== 'posted'
+        ) {
+          throw new Error(
+            'The corrected payment did not post immediately.',
+          );
+        }
+
+        const nextTransactions =
+          await listBusinessTransactionsForSpace(
+            spaceId,
+          );
+
+        setBusinessTransactions(
+          nextTransactions,
+        );
+
+        if (onFinancialSync) {
+          await onFinancialSync();
+        }
+
+        setSyncMessage(
+          (payment.paymentNo || payment.id)
+          + ' reconciled. The previous Money In was reversed and the corrected ADBN values were posted.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'ADBN TECH payment change could not be reconciled.',
         );
       } finally {
         setSyncBusyPaymentId('');
@@ -1130,6 +1231,46 @@ export function AdbnTechPaymentsWorkspace({
       [snapshot, syncedLabels],
     );
 
+  const changedPaymentCount =
+    useMemo(
+      () =>
+        (snapshot?.payments || [])
+          .filter(
+            (payment) => {
+              const currentTransaction =
+                findPostedAdbnPaymentTransaction(
+                  payment.id,
+                  businessTransactions,
+                );
+
+              if (!currentTransaction) {
+                return false;
+              }
+
+              const mappedAccountId =
+                payment.bankAccountId
+                  ? savedMappings[
+                      payment.bankAccountId
+                    ]
+                  : '';
+
+              return !adbnPaymentTransactionMatches(
+                payment,
+                currentTransaction,
+                spaceId,
+                mappedAccountId,
+              );
+            },
+          )
+          .length,
+      [
+        businessTransactions,
+        savedMappings,
+        snapshot,
+        spaceId,
+      ],
+    );
+
   const bajetAccountById = useMemo(
     () =>
       new Map(
@@ -1251,6 +1392,13 @@ export function AdbnTechPaymentsWorkspace({
           Synced{' '}
           <strong>
             {syncedPaymentCount}
+          </strong>
+        </span>
+
+        <span>
+          Changed{' '}
+          <strong>
+            {changedPaymentCount}
           </strong>
         </span>
       </div>
@@ -1414,7 +1562,7 @@ export function AdbnTechPaymentsWorkspace({
           </h3>
 
           <p className="muted">
-            Existing receipts stay manual. When enabled, only ADBN TECH payments created after the activation time can post automatically into the mapped BajetBN Business account.
+            Existing receipts stay manual. When enabled, only ADBN TECH payments created after the activation time can post automatically into the mapped BajetBN Business account. If a synced source payment is edited later, BajetBN marks it Changed and requires an explicit Reconcile change action.
           </p>
         </div>
 
@@ -1535,14 +1683,33 @@ export function AdbnTechPaymentsWorkspace({
                       )
                     : null;
 
-                const syncLabel =
-                  adbnPaymentSyncLabel(
+                const currentTransaction =
+                  findPostedAdbnPaymentTransaction(
                     payment.id,
+                    businessTransactions,
                   );
 
                 const paymentSynced =
-                  syncedLabels.has(
-                    syncLabel.toLowerCase(),
+                  Boolean(
+                    currentTransaction,
+                  );
+
+                const mappedAccountId =
+                  payment.bankAccountId
+                    ? savedMappings[
+                        payment.bankAccountId
+                      ]
+                    : '';
+
+                const paymentChanged =
+                  Boolean(
+                    currentTransaction,
+                  )
+                  && !adbnPaymentTransactionMatches(
+                    payment,
+                    currentTransaction as FinancialTransaction,
+                    spaceId,
+                    mappedAccountId,
                   );
 
                 const paymentReady =
@@ -1627,13 +1794,47 @@ export function AdbnTechPaymentsWorkspace({
                     </td>
 
                     <td>
-                      {paymentSynced ? (
+                      {paymentSynced && !paymentChanged ? (
                         <>
                           <strong>
                             Synced
                           </strong>
                           <small>
-                            Money activity
+                            Money activity matches ADBN
+                          </small>
+                        </>
+                      ) : paymentSynced
+                      && paymentChanged
+                      && paymentReady ? (
+                        <button
+                          type="button"
+                          className="button secondary compact"
+                          data-adbn-payment-reconcile
+                          disabled={
+                            Boolean(
+                              syncBusyPaymentId,
+                            )
+                          }
+                          onClick={() =>
+                            void reconcilePayment(
+                              payment,
+                              currentTransaction as FinancialTransaction,
+                            )
+                          }
+                        >
+                          {syncBusyPaymentId
+                            === payment.id
+                            ? 'Reconciling...'
+                            : 'Reconcile change'}
+                        </button>
+                      ) : paymentSynced
+                      && paymentChanged ? (
+                        <>
+                          <strong>
+                            Changed
+                          </strong>
+                          <small>
+                            Map account / check payment
                           </small>
                         </>
                       ) : paymentReady ? (
@@ -1749,7 +1950,7 @@ export function AdbnTechPaymentsWorkspace({
       )}
 
       <small className="muted">
-        Source of truth: ADBN TECH. Receipt and WhatsApp actions create or reuse ADBN TECH's customer-safe official receipt link; they do not create a second BajetBN receipt. Manual sync remains available for older receipts.
+        Source of truth: ADBN TECH. Receipt and WhatsApp actions create or reuse ADBN TECH's customer-safe official receipt link; they do not create a second BajetBN receipt. Manual sync remains available for older receipts. Changed synced payments reconcile by preserving the previous Money In as reversed, then posting the current ADBN source values.
       </small>
     </section>
   );
