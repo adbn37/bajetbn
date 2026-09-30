@@ -56,6 +56,13 @@ check(
 );
 
 check(
+  health.includes('data-adbn-payment-health-review')
+  && health.includes("openPayments(")
+  && health.includes("'attention'"),
+  'Integration Health provides a direct jump into payment attention review.',
+);
+
+check(
   !health.includes('setDoc(')
   && !health.includes('updateDoc(')
   && !health.includes('deleteDoc('),

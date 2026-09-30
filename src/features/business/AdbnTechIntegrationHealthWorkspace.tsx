@@ -46,6 +46,9 @@ function hasLabel(item: FinancialTransaction, value: string) {
 function hasPattern(item: FinancialTransaction, pattern: RegExp) {
   return (item.labels || []).some((label) => pattern.test(label.trim().toLowerCase()));
 }
+const PAYMENT_VIEW_FILTER_SESSION_KEY =
+  'bajetbn:adbn-payment-view-filter';
+
 function dateTime(value: string) {
   if (!value) return 'Not enabled';
   const d = new Date(value);
@@ -257,6 +260,32 @@ export function AdbnTechIntegrationHealthWorkspace({
   const connected = getAdbnTechConnectedEmail() === ADBN_TECH_ADMIN_EMAIL;
   const loadedAt = expenses?.loadedAt || payments?.loadedAt || core?.loadedAt || '';
 
+  const openPayments = (
+    filter: 'all' | 'attention' = 'all',
+  ) => {
+    if (
+      typeof window
+      !== 'undefined'
+    ) {
+      if (
+        filter === 'attention'
+      ) {
+        window.sessionStorage.setItem(
+          PAYMENT_VIEW_FILTER_SESSION_KEY,
+          filter,
+        );
+      } else {
+        window.sessionStorage.removeItem(
+          PAYMENT_VIEW_FILTER_SESSION_KEY,
+        );
+      }
+    }
+
+    onNavigate(
+      'adbn_payments',
+    );
+  };
+
   if (user?.email?.trim().toLowerCase() !== 'zardeerwandy@gmail.com') return null;
 
   return (
@@ -299,6 +328,22 @@ export function AdbnTechIntegrationHealthWorkspace({
           {(unmapped > 0 || broken > 0 || paymentHealth.attention > 0 || stalePayments.length > 0 || staleExpenses.length > 0) && (
             <div className="notice warning" data-adbn-payment-health-warning>
               Review required: {unmapped} active ADBN account(s) unmapped, {broken} broken mapping(s), {paymentHealth.attention} source payment(s) needing attention, {stalePayments.length} stale customer payment Money In record(s), and {staleExpenses.length} stale expense Money Out record(s).
+              {paymentHealth.attention > 0 && (
+                <div className="header-actions">
+                  <button
+                    type="button"
+                    className="button secondary compact"
+                    data-adbn-payment-health-review
+                    onClick={() =>
+                      openPayments(
+                        'attention',
+                      )
+                    }
+                  >
+                    Review {paymentHealth.attention} payment{paymentHealth.attention === 1 ? '' : 's'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -340,7 +385,22 @@ export function AdbnTechIntegrationHealthWorkspace({
                   : ' · historical payments remain manual.'}
               </small>
               <div className="header-actions">
-                <button type="button" className="button secondary compact" onClick={() => onNavigate('adbn_payments')}>Open Payments</button>
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  data-adbn-payment-health-open
+                  onClick={() =>
+                    openPayments(
+                      paymentHealth.attention > 0
+                        ? 'attention'
+                        : 'all',
+                    )
+                  }
+                >
+                  {paymentHealth.attention > 0
+                    ? 'Review attention'
+                    : 'Open Payments'}
+                </button>
               </div>
             </section>
 
