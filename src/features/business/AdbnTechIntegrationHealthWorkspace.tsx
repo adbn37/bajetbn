@@ -21,7 +21,12 @@ import {
   type AdbnTechReadOnlySnapshot,
 } from '../../repositories/adbnTechIntegrationRepository';
 import { findStalePostedAdbnExpenseTransactions } from '../../repositories/adbnTechExpenseSyncRepository';
-import { findStalePostedAdbnPaymentTransactions } from '../../repositories/adbnTechPaymentSyncRepository';
+import {
+  adbnPaymentPostingIssue,
+  adbnPaymentTransactionMatches,
+  findPostedAdbnPaymentTransaction,
+  findStalePostedAdbnPaymentTransactions,
+} from '../../repositories/adbnTechPaymentSyncRepository';
 import { getSpace } from '../../repositories/spaceRepository';
 import { listBusinessTransactionsForSpace } from '../../repositories/transactionRepository';
 import type { Account, FinancialTransaction, Space } from '../../types/models';
@@ -145,6 +150,104 @@ export function AdbnTechIntegrationHealthWorkspace({
       && hasLabel(t, 'adbn_expense')
       && hasPattern(t, /^adbn_exp_[a-f0-9]{16}$/),
   ).length;
+  const paymentHealth =
+    useMemo(
+      () => {
+        const summary = {
+          attention: 0,
+          changed: 0,
+          blocked: 0,
+          missingAccount: 0,
+          unmappedAccount: 0,
+          brokenMapping: 0,
+          invalid: 0,
+        };
+
+        for (
+          const payment
+          of payments?.payments || []
+        ) {
+          const mappedAccountId =
+            payment.bankAccountId
+              ? mappings[
+                  payment.bankAccountId
+                ]
+              : '';
+
+          const currentTransaction =
+            findPostedAdbnPaymentTransaction(
+              payment.id,
+              transactions,
+            );
+
+          const issue =
+            adbnPaymentPostingIssue(
+              payment,
+              mappedAccountId,
+              mappedAccountId
+                ? accountIds.has(
+                    mappedAccountId,
+                  )
+                : true,
+            );
+
+          const changed =
+            Boolean(
+              currentTransaction,
+            )
+            && !adbnPaymentTransactionMatches(
+              payment,
+              currentTransaction as FinancialTransaction,
+              spaceId,
+              mappedAccountId,
+            );
+
+          if (changed) {
+            summary.changed += 1;
+          }
+
+          if (issue) {
+            summary.blocked += 1;
+
+            if (
+              issue.code
+              === 'missing_adbn_account'
+            ) {
+              summary.missingAccount += 1;
+            } else if (
+              issue.code
+              === 'unmapped_adbn_account'
+            ) {
+              summary.unmappedAccount += 1;
+            } else if (
+              issue.code
+              === 'broken_bajet_mapping'
+            ) {
+              summary.brokenMapping += 1;
+            } else {
+              summary.invalid += 1;
+            }
+          }
+
+          if (
+            changed
+            || issue
+          ) {
+            summary.attention += 1;
+          }
+        }
+
+        return summary;
+      },
+      [
+        accountIds,
+        mappings,
+        payments,
+        spaceId,
+        transactions,
+      ],
+    );
+
   const stalePayments = payments
     ? findStalePostedAdbnPaymentTransactions(payments.payments, transactions)
     : [];
@@ -187,14 +290,15 @@ export function AdbnTechIntegrationHealthWorkspace({
             <span>Mapped accounts <strong>{mapped}/{activeAdbnAccounts.length}</strong></span>
             <span>Unmapped <strong>{unmapped}</strong></span>
             <span>Broken mappings <strong>{broken}</strong></span>
+            <span>Payment attention <strong>{paymentHealth.attention}</strong></span>
             <span>Missing payments <strong>{stalePayments.length}</strong></span>
             <span>Missing expenses <strong>{staleExpenses.length}</strong></span>
             <span>Last read <strong>{loadedAt ? dateTime(loadedAt) : '—'}</strong></span>
           </div>
 
-          {(unmapped > 0 || broken > 0 || stalePayments.length > 0 || staleExpenses.length > 0) && (
-            <div className="notice warning">
-              Review required: {unmapped} active ADBN account(s) unmapped, {broken} broken mapping(s), {stalePayments.length} stale customer payment Money In record(s), and {staleExpenses.length} stale expense Money Out record(s).
+          {(unmapped > 0 || broken > 0 || paymentHealth.attention > 0 || stalePayments.length > 0 || staleExpenses.length > 0) && (
+            <div className="notice warning" data-adbn-payment-health-warning>
+              Review required: {unmapped} active ADBN account(s) unmapped, {broken} broken mapping(s), {paymentHealth.attention} source payment(s) needing attention, {stalePayments.length} stale customer payment Money In record(s), and {staleExpenses.length} stale expense Money Out record(s).
             </div>
           )}
 
@@ -212,11 +316,28 @@ export function AdbnTechIntegrationHealthWorkspace({
             <section className="panel">
               <span className="eyebrow">Customer payments</span>
               <h3>{payments?.payments.length || 0} source payments</h3>
-              <p className="muted">{syncedPayments} active BajetBN Money In record(s) · {stalePayments.length} missing in ADBN. Auto-sync is {space?.externalIntegrationPaymentAutoSyncEnabled === true ? 'ON' : 'OFF'}.</p>
+              <p className="muted" data-adbn-payment-health-summary>
+                {syncedPayments} active BajetBN Money In record(s) · {paymentHealth.attention} source payment(s) need attention · {stalePayments.length} missing in ADBN.
+              </p>
               <small className="muted">
+                Changed {paymentHealth.changed}
+                {' · '}
+                Blocked {paymentHealth.blocked}
+                {' · '}
+                Missing receiving account {paymentHealth.missingAccount}
+                {' · '}
+                Unmapped {paymentHealth.unmappedAccount}
+                {' · '}
+                Broken mapping {paymentHealth.brokenMapping}
+                {' · '}
+                Invalid / cancelled {paymentHealth.invalid}
+              </small>
+              <small className="muted">
+                {' '}
+                Auto-sync is {space?.externalIntegrationPaymentAutoSyncEnabled === true ? 'ON' : 'OFF'}
                 {space?.externalIntegrationPaymentAutoSyncEnabled === true
-                  ? 'From ' + dateTime(space.externalIntegrationPaymentAutoSyncCutoffIso || '')
-                  : 'Historical payments remain manual.'}
+                  ? ' · from ' + dateTime(space.externalIntegrationPaymentAutoSyncCutoffIso || '')
+                  : ' · historical payments remain manual.'}
               </small>
               <div className="header-actions">
                 <button type="button" className="button secondary compact" onClick={() => onNavigate('adbn_payments')}>Open Payments</button>
