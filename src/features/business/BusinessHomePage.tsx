@@ -43,6 +43,9 @@ import {
   BusinessActivityTimeline,
 } from './BusinessActivityTimeline';
 import {
+  AdbnTechIntegrationHealthWorkspace,
+} from './AdbnTechIntegrationHealthWorkspace';
+import {
   AdbnTechMirrorWorkspace,
 } from './AdbnTechMirrorWorkspace';
 import {
@@ -146,6 +149,7 @@ type BusinessWorkspaceView =
   | 'finance'
   | 'sellers'
   | 'reports'
+  | 'adbn_integration'
   | 'adbn_customers'
   | 'adbn_invoices'
   | 'adbn_payments'
@@ -163,6 +167,7 @@ function workspaceViewFromSearch(
     || value === 'finance'
     || value === 'sellers'
     || value === 'reports'
+    || value === 'adbn_integration'
     || value === 'adbn_customers'
     || value === 'adbn_invoices'
     || value === 'adbn_payments'
@@ -1007,6 +1012,20 @@ export function BusinessHomePage() {
             <button
               type="button"
               className={
+                workspaceView === 'adbn_integration'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setWorkspaceView('adbn_integration')
+              }
+            >
+              Integration
+            </button>
+
+            <button
+              type="button"
+              className={
                 workspaceView === 'adbn_customers'
                   ? 'active'
                   : ''
@@ -1222,7 +1241,15 @@ export function BusinessHomePage() {
         )}
       </nav>
 
-      {workspaceView === 'adbn_customers'
+      {workspaceView === 'adbn_integration'
+        && canManageAdbnTechConnection
+        ? (
+          <AdbnTechIntegrationHealthWorkspace
+            spaceId={space.id}
+            onNavigate={setWorkspaceView}
+          />
+        )
+        : workspaceView === 'adbn_customers'
         && canManageAdbnTechConnection
         ? (
           <AdbnTechMirrorWorkspace
