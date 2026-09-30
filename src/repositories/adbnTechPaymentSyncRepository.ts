@@ -176,6 +176,115 @@ export function adbnPaymentCanPost(
   );
 }
 
+export type AdbnPaymentPostingIssueCode =
+  | 'invalid_amount'
+  | 'invalid_date'
+  | 'invalid_status'
+  | 'missing_adbn_account'
+  | 'unmapped_adbn_account'
+  | 'broken_bajet_mapping';
+
+export interface AdbnPaymentPostingIssue {
+  code: AdbnPaymentPostingIssueCode;
+  label: string;
+  detail: string;
+}
+
+export function adbnPaymentPostingIssue(
+  payment: AdbnTechPaymentMirror,
+  mappedAccountId: string,
+  mappedAccountExists = true,
+): AdbnPaymentPostingIssue | null {
+  if (payment.amount <= 0) {
+    return {
+      code: 'invalid_amount',
+      label: 'Invalid amount',
+      detail:
+        'Amount must be above BND 0 before this payment can sync.',
+    };
+  }
+
+  if (
+    !normalizedPaymentDate(
+      payment.paymentDate,
+    )
+  ) {
+    return {
+      code: 'invalid_date',
+      label: 'Invalid payment date',
+      detail:
+        'Add a valid payment date in ADBN TECH.',
+    };
+  }
+
+  const status =
+    payment.status
+      .trim()
+      .toLowerCase();
+
+  const blockedStatus =
+    [
+      'cancel',
+      'void',
+      'reverse',
+      'refund',
+      'reject',
+      'delete',
+      'failed',
+    ].find(
+      (blocked) =>
+        status.includes(
+          blocked,
+        ),
+    );
+
+  if (blockedStatus) {
+    return {
+      code: 'invalid_status',
+      label: 'Source status not eligible',
+      detail:
+        payment.status
+          ? 'ADBN TECH status: '
+            + payment.status
+          : 'This ADBN TECH payment status cannot be posted.',
+    };
+  }
+
+  if (!payment.bankAccountId) {
+    return {
+      code: 'missing_adbn_account',
+      label: 'No receiving account in ADBN',
+      detail:
+        'Assign the receiving bank/cash account on this payment in ADBN TECH.',
+    };
+  }
+
+  if (!mappedAccountId) {
+    return {
+      code: 'unmapped_adbn_account',
+      label: 'Receiving account not mapped',
+      detail:
+        'Map ADBN account '
+        + (
+          payment.bankAccountName
+          || payment.bankAccountId
+        )
+        + ' to a BajetBN Business account.',
+    };
+  }
+
+  if (!mappedAccountExists) {
+    return {
+      code: 'broken_bajet_mapping',
+      label: 'BajetBN mapping unavailable',
+      detail:
+        'The saved BajetBN account mapping is missing or unavailable. Choose an active Business account and save the mapping again.',
+    };
+  }
+
+  return null;
+}
+
 export function adbnPaymentIsAfterCutoff(
   payment: AdbnTechPaymentMirror,
   cutoffIso: string,

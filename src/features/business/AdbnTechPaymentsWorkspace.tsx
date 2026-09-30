@@ -28,6 +28,7 @@ import {
 } from '../../repositories/spaceRepository';
 import {
   adbnPaymentCanPost,
+  adbnPaymentPostingIssue,
   adbnPaymentSyncLabel,
   adbnPaymentTransactionMatches,
   autoSyncNewAdbnTechPaymentsToBajetBn,
@@ -1267,6 +1268,7 @@ export function AdbnTechPaymentsWorkspace({
           item.note,
           item.bankAccountName,
           item.bankAccountType,
+          item.bankAccountId,
         ].some((value) =>
           value
             .toLowerCase()
@@ -1289,18 +1291,85 @@ export function AdbnTechPaymentsWorkspace({
     [savedMappings, snapshot],
   );
 
-  const paymentsNeedingMapping = useMemo(
-    () =>
-      (snapshot?.payments || [])
-        .filter((payment) =>
-          !payment.bankAccountId
-          || !savedMappings[
+  const bajetAccountIds =
+    useMemo(
+      () =>
+        new Set(
+          bajetAccounts.map(
+            (account) =>
+              account.id,
+          ),
+        ),
+      [bajetAccounts],
+    );
+
+  const paymentIssueCounts =
+    useMemo(
+      () => {
+        const counts = {
+          total: 0,
+          missingAccount: 0,
+          unmappedAccount: 0,
+          brokenMapping: 0,
+          invalid: 0,
+        };
+
+        for (
+          const payment
+          of snapshot?.payments || []
+        ) {
+          const mappedAccountId =
             payment.bankAccountId
-          ],
-        )
-        .length,
-    [savedMappings, snapshot],
-  );
+              ? savedMappings[
+                  payment.bankAccountId
+                ]
+              : '';
+
+          const issue =
+            adbnPaymentPostingIssue(
+              payment,
+              mappedAccountId,
+              mappedAccountId
+                ? bajetAccountIds.has(
+                    mappedAccountId,
+                  )
+                : true,
+            );
+
+          if (!issue) {
+            continue;
+          }
+
+          counts.total += 1;
+
+          if (
+            issue.code
+            === 'missing_adbn_account'
+          ) {
+            counts.missingAccount += 1;
+          } else if (
+            issue.code
+            === 'unmapped_adbn_account'
+          ) {
+            counts.unmappedAccount += 1;
+          } else if (
+            issue.code
+            === 'broken_bajet_mapping'
+          ) {
+            counts.brokenMapping += 1;
+          } else {
+            counts.invalid += 1;
+          }
+        }
+
+        return counts;
+      },
+      [
+        bajetAccountIds,
+        savedMappings,
+        snapshot,
+      ],
+    );
 
   const hasUnsavedMappings =
     JSON.stringify(mappings)
@@ -1630,17 +1699,36 @@ export function AdbnTechPaymentsWorkspace({
               </div>
             )}
 
-            <div className="adbn-tech-account-mapping-footer-v115">
+            <div
+              className="adbn-tech-account-mapping-footer-v115"
+              data-adbn-payment-block-summary
+            >
               <div>
                 <strong>
-                  {paymentsNeedingMapping}
+                  {paymentIssueCounts.total}
                 </strong>
                 <span>
                   {' '}
                   payment
-                  {paymentsNeedingMapping === 1
+                  {paymentIssueCounts.total === 1
                     ? ''
-                    : 's'} currently require account mapping.
+                    : 's'} need attention
+                  {' · '}
+                  {paymentIssueCounts.missingAccount}
+                  {' '}
+                  missing receiving account
+                  {' · '}
+                  {paymentIssueCounts.unmappedAccount}
+                  {' '}
+                  unmapped
+                  {' · '}
+                  {paymentIssueCounts.brokenMapping}
+                  {' '}
+                  broken mapping
+                  {' · '}
+                  {paymentIssueCounts.invalid}
+                  {' '}
+                  invalid / cancelled
                 </span>
               </div>
 
@@ -1840,13 +1928,32 @@ export function AdbnTechPaymentsWorkspace({
                     mappedAccountId,
                   );
 
-                const paymentReady =
-                  Boolean(
-                    mappedBajetAccount,
-                  )
-                  && adbnPaymentCanPost(
+                const postingIssue =
+                  adbnPaymentPostingIssue(
                     payment,
+                    mappedAccountId,
+                    mappedAccountId
+                      ? bajetAccountIds.has(
+                          mappedAccountId,
+                        )
+                      : true,
                   );
+
+                const paymentReady =
+                  !postingIssue
+                  && Boolean(
+                    mappedBajetAccount,
+                  );
+
+                const mappingIssue =
+                  postingIssue?.code
+                    === 'missing_adbn_account'
+                  || postingIssue?.code
+                    === 'unmapped_adbn_account'
+                  || postingIssue?.code
+                    === 'broken_bajet_mapping'
+                    ? postingIssue
+                    : null;
 
                 return (
                   <tr key={payment.id}>
@@ -1905,7 +2012,16 @@ export function AdbnTechPaymentsWorkspace({
                     </td>
 
                     <td>
-                      {mappedBajetAccount ? (
+                      {mappingIssue ? (
+                        <>
+                          <strong className="adbn-tech-mapping-required-v115">
+                            {mappingIssue.label}
+                          </strong>
+                          <small>
+                            {mappingIssue.detail}
+                          </small>
+                        </>
+                      ) : mappedBajetAccount ? (
                         <>
                           <strong>
                             {mappedBajetAccount.name}
@@ -1916,12 +2032,17 @@ export function AdbnTechPaymentsWorkspace({
                         </>
                       ) : (
                         <span className="adbn-tech-mapping-required-v115">
-                          Mapping required
+                          Mapping unavailable
                         </span>
                       )}
                     </td>
 
-                    <td>
+                    <td
+                      data-adbn-payment-block-reason={
+                        postingIssue?.code
+                        || undefined
+                      }
+                    >
                       {paymentSynced && !paymentChanged ? (
                         <>
                           <strong>
@@ -1962,7 +2083,8 @@ export function AdbnTechPaymentsWorkspace({
                             Changed
                           </strong>
                           <small>
-                            Map account / check payment
+                            {postingIssue?.detail
+                              || 'Source values changed and need review.'}
                           </small>
                         </>
                       ) : paymentReady ? (
@@ -1987,11 +2109,13 @@ export function AdbnTechPaymentsWorkspace({
                         </button>
                       ) : (
                         <>
-                          <span>
-                            Blocked
-                          </span>
+                          <strong>
+                            {postingIssue?.label
+                              || 'Blocked'}
+                          </strong>
                           <small>
-                            Map account / check payment
+                            {postingIssue?.detail
+                              || 'Review this ADBN TECH payment before syncing.'}
                           </small>
                         </>
                       )}
