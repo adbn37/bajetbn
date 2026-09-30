@@ -61,6 +61,33 @@ type PaymentViewFilter =
   | 'changed'
   | 'blocked';
 
+const PAYMENT_VIEW_FILTER_SESSION_KEY =
+  'bajetbn:adbn-payment-view-filter';
+
+function initialPaymentViewFilter(): PaymentViewFilter {
+  if (
+    typeof window
+    === 'undefined'
+  ) {
+    return 'all';
+  }
+
+  const requested =
+    window.sessionStorage.getItem(
+      PAYMENT_VIEW_FILTER_SESSION_KEY,
+    );
+
+  return (
+    requested === 'attention'
+    || requested === 'ready'
+    || requested === 'synced'
+    || requested === 'changed'
+    || requested === 'blocked'
+  )
+    ? requested
+    : 'all';
+}
+
 function bnd(value: number) {
   return new Intl.NumberFormat('en-BN', {
     style: 'currency',
@@ -228,7 +255,9 @@ export function AdbnTechPaymentsWorkspace({
   const [
     paymentViewFilter,
     setPaymentViewFilter,
-  ] = useState<PaymentViewFilter>('all');
+  ] = useState<PaymentViewFilter>(
+    initialPaymentViewFilter,
+  );
 
   const [loading, setLoading] =
     useState(false);
@@ -388,6 +417,17 @@ export function AdbnTechPaymentsWorkspace({
     },
     [spaceId],
   );
+
+  useEffect(() => {
+    if (
+      typeof window
+      !== 'undefined'
+    ) {
+      window.sessionStorage.removeItem(
+        PAYMENT_VIEW_FILTER_SESSION_KEY,
+      );
+    }
+  }, []);
 
   useEffect(() => {
     void loadBajetBnSide();

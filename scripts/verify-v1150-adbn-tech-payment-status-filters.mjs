@@ -64,6 +64,13 @@ check(
 );
 
 check(
+  workspace.includes('initialPaymentViewFilter')
+  && workspace.includes("bajetbn:adbn-payment-view-filter")
+  && workspace.includes('sessionStorage.removeItem'),
+  'Payments workspace accepts and consumes a one-time status filter hint.',
+);
+
+check(
   workspace.includes('searchedPayments.filter')
   && workspace.includes("paymentViewFilter === 'attention'")
   && workspace.includes("paymentViewFilter === 'ready'"),
