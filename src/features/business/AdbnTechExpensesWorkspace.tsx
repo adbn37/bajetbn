@@ -23,9 +23,13 @@ import {
   autoReconcileChangedAdbnTechExpenses,
   autoSyncNewAdbnTechExpensesToBajetBn,
   findPostedAdbnExpenseTransaction,
+  findStalePostedAdbnExpenseTransactions,
   reconcileAdbnTechExpenseToBajetBn,
   syncAdbnTechExpenseToBajetBn,
 } from '../../repositories/adbnTechExpenseSyncRepository';
+import {
+  reverseStaleAdbnExpenseMoneyActivity,
+} from '../../repositories/businessMoneyActivityRepository';
 import {
   getSpace,
   markAdbnTechIntegrationConnected,
@@ -109,6 +113,8 @@ export function AdbnTechExpensesWorkspace({
   const [autoSyncCutoffIso, setAutoSyncCutoffIso] = useState('');
   const [autoSyncBusy, setAutoSyncBusy] = useState(false);
   const [autoSyncMessage, setAutoSyncMessage] = useState('');
+  const [staleReverseConfirmId, setStaleReverseConfirmId] = useState('');
+  const [staleReverseBusyId, setStaleReverseBusyId] = useState('');
   const autoSyncRunRef = useRef('');
 
   const load = useCallback(async () => {
@@ -492,6 +498,20 @@ export function AdbnTechExpensesWorkspace({
     ],
   );
 
+  const staleExpenseTransactions = useMemo(
+    () =>
+      snapshot
+        ? findStalePostedAdbnExpenseTransactions(
+            snapshot.expenses,
+            businessTransactions,
+          )
+        : [],
+    [
+      snapshot,
+      businessTransactions,
+    ],
+  );
+
   const syncExpense = async (expense: AdbnTechExpenseMirror) => {
     if (syncBusyExpenseId) return;
 
@@ -637,6 +657,85 @@ export function AdbnTechExpensesWorkspace({
     }
   };
 
+  const reverseStaleExpenseFromWorkspace =
+    async (
+      transaction: FinancialTransaction,
+    ) => {
+      if (staleReverseBusyId) {
+        return;
+      }
+
+      if (
+        staleReverseConfirmId
+        !== transaction.id
+      ) {
+        setStaleReverseConfirmId(
+          transaction.id,
+        );
+        setSyncMessage('');
+        setError('');
+        return;
+      }
+
+      setStaleReverseBusyId(
+        transaction.id,
+      );
+      setSyncMessage('');
+      setError('');
+
+      try {
+        const today =
+          new Intl.DateTimeFormat(
+            'en-CA',
+            {
+              timeZone:
+                'Asia/Brunei',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            },
+          )
+            .format(
+              new Date(),
+            );
+
+        await reverseStaleAdbnExpenseMoneyActivity({
+          transactionId:
+            transaction.id,
+          transactionDate:
+            today,
+          reason:
+            'Owner confirmed the ADBN TECH source expense is deleted; stale BajetBN Money Out reversed manually from the Expenses workspace.',
+        });
+
+        const nextTransactions =
+          await listBusinessTransactionsForSpace(
+            spaceId,
+          );
+
+        setBusinessTransactions(
+          nextTransactions,
+        );
+        setStaleReverseConfirmId('');
+
+        if (onFinancialSync) {
+          await onFinancialSync();
+        }
+
+        setSyncMessage(
+          'Stale ADBN TECH expense Money Out reversed. History is preserved and the Business Account, ledger, budgets and reports were updated.',
+        );
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'Stale ADBN TECH expense could not be reversed.',
+        );
+      } finally {
+        setStaleReverseBusyId('');
+      }
+    };
+
   if (user?.email?.trim().toLowerCase() !== 'zardeerwandy@gmail.com') {
     return null;
   }
@@ -675,6 +774,7 @@ export function AdbnTechExpensesWorkspace({
         <span>Expenses <strong>{snapshot?.expenses.length || 0}</strong></span>
         <span>Synced Money Out <strong>{syncedCount}</strong></span>
         <span>Changed <strong>{changedCount}</strong></span>
+        <span>Missing in ADBN <strong>{staleExpenseTransactions.length}</strong></span>
         <span>Visible total <strong>{bnd(visibleTotal)}</strong></span>
         <span>Source <strong>expenses</strong></span>
       </div>
@@ -691,7 +791,7 @@ export function AdbnTechExpensesWorkspace({
       <div className="info-banner" data-adbn-expense-manual-sync>
         <strong>Manual Money Out sync</strong>
         <span>
-          ADBN TECH expenses are already paid bank-ledger debits. Historical import remains manual. After a synced expense is edited in ADBN TECH, BajetBN marks it Changed and lets you reconcile it by reversing the old Money Out and posting the corrected source values. If an expense is deleted in ADBN TECH, use Reverse stale ADBN expense from Money Activity; a missing snapshot is never auto-reversed.
+          ADBN TECH expenses are already paid bank-ledger debits. Historical import remains manual. After a synced expense is edited in ADBN TECH, BajetBN marks it Changed and lets you reconcile it by reversing the old Money Out and posting the corrected source values. If a synced Money Out is absent from the current ADBN expense snapshot, BajetBN flags it as Missing in ADBN for owner review; a missing snapshot is never auto-reversed.
         </span>
       </div>
 
@@ -891,6 +991,146 @@ export function AdbnTechExpensesWorkspace({
             </tbody>
           </table>
         </div>
+      )}
+
+      {snapshot && staleExpenseTransactions.length > 0 && (
+        <section
+          className="panel"
+          data-adbn-expense-stale-review
+        >
+          <div className="business-home-v115-section-heading">
+            <div>
+              <span>Owner review only</span>
+              <h3>Missing in ADBN</h3>
+            </div>
+          </div>
+
+          <div className="notice warning">
+            These active BajetBN Money Out records have ADBN expense labels that are absent from the current ADBN expense snapshot. Review the source before reversing. Detection alone never changes money.
+          </div>
+
+          <div className="adbn-tech-table-wrap-v115">
+            <table className="adbn-tech-table-v115">
+              <thead>
+                <tr>
+                  <th>Money Out</th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Account</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staleExpenseTransactions.map(
+                  (transaction) => {
+                    const account =
+                      accountById.get(
+                        transaction.accountId,
+                      );
+
+                    const confirming =
+                      staleReverseConfirmId
+                      === transaction.id;
+
+                    const busy =
+                      staleReverseBusyId
+                      === transaction.id;
+
+                    return (
+                      <tr
+                        key={transaction.id}
+                        data-adbn-expense-stale-row
+                      >
+                        <td>
+                          <strong>Missing in ADBN</strong>
+                          <small>{transaction.id}</small>
+                        </td>
+                        <td>
+                          {simpleDate(
+                            transaction.transactionDate,
+                          )}
+                        </td>
+                        <td>
+                          <span>
+                            {transaction.counterparty
+                              || 'ADBN TECH expense'}
+                          </span>
+                          <small>
+                            {transaction.note || ''}
+                          </small>
+                        </td>
+                        <td>
+                          <strong>
+                            {bnd(
+                              transaction.amountMinor
+                              / 100,
+                            )}
+                          </strong>
+                        </td>
+                        <td>
+                          <span>
+                            {accountLabel(account)
+                              || transaction.accountId}
+                          </span>
+                          <small>
+                            {account?.currency || ''}
+                          </small>
+                        </td>
+                        <td>
+                          {confirming ? (
+                            <div className="header-actions">
+                              <button
+                                type="button"
+                                className="button danger compact"
+                                data-adbn-expense-stale-confirm
+                                disabled={busy}
+                                onClick={() =>
+                                  void reverseStaleExpenseFromWorkspace(
+                                    transaction,
+                                  )
+                                }
+                              >
+                                {busy
+                                  ? 'Reversing...'
+                                  : 'Confirm reverse'}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="button secondary compact"
+                                disabled={busy}
+                                onClick={() =>
+                                  setStaleReverseConfirmId('')
+                                }
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button danger compact"
+                              data-adbn-expense-stale-review-action
+                              disabled={Boolean(staleReverseBusyId)}
+                              onClick={() =>
+                                void reverseStaleExpenseFromWorkspace(
+                                  transaction,
+                                )
+                              }
+                            >
+                              Reverse stale expense
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  },
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </section>
   );

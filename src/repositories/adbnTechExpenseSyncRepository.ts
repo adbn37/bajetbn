@@ -444,6 +444,67 @@ export function findPostedAdbnExpenseTransaction(
   );
 }
 
+export function findStalePostedAdbnExpenseTransactions(
+  expenses: AdbnTechExpenseMirror[],
+  transactions: FinancialTransaction[],
+) {
+  const currentSourceLabels =
+    new Set(
+      expenses.map(
+        (expense) =>
+          adbnExpenseSyncLabel(
+            expense.id,
+          ).toLowerCase(),
+      ),
+    );
+
+  return transactions.filter(
+    (item) => {
+      if (
+        item.status !== 'posted'
+        || item.type !== 'expense'
+      ) {
+        return false;
+      }
+
+      const labels =
+        (item.labels || [])
+          .map(
+            (value) =>
+              value
+                .trim()
+                .toLowerCase(),
+          );
+
+      if (
+        !labels.includes(
+          'adbn_tech',
+        )
+        || !labels.includes(
+          'adbn_expense',
+        )
+      ) {
+        return false;
+      }
+
+      const sourceLabel =
+        labels.find(
+          (value) =>
+            /^adbn_exp_[a-f0-9]{16}$/
+              .test(value),
+        )
+        || '';
+
+      return Boolean(
+        sourceLabel,
+      )
+        && !currentSourceLabels.has(
+          sourceLabel,
+        );
+    },
+  );
+}
+
 export function adbnExpenseTransactionMatches(
   expense: AdbnTechExpenseMirror,
   transaction: FinancialTransaction,
