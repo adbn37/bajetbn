@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -12,12 +13,16 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { requireFirebase } from '../services/firebase';
+import {
+  isInternalAdbnTechSpace,
+} from '../utils/adbnTechAccess';
 import type {
   Commitment,
   SharedBillAssignment,
   SharedBillPayment,
   PaymentMethodCode,
   SharedBillSettlementMode,
+  Space,
   SpaceActivity,
   SpaceApprovalMode,
   SpaceInvitation,
@@ -158,11 +163,43 @@ export async function createSpaceInvitation(input: {
   canViewPrivateDocuments?: boolean;
   posRole?: Exclude<SmePosRole, 'owner'> | null;
 }): Promise<{ data: { invitationId: string; token: string } }> {
-  const { functions } = requireFirebase();
+  const {
+    db,
+    functions,
+  } = requireFirebase();
+
+  const spaceSnapshot =
+    await getDoc(
+      doc(
+        db,
+        'spaces',
+        input.spaceId,
+      ),
+    );
+
+  if (
+    spaceSnapshot.exists()
+    && isInternalAdbnTechSpace({
+      id: spaceSnapshot.id,
+      ...spaceSnapshot.data(),
+    } as Space)
+  ) {
+    throw new Error(
+      'The internal ADBN TECH Space is private and cannot invite normal Space members.',
+    );
+  }
+
   return httpsCallable<
     typeof input & { idempotencyKey: string },
     { invitationId: string; token: string }
-  >(functions, 'createSpaceInvitation')({ ...input, idempotencyKey: crypto.randomUUID() });
+  >(
+    functions,
+    'createSpaceInvitation',
+  )({
+    ...input,
+    idempotencyKey:
+      crypto.randomUUID(),
+  });
 }
 
 export async function revokeSpaceInvitation(invitationId: string) {
