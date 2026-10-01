@@ -15,7 +15,7 @@ for (const [path, tokens] of Object.entries({
     "smePosRole === 'manager'",
   ],
   'src/features/spaces/SpaceActionHub.tsx': [
-    'Your Space home',
+    'data-simplified-space-navigation',
     'lockedSpaceId={space.id}',
     "setTool('expenses')",
     "setTool('balances')",
@@ -32,11 +32,15 @@ for (const [path, tokens] of Object.entries({
   'src/layouts/AppShell.tsx': [
     'SidebarCustomizer',
     'orderedNavigation',
-    'subscribeSpaceActivities',
+    'subscribeUserNotifications',
     'space-activity-live-toast',
     'Customize menu',
   ],
   'src/pages/SettingsPage.tsx': [
+    '<ThemeStudio',
+  ],
+
+  'src/components/ThemeStudio.tsx': [
     'PersonalStyleSettings',
   ],
   'src/components/PersonalStyleSettings.tsx': [
@@ -65,7 +69,7 @@ for (const [path, tokens] of Object.entries({
     'export async function listCommitmentsForSpace',
   ],
   'src/repositories/collaborationRepository.ts': [
-    'export function subscribeSpaceActivities',
+    'export function subscribeUserNotifications',
   ],
   'firestore.rules': [
     'function isSmeSpace(spaceId)',

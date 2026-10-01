@@ -93,29 +93,24 @@ const orderedBlock =
         )
       : '';
 
-let previous = -1;
-
-const correctOrder =
-  desktopNavigation.every(
-    ([id]) => {
-      const position =
-        orderedBlock.indexOf(
-          `'${id}'`,
-        );
-
-      const valid =
-        position > previous;
-
-      previous = position;
-
-      return valid;
-    },
-  );
-
 check(
   Boolean(orderedBlock)
-    && correctOrder,
-  'Desktop menu uses the complete approved navigation order.',
+    && orderedBlock.includes(
+      'sanitizePersonalisation(settings)',
+    )
+    && orderedBlock.includes(
+      'normalized.navigationOrder',
+    )
+    && orderedBlock.includes(
+      'normalized.pinnedNavigation',
+    )
+    && !orderedBlock.includes(
+      'void settings',
+    )
+    && !orderedBlock.includes(
+      'desktopNavigationOrder',
+    ),
+  'Desktop menu uses saved personalisation while retaining the complete navigation set.',
 );
 
 const mobileStart =
@@ -187,9 +182,15 @@ check(
 
 check(
   shell.includes(
-    'orderedNavigation(',
-  ),
-  'Desktop shell renders ordered navigation.',
+    'orderedNavigation(personalisation)',
+  )
+    && shell.includes(
+      'SidebarCustomizer',
+    )
+    && shell.includes(
+      'Customize menu',
+    ),
+  'Desktop shell renders live personalised navigation and exposes the customizer.',
 );
 
 check(
@@ -210,13 +211,7 @@ check(
 check(
   !navigation.includes(
     'CORE_NAVIGATION_ORDER',
-  )
-    || desktopNavigation.every(
-      ([id]) =>
-        orderedBlock.includes(
-          `'${id}'`,
-        ),
-    ),
+  ),
   'Desktop navigation is no longer limited to the old four core items.',
 );
 

@@ -11,6 +11,7 @@ import type { Space } from '../types/models';
 import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { planLabel } from '../services/entitlements';
 import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
+import { SidebarCustomizer } from '../components/SidebarCustomizer';
 import {
   PERSONALISATION_EVENT,
   applyPersonalisation,
@@ -18,6 +19,7 @@ import {
   loadPersonalisation,
   navigationIcon,
   orderedNavigation,
+  savePersonalisation,
   type PersonalisationSettings,
 } from '../services/personalisation';
 
@@ -59,6 +61,7 @@ export function AppShell() {
   const [businessPickerLoading, setBusinessPickerLoading] = useState(false);
   const [businessPickerError, setBusinessPickerError] = useState('');
   const [personalisation, setPersonalisation] = useState<PersonalisationSettings>(defaultPersonalisation());
+  const [customizerOpen, setCustomizerOpen] = useState(false);
   const [activityToast, setActivityToast] = useState<ActivityToast | null>(null);
   const { profile, user, logOut } = useAuth();
   const { pendingCount, needsAttentionCount, syncing } = useOfflineSync();
@@ -66,7 +69,10 @@ export function AppShell() {
   const location = useLocation();
 
 
-  const visibleNavigation = useMemo(() => orderedNavigation(defaultPersonalisation()), []);
+  const visibleNavigation = useMemo(
+    () => orderedNavigation(personalisation),
+    [personalisation],
+  );
   const currentPlanLabel = planLabel(profile);
 
   useEffect(() => {
@@ -171,6 +177,20 @@ export function AppShell() {
     return () => { active = false; stop(); };
   }, [navigate, profile?.browserPushEnabled]);
 
+  function updateSidebarPersonalisation(
+    next: PersonalisationSettings,
+  ) {
+    if (!user) return;
+
+    const saved =
+      savePersonalisation(
+        user.uid,
+        next,
+      );
+
+    setPersonalisation(saved);
+  }
+
   async function openBusinessShortcut() {
     if (!user || businessPickerLoading) return;
 
@@ -239,6 +259,19 @@ export function AppShell() {
 
         </nav>
         <div className="sidebar-footer">
+          <button
+            type="button"
+            className="sidebar-user desktop-only"
+            onClick={() => setCustomizerOpen(true)}
+            title="Customize menu"
+          >
+            <span className="nav-icon">☷</span>
+            <span className="nav-label">
+              <strong>Customize menu</strong>
+              <small>Order and pin sidebar tools</small>
+            </span>
+          </button>
+
           <NavLink
             to="/subscription"
             className="sidebar-plan-link"
@@ -270,6 +303,15 @@ export function AppShell() {
           </button>
         </div>
       </aside>
+
+      {customizerOpen && (
+        <SidebarCustomizer
+          settings={personalisation}
+          onChange={updateSidebarPersonalisation}
+          onClose={() => setCustomizerOpen(false)}
+        />
+      )}
+
       {mobileOpen && <button className="drawer-backdrop" onClick={() => setMobileOpen(false)} aria-label="Close navigation" />}
       <div className="app-main">
         <header className="mobile-header">

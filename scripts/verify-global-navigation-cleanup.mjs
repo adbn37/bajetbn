@@ -51,29 +51,26 @@ const orderedBlock =
         )
       : '';
 
-let previousDesktopItem = -1;
-
-const desktopOrderValid =
-  desktopOrder.every(
-    (id) => {
-      const position =
-        orderedBlock.indexOf(
-          `'${id}'`,
-        );
-
-      const valid =
-        position > previousDesktopItem;
-
-      previousDesktopItem =
-        position;
-
-      return valid;
-    },
-  );
-
 check(
-  desktopOrderValid,
-  'Desktop navigation exposes the complete money and planning toolset in the approved order.',
+  desktopOrder.every(
+    (id) =>
+      navigation.includes(
+        `id: '${id}'`,
+      ),
+  )
+    && orderedBlock.includes(
+      'sanitizePersonalisation(settings)',
+    )
+    && orderedBlock.includes(
+      'normalized.navigationOrder',
+    )
+    && orderedBlock.includes(
+      'normalized.pinnedNavigation',
+    )
+    && !orderedBlock.includes(
+      'void settings',
+    ),
+  'Desktop navigation exposes the complete toolset using saved order and pinning.',
 );
 
 const mobileStart =

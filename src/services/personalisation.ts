@@ -154,7 +154,7 @@ export function defaultPersonalisation(): PersonalisationSettings {
     typographyStyle: 'system',
     decorationIntensity: 'balanced',
     navigationOrder: [...RECOMMENDED_NAVIGATION_ORDER],
-    hiddenNavigation: [...RECOMMENDED_HIDDEN_NAVIGATION],
+    hiddenNavigation: [],
     pinnedNavigation: [],
   };
 }
@@ -181,7 +181,7 @@ export function sanitizePersonalisation(value: Partial<PersonalisationSettings> 
     ? value.hiddenNavigation
     : defaults.hiddenNavigation;
   const hidden = validNavigationIds(hiddenSource).filter((id) => !protectedIds.has(id));
-  const pinned = validNavigationIds(value?.pinnedNavigation).filter((id) => !hidden.includes(id));
+  const pinned = validNavigationIds(value?.pinnedNavigation);
 
   return {
     iconPack: ICON_PACKS.includes(value?.iconPack as IconPack) ? value!.iconPack as IconPack : defaults.iconPack,
@@ -229,45 +229,39 @@ export function savePersonalisation(uid: string, value: PersonalisationSettings)
   return next;
 }
 
-const CORE_NAVIGATION_ORDER: NavigationId[] = [
-  'overview',
-  'transactions',
-  'spaces',
-  'inbox',
-];
-
 export function orderedNavigation(
   settings: PersonalisationSettings,
 ): NavigationItem[] {
-  void settings;
+  const normalized = sanitizePersonalisation(settings);
+
   const byId = new Map(
     NAVIGATION_ITEMS.map((item) => [item.id, item]),
   );
 
   /*
-   * Desktop sidebar exposes every normal BajetBN page.
-   * Mobile keeps its separate five-slot navigation.
+   * Desktop keeps the complete BajetBN navigation set visible.
+   * Personalisation controls order and pinning only.
+   * Mobile keeps its separate fixed five-slot navigation.
    */
-  const desktopNavigationOrder: NavigationId[] = [
-    'overview',
-    'transactions',
-    'spaces',
-    'inbox',
-    'accounts',
-    'budgets',
-    'bills',
-    'recurring',
-    'debt',
-    'goals',
-    'calendar',
-    'reports',
-    'search',
-    'offline-sync',
+  const pinned = new Set(
+    normalized.pinnedNavigation,
+  );
+
+  const orderedIds: NavigationId[] = [
+    ...normalized.navigationOrder.filter(
+      (id) => pinned.has(id),
+    ),
+    ...normalized.navigationOrder.filter(
+      (id) => !pinned.has(id),
+    ),
   ];
 
-  return desktopNavigationOrder
+  return orderedIds
     .map((id) => byId.get(id))
-    .filter((item): item is NavigationItem => Boolean(item));
+    .filter(
+      (item): item is NavigationItem =>
+        Boolean(item),
+    );
 }
 
 export function secondaryNavigation(
