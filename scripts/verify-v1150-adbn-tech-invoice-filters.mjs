@@ -102,6 +102,19 @@ need(
 
 need(
   mirror.includes(
+    'bajetbn:adbn-invoice-view-filter',
+  )
+    && mirror.includes(
+      'requestedInvoiceView',
+    )
+    && mirror.includes(
+      'sessionStorage.removeItem',
+    ),
+  'Invoice filters accept and consume a one-time receivables review hint.',
+);
+
+need(
+  mirror.includes(
     'visibleInvoiceOutstanding',
   )
     && mirror.includes(

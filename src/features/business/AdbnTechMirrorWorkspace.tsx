@@ -40,6 +40,9 @@ import {
 
 type MirrorView = 'customers' | 'invoices';
 
+const INVOICE_VIEW_FILTER_SESSION_KEY =
+  'bajetbn:adbn-invoice-view-filter';
+
 type AdbnRecordedPaymentShare = {
   receiptNo: string;
   amount: number;
@@ -613,6 +616,52 @@ export function AdbnTechMirrorWorkspace({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (
+      view !== 'invoices'
+      || typeof window === 'undefined'
+    ) {
+      return;
+    }
+
+    const requestedInvoiceView =
+      window.sessionStorage.getItem(
+        INVOICE_VIEW_FILTER_SESSION_KEY,
+      );
+
+    if (
+      requestedInvoiceView
+      !== 'outstanding'
+      && requestedInvoiceView
+      !== 'overdue'
+    ) {
+      return;
+    }
+
+    setQuery('');
+    setInvoiceStatusFilter('');
+    setInvoiceSaleTypeFilter('');
+
+    if (
+      requestedInvoiceView
+      === 'outstanding'
+    ) {
+      setInvoicePaymentFilter(
+        'outstanding',
+      );
+      setInvoiceDateFilter('');
+    } else {
+      setInvoicePaymentFilter('');
+      setInvoiceDateFilter(
+        'overdue',
+      );
+    }
+
+    window.sessionStorage.removeItem(
+      INVOICE_VIEW_FILTER_SESSION_KEY,
+    );
+  }, [view]);
 
   const connect = async () => {
     setLoading(true);

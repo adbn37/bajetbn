@@ -46,8 +46,23 @@ function hasLabel(item: FinancialTransaction, value: string) {
 function hasPattern(item: FinancialTransaction, pattern: RegExp) {
   return (item.labels || []).some((label) => pattern.test(label.trim().toLowerCase()));
 }
+
+function bnd(value: number) {
+  return new Intl.NumberFormat(
+    'en-BN',
+    {
+      style: 'currency',
+      currency: 'BND',
+    },
+  ).format(
+    value || 0,
+  );
+}
 const PAYMENT_VIEW_FILTER_SESSION_KEY =
   'bajetbn:adbn-payment-view-filter';
+
+const INVOICE_VIEW_FILTER_SESSION_KEY =
+  'bajetbn:adbn-invoice-view-filter';
 
 function dateTime(value: string) {
   if (!value) return 'Not enabled';
@@ -251,6 +266,86 @@ export function AdbnTechIntegrationHealthWorkspace({
       ],
     );
 
+  const invoiceHealth =
+    useMemo(
+      () => {
+        const summary = {
+          outstanding: 0,
+          outstandingAmount: 0,
+          overdue: 0,
+          overdueAmount: 0,
+          unpaid: 0,
+          partial: 0,
+          paid: 0,
+        };
+
+        const today =
+          new Date()
+            .toISOString()
+            .slice(
+              0,
+              10,
+            );
+
+        for (
+          const invoice
+          of core?.invoices || []
+        ) {
+          const balance =
+            Math.max(
+              0,
+              Number(
+                invoice.balance,
+              ) || 0,
+            );
+
+          if (
+            balance > 0
+          ) {
+            summary.outstanding += 1;
+            summary.outstandingAmount +=
+              balance;
+
+            const dueDate =
+              invoice.nextDueDate
+              || invoice.dueDate;
+
+            if (
+              dueDate
+              && dueDate < today
+            ) {
+              summary.overdue += 1;
+              summary.overdueAmount +=
+                balance;
+            }
+          }
+
+          if (
+            invoice.total > 0
+            && invoice.balance <= 0
+          ) {
+            summary.paid += 1;
+          } else if (
+            invoice.paid > 0
+            && balance > 0
+          ) {
+            summary.partial += 1;
+          } else if (
+            balance > 0
+          ) {
+            summary.unpaid += 1;
+          } else {
+            summary.paid += 1;
+          }
+        }
+
+        return summary;
+      },
+      [
+        core,
+      ],
+    );
+
   const stalePayments = payments
     ? findStalePostedAdbnPaymentTransactions(payments.payments, transactions)
     : [];
@@ -283,6 +378,33 @@ export function AdbnTechIntegrationHealthWorkspace({
 
     onNavigate(
       'adbn_payments',
+    );
+  };
+
+  const openInvoices = (
+    filter: 'all' | 'outstanding' | 'overdue' = 'all',
+  ) => {
+    if (
+      typeof window
+      !== 'undefined'
+    ) {
+      if (
+        filter === 'outstanding'
+        || filter === 'overdue'
+      ) {
+        window.sessionStorage.setItem(
+          INVOICE_VIEW_FILTER_SESSION_KEY,
+          filter,
+        );
+      } else {
+        window.sessionStorage.removeItem(
+          INVOICE_VIEW_FILTER_SESSION_KEY,
+        );
+      }
+    }
+
+    onNavigate(
+      'adbn_invoices',
     );
   };
 
@@ -352,9 +474,52 @@ export function AdbnTechIntegrationHealthWorkspace({
               <span className="eyebrow">Customers & billing</span>
               <h3>{core?.customers.length || 0} customers</h3>
               <p className="muted">{core?.invoices.length || 0} invoices · {core?.paymentPlans.length || 0} payment plans.</p>
+              <p
+                className="muted"
+                data-adbn-receivables-health-summary
+              >
+                {invoiceHealth.outstanding} outstanding · {bnd(invoiceHealth.outstandingAmount)}
+                {' · '}
+                {invoiceHealth.overdue} overdue · {bnd(invoiceHealth.overdueAmount)}
+              </p>
+              <small className="muted">
+                Unpaid {invoiceHealth.unpaid}
+                {' · '}
+                Partially paid {invoiceHealth.partial}
+                {' · '}
+                Paid {invoiceHealth.paid}
+              </small>
               <div className="header-actions">
                 <button type="button" className="button secondary compact" onClick={() => onNavigate('adbn_customers')}>Customers</button>
-                <button type="button" className="button secondary compact" onClick={() => onNavigate('adbn_invoices')}>Invoices</button>
+                <button type="button" className="button secondary compact" onClick={() => openInvoices('all')}>Invoices</button>
+                {invoiceHealth.outstanding > 0 && (
+                  <button
+                    type="button"
+                    className="button secondary compact"
+                    data-adbn-receivables-open-outstanding
+                    onClick={() =>
+                      openInvoices(
+                        'outstanding',
+                      )
+                    }
+                  >
+                    Outstanding ({invoiceHealth.outstanding})
+                  </button>
+                )}
+                {invoiceHealth.overdue > 0 && (
+                  <button
+                    type="button"
+                    className="button secondary compact"
+                    data-adbn-receivables-open-overdue
+                    onClick={() =>
+                      openInvoices(
+                        'overdue',
+                      )
+                    }
+                  >
+                    Overdue ({invoiceHealth.overdue})
+                  </button>
+                )}
               </div>
             </section>
 
