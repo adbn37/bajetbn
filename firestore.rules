@@ -13,11 +13,52 @@ service cloud.firestore {
       return spaceId + '_' + uid;
     }
 
-    function isSpaceMember(spaceId) {
+    function isBajetBnAdbnOwner() {
+      return signedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower()
+          == 'zardeerwandy@gmail.com';
+    }
+
+    function hasActiveSpaceMembership(spaceId) {
       return signedIn()
         && exists(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid)))
         && (!('status' in get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data)
           || get(/databases/$(database)/documents/spaceMembers/$(membershipId(spaceId, request.auth.uid))).data.status == 'active');
+    }
+
+    function isInternalAdbnTechSpaceData(data) {
+      return (
+        'externalIntegrationProvider' in data
+        && data.externalIntegrationProvider
+          == 'adbn_tech'
+        && (
+          !('externalIntegrationRole' in data)
+          || data.externalIntegrationRole
+            != 'customer'
+        )
+      );
+    }
+
+    function canAccessInternalAdbnTechSpaceData(data) {
+      return !isInternalAdbnTechSpaceData(data)
+        || (
+          isBajetBnAdbnOwner()
+          && data.ownerId
+            == request.auth.uid
+        );
+    }
+
+    function canAccessSpaceByIntegration(spaceId) {
+      return exists(/databases/$(database)/documents/spaces/$(spaceId))
+        && canAccessInternalAdbnTechSpaceData(
+          get(/databases/$(database)/documents/spaces/$(spaceId)).data
+        );
+    }
+
+    function isSpaceMember(spaceId) {
+      return hasActiveSpaceMembership(spaceId)
+        && canAccessSpaceByIntegration(spaceId);
     }
 
     function isSpaceOwner(spaceId) {

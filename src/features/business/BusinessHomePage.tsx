@@ -40,6 +40,10 @@ import type {
 } from '../../types/models';
 import { formatMoney } from '../../utils/money';
 import {
+  canAccessInternalAdbnTechSpace,
+  isInternalAdbnTechSpace,
+} from '../../utils/adbnTechAccess';
+import {
   BusinessActivityTimeline,
 } from './BusinessActivityTimeline';
 import {
@@ -267,6 +271,26 @@ export function BusinessHomePage() {
         setPosRole(null);
         setPosSettings(null);
         setCustomRoleName('');
+        return;
+      }
+
+      if (
+        !canAccessInternalAdbnTechSpace(
+          nextSpace,
+          {
+            uid: user.uid,
+            email: user.email,
+          },
+        )
+      ) {
+        setSpace(null);
+        setTransactions([]);
+        setPosRole(null);
+        setPosSettings(null);
+        setCustomRoleName('');
+        setError(
+          'This ADBN TECH internal Space is private to its owner.',
+        );
         return;
       }
 
@@ -525,18 +549,19 @@ export function BusinessHomePage() {
     space.ownerId === user?.uid;
 
   const isAdbnTechSpace =
-    space.externalIntegrationProvider
-        === 'adbn_tech'
-    || space.name
-      .trim()
-      .toLowerCase()
-      === 'adbn tech';
+    isInternalAdbnTechSpace(
+      space,
+    );
 
   const canManageAdbnTechConnection =
-    isOwner
-    && user?.email?.trim().toLowerCase()
-      === 'zardeerwandy@gmail.com'
-    && isAdbnTechSpace;
+    isAdbnTechSpace
+    && canAccessInternalAdbnTechSpace(
+      space,
+      {
+        uid: user?.uid,
+        email: user?.email,
+      },
+    );
 
   const adbnTechPrepared =
     space.externalIntegrationProvider

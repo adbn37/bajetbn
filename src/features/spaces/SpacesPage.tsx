@@ -5,6 +5,11 @@ import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../compone
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  canAccessInternalAdbnTechSpace,
+  isBajetBnAdbnOwnerEmail,
+  isInternalAdbnTechSpace,
+} from '../../utils/adbnTechAccess';
 import { acceptSpaceInvitation, declineSpaceInvitation, listMySpaceInvitations } from '../../repositories/collaborationRepository';
 import { manageSpace } from '../../repositories/lifecycleRepository';
 import { createGoal } from '../../repositories/goalRepository';
@@ -148,8 +153,9 @@ export function SpacesPage() {
       .toLowerCase();
 
   const canProvisionAdbnTechSpace =
-    currentEmail
-      === 'zardeerwandy@gmail.com';
+    isBajetBnAdbnOwnerEmail(
+      currentEmail,
+    );
 
   const adbnTechSpace =
     useMemo(
@@ -159,13 +165,8 @@ export function SpacesPage() {
             !item.archivedAt
             && item.type === 'sme'
             && item.ownerId === user?.uid
-            && (
-              item.externalIntegrationProvider
-                === 'adbn_tech'
-              || item.name
-                .trim()
-                .toLowerCase()
-                === 'adbn tech'
+            && isInternalAdbnTechSpace(
+              item,
             ),
         )
         || null,
@@ -180,15 +181,18 @@ export function SpacesPage() {
       () =>
         spaces.filter(
           (item) =>
-            item.externalIntegrationProvider
-              !== 'adbn_tech'
-            || item.externalIntegrationRole
-              === 'customer'
-            || canProvisionAdbnTechSpace,
+            canAccessInternalAdbnTechSpace(
+              item,
+              {
+                uid: user?.uid,
+                email: currentEmail,
+              },
+            ),
         ),
       [
         spaces,
-        canProvisionAdbnTechSpace,
+        user?.uid,
+        currentEmail,
       ],
     );
 

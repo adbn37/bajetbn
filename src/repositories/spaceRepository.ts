@@ -109,6 +109,8 @@ export async function prepareAdbnTechIntegration(
     {
       externalIntegrationProvider:
         'adbn_tech',
+      externalIntegrationRole:
+        'business',
       externalIntegrationStatus:
         'prepared',
       externalIntegrationKey:
@@ -128,6 +130,7 @@ export async function markAdbnTechIntegrationConnected(
     doc(db, 'spaces', spaceId),
     {
       externalIntegrationProvider: 'adbn_tech',
+      externalIntegrationRole: 'business',
       externalIntegrationStatus: 'connected',
       externalIntegrationKey: 'adbntech',
       updatedAt: serverTimestamp(),

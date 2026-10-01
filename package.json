@@ -86,6 +86,7 @@
     "verify:v1150-linked-recipient-money-alpha1c": "node scripts/verify-v1150-linked-recipient-money-alpha1c.mjs",
     "verify:v1150-home-modes": "node scripts/verify-v1150-home-modes.mjs",
     "verify:v1150-mobile-space-navigation": "node scripts/verify-v1150-mobile-space-navigation.mjs",
+    "verify:v1150-adbn-internal-space-owner-only": "node scripts/verify-v1150-adbn-internal-space-owner-only.mjs",
     "verify:v1150-adbn-tech-payment-financial-sync": "node scripts/verify-v1150-adbn-tech-payment-financial-sync.mjs",
     "verify:v1150-adbn-tech-payment-auto-sync": "node scripts/verify-v1150-adbn-tech-payment-auto-sync.mjs",
     "verify:v1150-adbn-tech-payment-reconciliation": "node scripts/verify-v1150-adbn-tech-payment-reconciliation.mjs",

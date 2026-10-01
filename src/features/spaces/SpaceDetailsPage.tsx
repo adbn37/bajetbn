@@ -63,6 +63,9 @@ import type {
   SmePosRole,
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import {
+  canAccessInternalAdbnTechSpace,
+} from '../../utils/adbnTechAccess';
 import { formatMoney } from '../../utils/money';
 import type { CollaborationTab } from '../collaboration/CollaborationPage';
 import { DEFAULT_TRANSACTION_CATEGORIES } from '../categories/defaultCategories';
@@ -951,6 +954,25 @@ export function SpaceDetailsPage() {
 
     try {
       const nextSpace = await getSpace(spaceId);
+
+      if (
+        nextSpace
+        && !canAccessInternalAdbnTechSpace(
+          nextSpace,
+          {
+            uid: user.uid,
+            email: user.email,
+          },
+        )
+      ) {
+        setSpace(null);
+        setMembers([]);
+        setSmePosRole(null);
+        setError(
+          'This ADBN TECH internal Space is private to its owner.',
+        );
+        return;
+      }
 
       setSpace(nextSpace);
 
