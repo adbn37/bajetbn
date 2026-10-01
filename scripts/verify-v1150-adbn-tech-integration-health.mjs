@@ -29,6 +29,12 @@ check(
   && health.includes('source payment(s) needing attention'),
   'Top health warning includes source-payment attention separately from stale Money In.',
 );
+check(
+  health.includes('invoiceHealth')
+  && health.includes('data-adbn-receivables-health-summary')
+  && health.includes('data-adbn-receivables-open-overdue'),
+  'Dashboard reports invoice receivables health.',
+);
 check(health.includes('ADBN purchase date from 25 Sep 2026 onward'), 'Supplier fixed automation cutoff remains visible.');
 check(!health.includes('setDoc(') && !health.includes('updateDoc(') && !health.includes('deleteDoc('), 'No ADBN write path introduced.');
 console.log('BajetBN ADBN TECH integration health verification PASS');
