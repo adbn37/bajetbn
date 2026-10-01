@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 
 function fail(message) {
   console.error('VERIFY FAIL:', message);
@@ -145,4 +145,3 @@ must(
 console.log(
   'ADBN TECH Record Payment write-back verification PASS',
 );
-
