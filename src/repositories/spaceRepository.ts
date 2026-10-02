@@ -14,22 +14,146 @@ import { requireFirebase } from '../services/firebase';
 import type { CustomSpaceModule, Space, SpaceType } from '../types/models';
 import { createClientDisplayId } from '../utils/ids';
 
-export async function listSpaces(uid: string): Promise<Space[]> {
-  const { db } = requireFirebase();
-  const memberSnapshot = await getDocs(query(collection(db, 'spaceMembers'), where('uid', '==', uid)));
-  const spaceIds = memberSnapshot.docs
-    .filter((item) => !item.data().status || item.data().status === 'active')
-    .map((item) => item.data().spaceId as string);
-  const spaces: Space[] = [];
-
-  for (let index = 0; index < spaceIds.length; index += 10) {
-    const chunk = spaceIds.slice(index, index + 10);
-    if (!chunk.length) continue;
-    const snapshot = await getDocs(query(collection(db, 'spaces'), where(documentId(), 'in', chunk)));
-    snapshot.forEach((item) => spaces.push({ id: item.id, ...item.data() } as Space));
+function isPermissionDenied(
+  error: unknown,
+): boolean {
+  if (
+    !error
+    || typeof error !== 'object'
+    || !('code' in error)
+  ) {
+    return false;
   }
 
-  return spaces.sort((a, b) => a.name.localeCompare(b.name));
+  const code =
+    String(
+      (
+        error as {
+          code?: unknown;
+        }
+      ).code
+      || '',
+    );
+
+  return (
+    code === 'permission-denied'
+    || code === 'firestore/permission-denied'
+  );
+}
+
+export async function listSpaces(uid: string): Promise<Space[]> {
+  const { db } = requireFirebase();
+
+  const memberSnapshot =
+    await getDocs(
+      query(
+        collection(db, 'spaceMembers'),
+        where('uid', '==', uid),
+      ),
+    );
+
+  const spaceIds =
+    Array.from(
+      new Set(
+        memberSnapshot.docs
+          .filter(
+            (item) =>
+              !item.data().status
+              || item.data().status === 'active',
+          )
+          .map(
+            (item) =>
+              item.data().spaceId as string,
+          )
+          .filter(Boolean),
+      ),
+    );
+
+  const spaces: Space[] = [];
+
+  for (
+    let index = 0;
+    index < spaceIds.length;
+    index += 10
+  ) {
+    const chunk =
+      spaceIds.slice(
+        index,
+        index + 10,
+      );
+
+    if (!chunk.length) {
+      continue;
+    }
+
+    try {
+      const snapshot =
+        await getDocs(
+          query(
+            collection(db, 'spaces'),
+            where(
+              documentId(),
+              'in',
+              chunk,
+            ),
+          ),
+        );
+
+      snapshot.forEach(
+        (item) =>
+          spaces.push({
+            id: item.id,
+            ...item.data(),
+          } as Space),
+      );
+    } catch (error) {
+      if (!isPermissionDenied(error)) {
+        throw error;
+      }
+
+      /*
+       * Firestore rejects an entire IN query when even one
+       * requested Space is not readable. Retry individually so
+       * a private/internal Space does not hide every other Space.
+       */
+      for (const spaceId of chunk) {
+        try {
+          const snapshot =
+            await getDoc(
+              doc(
+                db,
+                'spaces',
+                spaceId,
+              ),
+            );
+
+          if (snapshot.exists()) {
+            spaces.push({
+              id: snapshot.id,
+              ...snapshot.data(),
+            } as Space);
+          }
+        } catch (spaceError) {
+          if (
+            isPermissionDenied(
+              spaceError,
+            )
+          ) {
+            continue;
+          }
+
+          throw spaceError;
+        }
+      }
+    }
+  }
+
+  return spaces.sort(
+    (a, b) =>
+      a.name.localeCompare(
+        b.name,
+      ),
+  );
 }
 
 /**
