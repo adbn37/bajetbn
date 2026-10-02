@@ -817,10 +817,23 @@ function InstalmentDebtLinkForm({
             }),
           )
           .sort(
-            (a, b) =>
-              a.debt.counterparty.localeCompare(
+            (a, b) => {
+              const archivedOrder =
+                Number(
+                  a.debt.status === 'archived',
+                )
+                - Number(
+                  b.debt.status === 'archived',
+                );
+
+              if (archivedOrder !== 0) {
+                return archivedOrder;
+              }
+
+              return a.debt.counterparty.localeCompare(
                 b.debt.counterparty,
-              ),
+              );
+            },
           ),
       [
         debts,
@@ -1030,9 +1043,17 @@ function InstalmentDebtLinkForm({
                     key={candidate.debt.id}
                   >
                     <div>
-                      <strong>
-                        {candidate.debt.counterparty}
-                      </strong>
+                      <div className="button-row">
+                        <strong>
+                          {candidate.debt.counterparty}
+                        </strong>
+
+                        {candidate.debt.status === 'archived' && (
+                          <span className="type-badge">
+                            Archived
+                          </span>
+                        )}
+                      </div>
 
                       <small>
                         Total{' '}
@@ -1076,7 +1097,11 @@ function InstalmentDebtLinkForm({
         <div className="button-row">
           <button
             type="submit"
-            className="button primary"
+            className={
+              selectedDebt
+                ? 'button primary'
+                : 'button secondary'
+            }
             disabled={
               busy
               || !selectedDebt
