@@ -29596,6 +29596,15 @@ export const recordDebtPayment = onCall(
     const transactionRef =
       db.collection('transactions').doc();
 
+    const budgetCandidateRefs =
+      (
+        await db.collection('budgets')
+          .where('ownerId', '==', uid)
+          .get()
+      ).docs.map(
+        (item) => item.ref,
+      );
+
     const result = await db.runTransaction(
       async (transaction) => {
         const existingPayment =
@@ -29651,6 +29660,14 @@ export const recordDebtPayment = onCall(
                 linkedCommitmentRef,
               )
             : null;
+
+        const budgetSnapshots =
+          await Promise.all(
+            budgetCandidateRefs.map(
+              (ref) =>
+                transaction.get(ref),
+            ),
+          );
 
         if (debt.ownerId !== uid) {
           throw new HttpsError(
@@ -29916,6 +29933,70 @@ export const recordDebtPayment = onCall(
             ? 'expense'
             : 'income';
 
+        const linkedCategoryId =
+          linkedCommitmentData
+          && direction === 'owe'
+            ? String(
+                linkedCommitmentData
+                  .categoryId
+                || 'expense-other',
+              )
+            : null;
+
+        const budgetIds =
+          linkedCategoryId
+            ? matchingBudgetIds(
+                budgetSnapshots,
+                {
+                  spaceId,
+                  categoryId:
+                    linkedCategoryId,
+                  transactionDate:
+                    paymentDate,
+                },
+              )
+            : [];
+
+        if (budgetIds.length) {
+          updateBudgetsSpent(
+            transaction,
+            budgetSnapshots,
+            budgetIds,
+            amountMinor,
+          );
+        }
+
+        const transactionCategory =
+          linkedCategoryId
+            ? String(
+                linkedCommitmentData
+                  ?.categoryName
+                || linkedCommitmentData
+                  ?.name
+                || 'Instalment',
+              )
+            : direction === 'owe'
+              ? 'Debt repayment'
+              : 'Debt repayment received';
+
+        const transactionCategoryIcon =
+          linkedCategoryId
+            ? String(
+                linkedCommitmentData
+                  ?.categoryIcon
+                || 'repeat',
+              )
+            : 'repeat';
+
+        const transactionCategoryColor =
+          linkedCategoryId
+            ? String(
+                linkedCommitmentData
+                  ?.categoryColor
+                || 'slate',
+              )
+            : 'slate';
+
         transaction.create(
           transactionRef,
           {
@@ -29929,14 +30010,26 @@ export const recordDebtPayment = onCall(
             amountMinor,
             currency: 'BND',
             transactionDate: paymentDate,
-            categoryId: null,
+            categoryId:
+              linkedCategoryId,
             category:
-              direction === 'owe'
-                ? 'Debt repayment'
-                : 'Debt repayment received',
-            categoryIcon: 'repeat',
-            categoryColor: 'slate',
-            categoryScope: 'personal',
+              transactionCategory,
+            categoryIcon:
+              transactionCategoryIcon,
+            categoryColor:
+              transactionCategoryColor,
+            categoryScope:
+              linkedCategoryId
+                ? 'both'
+                : 'personal',
+            categoryIsSystem:
+              linkedCategoryId
+                ? !linkedCategoryId
+                    .startsWith(
+                      'custom-',
+                    )
+                : true,
+            budgetIds,
             counterparty:
               String(debt.counterparty || ''),
             note,
@@ -30185,6 +30278,49 @@ export const reverseDebtPayment = onCall(
               )
             : null;
 
+        const originalTransactionData =
+          originalTransactionSnapshot
+            .data()
+          || {};
+
+        const linkedBudgetIds =
+          Array.isArray(
+            originalTransactionData
+              .budgetIds,
+          )
+            ? [
+                ...new Set(
+                  originalTransactionData
+                    .budgetIds
+                    .filter(
+                      (
+                        value: unknown,
+                      ): value is string =>
+                        typeof value
+                          === 'string'
+                        && Boolean(
+                          value.trim(),
+                        ),
+                    ),
+                ),
+              ]
+            : [];
+
+        const linkedBudgetRefs =
+          linkedBudgetIds.map(
+            (budgetId) =>
+              db.collection('budgets')
+                .doc(budgetId),
+          );
+
+        const linkedBudgetSnapshots =
+          await Promise.all(
+            linkedBudgetRefs.map(
+              (ref) =>
+                transaction.get(ref),
+            ),
+          );
+
         if (!debtSnapshot.exists) {
           throw new HttpsError(
             'failed-precondition',
@@ -30371,9 +30507,6 @@ export const reverseDebtPayment = onCall(
         const accountData =
           accountSnapshot.data() || {};
 
-        const originalTransactionData =
-          originalTransactionSnapshot.data() || {};
-
         const spaceId =
           String(
             originalTransactionData.spaceId ||
@@ -30381,6 +30514,15 @@ export const reverseDebtPayment = onCall(
             accountData.spaceId ||
             '',
           );
+
+        if (linkedBudgetIds.length) {
+          updateBudgetsSpent(
+            transaction,
+            linkedBudgetSnapshots,
+            linkedBudgetIds,
+            -amountMinor,
+          );
+        }
 
         transaction.create(
           reversalTransactionRef,
@@ -30395,11 +30537,30 @@ export const reverseDebtPayment = onCall(
             amountMinor,
             currency: 'BND',
             transactionDate: reversalDate,
-            categoryId: null,
-            category: 'Debt payment reversal',
-            categoryIcon: 'repeat',
-            categoryColor: 'slate',
-            categoryScope: 'personal',
+            categoryId:
+              originalTransactionData
+                .categoryId
+              ?? null,
+            category:
+              'Debt payment reversal',
+            categoryIcon:
+              originalTransactionData
+                .categoryIcon
+              || 'repeat',
+            categoryColor:
+              originalTransactionData
+                .categoryColor
+              || 'slate',
+            categoryScope:
+              originalTransactionData
+                .categoryScope
+              || 'personal',
+            categoryIsSystem:
+              originalTransactionData
+                .categoryIsSystem
+              ?? true,
+            budgetIds:
+              linkedBudgetIds,
             counterparty:
               String(debt.counterparty || ''),
             note: reason,
