@@ -36147,6 +36147,61 @@ export const linkDebtInstalment = onCall(
           );
         }
 
+        /*
+         * A partially stale reciprocal link may still
+         * have valid synchronized Debt payment history.
+         * Repairing the reciprocal pointer must never
+         * erase that payment-chain metadata.
+         */
+        const preserveDebtSyncState =
+          existingDebtLink
+            === commitmentId;
+
+        const preservedLinkedPaymentSyncCount =
+          preserveDebtSyncState
+          && Number.isSafeInteger(
+            debt.linkedPaymentSyncCount,
+          )
+            ? Math.max(
+                0,
+                Number(
+                  debt.linkedPaymentSyncCount,
+                ),
+              )
+            : 0;
+
+        const preservedLinkedLatestPaymentId =
+          preserveDebtSyncState
+          && typeof debt
+            .linkedLatestPaymentId
+            === 'string'
+          && debt.linkedLatestPaymentId
+            ? debt.linkedLatestPaymentId
+            : null;
+
+        if (
+          preserveDebtSyncState
+          && (
+            (
+              preservedLinkedPaymentSyncCount
+                > 0
+              && !preservedLinkedLatestPaymentId
+            )
+            || (
+              preservedLinkedPaymentSyncCount
+                === 0
+              && Boolean(
+                preservedLinkedLatestPaymentId,
+              )
+            )
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The linked Debt payment history is incomplete. Repair the existing link before relinking.',
+          );
+        }
+
         const now =
           FieldValue
             .serverTimestamp();
@@ -36157,9 +36212,13 @@ export const linkDebtInstalment = onCall(
             linkedCommitmentId:
               commitmentId,
             linkedPaymentSyncCount:
-              0,
+              preserveDebtSyncState
+                ? preservedLinkedPaymentSyncCount
+                : 0,
             linkedLatestPaymentId:
-              null,
+              preserveDebtSyncState
+                ? preservedLinkedLatestPaymentId
+                : null,
             spaceId:
               debt.spaceId
               || commitmentSpaceId,
@@ -36248,8 +36307,21 @@ export const unlinkDebtInstalment = onCall(
               )
             : 0;
 
+        const linkedLatestPaymentId =
+          typeof debt
+            .linkedLatestPaymentId
+            === 'string'
+          && debt.linkedLatestPaymentId
+            ? debt.linkedLatestPaymentId
+            : '';
+
+        /*
+         * Fail closed if either synchronization marker
+         * says linked repayments still exist.
+         */
         if (
           linkedPaymentSyncCount > 0
+          || linkedLatestPaymentId
         ) {
           throw new HttpsError(
             'failed-precondition',
