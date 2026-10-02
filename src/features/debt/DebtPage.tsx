@@ -4,7 +4,10 @@ import {
   useState,
   type FormEvent,
 } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Link,
+  useSearchParams,
+} from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
@@ -45,6 +48,7 @@ import type {
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney } from '../../utils/money';
+import { canLinkDebtAndInstalment } from '../../utils/debtInstalmentLink';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -284,6 +288,13 @@ async function loadSpaceSettlements(
 
 export function DebtPage() {
   const { user } = useAuth();
+
+  const [searchParams] =
+    useSearchParams();
+
+  const focusedDebtId =
+    searchParams.get('focus')
+    || '';
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -360,6 +371,75 @@ export function DebtPage() {
     void load();
   }, [user]);
 
+  useEffect(
+    () => {
+      if (!focusedDebtId) {
+        return;
+      }
+
+      const target =
+        debts.find(
+          (item) =>
+            item.id === focusedDebtId,
+        );
+
+      if (!target) {
+        return;
+      }
+
+      setDirection(
+        target.direction,
+      );
+
+      setStatusFilter(
+        target.status,
+      );
+    },
+    [
+      debts,
+      focusedDebtId,
+    ],
+  );
+
+  useEffect(
+    () => {
+      if (
+        !focusedDebtId
+        || loading
+      ) {
+        return;
+      }
+
+      const element =
+        document.getElementById(
+          `debt-${focusedDebtId}`,
+        );
+
+      if (!element) {
+        return;
+      }
+
+      requestAnimationFrame(
+        () => {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+
+          element.focus({
+            preventScroll: true,
+          });
+        },
+      );
+    },
+    [
+      direction,
+      focusedDebtId,
+      loading,
+      statusFilter,
+    ],
+  );
+
   const visibleDebts = useMemo(
     () =>
       debts.filter(
@@ -369,6 +449,20 @@ export function DebtPage() {
       ),
     [debts, direction, statusFilter],
   );
+
+  const commitmentMap =
+    useMemo(
+      () =>
+        new Map(
+          commitments.map(
+            (item) => [
+              item.id,
+              item,
+            ],
+          ),
+        ),
+      [commitments],
+    );
 
   const totalOwe = debts
     .filter((item) => item.direction === 'owe' && item.status === 'active')
@@ -648,8 +742,29 @@ export function DebtPage() {
               && Boolean(item.dueDate)
               && item.dueDate! < todayIso();
 
+            const linkedCommitment =
+              item.linkedCommitmentId
+                ? commitmentMap.get(
+                    item.linkedCommitmentId,
+                  )
+                : undefined;
+
             return (
-              <article key={item.id} className="panel debt-card">
+              <article
+                key={item.id}
+                id={`debt-${item.id}`}
+                className="panel debt-card"
+                tabIndex={
+                  focusedDebtId === item.id
+                    ? -1
+                    : undefined
+                }
+                data-focused-debt={
+                  focusedDebtId === item.id
+                    ? 'true'
+                    : undefined
+                }
+              >
                 <div className="debt-card-main">
                   <div>
                     <span className="eyebrow">
@@ -724,14 +839,21 @@ export function DebtPage() {
                     data-debt-instalment-link
                   >
                     <span>
-                      Linked instalment
+                      {linkedCommitment
+                        ? `Linked instalment · ${linkedCommitment.name}`
+                        : 'Linked instalment'}
                     </span>
 
                     <Link
                       className="text-button"
-                      to="/bills"
+                      to={
+                        '/bills?focus='
+                        + encodeURIComponent(
+                            item.linkedCommitmentId,
+                          )
+                      }
                     >
-                      Open instalments
+                      Open linked instalment
                     </Link>
                   </div>
                 )}
@@ -918,65 +1040,22 @@ function DebtInstalmentLinkForm({
 }) {
   const eligible =
     useMemo(
-      () => {
-        const spaceMap =
-          new Map(
-            spaces.map(
-              (space) => [
-                space.id,
-                space,
-              ],
-            ),
-          );
-
-        return commitments
+      () =>
+        commitments
           .filter(
-            (item) => {
-              const space =
-                spaceMap.get(
-                  item.spaceId,
-                );
-
-              return (
-                item.type
-                  === 'instalment'
-                && !item.archivedAt
-                && !item.stoppedAt
-                && item
-                  .externalIntegrationProvider
-                  !== 'adbn_tech'
-                && space
-                && space.type
-                  !== 'sme'
-                && item.currency
-                  === debt.currency
-                && Number(
-                  item.totalAmountMinor
-                  || 0,
-                )
-                  === debt.totalMinor
-                && item.amountPaidMinor
-                  === debt.paidMinor
-                && (
-                  !item.linkedDebtId
-                  || item.linkedDebtId
-                    === debt.id
-                )
-                && (
-                  !debt.spaceId
-                  || debt.spaceId
-                    === item.spaceId
-                )
-              );
-            },
+            (item) =>
+              canLinkDebtAndInstalment(
+                debt,
+                item,
+                spaces,
+              ),
           )
           .sort(
             (a, b) =>
               a.name.localeCompare(
                 b.name,
               ),
-          );
-      },
+          ),
       [
         commitments,
         debt,

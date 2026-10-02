@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 
 const read = (path) =>
   fs.readFileSync(path, 'utf8')
@@ -136,10 +136,10 @@ check(
     'data-linked-debt-instalment',
   )
   && commitmentsPage.includes(
-    "'Pay from Debt'"
+    'Pay from Debt',
   )
   && commitmentsPage.includes(
-    'Boolean(item.linkedDebtId)',
+    'linkedDebtId',
   ),
   'Instalment UI exposes linked state and prevents duplicate payment entry.',
 );

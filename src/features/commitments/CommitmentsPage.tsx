@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Link,
+  useSearchParams,
+} from 'react-router-dom';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
@@ -12,6 +15,11 @@ import {
   listAccountsForSpace,
 } from '../../repositories/accountRepository';
 import { listCustomCategories } from '../../repositories/categoryRepository';
+import {
+  linkDebtInstalment,
+  listDebts,
+  unlinkDebtInstalment,
+} from '../../repositories/debtRepository';
 import {
   createCommitment,
   getSpaceCommitmentWorkspace,
@@ -26,10 +34,11 @@ import {
   getSpace,
   listSpaces,
 } from '../../repositories/spaceRepository';
-import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, PaymentMethodCode, Space, TransactionCategory } from '../../types/models';
+import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, DebtRecord, PaymentMethodCode, Space, TransactionCategory } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { shareBillToWhatsApp } from '../../services/billShare';
 import { formatMoney, toMinorUnits } from '../../utils/money';
+import { canLinkDebtAndInstalment } from '../../utils/debtInstalmentLink';
 
 type CommitmentLifecycleAction = 'stop' | 'delete';
 
@@ -48,7 +57,16 @@ export function CommitmentsPage({
   typeOverride?: CommitmentType;
 } = {}) {
   const { user, profile } = useAuth();
+
+  const [searchParams] =
+    useSearchParams();
+
+  const focusedCommitmentId =
+    searchParams.get('focus')
+    || '';
   const [items, setItems] = useState<Commitment[]>([]); const [payments, setPayments] = useState<CommitmentPayment[]>([]); const [accounts, setAccounts] = useState<Account[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [categories, setCategories] = useState<TransactionCategory[]>([]);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
+  const [linkingInstalment, setLinkingInstalment] = useState<Commitment | null>(null);
   const [editing, setEditing] = useState<Commitment | null>(null); const [paying, setPaying] = useState<Commitment | null>(null); const [showForm, setShowForm] = useState(false); const [typeFilter, setTypeFilter] = useState<'all' | CommitmentType>(typeOverride || 'all'); const [commitmentStatusFilter, setCommitmentStatusFilter] = useState<'all' | 'upcoming' | 'due' | 'overdue' | 'completed'>('all'); const [busyId, setBusyId] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Commitment, CommitmentLifecycleAction> | null>(null);
   const load = async () => {
@@ -61,11 +79,17 @@ export function CommitmentsPage({
         nextSpaces,
         nextAccounts,
         custom,
+        nextDebts,
       ] = await Promise.all([
         listSpaces(user.uid),
         listAccounts(user.uid),
         listCustomCategories(user.uid),
+        listDebts(user.uid),
       ]);
+
+      setDebts(
+        nextDebts,
+      );
 
       const ownedSpaces =
         nextSpaces.filter(
@@ -184,6 +208,42 @@ export function CommitmentsPage({
 
   useEffect(
     () => {
+      if (
+        !focusedCommitmentId
+      ) {
+        return;
+      }
+
+      const element =
+        document.getElementById(
+          `commitment-${focusedCommitmentId}`,
+        );
+
+      if (!element) {
+        return;
+      }
+
+      requestAnimationFrame(
+        () => {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+
+          element.focus({
+            preventScroll: true,
+          });
+        },
+      );
+    },
+    [
+      focusedCommitmentId,
+      items,
+    ],
+  );
+
+  useEffect(
+    () => {
       if (!typeOverride) return;
 
       let cancelled = false;
@@ -208,6 +268,34 @@ export function CommitmentsPage({
     .sort((a, b) => (a.nextDueDate || a.startDate || '9999-12-31').localeCompare(b.nextDueDate || b.startDate || '9999-12-31'));
   const upcoming = active.filter((item) => dueState(item) === 'upcoming' || dueState(item) === 'due').length; const overdue = active.filter((item) => dueState(item) === 'overdue').length; const outstanding = active.reduce((sum, item) => sum + (item.type === 'instalment' && item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : item.status === 'active' ? item.amountMinor : 0), 0);
   const accountMap = useMemo(() => new Map(accounts.map((item) => [item.id, item])), [accounts]);
+
+  const debtMap =
+    useMemo(
+      () =>
+        new Map(
+          debts.map(
+            (item) => [
+              item.id,
+              item,
+            ],
+          ),
+        ),
+      [debts],
+    );
+
+  const spaceTypeMap =
+    useMemo(
+      () =>
+        new Map(
+          spaces.map(
+            (item) => [
+              item.id,
+              item.type,
+            ],
+          ),
+        ),
+      [spaces],
+    );
 
   const spaceMap =
     useMemo(
@@ -274,6 +362,40 @@ export function CommitmentsPage({
         ),
     );
   };
+  async function runUnlinkDebt(
+    item: Commitment,
+  ) {
+    if (!item.linkedDebtId) {
+      return;
+    }
+
+    setBusyId(
+      item.id,
+    );
+
+    setError('');
+
+    try {
+      await unlinkDebtInstalment(
+        item.linkedDebtId,
+      );
+
+      setSuccess(
+        'Debt link removed.',
+      );
+
+      await load();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusyId('');
+    }
+  }
+
   function askLifecycle(item: Commitment, action: CommitmentLifecycleAction) {
     setError('');
     setLifecycleDialog(action === 'stop'
@@ -363,34 +485,480 @@ export function CommitmentsPage({
     <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     {!typeOverride && <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>}
     {!spaceIdOverride && <div className="commitment-global-filter-v115"><label>Status<select value={commitmentStatusFilter} onChange={(event) => setCommitmentStatusFilter(event.target.value as 'all' | 'upcoming' | 'due' | 'overdue' | 'completed')}><option value="all">All statuses</option><option value="upcoming">Coming up</option><option value="due">Due today</option><option value="overdue">Overdue</option><option value="completed">Finished / paid</option></select></label><span>Grouped by Space · sorted by due date</span></div>}
-    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} spaceMap={spaceMap} showSpace={!spaceIdOverride} groupBySpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} />
+    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} debtMap={debtMap} spaceMap={spaceMap} spaceTypeMap={spaceTypeMap} focusedCommitmentId={focusedCommitmentId} showSpace={!spaceIdOverride} groupBySpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onLinkDebt={canManageCurrentSpace ? setLinkingInstalment : undefined} onUnlinkDebt={canManageCurrentSpace ? (item) => void runUnlinkDebt(item) : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} />
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit bill or instalment' : 'Add bill or instalment'} onClose={() => setShowForm(false)}><CommitmentForm item={editing} accounts={accounts} spaces={spaces} categories={categories} lockedSpaceId={spaceIdOverride} typeOverride={typeOverride} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
     {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accountsForCommitment(paying)} onSaved={async (status) => { setPaying(null); setSuccess(status === 'pending_approval' ? 'Payment request sent to the Account Owner. No account or commitment balance changes until it is approved.' : 'Payment saved.'); await load(); }} /></Modal>}
+
+    {linkingInstalment && (
+      <InstalmentDebtLinkForm
+        item={linkingInstalment}
+        debts={debts}
+        spaces={spaces}
+        onClose={() =>
+          setLinkingInstalment(null)
+        }
+        onSaved={async () => {
+          setLinkingInstalment(null);
+          setSuccess(
+            'Instalment linked to Debt.',
+          );
+          await load();
+        }}
+      />
+    )}
   </main>;
 }
 
-function CommitmentGrid({ items, payments, accountMap, spaceMap, showSpace = false, groupBySpace = false, busyId, inactive = false, onPay, onEdit, onStop, onDelete, onRestore, onShare }: { items: Commitment[]; payments: CommitmentPayment[]; accountMap: Map<string, Account>; spaceMap: Map<string, string>; showSpace?: boolean; groupBySpace?: boolean; busyId: string; inactive?: boolean; onPay?: (item: Commitment) => void; onEdit?: (item: Commitment) => void; onStop?: (item: Commitment) => void; onDelete?: (item: Commitment) => void; onRestore?: (item: Commitment) => void; onShare?: (item: Commitment, payment?: CommitmentPayment) => void }) {
+function CommitmentGrid({
+  items,
+  payments,
+  accountMap,
+  debtMap,
+  spaceMap,
+  spaceTypeMap,
+  focusedCommitmentId,
+  showSpace = false,
+  groupBySpace = false,
+  busyId,
+  inactive = false,
+  onPay,
+  onEdit,
+  onLinkDebt,
+  onUnlinkDebt,
+  onStop,
+  onDelete,
+  onRestore,
+  onShare,
+}: {
+  items: Commitment[];
+  payments: CommitmentPayment[];
+  accountMap: Map<string, Account>;
+  debtMap: Map<string, DebtRecord>;
+  spaceMap: Map<string, string>;
+  spaceTypeMap: Map<string, Space['type']>;
+  focusedCommitmentId: string;
+  showSpace?: boolean;
+  groupBySpace?: boolean;
+  busyId: string;
+  inactive?: boolean;
+  onPay?: (item: Commitment) => void;
+  onEdit?: (item: Commitment) => void;
+  onLinkDebt?: (item: Commitment) => void;
+  onUnlinkDebt?: (item: Commitment) => void;
+  onStop?: (item: Commitment) => void;
+  onDelete?: (item: Commitment) => void;
+  onRestore?: (item: Commitment) => void;
+  onShare?: (
+    item: Commitment,
+    payment?: CommitmentPayment,
+  ) => void;
+}) {
   const renderCard = (item: Commitment) => {
     const state = inactive ? 'completed' : dueState(item);
     const remaining = item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0;
     const ratio = item.totalAmountMinor ? Math.min(100, Math.round(item.amountPaidMinor / item.totalAmountMinor * 100)) : item.status === 'completed' ? 100 : 0;
     const recent = payments.filter((payment) => payment.commitmentId === item.id).slice(0, 2);
-    return <article className={`planning-card commitment-card state-${state} ${inactive ? 'archived' : ''}`} key={item.id}>
+
+    const linkedDebt =
+      item.linkedDebtId
+        ? debtMap.get(
+            item.linkedDebtId,
+          )
+        : undefined;
+
+    const debtLinkSupported =
+      item.type === 'instalment'
+      && !inactive
+      && item.externalIntegrationProvider
+        !== 'adbn_tech'
+      && spaceTypeMap.get(
+        item.spaceId,
+      ) !== 'sme';
+
+    return <article
+      className={`planning-card commitment-card state-${state} ${inactive ? 'archived' : ''}`}
+      key={item.id}
+      id={`commitment-${item.id}`}
+      tabIndex={
+        focusedCommitmentId === item.id
+          ? -1
+          : undefined
+      }
+      data-focused-commitment={
+        focusedCommitmentId === item.id
+          ? 'true'
+          : undefined
+      }
+    >
       <div className="planning-card-head"><div><span className="eyebrow">{inactive ? 'Stopped' : dueLabels[state]}</span><h3>{item.name}</h3></div><span className="type-badge">{item.type === 'bill' ? 'Bill' : 'Instalment'}</span></div>
       <div className="budget-amount-line"><span>{item.type === 'bill' ? 'Amount due each cycle' : 'Instalment amount per cycle'}</span><strong>{formatMoney(item.amountMinor, item.currency)}</strong><span>{frequencyLabels[item.frequency]}</span></div>
       {item.type === 'instalment' && <><div className="progress planning-progress"><span style={{ width: `${ratio}%` }} /></div><div className="planning-meta"><span>Paid {formatMoney(item.amountPaidMinor,item.currency)}</span><span>Left {formatMoney(remaining,item.currency)}</span></div></>}
       <div className="planning-meta"><span>{item.payee || item.categoryName}{showSpace ? ` · ${spaceMap.get(item.spaceId) || 'Space'}` : ''}</span><span>{inactive ? 'Future dates stopped' : item.nextDueDate ? `Due ${item.nextDueDate}` : 'Finished'}</span></div>
       <div className="planning-meta"><span>{accountMap.get(item.accountId || '')?.name || 'Choose an account when you pay'}</span><span>Remind me {item.reminderDays} day(s)</span></div>
-      {item.linkedDebtId && <div className="planning-meta" data-linked-debt-instalment><span>Linked to Debt · repayments are recorded from Debt</span><Link className="text-button" to="/debt">Open Debt</Link></div>}
+      {item.linkedDebtId && (
+        <div
+          className="planning-meta"
+          data-linked-debt-instalment
+        >
+          <span>
+            {linkedDebt
+              ? `Linked Debt · ${linkedDebt.counterparty} · ${formatMoney(linkedDebt.balanceMinor, linkedDebt.currency)} left`
+              : 'Linked to Debt · repayments are recorded from Debt'}
+          </span>
+
+          <Link
+            className="text-button"
+            to={
+              '/debt?focus='
+              + encodeURIComponent(
+                  item.linkedDebtId,
+                )
+            }
+          >
+            Open linked Debt
+          </Link>
+        </div>
+      )}
       {recent.length > 0 && <div className="mini-history">{recent.map((payment) => <div key={payment.id}><span>{payment.paymentDate}</span><strong>{formatMoney(payment.amountMinor,payment.currency)}</strong><span>{payment.status === 'posted' ? 'Saved' : 'Undone'}</span></div>)}</div>}
-      {(onPay||onEdit||onStop||onDelete||onRestore||onShare) && <div className="button-row">{inactive ? <button className="button secondary" disabled={busyId===item.id} onClick={()=>onRestore?.(item)}>Restore</button> : <><button className="button primary" disabled={item.status==='completed'||Boolean(item.linkedDebtId)} onClick={()=>{if(!item.linkedDebtId)onPay?.(item);}}>{item.linkedDebtId?'Pay from Debt':'Add payment'}</button>{item.type==='bill' && <button className="button secondary" title="Share to WhatsApp" onClick={()=>onShare?.(item,recent.find((payment)=>payment.status==='posted'))}>Share</button>}<button className="button secondary" disabled={Boolean(item.linkedDebtId)} title={item.linkedDebtId?'Unlink from Debt before editing.':undefined} onClick={()=>onEdit?.(item)}>Edit</button><button className="text-button" disabled={busyId===item.id||Boolean(item.linkedDebtId)} onClick={()=>onStop?.(item)}>Stop</button><button className="text-button danger" disabled={busyId===item.id||Boolean(item.linkedDebtId)} onClick={()=>onDelete?.(item)}>Delete</button></>}</div>}
+      {(onPay
+        || onEdit
+        || onLinkDebt
+        || onUnlinkDebt
+        || onStop
+        || onDelete
+        || onRestore
+        || onShare) && (
+        <div className="button-row">
+          {inactive ? (
+            <button
+              className="button secondary"
+              disabled={busyId === item.id}
+              onClick={() =>
+                onRestore?.(item)
+              }
+            >
+              Restore
+            </button>
+          ) : (
+            <>
+              <button
+                className="button primary"
+                disabled={
+                  item.status === 'completed'
+                  || Boolean(
+                    item.linkedDebtId,
+                  )
+                }
+                onClick={() => {
+                  if (!item.linkedDebtId) {
+                    onPay?.(item);
+                  }
+                }}
+              >
+                {item.linkedDebtId
+                  ? 'Pay from Debt'
+                  : 'Add payment'}
+              </button>
+
+              {item.type === 'bill' && (
+                <button
+                  className="button secondary"
+                  title="Share to WhatsApp"
+                  onClick={() =>
+                    onShare?.(
+                      item,
+                      recent.find(
+                        (payment) =>
+                          payment.status
+                            === 'posted',
+                      ),
+                    )
+                  }
+                >
+                  Share
+                </button>
+              )}
+
+              {debtLinkSupported
+                && (
+                  item.linkedDebtId ? (
+                    <button
+                      className="button secondary"
+                      disabled={
+                        busyId === item.id
+                      }
+                      onClick={() =>
+                        onUnlinkDebt?.(
+                          item,
+                        )
+                      }
+                    >
+                      {busyId === item.id
+                        ? 'Working…'
+                        : 'Unlink Debt'}
+                    </button>
+                  ) : (
+                    <button
+                      className="button secondary"
+                      disabled={
+                        busyId === item.id
+                      }
+                      onClick={() =>
+                        onLinkDebt?.(
+                          item,
+                        )
+                      }
+                    >
+                      Link Debt
+                    </button>
+                  )
+                )}
+
+              <button
+                className="button secondary"
+                disabled={
+                  Boolean(
+                    item.linkedDebtId,
+                  )
+                }
+                title={
+                  item.linkedDebtId
+                    ? 'Unlink from Debt before editing.'
+                    : undefined
+                }
+                onClick={() =>
+                  onEdit?.(
+                    item,
+                  )
+                }
+              >
+                Edit
+              </button>
+
+              <button
+                className="text-button"
+                disabled={
+                  busyId === item.id
+                  || Boolean(
+                    item.linkedDebtId,
+                  )
+                }
+                onClick={() =>
+                  onStop?.(
+                    item,
+                  )
+                }
+              >
+                Stop
+              </button>
+
+              <button
+                className="text-button danger"
+                disabled={
+                  busyId === item.id
+                  || Boolean(
+                    item.linkedDebtId,
+                  )
+                }
+                onClick={() =>
+                  onDelete?.(
+                    item,
+                  )
+                }
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </article>;
   };
   if (!groupBySpace) return <section className="planning-card-grid">{items.map(renderCard)}</section>;
   const grouped = new Map<string, Commitment[]>();
   items.forEach((item) => { const rows=grouped.get(item.spaceId)||[]; rows.push(item); grouped.set(item.spaceId,rows); });
   return <div className="commitment-space-groups-v115">{[...grouped.entries()].map(([spaceId,rows]) => <section className="commitment-space-group-v115" key={spaceId}><div className="commitment-space-group-heading-v115"><div><span className="eyebrow">Space</span><h2>{spaceMap.get(spaceId)||'Personal / Other'}</h2></div><span>{rows.length} item{rows.length===1?'':'s'}</span></div><section className="planning-card-grid">{rows.map(renderCard)}</section></section>)}{items.length===0 && <div className="notice">No bills or instalments match these filters.</div>}</div>;
+}
+
+function InstalmentDebtLinkForm({
+  item,
+  debts,
+  spaces,
+  onClose,
+  onSaved,
+}: {
+  item: Commitment;
+  debts: DebtRecord[];
+  spaces: Space[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const eligible =
+    useMemo(
+      () =>
+        debts
+          .filter(
+            (debt) =>
+              canLinkDebtAndInstalment(
+                debt,
+                item,
+                spaces,
+              ),
+          )
+          .sort(
+            (a, b) =>
+              a.counterparty.localeCompare(
+                b.counterparty,
+              ),
+          ),
+      [
+        debts,
+        item,
+        spaces,
+      ],
+    );
+
+  const [debtId, setDebtId] =
+    useState(
+      eligible[0]?.id
+      || '',
+    );
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  async function submit(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (!debtId) {
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      await linkDebtInstalment({
+        debtId,
+        commitmentId:
+          item.id,
+      });
+
+      await onSaved();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Link Debt"
+      onClose={onClose}
+    >
+      <form
+        className="form-stack"
+        onSubmit={submit}
+      >
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
+
+        <div className="notice">
+          <strong>
+            Use one repayment source
+          </strong>
+
+          <span>
+            Choose an I Owe Debt with the same total,
+            paid progress, currency and Space.
+            Future repayments will be recorded from Debt
+            and synchronized with this Instalment.
+          </span>
+        </div>
+
+        {eligible.length === 0 ? (
+          <div className="notice">
+            No compatible Debt was found.
+            Check the total amount, amount already paid,
+            currency and Space.
+          </div>
+        ) : (
+          <label>
+            Debt
+            <select
+              value={debtId}
+              onChange={(event) =>
+                setDebtId(
+                  event.target.value,
+                )
+              }
+              required
+            >
+              {eligible.map(
+                (debt) => (
+                  <option
+                    key={debt.id}
+                    value={debt.id}
+                  >
+                    {debt.counterparty}
+                    {' — '}
+                    {formatMoney(
+                      debt.balanceMinor,
+                      debt.currency,
+                    )}
+                    {' left'}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+        )}
+
+        <small className="muted">
+          Business and ADBN-managed instalments cannot
+          be linked to personal Debt.
+        </small>
+
+        <div className="button-row">
+          <button
+            type="submit"
+            className="button primary"
+            disabled={
+              busy
+              || !debtId
+            }
+          >
+            {busy
+              ? 'Linking…'
+              : 'Link Debt'}
+          </button>
+
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 function CommitmentForm({
