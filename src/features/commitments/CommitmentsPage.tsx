@@ -17,6 +17,7 @@ import {
 import { listCustomCategories } from '../../repositories/categoryRepository';
 import {
   linkDebtInstalment,
+  listDebtPayments,
   listDebts,
   unlinkDebtInstalment,
 } from '../../repositories/debtRepository';
@@ -34,7 +35,7 @@ import {
   getSpace,
   listSpaces,
 } from '../../repositories/spaceRepository';
-import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, DebtRecord, PaymentMethodCode, Space, TransactionCategory } from '../../types/models';
+import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, CommitmentType, DebtPayment, DebtRecord, PaymentMethodCode, Space, TransactionCategory } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { shareBillToWhatsApp } from '../../services/billShare';
 import { formatMoney, toMinorUnits } from '../../utils/money';
@@ -69,6 +70,7 @@ export function CommitmentsPage({
     || '';
   const [items, setItems] = useState<Commitment[]>([]); const [payments, setPayments] = useState<CommitmentPayment[]>([]); const [accounts, setAccounts] = useState<Account[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
+  const [debtPayments, setDebtPayments] = useState<DebtPayment[]>([]);
   const [linkingInstalment, setLinkingInstalment] = useState<Commitment | null>(null);
   const [editing, setEditing] = useState<Commitment | null>(null); const [paying, setPaying] = useState<Commitment | null>(null); const [showForm, setShowForm] = useState(false); const [typeFilter, setTypeFilter] = useState<'all' | CommitmentType>(typeOverride || 'all'); const [commitmentStatusFilter, setCommitmentStatusFilter] = useState<'all' | 'upcoming' | 'due' | 'overdue' | 'completed'>('all'); const [busyId, setBusyId] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Commitment, CommitmentLifecycleAction> | null>(null);
@@ -83,15 +85,21 @@ export function CommitmentsPage({
         nextAccounts,
         custom,
         nextDebts,
+        nextDebtPayments,
       ] = await Promise.all([
         listSpaces(user.uid),
         listAccounts(user.uid),
         listCustomCategories(user.uid),
         listDebts(user.uid),
+        listDebtPayments(user.uid),
       ]);
 
       setDebts(
         nextDebts,
+      );
+
+      setDebtPayments(
+        nextDebtPayments,
       );
 
       const ownedSpaces =
@@ -488,7 +496,7 @@ export function CommitmentsPage({
     <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     {!typeOverride && <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>}
     {!spaceIdOverride && <div className="commitment-global-filter-v115"><label>Status<select value={commitmentStatusFilter} onChange={(event) => setCommitmentStatusFilter(event.target.value as 'all' | 'upcoming' | 'due' | 'overdue' | 'completed')}><option value="all">All statuses</option><option value="upcoming">Coming up</option><option value="due">Due today</option><option value="overdue">Overdue</option><option value="completed">Finished / paid</option></select></label><span>Grouped by Space · sorted by due date</span></div>}
-    <CommitmentGrid items={visible} payments={payments} accountMap={accountMap} debtMap={debtMap} spaceMap={spaceMap} spaceTypeMap={spaceTypeMap} focusedCommitmentId={focusedCommitmentId} showSpace={!spaceIdOverride} groupBySpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onLinkDebt={canManageCurrentSpace ? setLinkingInstalment : undefined} onUnlinkDebt={canManageCurrentSpace ? (item) => void runUnlinkDebt(item) : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} />
+    <CommitmentGrid items={visible} payments={payments} debtPayments={debtPayments} accountMap={accountMap} debtMap={debtMap} spaceMap={spaceMap} spaceTypeMap={spaceTypeMap} focusedCommitmentId={focusedCommitmentId} showSpace={!spaceIdOverride} groupBySpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onLinkDebt={canManageCurrentSpace ? setLinkingInstalment : undefined} onUnlinkDebt={canManageCurrentSpace ? (item) => void runUnlinkDebt(item) : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} />
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit bill or instalment' : 'Add bill or instalment'} onClose={() => setShowForm(false)}><CommitmentForm item={editing} accounts={accounts} spaces={spaces} categories={categories} lockedSpaceId={spaceIdOverride} typeOverride={typeOverride} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
     {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accountsForCommitment(paying)} onSaved={async (status) => { setPaying(null); setSuccess(status === 'pending_approval' ? 'Payment request sent to the Account Owner. No account or commitment balance changes until it is approved.' : 'Payment saved.'); await load(); }} /></Modal>}
@@ -516,6 +524,7 @@ export function CommitmentsPage({
 function CommitmentGrid({
   items,
   payments,
+  debtPayments,
   accountMap,
   debtMap,
   spaceMap,
@@ -536,6 +545,7 @@ function CommitmentGrid({
 }: {
   items: Commitment[];
   payments: CommitmentPayment[];
+  debtPayments: DebtPayment[];
   accountMap: Map<string, Account>;
   debtMap: Map<string, DebtRecord>;
   spaceMap: Map<string, string>;
@@ -561,7 +571,76 @@ function CommitmentGrid({
     const state = inactive ? 'completed' : dueState(item);
     const remaining = item.totalAmountMinor ? Math.max(0, item.totalAmountMinor - item.amountPaidMinor) : 0;
     const ratio = item.totalAmountMinor ? Math.min(100, Math.round(item.amountPaidMinor / item.totalAmountMinor * 100)) : item.status === 'completed' ? 100 : 0;
-    const recent = payments.filter((payment) => payment.commitmentId === item.id).slice(0, 2);
+    const recent =
+      payments
+        .filter(
+          (payment) =>
+            payment.commitmentId === item.id,
+        )
+        .slice(0, 2);
+
+    const synchronizedDebtPayments =
+      debtPayments.filter(
+        (payment) =>
+          payment.linkedCommitmentId
+            === item.id,
+      );
+
+    const recentHistory =
+      [
+        ...payments
+          .filter(
+            (payment) =>
+              payment.commitmentId
+                === item.id,
+          )
+          .map(
+            (payment) => ({
+              id:
+                'commitment-'
+                + payment.id,
+              paymentDate:
+                payment.paymentDate,
+              amountMinor:
+                payment.amountMinor,
+              currency:
+                payment.currency,
+              source:
+                'Payment',
+              status:
+                payment.status
+                  === 'posted'
+                  ? 'Saved'
+                  : 'Undone',
+            }),
+          ),
+        ...synchronizedDebtPayments.map(
+          (payment) => ({
+            id:
+              'debt-'
+              + payment.id,
+            paymentDate:
+              payment.paymentDate,
+            amountMinor:
+              payment.amountMinor,
+            currency:
+              payment.currency,
+            source:
+              'Debt',
+            status:
+              payment.reversedAt
+                ? 'Undone'
+                : 'Saved',
+          }),
+        ),
+      ]
+        .sort(
+          (a, b) =>
+            b.paymentDate.localeCompare(
+              a.paymentDate,
+            ),
+        )
+        .slice(0, 2);
 
     const linkedDebt =
       item.linkedDebtId
@@ -623,7 +702,37 @@ function CommitmentGrid({
           </Link>
         </div>
       )}
-      {recent.length > 0 && <div className="mini-history">{recent.map((payment) => <div key={payment.id}><span>{payment.paymentDate}</span><strong>{formatMoney(payment.amountMinor,payment.currency)}</strong><span>{payment.status === 'posted' ? 'Saved' : 'Undone'}</span></div>)}</div>}
+      {recentHistory.length > 0 && (
+        <div
+          className="mini-history"
+          data-instalment-payment-history
+        >
+          {recentHistory.map(
+            (payment) => (
+              <div key={payment.id}>
+                <span>
+                  {payment.paymentDate}
+                </span>
+
+                <span>
+                  {payment.source}
+                </span>
+
+                <strong>
+                  {formatMoney(
+                    payment.amountMinor,
+                    payment.currency,
+                  )}
+                </strong>
+
+                <span>
+                  {payment.status}
+                </span>
+              </div>
+            ),
+          )}
+        </div>
+      )}
       {(onPay
         || onEdit
         || onLinkDebt
