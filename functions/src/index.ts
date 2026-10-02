@@ -13110,6 +13110,15 @@ export const updateCommitment = onCall(
       );
     }
 
+    if (
+      existing?.linkedDebtId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Unlink this instalment from Debt before editing it.',
+      );
+    }
+
     if (existing?.archivedAt) {
       throw new HttpsError(
         'failed-precondition',
@@ -13948,7 +13957,7 @@ export const requestBusinessCommitmentPayment = onCall(
 
 export const payCommitment = onCall({ region }, async request=>{
   const uid=requireAuth(request.auth?.uid);const commitmentId=stringValue(request.data?.commitmentId,'Commitment ID');const accountId=stringValue(request.data?.accountId,'Account');const requestedAmount=request.data?.amountMinor==null?null:positiveMoney(request.data?.amountMinor);const paymentDate=localDate(request.data?.paymentDate,'Payment date');const{paymentMethod,paymentMethodLabel}=paymentMethodValues(request.data||{});const note=optionalString(request.data?.note,500);const key=stringValue(request.data?.idempotencyKey,'Idempotency key',64);const commandRef=db.collection('financialCommands').doc(commandId(uid,key));const commitmentRef=db.collection('commitments').doc(commitmentId);const accountRef=db.collection('accounts').doc(accountId);const budgetCandidateRefs=(await db.collection('budgets').where('ownerId','==',uid).get()).docs.map(item=>item.ref);
-  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.externalIntegrationProvider==='adbn_tech')throw new HttpsError('failed-precondition','Use the ADBN TECH payment flow for this managed billing record.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');if(Number(commitment?.sharedAssignedMinor||0)>Number(commitment?.sharedSettledMinor||0))throw new HttpsError('failed-precondition','This commitment has open shared bill assignments. Complete or reverse them from Sharing first.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,paymentMethod,paymentMethodLabel,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,paymentMethod,paymentMethodLabel,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,sharedCycleDueDate:nextDueDate,sharedAssignedMinor:0,sharedSettledMinor:0,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
+  return db.runTransaction(async transaction=>{const[command,commitmentSnapshot,accountSnapshot,budgetSnapshots]=await Promise.all([transaction.get(commandRef),transaction.get(commitmentRef),transaction.get(accountRef),Promise.all(budgetCandidateRefs.map(ref=>transaction.get(ref)))]);if(command.exists)return command.data()?.result;if(!commitmentSnapshot.exists)throw new HttpsError('not-found','Commitment not found.');const commitment=commitmentSnapshot.data();if(commitment?.ownerId!==uid)throw new HttpsError('permission-denied','You do not own this commitment.');if(commitment?.externalIntegrationProvider==='adbn_tech')throw new HttpsError('failed-precondition','Use the ADBN TECH payment flow for this managed billing record.');if(commitment?.linkedDebtId)throw new HttpsError('failed-precondition','Pay this linked instalment from Debt to avoid recording the same repayment twice.');if(commitment?.archivedAt||commitment?.status==='completed')throw new HttpsError('failed-precondition','This commitment is not active.');if(Number(commitment?.sharedAssignedMinor||0)>Number(commitment?.sharedSettledMinor||0))throw new HttpsError('failed-precondition','This commitment has open shared bill assignments. Complete or reverse them from Sharing first.');const account=assertAccount(accountSnapshot.data(),uid,'Account');if(account.currency!==commitment?.currency)throw new HttpsError('failed-precondition','Account and commitment currencies must match.');const remaining=commitment?.type==='instalment'?Math.max(0,Number(commitment?.totalAmountMinor||0)-Number(commitment?.amountPaidMinor||0)):Number(commitment?.amountMinor||0);const amountMinor=requestedAmount??Math.min(Number(commitment?.amountMinor||0),remaining);if(commitment?.type==='instalment'&&amountMinor>remaining)throw new HttpsError('invalid-argument','Payment cannot exceed the remaining instalment balance.');const transactionRef=db.collection('transactions').doc();const paymentRef=db.collection('commitmentPayments').doc();const now=FieldValue.serverTimestamp();const delta=accountEffect(account.type,'out',amountMinor);const budgetIds=matchingBudgetIds(budgetSnapshots,{spaceId:String(commitment?.spaceId),categoryId:String(commitment?.categoryId),transactionDate:paymentDate});updateAccountBalance(transaction,accountRef,account,delta);const ledgerEntryId=createLedgerEntry(transaction,{accountId,ownerId:uid,spaceId:String(commitment?.spaceId),transactionId:transactionRef.id,entryType:'commitment_payment',amountMinor:delta,currency:account.currency,idempotencyKey:key,now});if(budgetIds.length)updateBudgetsSpent(transaction,budgetSnapshots,budgetIds,amountMinor);const previousNextDueDate=commitment?.nextDueDate??commitment?.startDate??null;const previousStatus=commitment?.status==='completed'?'completed':'active';const nextPaid=Number(commitment?.amountPaidMinor||0)+amountMinor;let nextDueDate=addFrequency(String(previousNextDueDate||paymentDate),oneOf(commitment?.frequency,commitmentFrequencies,'frequency'));let nextStatus:'active'|'completed'='active';if(commitment?.type==='instalment'&&nextPaid>=Number(commitment?.totalAmountMinor||0)){nextStatus='completed';nextDueDate=null;}else if(commitment?.type==='bill'&&commitment?.frequency==='once'){nextStatus='completed';nextDueDate=null;}else if(nextDueDate&&commitment?.endDate&&nextDueDate>commitment.endDate){nextStatus='completed';nextDueDate=null;}transaction.create(transactionRef,{displayId:displayId('TXN'),ownerId:uid,createdBy:uid,type:'expense',status:'posted',spaceId:commitment?.spaceId,accountId,destinationAccountId:null,amountMinor,currency:account.currency,category:commitment?.categoryName,categoryId:commitment?.categoryId,categoryIcon:commitment?.categoryIcon,categoryColor:commitment?.categoryColor,categoryScope:'both',categoryIsSystem:!String(commitment?.categoryId).startsWith('custom-'),counterparty:commitment?.payee||commitment?.name,note:note||`Payment for ${commitment?.name}`,paymentMethod,paymentMethodLabel,transactionDate:paymentDate,reversalOf:null,reversedBy:null,budgetIds,commitmentId,commitmentPaymentId:paymentRef.id,createdAt:now,postedAt:now,updatedAt:now});transaction.create(paymentRef,{displayId:displayId('PAY'),ownerId:uid,commitmentId,transactionId:transactionRef.id,amountMinor,currency:account.currency,paymentDate,paymentMethod,paymentMethodLabel,dueDateApplied:previousNextDueDate,previousNextDueDate,previousStatus,status:'posted',reversedBy:null,createdAt:now,updatedAt:now});transaction.update(commitmentRef,{accountId,amountPaidMinor:nextPaid,nextDueDate,status:nextStatus,sharedCycleDueDate:nextDueDate,sharedAssignedMinor:0,sharedSettledMinor:0,updatedAt:now});const result={transactionId:transactionRef.id,paymentId:paymentRef.id,ledgerEntryId};transaction.create(commandRef,{uid,kind:'pay_commitment',idempotencyKey:key,result,createdAt:now});return result;});
 });
 
 // v0.7 Collaboration and WhatsApp coordination
@@ -22169,6 +22178,7 @@ export const manageCommitmentLifecycle = onCall({ region }, async (request) => {
   if (!snapshot.exists) throw new HttpsError('not-found', 'Bill or instalment not found.');
   const data = snapshot.data() || {};
   if (data.ownerId !== uid) throw new HttpsError('permission-denied', 'You do not own this bill or instalment.');
+  if (data.linkedDebtId) throw new HttpsError('failed-precondition', 'Unlink this instalment from Debt before changing its lifecycle.');
   if (action === 'delete') {
     const [hasPayments, hasShares] = await Promise.all([
       queryHasDocuments(db.collection('commitmentPayments').where('commitmentId', '==', commitmentId)),
@@ -29271,6 +29281,15 @@ export const updateDebt = onCall(
             );
           }
 
+          if (
+            debt.linkedCommitmentId
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Unlink this debt from its instalment before editing it.',
+            );
+          }
+
           const currentPaid =
             Number.isInteger(
               debt.paidMinor,
@@ -29420,6 +29439,16 @@ export const archiveDebt = onCall(
       throw new HttpsError(
         'permission-denied',
         'You cannot change this debt record.',
+      );
+    }
+
+    if (
+      debtSnapshot.data()
+        ?.linkedCommitmentId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Unlink this debt from its instalment before archiving it.',
       );
     }
 
@@ -35239,3 +35268,453 @@ export const syncAdbnCustomerBillingMirror = onCall(
     };
   },
 );
+
+/*
+ * Debt <-> Instalment linking foundation.
+ *
+ * Alpha 1 deliberately does not mirror payments.
+ * Debt becomes the payment entry point once linked;
+ * payment synchronization is added in Alpha 2.
+ */
+export const linkDebtInstalment = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const debtId =
+      stringValue(
+        request.data?.debtId,
+        'Debt record',
+        160,
+      );
+
+    const commitmentId =
+      stringValue(
+        request.data?.commitmentId,
+        'Instalment',
+        160,
+      );
+
+    const debtRef =
+      db.collection(
+        'debts',
+      ).doc(
+        debtId,
+      );
+
+    const commitmentRef =
+      db.collection(
+        'commitments',
+      ).doc(
+        commitmentId,
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const [
+          debtSnapshot,
+          commitmentSnapshot,
+        ] =
+          await Promise.all([
+            transaction.get(
+              debtRef,
+            ),
+            transaction.get(
+              commitmentRef,
+            ),
+          ]);
+
+        if (!debtSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Debt record not found.',
+          );
+        }
+
+        if (!commitmentSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Instalment not found.',
+          );
+        }
+
+        const debt =
+          debtSnapshot.data()
+          || {};
+
+        const commitment =
+          commitmentSnapshot.data()
+          || {};
+
+        if (
+          debt.ownerId !== uid
+          || commitment.ownerId !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'You can only link your own Debt and Instalment records.',
+          );
+        }
+
+        if (
+          debt.direction !== 'owe'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Only money you owe can be linked to an instalment.',
+          );
+        }
+
+        if (
+          debt.status === 'archived'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Restore this debt before linking an instalment.',
+          );
+        }
+
+        if (
+          commitment.type
+            !== 'instalment'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt can only be linked to an instalment.',
+          );
+        }
+
+        if (
+          commitment.archivedAt
+          || commitment.stoppedAt
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Restore this instalment before linking it to Debt.',
+          );
+        }
+
+        if (
+          commitment
+            .externalIntegrationProvider
+            === 'adbn_tech'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'ADBN TECH managed instalments cannot be manually linked to Debt.',
+          );
+        }
+
+        const existingDebtLink =
+          typeof debt
+            .linkedCommitmentId
+            === 'string'
+            ? debt
+                .linkedCommitmentId
+            : '';
+
+        if (
+          existingDebtLink
+          && existingDebtLink
+            !== commitmentId
+        ) {
+          throw new HttpsError(
+            'already-exists',
+            'This debt is already linked to another instalment.',
+          );
+        }
+
+        const existingCommitmentLink =
+          typeof commitment
+            .linkedDebtId
+            === 'string'
+            ? commitment
+                .linkedDebtId
+            : '';
+
+        if (
+          existingCommitmentLink
+          && existingCommitmentLink
+            !== debtId
+        ) {
+          throw new HttpsError(
+            'already-exists',
+            'This instalment is already linked to another debt.',
+          );
+        }
+
+        if (
+          String(
+            debt.currency
+            || 'BND',
+          )
+          !== String(
+            commitment.currency
+            || 'BND',
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt and Instalment currencies must match.',
+          );
+        }
+
+        if (
+          Number(
+            debt.totalMinor
+            || 0,
+          )
+          !== Number(
+            commitment
+              .totalAmountMinor
+            || 0,
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt total and Instalment total must match before linking.',
+          );
+        }
+
+        if (
+          Number(
+            debt.paidMinor
+            || 0,
+          )
+          !== Number(
+            commitment
+              .amountPaidMinor
+            || 0,
+          )
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt and Instalment paid progress must match before linking.',
+          );
+        }
+
+        const commitmentSpaceId =
+          String(
+            commitment.spaceId
+            || '',
+          );
+
+        if (!commitmentSpaceId) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The Instalment Space is unavailable.',
+          );
+        }
+
+        if (
+          debt.spaceId
+          && String(
+            debt.spaceId,
+          )
+          !== commitmentSpaceId
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Debt and Instalment must use the same Space when the Debt already has a Space.',
+          );
+        }
+
+        const spaceSnapshot =
+          await transaction.get(
+            db.collection(
+              'spaces',
+            ).doc(
+              commitmentSpaceId,
+            ),
+          );
+
+        if (
+          !spaceSnapshot.exists
+          || spaceSnapshot
+            .data()
+            ?.archivedAt
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The Instalment Space is unavailable.',
+          );
+        }
+
+        if (
+          spaceSnapshot
+            .data()
+            ?.type === 'sme'
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Business instalments cannot be linked to Debt in Alpha 1.',
+          );
+        }
+
+        const now =
+          FieldValue
+            .serverTimestamp();
+
+        transaction.update(
+          debtRef,
+          {
+            linkedCommitmentId:
+              commitmentId,
+            updatedAt:
+              now,
+          },
+        );
+
+        transaction.update(
+          commitmentRef,
+          {
+            linkedDebtId:
+              debtId,
+            updatedAt:
+              now,
+          },
+        );
+
+        return {
+          debtId,
+          commitmentId,
+        };
+      },
+    );
+  },
+);
+
+export const unlinkDebtInstalment = onCall(
+  { region },
+  async (request) => {
+    const uid =
+      requireAuth(
+        request.auth?.uid,
+      );
+
+    const debtId =
+      stringValue(
+        request.data?.debtId,
+        'Debt record',
+        160,
+      );
+
+    const debtRef =
+      db.collection(
+        'debts',
+      ).doc(
+        debtId,
+      );
+
+    return db.runTransaction(
+      async (transaction) => {
+        const debtSnapshot =
+          await transaction.get(
+            debtRef,
+          );
+
+        if (!debtSnapshot.exists) {
+          throw new HttpsError(
+            'not-found',
+            'Debt record not found.',
+          );
+        }
+
+        const debt =
+          debtSnapshot.data()
+          || {};
+
+        if (
+          debt.ownerId !== uid
+        ) {
+          throw new HttpsError(
+            'permission-denied',
+            'You cannot unlink this Debt record.',
+          );
+        }
+
+        const commitmentId =
+          typeof debt
+            .linkedCommitmentId
+            === 'string'
+            ? debt
+                .linkedCommitmentId
+            : '';
+
+        if (!commitmentId) {
+          return {
+            debtId,
+            commitmentId:
+              null,
+          };
+        }
+
+        const commitmentRef =
+          db.collection(
+            'commitments',
+          ).doc(
+            commitmentId,
+          );
+
+        const commitmentSnapshot =
+          await transaction.get(
+            commitmentRef,
+          );
+
+        if (
+          commitmentSnapshot.exists
+        ) {
+          const commitment =
+            commitmentSnapshot.data()
+            || {};
+
+          if (
+            commitment.ownerId
+              !== uid
+          ) {
+            throw new HttpsError(
+              'permission-denied',
+              'You cannot unlink this Instalment record.',
+            );
+          }
+
+          if (
+            commitment.linkedDebtId
+              === debtId
+          ) {
+            transaction.update(
+              commitmentRef,
+              {
+                linkedDebtId:
+                  null,
+                updatedAt:
+                  FieldValue
+                    .serverTimestamp(),
+              },
+            );
+          }
+        }
+
+        transaction.update(
+          debtRef,
+          {
+            linkedCommitmentId:
+              null,
+            updatedAt:
+              FieldValue
+                .serverTimestamp(),
+          },
+        );
+
+        return {
+          debtId,
+          commitmentId,
+        };
+      },
+    );
+  },
+);
+

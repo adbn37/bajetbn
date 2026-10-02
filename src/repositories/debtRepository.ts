@@ -376,3 +376,75 @@ export async function removeDebtPaymentProof(
     paymentId,
   });
 }
+
+export async function linkDebtInstalment(input: {
+  debtId: string;
+  commitmentId: string;
+}): Promise<{
+  debtId: string;
+  commitmentId: string;
+}> {
+  if (!navigator.onLine) {
+    throw new Error(
+      'Connect to the internet before linking an instalment.',
+    );
+  }
+
+  const { functions } =
+    requireFirebase();
+
+  const call =
+    httpsCallable<
+      typeof input,
+      {
+        debtId: string;
+        commitmentId: string;
+      }
+    >(
+      functions,
+      'linkDebtInstalment',
+    );
+
+  const result =
+    await call(input);
+
+  return result.data;
+}
+
+export async function unlinkDebtInstalment(
+  debtId: string,
+): Promise<{
+  debtId: string;
+  commitmentId: string | null;
+}> {
+  if (!navigator.onLine) {
+    throw new Error(
+      'Connect to the internet before unlinking an instalment.',
+    );
+  }
+
+  const { functions } =
+    requireFirebase();
+
+  const call =
+    httpsCallable<
+      {
+        debtId: string;
+      },
+      {
+        debtId: string;
+        commitmentId: string | null;
+      }
+    >(
+      functions,
+      'unlinkDebtInstalment',
+    );
+
+  const result =
+    await call({
+      debtId,
+    });
+
+  return result.data;
+}
+

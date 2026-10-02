@@ -1265,6 +1265,7 @@ export interface DebtRecord {
   scheduleNote?: string | null;
   reminderEnabled: boolean;
   spaceId?: string | null;
+  linkedCommitmentId?: string | null;
   status: DebtStatus;
   settledAt?: Timestamp | null;
   archivedAt?: Timestamp | null;
@@ -1836,6 +1837,7 @@ export interface Commitment {
   reminderDays: number;
   status: CommitmentStatus;
   note?: string;
+  linkedDebtId?: string | null;
   externalIntegrationProvider?: 'adbn_tech' | null;
   externalIntegrationSourceType?: 'adbn_invoice' | 'adbn_payment_plan' | null;
   externalIntegrationSourceId?: string | null;

@@ -10,6 +10,7 @@ import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { listPersonalAccounts } from '../../repositories/accountRepository';
+import { listAllCommitments } from '../../repositories/commitmentRepository';
 import {
   archiveDebt,
   createDebt,
@@ -17,10 +18,12 @@ import {
   listDebts,
   getDebtPaymentProofUrl,
   listDebtPayments,
+  linkDebtInstalment,
   recordDebtPayment,
   removeDebtPaymentProof,
   restoreDebt,
   reverseDebtPayment,
+  unlinkDebtInstalment,
   uploadDebtPaymentProof,
 } from '../../repositories/debtRepository';
 import { listSpaces } from '../../repositories/spaceRepository';
@@ -34,6 +37,7 @@ import type {
   DebtRecord,
   DebtSchedule,
   DebtPayment,
+  Commitment,
   Account,
   SharedExpense,
   SharedExpenseShare,
@@ -284,6 +288,8 @@ export function DebtPage() {
   const [payments, setPayments] = useState<DebtPayment[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [commitments, setCommitments] = useState<Commitment[]>([]);
+  const [linkDebt, setLinkDebt] = useState<DebtRecord | null>(null);
 
   const [
     spaceSettlements,
@@ -314,11 +320,13 @@ export function DebtPage() {
         nextPayments,
         nextAccounts,
         nextSpaces,
+        nextCommitments,
       ] = await Promise.all([
         listDebts(user.uid),
         listDebtPayments(user.uid),
         listPersonalAccounts(user.uid),
         listSpaces(user.uid),
+        listAllCommitments(user.uid),
       ]);
 
       const activeSpaces =
@@ -337,6 +345,7 @@ export function DebtPage() {
       setPayments(nextPayments);
       setAccounts(nextAccounts);
       setSpaces(activeSpaces);
+      setCommitments(nextCommitments);
       setSpaceSettlements(
         nextSpaceSettlements,
       );
@@ -406,6 +415,29 @@ export function DebtPage() {
       await load();
     } catch (nextError) {
       setError(getErrorMessage(nextError));
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function runUnlinkInstalment(
+    item: DebtRecord,
+  ) {
+    setBusyId(item.id);
+    setError('');
+
+    try {
+      await unlinkDebtInstalment(
+        item.id,
+      );
+
+      await load();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
     } finally {
       setBusyId('');
     }
@@ -686,6 +718,24 @@ export function DebtPage() {
                   />
                 </div>
 
+                {item.linkedCommitmentId && (
+                  <div
+                    className="planning-meta"
+                    data-debt-instalment-link
+                  >
+                    <span>
+                      Linked instalment
+                    </span>
+
+                    <Link
+                      className="text-button"
+                      to="/bills"
+                    >
+                      Open instalments
+                    </Link>
+                  </div>
+                )}
+
                 <footer className="debt-card-footer">
 
 
@@ -722,6 +772,42 @@ export function DebtPage() {
                       History
                     </button>
 
+                    {item.direction === 'owe'
+                      && item.status !== 'archived'
+                      && (
+                        item.linkedCommitmentId ? (
+                          <button
+                            type="button"
+                            className="button secondary"
+                            disabled={
+                              busyId === item.id
+                            }
+                            onClick={() =>
+                              void runUnlinkInstalment(
+                                item,
+                              )
+                            }
+                          >
+                            Unlink instalment
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="button secondary"
+                            disabled={
+                              busyId === item.id
+                            }
+                            onClick={() =>
+                              setLinkDebt(
+                                item,
+                              )
+                            }
+                          >
+                            Link instalment
+                          </button>
+                        )
+                      )}
+
                     {item.status === 'archived' ? (
                       <button
                         type="button"
@@ -747,6 +833,21 @@ export function DebtPage() {
             );
           })}
         </section>
+      )}
+
+      {linkDebt && (
+        <DebtInstalmentLinkForm
+          debt={linkDebt}
+          commitments={commitments}
+          spaces={spaces}
+          onClose={() =>
+            setLinkDebt(null)
+          }
+          onSaved={async () => {
+            setLinkDebt(null);
+            await load();
+          }}
+        />
       )}
 
       {showAdd && (
@@ -799,6 +900,230 @@ export function DebtPage() {
         />
       )}
     </main>
+  );
+}
+
+function DebtInstalmentLinkForm({
+  debt,
+  commitments,
+  spaces,
+  onClose,
+  onSaved,
+}: {
+  debt: DebtRecord;
+  commitments: Commitment[];
+  spaces: Space[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const eligible =
+    useMemo(
+      () => {
+        const spaceMap =
+          new Map(
+            spaces.map(
+              (space) => [
+                space.id,
+                space,
+              ],
+            ),
+          );
+
+        return commitments
+          .filter(
+            (item) => {
+              const space =
+                spaceMap.get(
+                  item.spaceId,
+                );
+
+              return (
+                item.type
+                  === 'instalment'
+                && !item.archivedAt
+                && !item.stoppedAt
+                && item
+                  .externalIntegrationProvider
+                  !== 'adbn_tech'
+                && space
+                && space.type
+                  !== 'sme'
+                && item.currency
+                  === debt.currency
+                && Number(
+                  item.totalAmountMinor
+                  || 0,
+                )
+                  === debt.totalMinor
+                && item.amountPaidMinor
+                  === debt.paidMinor
+                && (
+                  !item.linkedDebtId
+                  || item.linkedDebtId
+                    === debt.id
+                )
+                && (
+                  !debt.spaceId
+                  || debt.spaceId
+                    === item.spaceId
+                )
+              );
+            },
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
+          );
+      },
+      [
+        commitments,
+        debt,
+        spaces,
+      ],
+    );
+
+  const [
+    commitmentId,
+    setCommitmentId,
+  ] =
+    useState(
+      eligible[0]?.id
+      || '',
+    );
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  async function submit(
+    event: FormEvent,
+  ) {
+    event.preventDefault();
+
+    if (!commitmentId) {
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      await linkDebtInstalment({
+        debtId:
+          debt.id,
+        commitmentId,
+      });
+
+      await onSaved();
+    } catch (nextError) {
+      setError(
+        getErrorMessage(
+          nextError,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Link instalment"
+      onClose={onClose}
+    >
+      <form
+        className="form-stack"
+        onSubmit={submit}
+      >
+        {error && (
+          <div className="notice error">
+            {error}
+          </div>
+        )}
+
+        <div className="notice">
+          <strong>
+            Link without duplicating payments
+          </strong>
+
+          <span>
+            The Debt total and paid progress must match the Instalment.
+            Linked repayments will be recorded from Debt.
+          </span>
+        </div>
+
+        {eligible.length === 0 ? (
+          <div className="notice">
+            No compatible Instalment was found.
+            Check the total amount, amount already paid,
+            currency and Space.
+          </div>
+        ) : (
+          <label>
+            Instalment
+            <select
+              value={commitmentId}
+              onChange={(event) =>
+                setCommitmentId(
+                  event.target.value,
+                )
+              }
+              required
+            >
+              {eligible.map(
+                (item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                  >
+                    {item.name}
+                    {' — '}
+                    {formatMoney(
+                      item.totalAmountMinor
+                      || 0,
+                      item.currency,
+                    )}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+        )}
+
+        <small className="muted">
+          Business and ADBN-managed instalments are excluded
+          from this first linking phase.
+        </small>
+
+        <div className="button-row">
+          <button
+            type="submit"
+            className="button primary"
+            disabled={
+              busy
+              || !commitmentId
+            }
+          >
+            {busy
+              ? 'Linking…'
+              : 'Link instalment'}
+          </button>
+
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
