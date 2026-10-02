@@ -116,9 +116,15 @@ check(
 
 check(
   rules.includes(
+    'return hasActiveSpaceMembership(spaceId);',
+  )
+  && rules.includes(
+    'canAccessInternalAdbnTechSpaceData(resource.data);',
+  )
+  && !rules.includes(
     'canAccessSpaceByIntegration(spaceId)',
   ),
-  'Firestore Space membership inherits ADBN restriction.',
+  'Firestore keeps normal Space membership queries lightweight while protecting the internal ADBN Space document.',
 );
 
 check(

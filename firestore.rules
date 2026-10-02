@@ -49,16 +49,8 @@ service cloud.firestore {
         );
     }
 
-    function canAccessSpaceByIntegration(spaceId) {
-      return exists(/databases/$(database)/documents/spaces/$(spaceId))
-        && canAccessInternalAdbnTechSpaceData(
-          get(/databases/$(database)/documents/spaces/$(spaceId)).data
-        );
-    }
-
     function isSpaceMember(spaceId) {
-      return hasActiveSpaceMembership(spaceId)
-        && canAccessSpaceByIntegration(spaceId);
+      return hasActiveSpaceMembership(spaceId);
     }
 
     function isSpaceOwner(spaceId) {
@@ -335,9 +327,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /spaces/{spaceId} {
-      allow read: if isSpaceMember(spaceId);
+      allow read: if isSpaceMember(spaceId)
+        && canAccessInternalAdbnTechSpaceData(resource.data);
       allow create: if false; // Created by entitlement-enforced Cloud Functions.
       allow update: if isSpaceOwner(spaceId)
+        && canAccessInternalAdbnTechSpaceData(resource.data)
+        && canAccessInternalAdbnTechSpaceData(request.resource.data)
         && request.resource.data.ownerId == resource.data.ownerId
         && request.resource.data.type == resource.data.type
         && !(resource.data.type == 'personal' && request.resource.data.archivedAt != null);
