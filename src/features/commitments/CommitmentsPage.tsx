@@ -51,6 +51,88 @@ const dueLabels = { completed: 'Finished', overdue: 'Overdue', due: 'Due today',
 const frequencyLabels: Record<CommitmentFrequency, string> = { once: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Every 3 months', yearly: 'Yearly' };
 function dueState(item: Commitment): 'completed' | 'overdue' | 'due' | 'upcoming' { if (item.status === 'completed') return 'completed'; const due = item.nextDueDate || item.startDate; const now = today(); if (due < now) return 'overdue'; if (due === now) return 'due'; return 'upcoming'; }
 
+interface InstalmentPaymentHistoryRow {
+  id: string;
+  paymentDate: string;
+  amountMinor: number;
+  currency: string;
+  source: 'Payment' | 'Debt';
+  status: 'Saved' | 'Undone';
+}
+
+function buildInstalmentPaymentHistory(
+  commitmentId: string,
+  payments: CommitmentPayment[],
+  debtPayments: DebtPayment[],
+): InstalmentPaymentHistoryRow[] {
+  const synchronizedDebtPayments =
+    debtPayments.filter(
+      (payment) =>
+        payment.linkedCommitmentId
+          === commitmentId,
+    );
+
+  return [
+    ...payments
+      .filter(
+        (payment) =>
+          payment.commitmentId
+            === commitmentId,
+      )
+      .map(
+        (
+          payment,
+        ): InstalmentPaymentHistoryRow => ({
+          id:
+            'commitment-'
+            + payment.id,
+          paymentDate:
+            payment.paymentDate,
+          amountMinor:
+            payment.amountMinor,
+          currency:
+            payment.currency,
+          source:
+            'Payment',
+          status:
+            payment.status
+              === 'posted'
+              ? 'Saved'
+              : 'Undone',
+        }),
+      ),
+    ...synchronizedDebtPayments.map(
+      (
+        payment,
+      ): InstalmentPaymentHistoryRow => ({
+        id:
+          'debt-'
+          + payment.id,
+        paymentDate:
+          payment.paymentDate,
+        amountMinor:
+          payment.amountMinor,
+        currency:
+          payment.currency,
+        source:
+          'Debt',
+        status:
+          payment.reversedAt
+            ? 'Undone'
+            : 'Saved',
+      }),
+    ),
+  ].sort(
+    (a, b) =>
+      b.paymentDate.localeCompare(
+        a.paymentDate,
+      )
+      || b.id.localeCompare(
+        a.id,
+      ),
+  );
+}
+
 export function CommitmentsPage({
   spaceIdOverride,
   embedded = false,
@@ -71,6 +153,7 @@ export function CommitmentsPage({
   const [items, setItems] = useState<Commitment[]>([]); const [payments, setPayments] = useState<CommitmentPayment[]>([]); const [accounts, setAccounts] = useState<Account[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [debtPayments, setDebtPayments] = useState<DebtPayment[]>([]);
+  const [historyCommitment, setHistoryCommitment] = useState<Commitment | null>(null);
   const [linkingInstalment, setLinkingInstalment] = useState<Commitment | null>(null);
   const [editing, setEditing] = useState<Commitment | null>(null); const [paying, setPaying] = useState<Commitment | null>(null); const [showForm, setShowForm] = useState(false); const [typeFilter, setTypeFilter] = useState<'all' | CommitmentType>(typeOverride || 'all'); const [commitmentStatusFilter, setCommitmentStatusFilter] = useState<'all' | 'upcoming' | 'due' | 'overdue' | 'completed'>('all'); const [busyId, setBusyId] = useState(''); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Commitment, CommitmentLifecycleAction> | null>(null);
@@ -496,10 +579,28 @@ export function CommitmentsPage({
     <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     {!typeOverride && <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>}
     {!spaceIdOverride && <div className="commitment-global-filter-v115"><label>Status<select value={commitmentStatusFilter} onChange={(event) => setCommitmentStatusFilter(event.target.value as 'all' | 'upcoming' | 'due' | 'overdue' | 'completed')}><option value="all">All statuses</option><option value="upcoming">Coming up</option><option value="due">Due today</option><option value="overdue">Overdue</option><option value="completed">Finished / paid</option></select></label><span>Grouped by Space · sorted by due date</span></div>}
-    <CommitmentGrid items={visible} payments={payments} debtPayments={debtPayments} accountMap={accountMap} debtMap={debtMap} spaceMap={spaceMap} spaceTypeMap={spaceTypeMap} focusedCommitmentId={focusedCommitmentId} showSpace={!spaceIdOverride} groupBySpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onLinkDebt={canManageCurrentSpace ? setLinkingInstalment : undefined} onUnlinkDebt={canManageCurrentSpace ? (item) => void runUnlinkDebt(item) : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} />
+    <CommitmentGrid items={visible} payments={payments} debtPayments={debtPayments} accountMap={accountMap} debtMap={debtMap} spaceMap={spaceMap} spaceTypeMap={spaceTypeMap} focusedCommitmentId={focusedCommitmentId} showSpace={!spaceIdOverride} groupBySpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onLinkDebt={canManageCurrentSpace ? setLinkingInstalment : undefined} onUnlinkDebt={canManageCurrentSpace ? (item) => void runUnlinkDebt(item) : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} onViewHistory={setHistoryCommitment} />
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     {showForm && <Modal title={editing ? 'Edit bill or instalment' : 'Add bill or instalment'} onClose={() => setShowForm(false)}><CommitmentForm item={editing} accounts={accounts} spaces={spaces} categories={categories} lockedSpaceId={spaceIdOverride} typeOverride={typeOverride} onSaved={async () => { setShowForm(false); await load(); }} /></Modal>}
     {paying && <Modal title={`Pay ${paying.name}`} onClose={() => setPaying(null)}><PaymentForm item={paying} accounts={accountsForCommitment(paying)} onSaved={async (status) => { setPaying(null); setSuccess(status === 'pending_approval' ? 'Payment request sent to the Account Owner. No account or commitment balance changes until it is approved.' : 'Payment saved.'); await load(); }} /></Modal>}
+
+    {historyCommitment && (
+      <Modal
+        title={
+          `Payment history · ${historyCommitment.name}`
+        }
+        onClose={() =>
+          setHistoryCommitment(null)
+        }
+      >
+        <InstalmentPaymentHistory
+          item={historyCommitment}
+          payments={payments}
+          debtPayments={debtPayments}
+          debtMap={debtMap}
+        />
+      </Modal>
+    )}
 
     {linkingInstalment && (
       <InstalmentDebtLinkForm
@@ -542,6 +643,7 @@ function CommitmentGrid({
   onDelete,
   onRestore,
   onShare,
+  onViewHistory,
 }: {
   items: Commitment[];
   payments: CommitmentPayment[];
@@ -566,6 +668,9 @@ function CommitmentGrid({
     item: Commitment,
     payment?: CommitmentPayment,
   ) => void;
+  onViewHistory?: (
+    item: Commitment,
+  ) => void;
 }) {
   const renderCard = (item: Commitment) => {
     const state = inactive ? 'completed' : dueState(item);
@@ -579,68 +684,18 @@ function CommitmentGrid({
         )
         .slice(0, 2);
 
-    const synchronizedDebtPayments =
-      debtPayments.filter(
-        (payment) =>
-          payment.linkedCommitmentId
-            === item.id,
+    const fullPaymentHistory =
+      buildInstalmentPaymentHistory(
+        item.id,
+        payments,
+        debtPayments,
       );
 
     const recentHistory =
-      [
-        ...payments
-          .filter(
-            (payment) =>
-              payment.commitmentId
-                === item.id,
-          )
-          .map(
-            (payment) => ({
-              id:
-                'commitment-'
-                + payment.id,
-              paymentDate:
-                payment.paymentDate,
-              amountMinor:
-                payment.amountMinor,
-              currency:
-                payment.currency,
-              source:
-                'Payment',
-              status:
-                payment.status
-                  === 'posted'
-                  ? 'Saved'
-                  : 'Undone',
-            }),
-          ),
-        ...synchronizedDebtPayments.map(
-          (payment) => ({
-            id:
-              'debt-'
-              + payment.id,
-            paymentDate:
-              payment.paymentDate,
-            amountMinor:
-              payment.amountMinor,
-            currency:
-              payment.currency,
-            source:
-              'Debt',
-            status:
-              payment.reversedAt
-                ? 'Undone'
-                : 'Saved',
-          }),
-        ),
-      ]
-        .sort(
-          (a, b) =>
-            b.paymentDate.localeCompare(
-              a.paymentDate,
-            ),
-        )
-        .slice(0, 2);
+      fullPaymentHistory.slice(
+        0,
+        2,
+      );
 
     const linkedDebt =
       item.linkedDebtId
@@ -731,6 +786,24 @@ function CommitmentGrid({
               </div>
             ),
           )}
+
+          {item.type === 'instalment'
+            && onViewHistory
+            && (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() =>
+                  onViewHistory(
+                    item,
+                  )
+                }
+              >
+                View payment history
+                {' · '}
+                {fullPaymentHistory.length}
+              </button>
+            )}
         </div>
       )}
       {(onPay
@@ -891,6 +964,136 @@ function CommitmentGrid({
   const grouped = new Map<string, Commitment[]>();
   items.forEach((item) => { const rows=grouped.get(item.spaceId)||[]; rows.push(item); grouped.set(item.spaceId,rows); });
   return <div className="commitment-space-groups-v115">{[...grouped.entries()].map(([spaceId,rows]) => <section className="commitment-space-group-v115" key={spaceId}><div className="commitment-space-group-heading-v115"><div><span className="eyebrow">Space</span><h2>{spaceMap.get(spaceId)||'Personal / Other'}</h2></div><span>{rows.length} item{rows.length===1?'':'s'}</span></div><section className="planning-card-grid">{rows.map(renderCard)}</section></section>)}{items.length===0 && <div className="notice">No bills or instalments match these filters.</div>}</div>;
+}
+
+function InstalmentPaymentHistory({
+  item,
+  payments,
+  debtPayments,
+  debtMap,
+}: {
+  item: Commitment;
+  payments: CommitmentPayment[];
+  debtPayments: DebtPayment[];
+  debtMap: Map<string, DebtRecord>;
+}) {
+  const history =
+    buildInstalmentPaymentHistory(
+      item.id,
+      payments,
+      debtPayments,
+    );
+
+  const linkedDebt =
+    item.linkedDebtId
+      ? debtMap.get(
+          item.linkedDebtId,
+        )
+      : undefined;
+
+  const savedCount =
+    history.filter(
+      (payment) =>
+        payment.status === 'Saved',
+    ).length;
+
+  const undoneCount =
+    history.length
+    - savedCount;
+
+  return (
+    <div
+      data-instalment-full-payment-history
+    >
+      <div className="planning-meta">
+        <span>
+          {history.length}
+          {' '}
+          payment
+          {history.length === 1
+            ? ''
+            : 's'}
+        </span>
+
+        <span>
+          {savedCount}
+          {' saved'}
+          {undoneCount > 0
+            ? ` · ${undoneCount} undone`
+            : ''}
+        </span>
+      </div>
+
+      {item.linkedDebtId && (
+        <div
+          className="planning-meta"
+          data-full-history-linked-debt
+        >
+          <span>
+            {linkedDebt
+              ? `Linked Debt · ${linkedDebt.counterparty}`
+              : 'Linked Debt'}
+          </span>
+
+          <Link
+            className="text-button"
+            to={
+              '/debt?focus='
+              + encodeURIComponent(
+                  item.linkedDebtId,
+                )
+            }
+          >
+            Open linked Debt
+          </Link>
+        </div>
+      )}
+
+      {history.length > 0 ? (
+        <div
+          className="mini-history"
+          data-full-payment-history-rows
+        >
+          {history.map(
+            (payment) => (
+              <div
+                key={payment.id}
+                data-payment-source={
+                  payment.source
+                }
+              >
+                <span>
+                  {payment.paymentDate}
+                </span>
+
+                <span>
+                  {payment.source
+                    === 'Debt'
+                    ? 'Debt repayment'
+                    : 'Direct payment'}
+                </span>
+
+                <strong>
+                  {formatMoney(
+                    payment.amountMinor,
+                    payment.currency,
+                  )}
+                </strong>
+
+                <span>
+                  {payment.status}
+                </span>
+              </div>
+            ),
+          )}
+        </div>
+      ) : (
+        <div className="notice">
+          No payment history yet.
+        </div>
+      )}
+    </div>
+  );
 }
 
 function InstalmentDebtLinkForm({
