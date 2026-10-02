@@ -2146,12 +2146,30 @@ function DebtPaymentHistory({
                   <button
                     type="button"
                     className="button secondary"
-                    disabled={busyId === payment.id}
+                    disabled={
+                      busyId === payment.id
+                      || Boolean(
+                        payment.linkedCommitmentId
+                        && debt.linkedLatestPaymentId
+                          !== payment.id,
+                      )
+                    }
+                    title={
+                      payment.linkedCommitmentId
+                      && debt.linkedLatestPaymentId
+                        !== payment.id
+                        ? 'Reverse the newest linked payment first.'
+                        : undefined
+                    }
                     onClick={() => void reverse(payment)}
                   >
                     {busyId === payment.id
                       ? 'Working…'
-                      : 'Reverse'}
+                      : payment.linkedCommitmentId
+                        && debt.linkedLatestPaymentId
+                          !== payment.id
+                        ? 'Reverse latest first'
+                        : 'Reverse'}
                   </button>
                 )}
               </div>

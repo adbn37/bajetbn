@@ -12231,6 +12231,16 @@ export const reverseTransaction = onCall({ region }, async (request) => {
       throw new HttpsError('failed-precondition', 'Reverse shared bill payments from Sharing so the assignment and commitment reopen correctly.');
     }
 
+    if (
+      original.sourceType === 'debt_payment'
+      || original.sourceType === 'debt_payment_reversal'
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Reverse Debt payments from Debt payment history so the Debt balance stays correct.',
+      );
+    }
+
     const accountRef = db.collection('accounts').doc(String(original.accountId));
     const destinationRef = original.destinationAccountId ? db.collection('accounts').doc(String(original.destinationAccountId)) : null;
     const budgetRefs = Array.isArray(original.budgetIds)
@@ -12261,6 +12271,18 @@ export const reverseTransaction = onCall({ region }, async (request) => {
       invoicePaymentRef ? transaction.get(invoicePaymentRef) : Promise.resolve(null),
       invoiceRef ? transaction.get(invoiceRef) : Promise.resolve(null),
     ]);
+    if (
+      commitmentSnapshot?.exists
+      && commitmentSnapshot
+        .data()
+        ?.linkedDebtId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Unlink this Instalment from Debt before reversing an older Instalment payment.',
+      );
+    }
+
     const account = assertAccount(accountSnapshot.data(), uid, 'Account', true);
     const destination = destinationSnapshot ? assertAccount(destinationSnapshot.data(), uid, 'Destination account', true) : null;
     const amountMinor = positiveMoney(original.amountMinor);
@@ -29606,6 +29628,30 @@ export const recordDebtPayment = onCall(
         const debt =
           debtSnapshot.data() || {};
 
+        const linkedCommitmentId =
+          typeof debt
+            .linkedCommitmentId
+            === 'string'
+          && debt.linkedCommitmentId
+            ? debt.linkedCommitmentId
+            : '';
+
+        const linkedCommitmentRef =
+          linkedCommitmentId
+            ? db.collection(
+                'commitments',
+              ).doc(
+                linkedCommitmentId,
+              )
+            : null;
+
+        const linkedCommitmentSnapshot =
+          linkedCommitmentRef
+            ? await transaction.get(
+                linkedCommitmentRef,
+              )
+            : null;
+
         if (debt.ownerId !== uid) {
           throw new HttpsError(
             'permission-denied',
@@ -29682,6 +29728,169 @@ export const recordDebtPayment = onCall(
         const nextPaid =
           currentPaid + amountMinor;
 
+        let linkedCommitmentData:
+          DocumentData | null =
+            null;
+
+        let linkedCommitmentPreviousNextDueDate:
+          string | null =
+            null;
+
+        let linkedCommitmentPreviousStatus:
+          'active' | 'completed' | null =
+            null;
+
+        let linkedCommitmentNextDueDate:
+          string | null =
+            null;
+
+        const linkedPaymentSyncCount =
+          Number.isSafeInteger(
+            debt.linkedPaymentSyncCount,
+          )
+            ? Math.max(
+                0,
+                Number(
+                  debt.linkedPaymentSyncCount,
+                ),
+              )
+            : 0;
+
+        const linkedPreviousPaymentId =
+          typeof debt
+            .linkedLatestPaymentId
+            === 'string'
+          && debt.linkedLatestPaymentId
+            ? debt.linkedLatestPaymentId
+            : null;
+
+        if (linkedCommitmentId) {
+          if (
+            !linkedCommitmentRef
+            || !linkedCommitmentSnapshot
+              ?.exists
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The linked Instalment no longer exists.',
+            );
+          }
+
+          linkedCommitmentData =
+            linkedCommitmentSnapshot
+              .data()
+            || {};
+
+          if (
+            linkedCommitmentData
+              .ownerId !== uid
+            || linkedCommitmentData
+              .type !== 'instalment'
+            || linkedCommitmentData
+              .linkedDebtId !== debtId
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The Debt and Instalment link is no longer valid.',
+            );
+          }
+
+          if (
+            linkedCommitmentData
+              .archivedAt
+            || linkedCommitmentData
+              .stoppedAt
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The linked Instalment is not active.',
+            );
+          }
+
+          if (
+            linkedCommitmentData
+              .externalIntegrationProvider
+              === 'adbn_tech'
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'ADBN TECH managed instalments cannot use Debt payment synchronization.',
+            );
+          }
+
+          const linkedTotalMinor =
+            Number(
+              linkedCommitmentData
+                .totalAmountMinor
+              || 0,
+            );
+
+          const linkedPaidMinor =
+            Number(
+              linkedCommitmentData
+                .amountPaidMinor
+              || 0,
+            );
+
+          if (
+            linkedTotalMinor
+              !== Number(
+                debt.totalMinor
+                || 0,
+              )
+            || linkedPaidMinor
+              !== currentPaid
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Linked Debt and Instalment progress is out of sync. Unlink or repair the pair before recording another payment.',
+            );
+          }
+
+          if (
+            linkedCommitmentData
+              .status !== 'active'
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The linked Instalment is not active.',
+            );
+          }
+
+          linkedCommitmentPreviousNextDueDate =
+            typeof linkedCommitmentData
+              .nextDueDate
+              === 'string'
+            && linkedCommitmentData
+              .nextDueDate
+              ? linkedCommitmentData
+                  .nextDueDate
+              : typeof linkedCommitmentData
+                  .startDate
+                  === 'string'
+                && linkedCommitmentData
+                  .startDate
+                  ? linkedCommitmentData
+                      .startDate
+                  : paymentDate;
+
+          linkedCommitmentPreviousStatus =
+            'active';
+
+          linkedCommitmentNextDueDate =
+            nextPaid >= linkedTotalMinor
+              ? null
+              : addFrequency(
+                  linkedCommitmentPreviousNextDueDate,
+                  oneOf(
+                    linkedCommitmentData
+                      .frequency,
+                    commitmentFrequencies,
+                    'frequency',
+                  ),
+                );
+        }
+
         const now =
           FieldValue.serverTimestamp();
 
@@ -29689,9 +29898,18 @@ export const recordDebtPayment = onCall(
           accountSnapshot.data() || {};
 
         const spaceId =
-          typeof debt.spaceId === 'string' && debt.spaceId
-            ? debt.spaceId
-            : String(accountData.spaceId || '');
+          linkedCommitmentData
+          && typeof linkedCommitmentData
+            .spaceId === 'string'
+          && linkedCommitmentData.spaceId
+            ? linkedCommitmentData.spaceId
+            : typeof debt.spaceId === 'string'
+              && debt.spaceId
+              ? debt.spaceId
+              : String(
+                  accountData.spaceId
+                  || '',
+                );
 
         const transactionType =
           direction === 'owe'
@@ -29764,6 +29982,12 @@ export const recordDebtPayment = onCall(
             displayId: displayId('DPAY'),
             ownerId: uid,
             debtId,
+            linkedCommitmentId:
+              linkedCommitmentId
+              || null,
+            linkedCommitmentPreviousNextDueDate,
+            linkedCommitmentPreviousStatus,
+            linkedPreviousPaymentId,
             direction,
             amountMinor,
             currency: 'BND',
@@ -29784,6 +30008,27 @@ export const recordDebtPayment = onCall(
           },
         );
 
+        if (
+          linkedCommitmentRef
+          && linkedCommitmentData
+        ) {
+          transaction.update(
+            linkedCommitmentRef,
+            {
+              amountPaidMinor:
+                nextPaid,
+              nextDueDate:
+                linkedCommitmentNextDueDate,
+              status:
+                nextBalance === 0
+                  ? 'completed'
+                  : 'active',
+              updatedAt:
+                now,
+            },
+          );
+        }
+
         transaction.update(
           debtRef,
           {
@@ -29797,6 +30042,15 @@ export const recordDebtPayment = onCall(
               nextBalance === 0
                 ? now
                 : null,
+            ...(linkedCommitmentId
+              ? {
+                  linkedPaymentSyncCount:
+                    linkedPaymentSyncCount
+                    + 1,
+                  linkedLatestPaymentId:
+                    paymentRef.id,
+                }
+              : {}),
             updatedAt: now,
           },
         );
@@ -29898,6 +30152,23 @@ export const reverseDebtPayment = onCall(
         const originalTransactionRef =
           db.collection('transactions').doc(transactionId);
 
+        const linkedCommitmentId =
+          typeof payment
+            .linkedCommitmentId
+            === 'string'
+          && payment.linkedCommitmentId
+            ? payment.linkedCommitmentId
+            : '';
+
+        const linkedCommitmentRef =
+          linkedCommitmentId
+            ? db.collection(
+                'commitments',
+              ).doc(
+                linkedCommitmentId,
+              )
+            : null;
+
         const debtSnapshot =
           await transaction.get(debtRef);
 
@@ -29906,6 +30177,13 @@ export const reverseDebtPayment = onCall(
 
         const originalTransactionSnapshot =
           await transaction.get(originalTransactionRef);
+
+        const linkedCommitmentSnapshot =
+          linkedCommitmentRef
+            ? await transaction.get(
+                linkedCommitmentRef,
+              )
+            : null;
 
         if (!debtSnapshot.exists) {
           throw new HttpsError(
@@ -29975,6 +30253,116 @@ export const reverseDebtPayment = onCall(
             'failed-precondition',
             'Debt balance cannot be safely reversed.',
           );
+        }
+
+        let linkedPaymentSyncCount =
+          0;
+
+        let linkedPreviousPaymentId:
+          string | null =
+            null;
+
+        let linkedRestoreNextDueDate:
+          string | null =
+            null;
+
+        let linkedRestoreStatus:
+          'active' | 'completed' =
+            'active';
+
+        if (linkedCommitmentId) {
+          linkedPaymentSyncCount =
+            Number.isSafeInteger(
+              debt.linkedPaymentSyncCount,
+            )
+              ? Math.max(
+                  0,
+                  Number(
+                    debt.linkedPaymentSyncCount,
+                  ),
+                )
+              : 0;
+
+          if (
+            linkedPaymentSyncCount <= 0
+            || debt.linkedLatestPaymentId
+              !== paymentId
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Reverse the newest linked Debt payment first.',
+            );
+          }
+
+          if (
+            debt.linkedCommitmentId
+              !== linkedCommitmentId
+            || !linkedCommitmentRef
+            || !linkedCommitmentSnapshot
+              ?.exists
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The linked Debt and Instalment pair is incomplete.',
+            );
+          }
+
+          const linkedCommitment =
+            linkedCommitmentSnapshot
+              .data()
+            || {};
+
+          if (
+            linkedCommitment.ownerId
+              !== uid
+            || linkedCommitment
+              .linkedDebtId
+              !== debtId
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'The linked Debt and Instalment pair is no longer valid.',
+            );
+          }
+
+          if (
+            Number(
+              linkedCommitment
+                .amountPaidMinor
+              || 0,
+            )
+            !== currentPaid
+          ) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Linked Debt and Instalment progress is out of sync. The reversal was not applied.',
+            );
+          }
+
+          linkedRestoreNextDueDate =
+            typeof payment
+              .linkedCommitmentPreviousNextDueDate
+              === 'string'
+              ? payment
+                  .linkedCommitmentPreviousNextDueDate
+              : null;
+
+          linkedRestoreStatus =
+            payment
+              .linkedCommitmentPreviousStatus
+              === 'completed'
+              ? 'completed'
+              : 'active';
+
+          linkedPreviousPaymentId =
+            typeof payment
+              .linkedPreviousPaymentId
+              === 'string'
+            && payment
+              .linkedPreviousPaymentId
+              ? payment
+                  .linkedPreviousPaymentId
+              : null;
         }
 
         const now =
@@ -30078,6 +30466,26 @@ export const reverseDebtPayment = onCall(
           },
         );
 
+        if (
+          linkedCommitmentRef
+          && linkedCommitmentSnapshot
+            ?.exists
+        ) {
+          transaction.update(
+            linkedCommitmentRef,
+            {
+              amountPaidMinor:
+                nextPaid,
+              nextDueDate:
+                linkedRestoreNextDueDate,
+              status:
+                linkedRestoreStatus,
+              updatedAt:
+                now,
+            },
+          );
+        }
+
         transaction.update(
           debtRef,
           {
@@ -30085,6 +30493,18 @@ export const reverseDebtPayment = onCall(
             balanceMinor: nextBalance,
             status: 'active',
             settledAt: null,
+            ...(linkedCommitmentId
+              ? {
+                  linkedPaymentSyncCount:
+                    Math.max(
+                      0,
+                      linkedPaymentSyncCount
+                      - 1,
+                    ),
+                  linkedLatestPaymentId:
+                    linkedPreviousPaymentId,
+                }
+              : {}),
             updatedAt: now,
           },
         );
@@ -35447,6 +35867,18 @@ export const linkDebtInstalment = onCall(
         }
 
         if (
+          existingDebtLink
+            === commitmentId
+          && existingCommitmentLink
+            === debtId
+        ) {
+          return {
+            debtId,
+            commitmentId,
+          };
+        }
+
+        if (
           String(
             debt.currency
             || 'BND',
@@ -35563,6 +35995,13 @@ export const linkDebtInstalment = onCall(
           {
             linkedCommitmentId:
               commitmentId,
+            linkedPaymentSyncCount:
+              0,
+            linkedLatestPaymentId:
+              null,
+            spaceId:
+              debt.spaceId
+              || commitmentSpaceId,
             updatedAt:
               now,
           },
@@ -35636,6 +36075,27 @@ export const unlinkDebtInstalment = onCall(
           );
         }
 
+        const linkedPaymentSyncCount =
+          Number.isSafeInteger(
+            debt.linkedPaymentSyncCount,
+          )
+            ? Math.max(
+                0,
+                Number(
+                  debt.linkedPaymentSyncCount,
+                ),
+              )
+            : 0;
+
+        if (
+          linkedPaymentSyncCount > 0
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Reverse linked Debt payments before unlinking this instalment.',
+          );
+        }
+
         const commitmentId =
           typeof debt
             .linkedCommitmentId
@@ -35702,6 +36162,10 @@ export const unlinkDebtInstalment = onCall(
           debtRef,
           {
             linkedCommitmentId:
+              null,
+            linkedPaymentSyncCount:
+              0,
+            linkedLatestPaymentId:
               null,
             updatedAt:
               FieldValue

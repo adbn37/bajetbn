@@ -1266,6 +1266,8 @@ export interface DebtRecord {
   reminderEnabled: boolean;
   spaceId?: string | null;
   linkedCommitmentId?: string | null;
+  linkedPaymentSyncCount?: number;
+  linkedLatestPaymentId?: string | null;
   status: DebtStatus;
   settledAt?: Timestamp | null;
   archivedAt?: Timestamp | null;
@@ -1278,6 +1280,10 @@ export interface DebtPayment {
   displayId: string;
   ownerId: string;
   debtId: string;
+  linkedCommitmentId?: string | null;
+  linkedCommitmentPreviousNextDueDate?: string | null;
+  linkedCommitmentPreviousStatus?: 'active' | 'completed' | null;
+  linkedPreviousPaymentId?: string | null;
   direction: DebtDirection;
   amountMinor: number;
   currency: string;
