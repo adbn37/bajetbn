@@ -18,6 +18,7 @@ const workspace = read('src/features/business/AdbnTechMirrorWorkspace.tsx');
 const app = read('src/app/App.tsx');
 const details = read('src/features/spaces/SpaceDetailsPage.tsx');
 const spacesPage = read('src/features/spaces/SpacesPage.tsx');
+const adbnAccess = read('src/utils/adbnTechAccess.ts');
 const models = read('src/types/models.ts');
 
 const start =
@@ -165,13 +166,25 @@ check(
 
 check(
   spacesPage.includes(
-    "item.externalIntegrationRole"
+    'canAccessInternalAdbnTechSpace('
   )
-  && spacesPage.includes(
+  && adbnAccess.includes(
+    'export function isAdbnTechCustomerSpace('
+  )
+  && adbnAccess.includes(
+    'externalIntegrationProvider'
+  )
+  && adbnAccess.includes(
+    "=== 'adbn_tech'"
+  )
+  && adbnAccess.includes(
+    'externalIntegrationRole'
+  )
+  && adbnAccess.includes(
     "=== 'customer'"
   )
-  && spacesPage.includes(
-    'canProvisionAdbnTechSpace'
+  && adbnAccess.includes(
+    'isAdbnTechCustomerSpace(space)'
   ),
   'Dedicated ADBN customer Spaces remain visible in the normal Spaces list.',
 );
