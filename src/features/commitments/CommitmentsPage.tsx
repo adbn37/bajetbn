@@ -38,7 +38,10 @@ import type { Account, Commitment, CommitmentFrequency, CommitmentPayment, Commi
 import { getErrorMessage } from '../../utils/errors';
 import { shareBillToWhatsApp } from '../../services/billShare';
 import { formatMoney, toMinorUnits } from '../../utils/money';
-import { canLinkDebtAndInstalment } from '../../utils/debtInstalmentLink';
+import {
+  canLinkDebtAndInstalment,
+  getDebtInstalmentLinkIssues,
+} from '../../utils/debtInstalmentLink';
 
 type CommitmentLifecycleAction = 'stop' | 'delete';
 
@@ -794,22 +797,29 @@ function InstalmentDebtLinkForm({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const eligible =
+  const candidateRows =
     useMemo(
       () =>
         debts
           .filter(
             (debt) =>
-              canLinkDebtAndInstalment(
-                debt,
-                item,
-                spaces,
-              ),
+              debt.direction === 'owe',
+          )
+          .map(
+            (debt) => ({
+              debt,
+              issues:
+                getDebtInstalmentLinkIssues(
+                  debt,
+                  item,
+                  spaces,
+                ),
+            }),
           )
           .sort(
             (a, b) =>
-              a.counterparty.localeCompare(
-                b.counterparty,
+              a.debt.counterparty.localeCompare(
+                b.debt.counterparty,
               ),
           ),
       [
@@ -819,10 +829,48 @@ function InstalmentDebtLinkForm({
       ],
     );
 
+  const eligible =
+    useMemo(
+      () =>
+        candidateRows
+          .filter(
+            (candidate) =>
+              canLinkDebtAndInstalment(
+                candidate.debt,
+                item,
+                spaces,
+              ),
+          )
+          .map(
+            (candidate) =>
+              candidate.debt,
+          ),
+      [
+        candidateRows,
+        item,
+        spaces,
+      ],
+    );
+
+  const unavailable =
+    useMemo(
+      () =>
+        candidateRows.filter(
+          (candidate) =>
+            candidate.issues.length > 0,
+        ),
+      [candidateRows],
+    );
+
   const [debtId, setDebtId] =
     useState(
-      eligible[0]?.id
-      || '',
+      eligible[0]?.id || '',
+    );
+
+  const selectedDebt =
+    eligible.find(
+      (debt) =>
+        debt.id === debtId,
     );
 
   const [busy, setBusy] =
@@ -836,7 +884,7 @@ function InstalmentDebtLinkForm({
   ) {
     event.preventDefault();
 
-    if (!debtId) {
+    if (!selectedDebt) {
       return;
     }
 
@@ -845,9 +893,8 @@ function InstalmentDebtLinkForm({
 
     try {
       await linkDebtInstalment({
-        debtId,
-        commitmentId:
-          item.id,
+        debtId: selectedDebt.id,
+        commitmentId: item.id,
       });
 
       await onSaved();
@@ -883,54 +930,147 @@ function InstalmentDebtLinkForm({
           </strong>
 
           <span>
-            Choose an I Owe Debt with the same total,
-            paid progress, currency and Space.
             Future repayments will be recorded from Debt
             and synchronized with this Instalment.
           </span>
+
+          <span>
+            Instalment total:{' '}
+            <strong>
+              {formatMoney(
+                item.totalAmountMinor || 0,
+                item.currency,
+              )}
+            </strong>
+            {' · '}
+            Paid:{' '}
+            <strong>
+              {formatMoney(
+                item.amountPaidMinor,
+                item.currency,
+              )}
+            </strong>
+          </span>
         </div>
 
-        {eligible.length === 0 ? (
+        {eligible.length > 0 ? (
+          <>
+            <label>
+              Compatible Debt
+              <select
+                value={debtId}
+                onChange={(event) =>
+                  setDebtId(
+                    event.target.value,
+                  )
+                }
+                required
+              >
+                {eligible.map(
+                  (debt) => (
+                    <option
+                      key={debt.id}
+                      value={debt.id}
+                    >
+                      {debt.counterparty}
+                      {' — '}
+                      {formatMoney(
+                        debt.balanceMinor,
+                        debt.currency,
+                      )}
+                      {' left'}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+
+            <small className="muted">
+              {eligible.length}
+              {' compatible Debt '}
+              {eligible.length === 1
+                ? 'record'
+                : 'records'}
+              {' found.'}
+            </small>
+          </>
+        ) : candidateRows.length === 0 ? (
           <div className="notice">
-            No compatible Debt was found.
-            Check the total amount, amount already paid,
-            currency and Space.
+            No I Owe Debt records were found.
+            Add the Debt first, then return here.
           </div>
         ) : (
-          <label>
-            Debt
-            <select
-              value={debtId}
-              onChange={(event) =>
-                setDebtId(
-                  event.target.value,
-                )
-              }
-              required
-            >
-              {eligible.map(
-                (debt) => (
-                  <option
-                    key={debt.id}
-                    value={debt.id}
+          <div className="notice">
+            No compatible Debt is available yet.
+            See the reason for each Debt below.
+          </div>
+        )}
+
+        {unavailable.length > 0 && (
+          <section
+            className="form-stack"
+            data-debt-link-diagnostics
+          >
+            <div>
+              <strong>
+                Other I Owe Debts
+              </strong>
+
+              <p className="muted">
+                These records cannot be linked to this
+                Instalment yet.
+              </p>
+            </div>
+
+            <div className="space-scoped-list">
+              {unavailable.map(
+                (candidate) => (
+                  <article
+                    className="space-scoped-row"
+                    key={candidate.debt.id}
                   >
-                    {debt.counterparty}
-                    {' — '}
-                    {formatMoney(
-                      debt.balanceMinor,
-                      debt.currency,
-                    )}
-                    {' left'}
-                  </option>
+                    <div>
+                      <strong>
+                        {candidate.debt.counterparty}
+                      </strong>
+
+                      <small>
+                        Total{' '}
+                        {formatMoney(
+                          candidate.debt.totalMinor,
+                          candidate.debt.currency,
+                        )}
+                        {' · Paid '}
+                        {formatMoney(
+                          candidate.debt.paidMinor,
+                          candidate.debt.currency,
+                        )}
+                        {' · Left '}
+                        {formatMoney(
+                          candidate.debt.balanceMinor,
+                          candidate.debt.currency,
+                        )}
+                      </small>
+                    </div>
+
+                    <div>
+                      <small>
+                        Cannot link:{' '}
+                        {candidate.issues.join(
+                          ' · ',
+                        )}
+                      </small>
+                    </div>
+                  </article>
                 ),
               )}
-            </select>
-          </label>
+            </div>
+          </section>
         )}
 
         <small className="muted">
-          Business and ADBN-managed instalments cannot
-          be linked to personal Debt.
+          Business and ADBN-managed Instalments remain
+          excluded from personal Debt linking.
         </small>
 
         <div className="button-row">
@@ -939,12 +1079,14 @@ function InstalmentDebtLinkForm({
             className="button primary"
             disabled={
               busy
-              || !debtId
+              || !selectedDebt
             }
           >
             {busy
               ? 'Linking…'
-              : 'Link Debt'}
+              : selectedDebt
+                ? 'Link Debt'
+                : 'No compatible Debt'}
           </button>
 
           <button

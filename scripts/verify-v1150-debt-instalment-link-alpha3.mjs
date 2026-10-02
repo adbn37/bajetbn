@@ -36,13 +36,16 @@ check(
     'canLinkDebtAndInstalment',
   )
   && helper.includes(
-    "debt.direction === 'owe'"
+    'getDebtInstalmentLinkIssues',
   )
   && helper.includes(
-    "space.type !== 'sme'"
+    'Only I Owe Debt can be linked.'
   )
   && helper.includes(
-    "!== 'adbn_tech'"
+    'Business Instalments cannot be linked to personal Debt.'
+  )
+  && helper.includes(
+    'ADBN-managed Instalments cannot be linked.'
   ),
   'Debt and Instalment pages share one compatibility rule.',
 );
