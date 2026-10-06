@@ -29,6 +29,7 @@ const page = read('src/pages/MyInboxPage.tsx');
 const app = read('src/app/App.tsx');
 const personalisation = read('src/services/personalisation.ts');
 const css = read('src/styles/global.css');
+const morePage = read('src/pages/MorePage.tsx');
 
 for (const marker of [
   "collection(db, 'spaceMembers')",
@@ -100,14 +101,14 @@ const mobileNavigation = shell.slice(
   mobileNavEnd,
 );
 
-const businessIndex =
-  mobileNavigation.indexOf(
-    '<small>Business</small>',
-  );
-
 const homeIndex =
   mobileNavigation.indexOf(
     '<small>Home</small>',
+  );
+
+const transactionsIndex =
+  mobileNavigation.indexOf(
+    '<small>Transactions</small>',
   );
 
 const addIndex =
@@ -115,9 +116,9 @@ const addIndex =
     'mobile-bottom-add',
   );
 
-const spaceIndex =
+const goalsIndex =
   mobileNavigation.indexOf(
-    '<small>Space</small>',
+    '<small>Goals</small>',
   );
 
 const moreIndex =
@@ -126,22 +127,22 @@ const moreIndex =
   );
 
 need(
-  businessIndex >= 0
-    && businessIndex < homeIndex
-    && homeIndex < addIndex
-    && addIndex < spaceIndex
-    && spaceIndex < moreIndex,
-  'Mobile bottom navigation must remain Business, Home, Add, Space, More.',
+  homeIndex >= 0
+    && homeIndex < transactionsIndex
+    && transactionsIndex < addIndex
+    && addIndex < goalsIndex
+    && goalsIndex < moreIndex,
+  'Mobile bottom navigation must remain Home, Transactions, Add, Goals, More.',
 );
 
 need(
-  mobileNavigation.includes(
-    'openBusinessShortcut',
+  !mobileNavigation.includes(
+    '<small>Business</small>',
   )
-    && shell.includes(
-      'businessSpaces.map',
+    && !mobileNavigation.includes(
+      '<small>Space</small>',
     ),
-  'Mobile Business shortcut and multi-Business picker must remain available.',
+  'Business and Space must not occupy dedicated mobile bottom-navigation slots.',
 );
 
 need(
@@ -153,12 +154,29 @@ need(
 
 need(
   mobileNavigation.includes(
-    'to="/spaces"',
+    'to="/transactions"',
+  ),
+  'Mobile Transactions destination is missing.',
+);
+
+need(
+  mobileNavigation.includes(
+    'to="/goals"',
+  ),
+  'Mobile Goals destination is missing.',
+);
+
+need(
+  morePage.includes(
+    'more-space-shortcuts-v116',
   )
-    && mobileNavigation.includes(
-      '<small>Space</small>',
+    && morePage.includes(
+      'Manage Spaces',
+    )
+    && morePage.includes(
+      'to="/spaces"',
     ),
-  'Mobile Space destination is missing.',
+  'Spaces must remain reachable from More.',
 );
 
 need(
