@@ -104,6 +104,14 @@ check(
   'Personal and Business Home controls open their matching Space pickers.',
 );
 
+check(
+  dashboard.indexOf('      {homeSpacePicker && (')
+    > dashboard.indexOf('        <GlobalBusinessOverview')
+    && dashboard.indexOf('      {showTripPicker && (')
+    > dashboard.indexOf('        <GlobalBusinessOverview'),
+  'Home Space and Trip pickers render outside the Personal-only branch.',
+);
+
 if (failures.length) {
   console.error('');
 
@@ -117,6 +125,9 @@ if (failures.length) {
       + ' check(s).',
   );
 }
+
+
+
 
 console.log('');
 console.log('BAJETBN v116 CONTEXT SIMPLIFICATION VERIFICATION PASS');

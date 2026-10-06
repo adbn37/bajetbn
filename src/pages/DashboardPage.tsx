@@ -1955,6 +1955,51 @@ export function DashboardPage() {
         </Modal>
       )}
 
+      {showMoneyActivity
+        && profile
+        && (
+          <MoneyActivityModal
+            accounts={quickAccounts}
+            spaces={quickPersonalSpaces}
+            categories={
+              allCategories
+            }
+            timezone={
+              profile.timezone
+            }
+            online={online}
+initialType={quickInitialType}
+            entryMode={quickEntryMode}
+            onClose={
+              closeQuickActivity
+            }
+            onSubmit={postTransaction}
+            onComplete={async (
+              message,
+              refresh,
+            ) => {
+              closeQuickActivity();
+              setFeedback(message);
+
+              if (refresh) {
+                await loadAccounts();
+
+                await loadAccountActivity(
+                  activeAccount?.id
+                    || null,
+                );
+              }
+            }}
+          />
+        )}
+        </>
+      ) : (
+        <GlobalBusinessOverview
+          userId={user?.uid || ''}
+          currency={currency}
+        />
+      )}
+
       {homeSpacePicker && (
         <Modal
           title={
@@ -2108,50 +2153,6 @@ export function DashboardPage() {
         </Modal>
       )}
 
-      {showMoneyActivity
-        && profile
-        && (
-          <MoneyActivityModal
-            accounts={quickAccounts}
-            spaces={quickPersonalSpaces}
-            categories={
-              allCategories
-            }
-            timezone={
-              profile.timezone
-            }
-            online={online}
-initialType={quickInitialType}
-            entryMode={quickEntryMode}
-            onClose={
-              closeQuickActivity
-            }
-            onSubmit={postTransaction}
-            onComplete={async (
-              message,
-              refresh,
-            ) => {
-              closeQuickActivity();
-              setFeedback(message);
-
-              if (refresh) {
-                await loadAccounts();
-
-                await loadAccountActivity(
-                  activeAccount?.id
-                    || null,
-                );
-              }
-            }}
-          />
-        )}
-        </>
-      ) : (
-        <GlobalBusinessOverview
-          userId={user?.uid || ''}
-          currency={currency}
-        />
-      )}
 
     </main>
   );
