@@ -121,7 +121,7 @@ const spaceTypeLabels: Record<Space['type'], string> = {
 };
 
 function spaceDisplayLabel(space: Space): string {
-  if (space.type === 'personal') return 'Personal money (no Space)';
+  if (space.type === 'personal') return 'Personal';
   return [space.name, spaceTypeLabels[space.type], space.currency].join(' · ');
 }
 
@@ -576,6 +576,7 @@ export function TransactionsPage() {
         nextSpaces.filter(
           (space) =>
             space.type !== 'sme'
+            && space.type !== 'goal'
             && !space.archivedAt,
         );
 
@@ -1193,7 +1194,7 @@ export function TransactionsPage() {
       <MoneyScopeSwitch mode="personal" businessSpaces={businessSpaces} />
       {error && <div className="notice error">{error}</div>}
       {feedback && <div className="notice success">{feedback} {feedback.includes('device') && <Link to="/offline-sync">View Offline & sync</Link>}</div>}
-      <div className="info-banner"><strong>Personal money only.</strong><span>Business activity is kept inside its specific Business Space. You can still assign Personal money activity to Household, Trip, Plan or another non-Business Space without duplicating the transaction.</span></div>
+      <div className="info-banner"><strong>Personal money only.</strong><span>Business activity is kept inside its specific Business Space. You can still assign Personal money activity to a Household, Trip or another non-Business Space without duplicating the transaction. Plans are managed from Goals.</span></div>
 
       <section className="transaction-summary">
         <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
@@ -1354,8 +1355,7 @@ export function TransactionsPage() {
         onCategoriesChanged={refreshCategories}
         timezone={profile.timezone}
         online={online}
-        scopeControls={<MoneyScopeSwitch mode="personal" businessSpaces={businessSpaces} compact />}
-        lockedSpaceId={
+lockedSpaceId={
           quickLockedSpaceId
           || undefined
         }
@@ -1675,7 +1675,6 @@ export function MoneyActivityModal({
   entryMode = 'activity',
   initialValues,
   lockedSpaceId,
-  scopeControls,
   onCategoriesChanged,
   onClose,
   onSubmit,
@@ -1691,7 +1690,6 @@ export function MoneyActivityModal({
   entryMode?: 'activity' | 'move' | 'receipt';
   initialValues?: TransactionInput;
   lockedSpaceId?: string;
-  scopeControls?: ReactNode;
   onCategoriesChanged?: () => Promise<TransactionCategory[]>;
   onClose: () => void;
   onSubmit: (values: TransactionInput) => Promise<PostTransactionOutcome>;
@@ -2661,8 +2659,7 @@ export function MoneyActivityModal({
     }
     onSubmit={submit}
   >
-    {scopeControls && <div className="money-entry-scope-controls">{scopeControls}</div>}
-    {initialValues && <div className="notice warning compact-notice"><strong>Creating a correction</strong><span>The original activity has already been undone. Review every field and save this replacement to finish the correction.</span></div>}
+{initialValues && <div className="notice warning compact-notice"><strong>Creating a correction</strong><span>The original activity has already been undone. Review every field and save this replacement to finish the correction.</span></div>}
     {error && <div className="notice error">{error}</div>}
 
     {entryMode === 'receipt' && !initialValues && (
@@ -2946,7 +2943,7 @@ export function MoneyActivityModal({
             )}
 
             <div className="bajetbn-identity-copy">
-              <span>Space (optional)</span>
+              <span>Recorded in</span>
               <strong>
                 {selectedSpace?.type === 'personal'
                   ? 'Personal'
@@ -2954,7 +2951,7 @@ export function MoneyActivityModal({
               </strong>
               <small>
                 {selectedSpace?.type === 'personal'
-                  ? 'No Space selected'
+                  ? 'Personal money'
                   : selectedSpace
                     ? spaceTypeLabels[selectedSpace.type]
                     : 'Choose where this activity belongs'}
@@ -2977,16 +2974,14 @@ export function MoneyActivityModal({
             >
               {spaceChooserOpen
                 ? 'Cancel'
-                : selectedSpace?.type === 'personal'
-                  ? 'Select Space'
-                  : 'Change'}
+                : 'Change'}
             </button>
           )}
         </div>
 
         {spaceChooserOpen && (
           <label className="contextual-space-chooser">
-            Space
+            Recorded in
             <select
               required
               value={spaceId}

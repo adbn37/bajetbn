@@ -9,8 +9,7 @@ const moneyTools = [
   { to: '/accounts', label: 'Accounts' },
   { to: '/bills', label: 'Bills & instalments' },
   { to: '/budgets', label: 'Budgets' },
-  { to: '/goals', label: 'Goals' },
-  { to: '/debt', label: 'Debt' },
+  { to: '/goals', label: 'Goals, plans & debt' },
   { to: '/recurring', label: 'Recurring money' },
   { to: '/reports', label: 'Reports' },
 ];

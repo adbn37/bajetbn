@@ -42,7 +42,6 @@ import {
 } from '../features/categories/defaultCategories';
 import {
   MoneyActivityModal,
-  MoneyScopeSwitch,
 } from '../features/transactions/TransactionsPage';
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
 import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
@@ -439,17 +438,8 @@ export function DashboardPage() {
       () =>
         activeSpaces.filter(
           (item) =>
-            item.type !== 'sme',
-        ),
-      [activeSpaces],
-    );
-
-  const quickBusinessSpaces =
-    useMemo(
-      () =>
-        activeSpaces.filter(
-          (item) =>
-            item.type === 'sme',
+            item.type !== 'sme'
+            && item.type !== 'goal',
         ),
       [activeSpaces],
     );
@@ -1488,7 +1478,7 @@ export function DashboardPage() {
         <Link to="/goals">
           <span aria-hidden="true">G</span>
           <strong>Goals</strong>
-          <small>Plan & save</small>
+          <small>Plans & debt</small>
         </Link>
 
         <Link
@@ -1923,15 +1913,7 @@ export function DashboardPage() {
               profile.timezone
             }
             online={online}
-            scopeControls={
-              <MoneyScopeSwitch
-                mode="personal"
-                businessSpaces={quickBusinessSpaces}
-                openAddOnBusiness
-                compact
-              />
-            }
-            initialType={quickInitialType}
+initialType={quickInitialType}
             entryMode={quickEntryMode}
             onClose={
               closeQuickActivity

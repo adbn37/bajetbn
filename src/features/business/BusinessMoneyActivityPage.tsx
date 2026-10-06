@@ -1708,7 +1708,7 @@ export function BusinessMoneyActivityPage() {
               ? 'move'
               : undefined
           }
-          scopeControls={<MoneyScopeSwitch mode="business" businessSpaces={businessSpaces.length ? businessSpaces : [space]} currentBusinessId={space.id} compact />}
+
           lockedSpaceId={space.id}
           onClose={() => {
             setShowAdd(false);
