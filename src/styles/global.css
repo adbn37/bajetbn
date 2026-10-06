@@ -22187,3 +22187,180 @@ select.trip-sheet-cell-input {
     flex-direction: column;
   }
 }
+
+/* BAJETBN V116 MOBILE SPACE CONTEXT */
+
+.more-section-heading-v116 {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .7rem;
+}
+
+.more-section-heading-v116 h2 {
+  margin: 0;
+}
+
+.more-section-heading-v116 p {
+  margin: .2rem 0 0;
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.more-space-grid-v116 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+}
+
+.more-space-shortcut-v116 {
+  min-width: 0;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .55rem;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.more-space-shortcut-v116 .space-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+}
+
+.more-space-shortcut-v116 > span {
+  min-width: 0;
+}
+
+.more-space-shortcut-v116 strong,
+.more-space-shortcut-v116 small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-space-shortcut-v116 small {
+  margin-top: .12rem;
+  color: var(--muted);
+  font-size: .66rem;
+}
+
+.more-space-shortcut-v116 > b {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.more-manage-spaces-v116,
+.more-space-empty-v116 {
+  margin-top: .55rem;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .65rem .72rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.more-manage-spaces-v116 strong,
+.more-manage-spaces-v116 small,
+.more-space-empty-v116 strong,
+.more-space-empty-v116 small {
+  display: block;
+}
+
+.more-manage-spaces-v116 small,
+.more-space-empty-v116 small {
+  margin-top: .1rem;
+  color: var(--muted);
+  font-size: .66rem;
+}
+
+.more-space-loading-v116 {
+  padding: .75rem;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.personal-trip-shortcuts-v116 {
+  margin-top: .9rem;
+}
+
+.personal-trip-shortcut-rail-v116 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+}
+
+.personal-trip-shortcut-v116 {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .5rem;
+  min-height: 66px;
+  padding: .6rem;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.personal-trip-shortcut-v116 .space-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+}
+
+.personal-trip-shortcut-v116 > span {
+  min-width: 0;
+}
+
+.personal-trip-shortcut-v116 strong,
+.personal-trip-shortcut-v116 small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personal-trip-shortcut-v116 small {
+  margin-top: .1rem;
+  color: var(--muted);
+  font-size: .65rem;
+}
+
+.personal-trip-shortcut-v116 > b {
+  color: var(--muted);
+}
+
+@media (max-width: 520px) {
+  .more-mobile-hub-v116 {
+    padding-inline: .85rem;
+  }
+
+  .more-space-grid-v116,
+  .personal-trip-shortcut-rail-v116 {
+    grid-template-columns: 1fr;
+  }
+
+  .more-space-shortcut-v116 {
+    min-height: 64px;
+  }
+
+  .mobile-bottom-nav small {
+    font-size: .62rem;
+  }
+}

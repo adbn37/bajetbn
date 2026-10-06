@@ -371,22 +371,6 @@ export function AppShell() {
         <Outlet />
 
         <nav className="mobile-bottom-nav" aria-label="Quick navigation">
-          <button
-            type="button"
-            className={
-              businessPickerOpen
-              || location.pathname.startsWith('/business/')
-                ? 'active'
-                : ''
-            }
-            onClick={() => void openBusinessShortcut()}
-            aria-label="Open Business"
-            aria-expanded={businessPickerOpen}
-          >
-            <span aria-hidden="true">▦</span>
-            <small>Business</small>
-          </button>
-
           <NavLink
             to="/"
             end
@@ -394,6 +378,14 @@ export function AppShell() {
           >
             <span aria-hidden="true">⌂</span>
             <small>Home</small>
+          </NavLink>
+
+          <NavLink
+            to="/transactions"
+            className={({ isActive }) => isActive ? 'active' : ''}
+          >
+            <span aria-hidden="true">↕</span>
+            <small>Transactions</small>
           </NavLink>
 
           <button
@@ -407,11 +399,11 @@ export function AppShell() {
           </button>
 
           <NavLink
-            to="/spaces"
+            to="/goals"
             className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">▣</span>
-            <small>Space</small>
+            <span aria-hidden="true">◎</span>
+            <small>Goals</small>
           </NavLink>
 
           <NavLink

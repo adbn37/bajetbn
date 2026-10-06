@@ -45,6 +45,7 @@ import {
   MoneyScopeSwitch,
 } from '../features/transactions/TransactionsPage';
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
+import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
 
 function monthPrefix() {
@@ -452,6 +453,43 @@ export function DashboardPage() {
         ),
       [activeSpaces],
     );
+
+  const personalTripSpaces =
+    useMemo(
+      () =>
+        activeSpaces
+          .filter(
+            (item) => item.type === 'trip',
+          )
+          .sort(
+            (a, b) => a.name.localeCompare(b.name),
+          ),
+      [activeSpaces],
+    );
+
+  useEffect(() => {
+    if (!user || homeMode !== 'personal') return;
+
+    let cancelled = false;
+
+    void listSpaces(user.uid)
+      .then((items) => {
+        if (cancelled) return;
+
+        setSpaces(
+          items.filter(
+            (item) => !item.archivedAt,
+          ),
+        );
+      })
+      .catch(() => {
+        // Trip shortcuts are enhancement-only.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [homeMode, user]);
 
   const allCategories =
     useMemo(
@@ -1447,17 +1485,29 @@ export function DashboardPage() {
       )}
 
       <section className="home-v110-shortcuts bajetbn-reference-actions bajetbn-reference-actions-four">
-        <button
-          type="button"
-          disabled={quickAccounts.length < 2}
-          onClick={() =>
-            void openQuickActivity('move')
-          }
+        <Link to="/goals">
+          <span aria-hidden="true">G</span>
+          <strong>Goals</strong>
+          <small>Plan & save</small>
+        </Link>
+
+        <Link
+          to="/more"
         >
-          <span aria-hidden="true">M</span>
-          <strong>Move</strong>
-          <small>Money</small>
-        </button>
+          <span aria-hidden="true">T</span>
+          <strong>Trips</strong>
+          <small>
+            {personalTripSpaces.length > 0
+              ? personalTripSpaces.length + ' active'
+              : 'Plan a trip'}
+          </small>
+        </Link>
+
+        <Link to="/bills">
+          <span aria-hidden="true">B</span>
+          <strong>Bills</strong>
+          <small>Manage</small>
+        </Link>
 
         <button
           type="button"
@@ -1469,19 +1519,35 @@ export function DashboardPage() {
           <strong>Scan</strong>
           <small>Receipt</small>
         </button>
-
-        <Link to="/bills">
-          <span aria-hidden="true">B</span>
-          <strong>Bills</strong>
-          <small>Manage</small>
-        </Link>
-
-        <Link to="/debt">
-          <span aria-hidden="true">D</span>
-          <strong>Debt</strong>
-          <small>Owe & owed</small>
-        </Link>
       </section>
+
+      {personalTripSpaces.length > 0 && (
+        <section className="personal-trip-shortcuts-v116">
+          <div className="bajetbn-home-section-title">
+            <h2>Trips</h2>
+            <Link to="/more">More trips</Link>
+          </div>
+
+          <div className="personal-trip-shortcut-rail-v116">
+            {personalTripSpaces.slice(0, 4).map((trip) => (
+              <Link
+                to={'/spaces/' + trip.id}
+                className="personal-trip-shortcut-v116"
+                key={trip.id}
+              >
+                <SpaceAvatar space={trip} />
+
+                <span>
+                  <strong>{trip.name}</strong>
+                  <small>Trip</small>
+                </span>
+
+                <b aria-hidden="true">›</b>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="home-v110-section bajetbn-home-recent-section">
         <div className="bajetbn-home-section-title">
