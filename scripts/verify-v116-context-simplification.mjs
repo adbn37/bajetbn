@@ -85,10 +85,23 @@ check(
 );
 
 check(
-  dashboard.includes('<strong>Goals</strong>')
-    && dashboard.includes('<small>Plans & debt</small>')
-    && dashboard.includes("item.type === 'trip'"),
-  'Personal Home keeps Trips separate while Goals communicates Plans and Debt.',
+  !dashboard.includes('<strong>Goals</strong>')
+    && dashboard.includes('<strong>Trips</strong>')
+    && dashboard.includes('<strong>Receipt</strong>')
+    && dashboard.includes('data-trip-picker-v116')
+    && dashboard.includes('data-trip-picker-list-v116')
+    && dashboard.includes('setShowTripPicker(true)'),
+  'Personal Home keeps Trips, Bills and Receipt without duplicating Goals; Trips opens the Trip picker.',
+);
+
+check(
+  dashboard.includes('data-home-space-picker-trigger-v116="personal"')
+    && dashboard.includes('data-home-space-picker-trigger-v116="business"')
+    && dashboard.includes('data-home-space-picker-v116={homeSpacePicker}')
+    && dashboard.includes("item.type === 'sme'")
+    && dashboard.includes("to={'/business/' + space.id}")
+    && dashboard.includes("to={'/spaces/' + space.id}"),
+  'Personal and Business Home controls open their matching Space pickers.',
 );
 
 if (failures.length) {

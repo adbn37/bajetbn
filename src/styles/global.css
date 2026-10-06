@@ -22364,3 +22364,98 @@ select.trip-sheet-cell-input {
     font-size: .62rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V116 HOME SPACE PICKERS
+   Personal / Business tabs open their Spaces.
+   Trips shortcut opens all active Trip Spaces.
+   ========================================================== */
+
+.bajetbn-reference-actions-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.bajetbn-home-mode-switch-v115 button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+}
+
+.bajetbn-home-mode-switch-v115 button > b {
+  font-size: .72rem;
+  line-height: 1;
+  opacity: .75;
+}
+
+.home-space-picker-list-v116 {
+  display: grid;
+  gap: .55rem;
+}
+
+.home-space-picker-row-v116 {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .65rem;
+  min-height: 64px;
+  padding: .65rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.home-space-picker-row-v116:hover,
+.home-space-picker-row-v116:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+}
+
+.home-space-picker-row-v116 .space-avatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+}
+
+.home-space-picker-row-v116 > span {
+  min-width: 0;
+}
+
+.home-space-picker-row-v116 strong,
+.home-space-picker-row-v116 small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-space-picker-row-v116 small {
+  margin-top: .12rem;
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.home-space-picker-row-v116 > b {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+@media (max-width: 520px) {
+  .bajetbn-reference-actions-three {
+    gap: .55rem;
+  }
+
+  .bajetbn-reference-actions-three > a,
+  .bajetbn-reference-actions-three > button {
+    min-width: 0;
+    padding-inline: .45rem;
+  }
+}

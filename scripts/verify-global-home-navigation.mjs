@@ -173,7 +173,7 @@ check(
 
 check(
   dashboard.includes(
-    "selectHomeMode('business')",
+    "openHomeSpacePicker('business')",
   )
     && dashboard.includes(
       "homeMode === 'business'",
