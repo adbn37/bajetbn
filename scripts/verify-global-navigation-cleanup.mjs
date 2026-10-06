@@ -99,13 +99,24 @@ check(
 const start = shell.indexOf('<nav className="mobile-bottom-nav"');
 const end = shell.indexOf('</nav>', start);
 const mobile = start >= 0 && end > start ? shell.slice(start, end) : '';
-for (const token of ['<small>Business</small>', '<small>Home</small>', 'mobile-bottom-add', '<small>Space</small>', '<small>More</small>']) {
+for (const token of ['<small>Home</small>', '<small>Transactions</small>', 'mobile-bottom-add', '<small>Goals</small>', '<small>More</small>']) {
   check(mobile.includes(token), `Mobile navigation missing ${token}.`);
 }
-check(mobile.includes('openBusinessShortcut') && shell.includes('businessSpaces.map'), 'Mobile Business shortcut or Business picker is missing.');
+check(mobile.includes('to="/transactions"'), 'Mobile Transactions destination is missing.');
 check(mobile.includes("navigate('/?quick=1')"), 'Mobile Add action is missing.');
-check(mobile.includes('to="/spaces"'), 'Mobile Spaces destination is missing.');
+check(mobile.includes('to="/goals"'), 'Mobile Goals destination is missing.');
 check(mobile.includes('to="/more"'), 'Mobile More destination is missing.');
+check(!mobile.includes('<small>Business</small>') && !mobile.includes('<small>Space</small>'), 'Business and Space are no longer dedicated mobile bottom-nav destinations.');
+check(
+  morePage.includes('more-space-shortcuts-v116')
+    && morePage.includes('Manage Spaces')
+    && morePage.includes('to="/spaces"'),
+  'More keeps Space shortcuts and Space management access.',
+);
+check(
+  morePage.includes("space.type !== 'goal'"),
+  'Goal / Plan Spaces stay out of the general More Space launcher.',
+);
 check(morePage.includes('data-simplified-more'), 'More page simplification marker is missing.');
 check(!morePage.includes('NAVIGATION_DESCRIPTIONS'), 'More no longer repeats descriptions for every tool.');
 check(

@@ -9,6 +9,9 @@ const dashboard =
 const shell =
   read('src/layouts/AppShell.tsx');
 
+const morePage =
+  read('src/pages/MorePage.tsx');
+
 const transactions =
   read('src/repositories/transactionRepository.ts');
 
@@ -132,10 +135,10 @@ const nav =
     : '';
 
 const tokens = [
-  '<small>Business</small>',
   '<small>Home</small>',
+  '<small>Transactions</small>',
   'mobile-bottom-add',
-  '<small>Space</small>',
+  '<small>Goals</small>',
   '<small>More</small>',
 ];
 
@@ -160,22 +163,22 @@ for (const token of tokens) {
 check(
   ordered
     && !nav.includes(
-      '<small>Money</small>',
+      '<small>Business</small>',
+    )
+    && !nav.includes(
+      '<small>Space</small>',
     ),
-  'Mobile navigation is Business | Home | + | Space | More.',
+  'Mobile navigation is Home | Transactions | + | Goals | More.',
 );
 
 check(
-  nav.includes(
-    'openBusinessShortcut',
+  dashboard.includes(
+    "selectHomeMode('business')",
   )
-    && shell.includes(
-      "space.type === 'sme'",
-    )
-    && shell.includes(
-      'businessSpaces.map',
+    && dashboard.includes(
+      "homeMode === 'business'",
     ),
-  'Business shortcut targets Business Spaces and supports multiple Businesses.',
+  'Business remains a Home-level mode instead of a dedicated bottom-nav destination.',
 );
 
 check(
@@ -187,12 +190,16 @@ check(
 
 check(
   nav.includes(
-    'to="/spaces"',
-  )
-    && nav.includes(
-      '<small>Space</small>',
-    ),
-  'Space remains the shared-work destination.',
+    'to="/transactions"',
+  ),
+  'Transactions is the second mobile destination.',
+);
+
+check(
+  nav.includes(
+    'to="/goals"',
+  ),
+  'Goals is the fourth mobile destination.',
 );
 
 check(
@@ -200,6 +207,19 @@ check(
     'to="/more"',
   ),
   'More remains the fifth destination.',
+);
+
+check(
+  morePage.includes(
+    'more-space-shortcuts-v116',
+  )
+    && morePage.includes(
+      'Manage Spaces',
+    )
+    && morePage.includes(
+      'to="/spaces"',
+    ),
+  'Spaces remain reachable from More without occupying a bottom-nav slot.',
 );
 
 check(
