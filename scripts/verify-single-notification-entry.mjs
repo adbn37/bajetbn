@@ -62,7 +62,7 @@ const mobileNavigation = section(
  *   Search + Alerts
  *
  * Bottom:
- *   Business | Home | + | Space | More
+ *   Home | Transactions | + | Goals | More
  *
  * Environment wording is not shown
  * in the mobile customer header.
@@ -133,10 +133,10 @@ expect(
  */
 
 const navTokens = [
-  '<small>Business</small>',
   '<small>Home</small>',
+  '<small>Transactions</small>',
   'mobile-bottom-add',
-  '<small>Space</small>',
+  '<small>Goals</small>',
   '<small>More</small>',
 ];
 
@@ -162,14 +162,31 @@ for (const token of navTokens) {
 
 expect(
   correctOrder,
-  'Mobile navigation must be Business | Home | + | Space | More.',
+  'Mobile navigation must be Home | Transactions | + | Goals | More.',
 );
 
 expect(
   mobileNavigation.includes(
-    'to="/spaces"',
+    'to="/transactions"',
   ),
-  'The mobile Spaces destination is missing.',
+  'The mobile Transactions destination is missing.',
+);
+
+expect(
+  mobileNavigation.includes(
+    'to="/goals"',
+  ),
+  'The mobile Goals destination is missing.',
+);
+
+expect(
+  !mobileNavigation.includes(
+    '<small>Business</small>',
+  )
+    && !mobileNavigation.includes(
+      '<small>Space</small>',
+    ),
+  'Business and Space must not occupy dedicated mobile bottom-navigation slots.',
 );
 
 expect(
@@ -212,5 +229,5 @@ if (failures.length) {
 console.log(
   'Single notification-entry verification passed: '
   + 'mobile Alerts is in the header and bottom navigation is '
-  + 'Business | Home | + | Space | More.',
+  + 'Home | Transactions | + | Goals | More.',
 );
