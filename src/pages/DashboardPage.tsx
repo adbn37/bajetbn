@@ -459,6 +459,25 @@ export function DashboardPage() {
       [activeSpaces],
     );
 
+  // The Personal Home picker is for Personal and Household Spaces.
+  // Keep Trip Spaces available separately in the Trips picker and money entry.
+  const personalPickerSpaces =
+    useMemo(
+      () =>
+        quickPersonalSpaces
+          .filter(
+            (item) => item.type !== 'trip',
+          )
+          .sort((a, b) => {
+            if (a.type === 'personal') {
+              return b.type === 'personal' ? 0 : -1;
+            }
+            if (b.type === 'personal') return 1;
+            return a.name.localeCompare(b.name);
+          }),
+      [quickPersonalSpaces],
+    );
+
   const businessSpaces =
     useMemo(
       () =>
@@ -2016,8 +2035,8 @@ initialType={quickInitialType}
             data-home-space-picker-v116={homeSpacePicker}
           >
             {homeSpacePicker === 'personal' ? (
-              quickPersonalSpaces.length > 0 ? (
-                quickPersonalSpaces.map((space) =>
+              personalPickerSpaces.length > 0 ? (
+                personalPickerSpaces.map((space) =>
                   space.type === 'personal' ? (
                     <button
                       type="button"
@@ -2050,9 +2069,7 @@ initialType={quickInitialType}
                         <small>
                           {space.type === 'household'
                             ? 'Household'
-                            : space.type === 'trip'
-                              ? 'Trip'
-                              : 'Space'}
+                            : 'Space'}
                         </small>
                       </span>
                       <b aria-hidden="true">›</b>

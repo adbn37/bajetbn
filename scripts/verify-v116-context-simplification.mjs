@@ -112,6 +112,27 @@ check(
   'Home Space and Trip pickers render outside the Personal-only branch.',
 );
 
+
+check(
+  (() => {
+    const pickerStart = dashboard.indexOf('const personalPickerSpaces =');
+    const businessStart = dashboard.indexOf('const businessSpaces =', pickerStart);
+    const markupStart = dashboard.indexOf("{homeSpacePicker === 'personal' ? (");
+    const markupEnd = dashboard.indexOf(') : businessSpaces.length > 0 ? (', markupStart);
+
+    return pickerStart !== -1
+      && businessStart > pickerStart
+      && markupStart !== -1
+      && markupEnd > markupStart
+      && dashboard.slice(pickerStart, businessStart).includes("item.type !== 'trip'")
+      && dashboard.slice(markupStart, markupEnd).includes('personalPickerSpaces.map((space)')
+      && !dashboard.slice(markupStart, markupEnd).includes('quickPersonalSpaces.map((space)')
+      && dashboard.includes('personalTripSpaces.map((trip)')
+      && dashboard.includes('spaces={quickPersonalSpaces}');
+  })(),
+  'Trip Spaces appear in Trips, not Personal Spaces, while Personal money entry still supports Trip context.',
+);
+
 if (failures.length) {
   console.error('');
 
