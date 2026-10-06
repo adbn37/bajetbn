@@ -180,10 +180,10 @@ const nav =
     : '';
 
 const navTokens = [
-  '<small>Business</small>',
   '<small>Home</small>',
+  '<small>Transactions</small>',
   'mobile-bottom-add',
-  '<small>Space</small>',
+  '<small>Goals</small>',
   '<small>More</small>',
 ];
 
@@ -206,8 +206,14 @@ for (const token of navTokens) {
 }
 
 check(
-  navValid,
-  'Business | Home | + | Space | More is the mobile navigation.',
+  navValid
+    && !nav.includes(
+      '<small>Business</small>',
+    )
+    && !nav.includes(
+      '<small>Space</small>',
+    ),
+  'Home | Transactions | + | Goals | More is the mobile navigation.',
 );
 
 if (failures.length) {
