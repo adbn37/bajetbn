@@ -586,7 +586,7 @@ function GoalGrid({
             : goalSpace?.type === 'personal'
               ? 'Personal'
               : isLegacyPlan
-                ? 'Legacy plan'
+                ? 'Plan'
                 : goalSpace?.name || 'Space';
 
         return (

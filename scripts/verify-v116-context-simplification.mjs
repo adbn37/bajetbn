@@ -94,7 +94,7 @@ check(
 );
 
 check(
-  goals.includes("'Legacy plan'")
+  goals.includes("'Plan'") && !goals.includes("'Legacy plan'")
     && goals.includes("['spaces', 'Space goals']")
     && goals.includes('goal-card-more-v116')
     && goals.includes('goals-debt-shortcut-v116')

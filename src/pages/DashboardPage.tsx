@@ -1525,52 +1525,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="bajetbn-home-header-actions">
-          <Link
-            to="/search"
-            aria-label="Search BajetBN"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle
-                cx="11"
-                cy="11"
-                r="6"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <path
-                d="m16 16 4 4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-          </Link>
 
-          <Link
-            to="/notifications"
-            aria-label="Open notifications"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M6.5 9.5a5.5 5.5 0 0 1 11 0v4.1l1.5 2.4H5l1.5-2.4V9.5Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M10 19h4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-              />
-            </svg>
-          </Link>
-        </div>
       </header>
 
       {welcomeFromOnboarding && (

@@ -22718,3 +22718,224 @@ select.trip-sheet-cell-input {
     flex: 0 0 auto;
   }
 }
+
+
+/* BAJETBN MOBILE CONSISTENCY V8 */
+
+.account-actions-v116 {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .4rem;
+}
+
+.account-more-v116 {
+  position: relative;
+}
+
+.account-more-summary-v116 {
+  display: grid;
+  place-items: center;
+  list-style: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  letter-spacing: .08em;
+}
+
+.account-more-summary-v116::-webkit-details-marker {
+  display: none;
+}
+
+.account-more-menu-v116 {
+  position: absolute;
+  z-index: 60;
+  right: 0;
+  top: calc(100% + .45rem);
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .15rem;
+  padding: .45rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .38);
+}
+
+.account-more-menu-v116 .text-button {
+  width: 100%;
+  padding: .65rem .7rem;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.account-more-menu-v116 .text-button:hover {
+  background: var(--surface-2);
+}
+
+@media (max-width: 780px) {
+  html {
+    scroll-padding-bottom:
+      calc(11rem + env(safe-area-inset-bottom));
+  }
+
+  .app-main {
+    padding-bottom:
+      calc(6.5rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-main > main,
+  .app-main > .page {
+    padding-bottom:
+      calc(11rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .account-actions-v116 {
+    grid-column: 2;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .account-view-activity {
+    flex: 1 1 auto;
+  }
+
+  .account-more-v116 {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+}
+
+/* Trip Overview: turn only the two overview tables into stacked mobile cards.
+   Other Trip spreadsheets keep their existing horizontal worksheet behaviour. */
+@media (max-width: 680px) {
+  .trip-sheet-scroll:has(> .trip-overview-money-table),
+  .trip-sheet-scroll:has(> .trip-overview-team-table) {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .trip-overview-money-table,
+  .trip-overview-team-table {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+    border: 0;
+  }
+
+  .trip-overview-money-table thead,
+  .trip-overview-team-table thead {
+    display: none;
+  }
+
+  .trip-overview-money-table tbody,
+  .trip-overview-team-table tbody {
+    display: grid;
+    gap: .6rem;
+  }
+
+  .trip-overview-money-table tr,
+  .trip-overview-team-table tr {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background:
+      color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+  }
+
+  .trip-overview-money-table tr {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trip-overview-team-table tr {
+    grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr);
+  }
+
+  .trip-overview-money-table td,
+  .trip-overview-team-table td {
+    display: grid;
+    min-width: 0 !important;
+    gap: .16rem;
+    padding: .62rem !important;
+    border: 0 !important;
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--border) 82%, transparent) !important;
+    background: transparent !important;
+    overflow-wrap: anywhere;
+  }
+
+  .trip-overview-money-table td::before,
+  .trip-overview-team-table td::before {
+    color: var(--muted);
+    font-size: .57rem;
+    font-weight: 750;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .trip-overview-money-table td:first-child,
+  .trip-overview-team-table td:first-child {
+    grid-column: 1 / -1;
+    background:
+      color-mix(in srgb, var(--surface-2) 74%, transparent) !important;
+  }
+
+  .trip-overview-money-table td:first-child {
+    font-size: .86rem;
+  }
+
+  .trip-overview-money-table td:nth-child(1)::before {
+    content: 'Area';
+  }
+
+  .trip-overview-money-table td:nth-child(2)::before {
+    content: 'Target / Plan';
+  }
+
+  .trip-overview-money-table td:nth-child(3)::before {
+    content: 'Collected / Spent';
+  }
+
+  .trip-overview-money-table td:nth-child(4)::before {
+    content: 'Available / Left';
+  }
+
+  .trip-overview-money-table td:nth-child(5)::before {
+    content: 'Status';
+  }
+
+  .trip-overview-team-table td:nth-child(1)::before {
+    content: 'Item';
+  }
+
+  .trip-overview-team-table td:nth-child(2)::before {
+    content: 'Current';
+  }
+
+  .trip-overview-team-table td:nth-child(3)::before {
+    content: 'Attention';
+  }
+
+  .trip-overview-money-table td:last-child,
+  .trip-overview-team-table td:last-child {
+    border-bottom: 0 !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .trip-overview-money-table tr,
+  .trip-overview-team-table tr {
+    grid-template-columns: 1fr;
+  }
+
+  .trip-overview-money-table td:first-child,
+  .trip-overview-team-table td:first-child {
+    grid-column: 1;
+  }
+}
