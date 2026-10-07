@@ -94,6 +94,16 @@ check(
 );
 
 check(
+  goals.includes("'Legacy plan'")
+    && goals.includes("['spaces', 'Space goals']")
+    && goals.includes('goal-card-more-v116')
+    && goals.includes('goals-debt-shortcut-v116')
+    && goals.includes('View plan details →')
+    && !goals.includes('Open Plan workspace'),
+  'Goals mobile UI keeps legacy Plan compatibility while simplifying user-facing actions.',
+);
+
+check(
   /const\s+HOME_SHORTCUT_DEFAULTS:\s*HomeShortcutId\[\]\s*=\s*\[\s*'trips',\s*'bills',\s*'goals',\s*'budgets',\s*'recurring',\s*'subscription',\s*\]/m.test(dashboard)
     && dashboard.includes("id: 'receipt'")
     && dashboard.includes("label: 'Subscription'")

@@ -34,6 +34,7 @@ type GoalLifecycleAction = 'archive' | 'close' | 'delete';
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
+// BAJETBN_GOALS_UI_REFINED_V5
 export function GoalsPage({
   spaceIdOverride,
   embedded = false,
@@ -268,23 +269,6 @@ setContributions(
     />
     {error && <div className="notice error">{error}</div>}
 
-    {!embedded && (
-      <section
-        className="more-v110-group goals-plan-hub-v116"
-        data-goals-plan-hub-v116
-      >
-        <div className="more-section-heading-v116">
-          <div>
-            <h2>Debt planning</h2>
-            <p>Manage debt repayments separately from savings goals.</p>
-          </div>
-
-          <Link to="/debt" className="text-button">
-            Manage debt
-          </Link>
-        </div>
-      </section>
-    )}
 
     {focusedPlan ? (
       <section
@@ -357,14 +341,14 @@ setContributions(
 
     {!embedded && (
       <div
-        className="button-row"
+        className="button-row goals-filter-row-v116"
         role="group"
         aria-label="Filter savings goals"
       >
         {([
           ['all', 'All goals'],
           ['personal', 'Personal'],
-          ['spaces', 'In Spaces'],
+          ['spaces', 'Space goals'],
         ] as const).map(([value, label]) => (
           <button
             key={value}
@@ -437,6 +421,21 @@ setContributions(
         })
       }
     />
+
+    {!embedded && (
+      <Link
+        to="/debt"
+        className="goals-debt-shortcut-v116"
+        data-goals-plan-hub-v116
+      >
+        <span>
+          <strong>Debt planning</strong>
+          <small>Track repayments separately from savings goals.</small>
+        </span>
+
+        <b aria-hidden="true">›</b>
+      </Link>
+    )}
 
     {undoDialog && (
       <ActionConfirmModal
@@ -572,6 +571,24 @@ function GoalGrid({
             )
             .slice(0, 3);
 
+        const goalSpace =
+          spaces.find(
+            (item) =>
+              item.id === goal.spaceId,
+          );
+
+        const isLegacyPlan =
+          goalSpace?.type === 'goal';
+
+        const contextLabel =
+          focusedPlan
+            ? 'Plan target'
+            : goalSpace?.type === 'personal'
+              ? 'Personal'
+              : isLegacyPlan
+                ? 'Legacy plan'
+                : goalSpace?.name || 'Space';
+
         return (
           <article
             className={
@@ -624,17 +641,7 @@ function GoalGrid({
 
             <div className="planning-meta">
               <span>
-                {focusedPlan
-                  ? 'Plan target'
-                  : spaces.find(
-                      (item) =>
-                        item.id === goal.spaceId,
-                    )?.type === 'personal'
-                    ? 'Personal'
-                    : spaces.find(
-                        (item) =>
-                          item.id === goal.spaceId,
-                      )?.name || 'Space'}
+                {contextLabel}
               </span>
 
               <span>
@@ -645,17 +652,13 @@ function GoalGrid({
             </div>
 
             {!focusedPlan
-              && spaces.some(
-                (space) =>
-                  space.id === goal.spaceId
-                  && space.type === 'goal',
-              )
+              && isLegacyPlan
               && (
                 <Link
                   to={`/spaces/${goal.spaceId}`}
-                  className="text-button"
+                  className="text-button goal-plan-details-link-v116"
                 >
-                  Open Plan workspace
+                  View plan details →
                 </Link>
               )}
 
@@ -735,7 +738,7 @@ function GoalGrid({
                   </button>
                 </>
               ) : (
-                <>
+                <div className="goal-card-primary-actions-v116">
                   <button
                     className="button primary"
                     disabled={
@@ -757,42 +760,45 @@ function GoalGrid({
                     Edit
                   </button>
 
-                  <button
-                    className="text-button"
-                    disabled={
-                      busyId === goal.id
-                    }
-                    onClick={() =>
-                      onClose?.(goal)
-                    }
-                  >
-                    Close
-                  </button>
+                  <details className="goal-card-more-v116">
+                    <summary
+                      className="icon-button"
+                      aria-label={`More actions for ${goal.name}`}
+                      title="More actions"
+                    >
+                      •••
+                    </summary>
 
-                  <button
-                    className="text-button"
-                    disabled={
-                      busyId === goal.id
-                    }
-                    onClick={() =>
-                      onArchive?.(goal)
-                    }
-                  >
-                    Archive
-                  </button>
+                    <div className="goal-card-more-menu-v116">
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={busyId === goal.id}
+                        onClick={() => onClose?.(goal)}
+                      >
+                        Close goal
+                      </button>
 
-                  <button
-                    className="text-button danger"
-                    disabled={
-                      busyId === goal.id
-                    }
-                    onClick={() =>
-                      onDelete?.(goal)
-                    }
-                  >
-                    Delete
-                  </button>
-                </>
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={busyId === goal.id}
+                        onClick={() => onArchive?.(goal)}
+                      >
+                        Archive goal
+                      </button>
+
+                      <button
+                        type="button"
+                        className="text-button danger"
+                        disabled={busyId === goal.id}
+                        onClick={() => onDelete?.(goal)}
+                      >
+                        Delete goal
+                      </button>
+                    </div>
+                  </details>
+                </div>
               )}
             </div>
           </article>

@@ -22597,3 +22597,124 @@ select.trip-sheet-cell-input {
     gap: .3rem;
   }
 }
+
+
+/* BAJETBN V116 GOALS CONSOLIDATED MOBILE REFINEMENT */
+.goals-filter-row-v116 {
+  margin: 1rem 0;
+}
+
+.goal-plan-details-link-v116 {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: .2rem;
+}
+
+.goal-card-primary-actions-v116 {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  width: 100%;
+}
+
+.goal-card-more-v116 {
+  position: relative;
+  margin-left: auto;
+}
+
+.goal-card-more-v116 > summary {
+  display: grid;
+  place-items: center;
+  list-style: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  letter-spacing: .08em;
+}
+
+.goal-card-more-v116 > summary::-webkit-details-marker {
+  display: none;
+}
+
+.goal-card-more-menu-v116 {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + .5rem);
+  z-index: 15;
+  min-width: 175px;
+  padding: .45rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .2rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .32);
+}
+
+.goal-card-more-menu-v116 .text-button {
+  width: 100%;
+  padding: .65rem .7rem;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.goal-card-more-menu-v116 .text-button:hover {
+  background: var(--surface-2);
+}
+
+.goals-debt-shortcut-v116 {
+  margin-top: 1rem;
+  padding: .9rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(11, 21, 34, .62);
+  color: var(--text);
+}
+
+.goals-debt-shortcut-v116 span {
+  min-width: 0;
+}
+
+.goals-debt-shortcut-v116 strong,
+.goals-debt-shortcut-v116 small {
+  display: block;
+}
+
+.goals-debt-shortcut-v116 small {
+  margin-top: .22rem;
+  color: var(--muted);
+}
+
+.goals-debt-shortcut-v116 b {
+  color: var(--accent-2);
+  font-size: 1.15rem;
+}
+
+@media (max-width: 780px) {
+  .goals-filter-row-v116 {
+    gap: .45rem;
+  }
+
+  .goals-filter-row-v116 .button {
+    min-height: 38px;
+    padding: .5rem .75rem;
+  }
+
+  .goal-card-primary-actions-v116 {
+    flex-wrap: nowrap;
+  }
+
+  .goal-card-primary-actions-v116 > .button {
+    flex: 1 1 auto;
+  }
+
+  .goal-card-more-v116 {
+    flex: 0 0 auto;
+  }
+}
