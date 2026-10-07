@@ -22415,6 +22415,25 @@ select.trip-sheet-cell-input {
   flex: 0 0 42px;
   width: 42px;
   padding: 0;
+  border-left: 1px solid color-mix(
+    in srgb,
+    var(--accent) 28%,
+    var(--border)
+  ) !important;
+  background: color-mix(
+    in srgb,
+    var(--accent) 7%,
+    transparent
+  ) !important;
+}
+
+.bajetbn-home-mode-option-v116.active
+.bajetbn-home-mode-picker-v116 {
+  background: color-mix(
+    in srgb,
+    var(--accent) 14%,
+    transparent
+  ) !important;
 }
 
 .bajetbn-home-mode-picker-v116 span {
