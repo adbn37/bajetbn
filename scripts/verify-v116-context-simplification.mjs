@@ -8,6 +8,7 @@ const businessMoney = read('src/features/business/BusinessMoneyActivityPage.tsx'
 const dashboard = read('src/pages/DashboardPage.tsx');
 const more = read('src/pages/MorePage.tsx');
 const goals = read('src/features/goals/GoalsPage.tsx');
+const spacesPage = read('src/features/spaces/SpacesPage.tsx');
 const hub = read('src/features/spaces/SpaceActionHub.tsx');
 const details = read('src/features/spaces/SpaceDetailsPage.tsx');
 
@@ -78,10 +79,18 @@ check(
 
 check(
   goals.includes('data-goals-plan-hub-v116')
-    && goals.includes("item.type === 'goal'")
+    && goals.includes('setGoals(nextGoals);')
+    && goals.includes('setContributions(nextContributions);')
+    && goals.includes('visibleGoals')
     && goals.includes('to="/debt"')
-    && goals.includes('<SpaceAvatar space={plan} />'),
-  'Goals surfaces Plan Spaces and Debt planning together.',
+    && !goals.includes('<SpaceAvatar space={plan} />'),
+  'Goals presents personal, Space-owned savings goals and legacy Plan targets in one view.',
+);
+
+check(
+  spacesPage.includes("item.type !== 'goal'")
+    && !spacesPage.includes('<option value="goal">Plan / saving goal</option>'),
+  'New saving Plans are goals rather than Spaces; existing Plan data remains compatible.',
 );
 
 check(

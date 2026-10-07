@@ -4,7 +4,6 @@ import { ActionConfirmModal, type ActionConfirmState } from '../../components/Ac
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
-import { SpaceAvatar } from '../spaces/SpaceAvatar';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   createGoal,
@@ -43,7 +42,8 @@ export function GoalsPage({
   embedded?: boolean;
 } = {}) {
   const { user, profile } = useAuth();
-  const [goals, setGoals] = useState<SavingsGoal[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [planSpaces, setPlanSpaces] = useState<Space[]>([]); const [contributions, setContributions] = useState<GoalContribution[]>([]);
+  const [goals, setGoals] = useState<SavingsGoal[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [contributions, setContributions] = useState<GoalContribution[]>([]);
+  const [goalScope, setGoalScope] = useState<'all' | 'personal' | 'spaces'>('all');
   const [editing, setEditing] = useState<SavingsGoal | null>(null); const [contributing, setContributing] = useState<SavingsGoal | null>(null); const [showForm, setShowForm] = useState(false); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<SavingsGoal, GoalLifecycleAction> | null>(null);
   const [undoDialog, setUndoDialog] = useState<ActionConfirmState<GoalContribution> | null>(null);
@@ -85,8 +85,7 @@ export function GoalsPage({
 
         setGoals(nextGoals);
         setSpaces([targetSpace]);
-        setPlanSpaces([]);
-        setContributions(
+setContributions(
           nextContributions.filter(
             (item) =>
               targetGoalIds.has(
@@ -108,29 +107,17 @@ export function GoalsPage({
         listGoalContributions(user.uid),
       ]);
 
-      const personalSpace =
-        nextSpaces.find((item) => item.type === 'personal' && !item.archivedAt) || null;
-      const nextPlanSpaces =
-        nextSpaces
-          .filter(
-            (item) =>
-              item.type === 'goal'
-              && !item.archivedAt,
-          )
-          .sort(
-            (a, b) =>
-              a.name.localeCompare(b.name),
-          );
-      const personalGoals = personalSpace
-        ? nextGoals.filter((item) => item.spaceId === personalSpace.id)
-        : [];
-      const personalGoalIds = new Set(personalGoals.map((item) => item.id));
-      setGoals(personalGoals);
-      setSpaces(personalSpace ? [personalSpace] : []);
-      setPlanSpaces(nextPlanSpaces);
-      setContributions(
-        nextContributions.filter((item) => personalGoalIds.has(item.goalId)),
+      // One goal record powers the central Goals view and every Space view.
+      // Existing Plan Space IDs remain intact so legacy Plan workspaces still work.
+      setGoals(nextGoals);
+      setSpaces(
+        [...nextSpaces].sort(
+          (a, b) =>
+            Number(b.type === 'personal') - Number(a.type === 'personal')
+            || a.name.localeCompare(b.name),
+        ),
       );
+      setContributions(nextContributions);
     } catch (nextError) {
       setError(
         getErrorMessage(nextError),
@@ -147,6 +134,19 @@ export function GoalsPage({
   const active = useMemo(() => goals.filter((item) => !item.archivedAt && !item.closedAt), [goals]);
   const inactive = useMemo(() => goals.filter((item) => item.archivedAt || item.closedAt), [goals]);
   const target = active.reduce((sum, item) => sum + item.targetMinor, 0); const saved = active.reduce((sum, item) => sum + item.currentMinor, 0);
+  const visibleGoals = useMemo(() => {
+    if (embedded || goalScope === 'all') return active;
+
+    const personalSpaceId =
+      spaces.find((space) => space.type === 'personal')?.id;
+
+    return active.filter((goal) =>
+      goalScope === 'personal'
+        ? goal.spaceId === personalSpaceId
+        : goal.spaceId !== personalSpaceId,
+    );
+  }, [active, embedded, goalScope, spaces]);
+
   const focusedPlan =
     Boolean(
       embedded
@@ -268,54 +268,21 @@ export function GoalsPage({
     />
     {error && <div className="notice error">{error}</div>}
 
-    {!embedded && !focusedPlan && (
+    {!embedded && (
       <section
         className="more-v110-group goals-plan-hub-v116"
         data-goals-plan-hub-v116
       >
         <div className="more-section-heading-v116">
           <div>
-            <h2>Plans & debt</h2>
-            <p>Keep planning tools together without treating them as everyday Spaces.</p>
+            <h2>Debt planning</h2>
+            <p>Manage debt repayments separately from savings goals.</p>
           </div>
 
-          <Link to="/spaces" className="text-button">
-            Manage plans
+          <Link to="/debt" className="text-button">
+            Manage debt
           </Link>
         </div>
-
-        {planSpaces.length > 0 && (
-          <div className="more-space-grid-v116">
-            {planSpaces.map((plan) => (
-              <Link
-                className="more-space-shortcut-v116"
-                to={'/spaces/' + plan.id}
-                key={plan.id}
-              >
-                <SpaceAvatar space={plan} />
-
-                <span>
-                  <strong>{plan.name}</strong>
-                  <small>Plan</small>
-                </span>
-
-                <b aria-hidden="true">›</b>
-              </Link>
-            ))}
-          </div>
-        )}
-
-        <Link
-          className="more-manage-spaces-v116"
-          to="/debt"
-        >
-          <span>
-            <strong>Debt planning</strong>
-            <small>Track debt and plan repayments from the Goals area.</small>
-          </span>
-
-          <b aria-hidden="true">›</b>
-        </Link>
       </section>
     )}
 
@@ -388,8 +355,40 @@ export function GoalsPage({
       </section>
     )}
 
+    {!embedded && (
+      <div
+        className="button-row"
+        role="group"
+        aria-label="Filter savings goals"
+      >
+        {([
+          ['all', 'All goals'],
+          ['personal', 'Personal'],
+          ['spaces', 'In Spaces'],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={`button ${goalScope === value ? 'primary' : 'secondary'}`}
+            aria-pressed={goalScope === value}
+            onClick={() => setGoalScope(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    )}
+
+    {visibleGoals.length === 0 && (
+      <div className="notice">
+        {active.length === 0
+          ? 'No savings goals yet. Use Add savings goal to create your first target.'
+          : 'No savings goals match this filter.'}
+      </div>
+    )}
+
     <GoalGrid
-      goals={active}
+      goals={visibleGoals}
       spaces={spaces}
       contributions={contributions}
       busyId={busyId}
@@ -644,6 +643,21 @@ function GoalGrid({
                   : 'No deadline'}
               </span>
             </div>
+
+            {!focusedPlan
+              && spaces.some(
+                (space) =>
+                  space.id === goal.spaceId
+                  && space.type === 'goal',
+              )
+              && (
+                <Link
+                  to={`/spaces/${goal.spaceId}`}
+                  className="text-button"
+                >
+                  Open Plan workspace
+                </Link>
+              )}
 
             {recent.length > 0 && (
               <div className="mini-history">
@@ -957,7 +971,7 @@ function GoalForm({
                 )
               }
             >
-              {spaces.map(
+              {spaces.filter((item) => goal?.spaceId === item.id || (!item.archivedAt && item.type !== 'goal')).map(
                 (item) => (
                   <option
                     value={item.id}

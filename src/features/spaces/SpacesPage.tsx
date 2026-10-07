@@ -197,7 +197,7 @@ export function SpacesPage() {
     );
 
   const active = useMemo(
-    () => visibleSpaces.filter((item) => !item.archivedAt && item.type !== 'personal'),
+    () => visibleSpaces.filter((item) => !item.archivedAt && item.type !== 'personal' && item.type !== 'goal'),
     [visibleSpaces],
   );
   const archived = useMemo(
@@ -413,7 +413,7 @@ export function SpacesPage() {
           </p>
 
           <div className="notice">
-            Your normal personal budgeting does not need a Space. Personal accounts, spending, bills, budgets and savings remain available from Home and the normal money tools.
+            Your normal personal budgeting does not need a Space. Personal accounts, spending, bills, budgets and savings remain available from Home and the normal money tools. Goals created inside a Space also appear in the main Goals page.
           </div>
 
           <button
@@ -733,8 +733,7 @@ function SpaceForm({
           <option value="sme">Business</option>
           <option value="trip">Trip with others</option>
           <option value="household">Household / family</option>
-          <option value="goal">Plan / saving goal</option>
-          <option value="project">Project / group</option>
+<option value="project">Project / group</option>
           <option value="event">Event / group</option>
           <option value="custom">Other shared Space</option>
         </select>
@@ -742,7 +741,11 @@ function SpaceForm({
         <small className="muted">
           {spaceDefaultDescription(type)}
         </small>
-      </label>
+      
+        <small className="muted">
+          Saving toward a target? Create it from Goals instead; it can belong to any Space.
+        </small>
+</label>
 
 
       {!initial && type === 'goal' && (
