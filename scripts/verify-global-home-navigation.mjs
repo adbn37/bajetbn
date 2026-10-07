@@ -138,7 +138,7 @@ const tokens = [
   '<small>Home</small>',
   '<small>Transactions</small>',
   'mobile-bottom-add',
-  '<small>Goals</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ];
 
@@ -168,7 +168,7 @@ check(
     && !nav.includes(
       '<small>Space</small>',
     ),
-  'Mobile navigation is Home | Transactions | + | Goals | More.',
+  'Mobile navigation is Home | Transactions | + | Spaces | More.',
 );
 
 check(
@@ -176,9 +176,18 @@ check(
     "selectHomeMode('business')",
   )
     && dashboard.includes(
+      "openHomeSpacePicker('business')",
+    )
+    && dashboard.includes(
+      'data-home-overview-trigger-v116="business"',
+    )
+    && dashboard.includes(
+      'data-home-space-picker-trigger-v116="business"',
+    )
+    && dashboard.includes(
       "homeMode === 'business'",
     ),
-  'Business remains a Home-level mode instead of a dedicated bottom-nav destination.',
+  'Business overview and Business Space picker remain separate Home-level actions.',
 );
 
 check(
@@ -197,9 +206,9 @@ check(
 
 check(
   nav.includes(
-    'to="/goals"',
+    'to="/spaces"',
   ),
-  'Goals is the fourth mobile destination.',
+  'Spaces is the fourth mobile destination.',
 );
 
 check(
@@ -219,7 +228,7 @@ check(
     && morePage.includes(
       'to="/spaces"',
     ),
-  'Spaces remain reachable from More without occupying a bottom-nav slot.',
+  'More retains the detailed Space launcher and management alongside bottom-nav Spaces.',
 );
 
 check(

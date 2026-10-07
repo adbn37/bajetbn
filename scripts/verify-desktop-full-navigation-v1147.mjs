@@ -162,7 +162,7 @@ for (const token of [
   '<small>Home</small>',
   '<small>Transactions</small>',
   'mobile-bottom-add',
-  '<small>Goals</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ]) {
   check(
@@ -182,9 +182,9 @@ check(
 
 check(
   mobileShell.includes(
-    'to="/goals"',
+    'to="/spaces"',
   ),
-  'Mobile Goals route remains available.',
+  'Mobile Spaces route remains available.',
 );
 
 check(
@@ -199,9 +199,9 @@ check(
     '<small>Business</small>',
   )
     && !mobileShell.includes(
-      '<small>Space</small>',
+      '<small>Goals</small>',
     ),
-  'Business and Space are removed from dedicated mobile bottom-nav slots.',
+  'Business and Goals are not fixed mobile bottom-nav slots.',
 );
 
 check(

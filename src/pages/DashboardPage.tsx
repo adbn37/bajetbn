@@ -168,6 +168,121 @@ function homeActivityMeta(
     .join(' · ');
 }
 
+type HomeShortcutId =
+  | 'trips'
+  | 'bills'
+  | 'receipt'
+  | 'budgets'
+  | 'recurring'
+  | 'subscription'
+  | 'accounts'
+  | 'reports'
+  | 'debt'
+  | 'goals'
+  | 'inbox'
+  | `space:${string}`;
+
+type HomeShortcutChoice = {
+  id: HomeShortcutId;
+  label: string;
+  description: string;
+  icon: string;
+  route?: string;
+  action?: 'trips' | 'receipt';
+};
+
+const HOME_SHORTCUT_DEFAULTS: HomeShortcutId[] = [
+  'trips',
+  'bills',
+  'goals',
+  'budgets',
+  'recurring',
+  'subscription',
+];
+
+const HOME_SHORTCUT_CHOICES: HomeShortcutChoice[] = [
+  {
+    id: 'trips',
+    label: 'Trips',
+    description: 'All trips',
+    icon: 'T',
+    action: 'trips',
+  },
+  {
+    id: 'bills',
+    label: 'Bills',
+    description: 'Manage',
+    icon: 'B',
+    route: '/bills',
+  },
+  {
+    id: 'receipt',
+    label: 'Receipt',
+    description: 'Add or scan',
+    icon: 'R',
+    action: 'receipt',
+  },
+  {
+    id: 'budgets',
+    label: 'Budgets',
+    description: 'Plan spending',
+    icon: 'B',
+    route: '/budgets',
+  },
+  {
+    id: 'recurring',
+    label: 'Recurring',
+    description: 'Automate',
+    icon: '↻',
+    route: '/recurring',
+  },
+  {
+    id: 'subscription',
+    label: 'Subscription',
+    description: 'Account plan',
+    icon: 'P',
+    route: '/subscription',
+  },
+  {
+    id: 'accounts',
+    label: 'Accounts',
+    description: 'Manage',
+    icon: 'A',
+    route: '/accounts',
+  },
+  {
+    id: 'reports',
+    label: 'Reports',
+    description: 'Insights',
+    icon: 'R',
+    route: '/reports',
+  },
+  {
+    id: 'debt',
+    label: 'Debt',
+    description: 'Track',
+    icon: 'D',
+    route: '/debt',
+  },
+  {
+    id: 'goals',
+    label: 'Goals',
+    description: 'Plan & save',
+    icon: 'G',
+    route: '/goals',
+  },
+  {
+    id: 'inbox',
+    label: 'Needs Attention',
+    description: 'Inbox',
+    icon: '!',
+    route: '/inbox',
+  },
+];
+
+const HOME_SHORTCUT_STORAGE_PREFIX =
+  'bajetbn.homeShortcuts.v116.';
+
 export function DashboardPage() {
   const { user, profile } = useAuth();
   const {
@@ -231,6 +346,35 @@ export function DashboardPage() {
     showMoneyActivity,
     setShowMoneyActivity,
   ] = useState(false);
+
+  const [
+    homeSpacePicker,
+    setHomeSpacePicker,
+  ] = useState<'personal' | 'business' | null>(null);
+
+  const [
+    showTripPicker,
+    setShowTripPicker,
+  ] = useState(false);
+
+  const [
+    showShortcutEditor,
+    setShowShortcutEditor,
+  ] = useState(false);
+
+  const [
+    homeShortcutIds,
+    setHomeShortcutIds,
+  ] = useState<HomeShortcutId[]>(
+    [...HOME_SHORTCUT_DEFAULTS],
+  );
+
+  const [
+    homeShortcutDraft,
+    setHomeShortcutDraft,
+  ] = useState<HomeShortcutId[]>(
+    [...HOME_SHORTCUT_DEFAULTS],
+  );
 
   const [
     quickInitialType,
@@ -436,11 +580,50 @@ export function DashboardPage() {
   const quickPersonalSpaces =
     useMemo(
       () =>
-        activeSpaces.filter(
-          (item) =>
-            item.type !== 'sme'
-            && item.type !== 'goal',
-        ),
+        activeSpaces
+          .filter(
+            (item) =>
+              item.type !== 'sme'
+              && item.type !== 'goal',
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(b.name),
+          ),
+      [activeSpaces],
+    );
+
+  // The Personal Home picker is for Personal and Household Spaces.
+  // Keep Trip Spaces available separately in the Trips picker and money entry.
+  const personalPickerSpaces =
+    useMemo(
+      () =>
+        quickPersonalSpaces
+          .filter(
+            (item) => item.type !== 'trip',
+          )
+          .sort((a, b) => {
+            if (a.type === 'personal') {
+              return b.type === 'personal' ? 0 : -1;
+            }
+            if (b.type === 'personal') return 1;
+            return a.name.localeCompare(b.name);
+          }),
+      [quickPersonalSpaces],
+    );
+
+  const businessSpaces =
+    useMemo(
+      () =>
+        activeSpaces
+          .filter(
+            (item) =>
+              item.type === 'sme',
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(b.name),
+          ),
       [activeSpaces],
     );
 
@@ -457,8 +640,118 @@ export function DashboardPage() {
       [activeSpaces],
     );
 
+  const homeShortcutChoices =
+    useMemo<HomeShortcutChoice[]>(
+      () => [
+        ...HOME_SHORTCUT_CHOICES,
+        ...activeSpaces
+          .filter(
+            (space) =>
+              space.type !== 'goal'
+              && space.type !== 'personal',
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(b.name),
+          )
+          .map((space) => ({
+            id: `space:${space.id}` as HomeShortcutId,
+            label: space.name,
+            description:
+              space.type === 'sme'
+                ? 'Business'
+                : space.type === 'household'
+                  ? 'Household'
+                  : space.type === 'trip'
+                    ? 'Trip'
+                    : 'Space',
+            icon:
+              space.type === 'sme'
+                ? 'B'
+                : space.type === 'household'
+                  ? 'H'
+                  : space.type === 'trip'
+                    ? 'T'
+                    : 'S',
+            route:
+              space.type === 'sme'
+                ? '/business/' + space.id
+                : '/spaces/' + space.id,
+          })),
+      ],
+      [activeSpaces],
+    );
+
+  const resolvedHomeShortcuts =
+    useMemo(
+      () =>
+        homeShortcutIds.map(
+          (shortcutId, index) =>
+            homeShortcutChoices.find(
+              (choice) =>
+                choice.id === shortcutId,
+            )
+            || homeShortcutChoices.find(
+              (choice) =>
+                choice.id
+                  === HOME_SHORTCUT_DEFAULTS[index],
+            )
+            || HOME_SHORTCUT_CHOICES[index],
+        ),
+      [
+        homeShortcutChoices,
+        homeShortcutIds,
+      ],
+    );
+
   useEffect(() => {
-    if (!user || homeMode !== 'personal') return;
+    if (!user) {
+      setHomeShortcutIds(
+        [...HOME_SHORTCUT_DEFAULTS],
+      );
+      setHomeShortcutDraft(
+        [...HOME_SHORTCUT_DEFAULTS],
+      );
+      return;
+    }
+
+    try {
+      const raw =
+        window.localStorage.getItem(
+          HOME_SHORTCUT_STORAGE_PREFIX
+            + user.uid,
+        );
+
+      const parsed =
+        raw
+          ? JSON.parse(raw)
+          : null;
+
+      if (
+        Array.isArray(parsed)
+        && parsed.length
+          === HOME_SHORTCUT_DEFAULTS.length
+        && parsed.every(
+          (item) =>
+            typeof item === 'string',
+        )
+      ) {
+        setHomeShortcutIds(
+          parsed as HomeShortcutId[],
+        );
+        return;
+      }
+    } catch {
+      // Fall back to defaults if local shortcut preferences are invalid.
+    }
+
+    setHomeShortcutIds(
+      [...HOME_SHORTCUT_DEFAULTS],
+    );
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
 
     let cancelled = false;
 
@@ -479,7 +772,7 @@ export function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [homeMode, user]);
+  }, [user]);
 
   const allCategories =
     useMemo(
@@ -1160,6 +1453,54 @@ export function DashboardPage() {
     );
   }
 
+  function openHomeSpacePicker(
+    nextMode: 'personal' | 'business',
+  ) {
+    setHomeSpacePicker(nextMode);
+  }
+
+  function openShortcutEditor() {
+    setHomeShortcutDraft(
+      homeShortcutIds.map(
+        (shortcutId, index) =>
+          homeShortcutChoices.some(
+            (choice) =>
+              choice.id === shortcutId,
+          )
+            ? shortcutId
+            : HOME_SHORTCUT_DEFAULTS[index],
+      ),
+    );
+
+    setShowShortcutEditor(true);
+  }
+
+  function saveShortcutEditor() {
+    const next =
+      homeShortcutDraft.length
+        === HOME_SHORTCUT_DEFAULTS.length
+        ? [...homeShortcutDraft]
+        : [...HOME_SHORTCUT_DEFAULTS];
+
+    setHomeShortcutIds(next);
+
+    if (user) {
+      window.localStorage.setItem(
+        HOME_SHORTCUT_STORAGE_PREFIX
+          + user.uid,
+        JSON.stringify(next),
+      );
+    }
+
+    setShowShortcutEditor(false);
+  }
+
+  function resetShortcutEditor() {
+    setHomeShortcutDraft(
+      [...HOME_SHORTCUT_DEFAULTS],
+    );
+  }
+
   const firstName =
     profile?.fullName
       ?.trim()
@@ -1184,52 +1525,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="bajetbn-home-header-actions">
-          <Link
-            to="/search"
-            aria-label="Search BajetBN"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle
-                cx="11"
-                cy="11"
-                r="6"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <path
-                d="m16 16 4 4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-          </Link>
 
-          <Link
-            to="/notifications"
-            aria-label="Open notifications"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M6.5 9.5a5.5 5.5 0 0 1 11 0v4.1l1.5 2.4H5l1.5-2.4V9.5Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M10 19h4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-              />
-            </svg>
-          </Link>
-        </div>
       </header>
 
       {welcomeFromOnboarding && (
@@ -1259,39 +1555,87 @@ export function DashboardPage() {
         data-home-mode-switch-v115
         aria-label="Home view"
       >
-        <button
-          type="button"
+        <div
           className={
-            homeMode === 'personal'
-              ? 'active'
-              : ''
-          }
-          aria-pressed={
-            homeMode === 'personal'
-          }
-          onClick={() =>
-            selectHomeMode('personal')
+            'bajetbn-home-mode-option-v116 '
+            + (
+              homeMode === 'personal'
+                ? 'active'
+                : ''
+            )
           }
         >
-          Personal
-        </button>
+          <button
+            type="button"
+            className="bajetbn-home-mode-overview-v116"
+            aria-pressed={
+              homeMode === 'personal'
+            }
+            data-home-overview-trigger-v116="personal"
+            onClick={() =>
+              selectHomeMode('personal')
+            }
+          >
+            Personal
+          </button>
 
-        <button
-          type="button"
+          <button
+            type="button"
+            className="bajetbn-home-mode-picker-v116"
+            aria-label="Choose Personal Space"
+            aria-haspopup="dialog"
+            aria-expanded={
+              homeSpacePicker === 'personal'
+            }
+            data-home-space-picker-trigger-v116="personal"
+            onClick={() =>
+              openHomeSpacePicker('personal')
+            }
+          >
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
+
+        <div
           className={
-            homeMode === 'business'
-              ? 'active'
-              : ''
-          }
-          aria-pressed={
-            homeMode === 'business'
-          }
-          onClick={() =>
-            selectHomeMode('business')
+            'bajetbn-home-mode-option-v116 '
+            + (
+              homeMode === 'business'
+                ? 'active'
+                : ''
+            )
           }
         >
-          Business
-        </button>
+          <button
+            type="button"
+            className="bajetbn-home-mode-overview-v116"
+            aria-pressed={
+              homeMode === 'business'
+            }
+            data-home-overview-trigger-v116="business"
+            onClick={() =>
+              selectHomeMode('business')
+            }
+          >
+            Business
+          </button>
+
+          <button
+            type="button"
+            className="bajetbn-home-mode-picker-v116"
+            aria-label="Choose Business Space"
+            aria-haspopup="dialog"
+            aria-expanded={
+              homeSpacePicker === 'business'
+            }
+            data-home-space-picker-trigger-v116="business"
+            onClick={() =>
+              openHomeSpacePicker('business')
+            }
+          >
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
       </nav>
 
       {homeMode === 'personal' ? (
@@ -1474,70 +1818,113 @@ export function DashboardPage() {
         </section>
       )}
 
-      <section className="home-v110-shortcuts bajetbn-reference-actions bajetbn-reference-actions-four">
-        <Link to="/goals">
-          <span aria-hidden="true">G</span>
-          <strong>Goals</strong>
-          <small>Plans & debt</small>
-        </Link>
+      <section
+        className="home-shortcut-hub-v116"
+        data-home-shortcut-hub-v116
+      >
+        <div className="home-shortcut-heading-v116">
+          <strong>Shortcuts</strong>
 
-        <Link
-          to="/more"
+          <button
+            type="button"
+            className="text-button"
+            onClick={openShortcutEditor}
+          >
+            Edit shortcuts
+          </button>
+        </div>
+
+        <div
+          className="home-v110-shortcuts bajetbn-reference-actions bajetbn-reference-actions-six"
+          data-home-shortcut-grid-v116
         >
-          <span aria-hidden="true">T</span>
-          <strong>Trips</strong>
-          <small>
-            {personalTripSpaces.length > 0
-              ? personalTripSpaces.length + ' active'
-              : 'Plan a trip'}
-          </small>
-        </Link>
+          {resolvedHomeShortcuts.map(
+            (shortcut, index) => {
+              const description =
+                shortcut.id === 'trips'
+                  ? (
+                    personalTripSpaces.length > 0
+                      ? personalTripSpaces.length
+                        + ' active'
+                      : 'No active trips'
+                  )
+                  : shortcut.description;
 
-        <Link to="/bills">
-          <span aria-hidden="true">B</span>
-          <strong>Bills</strong>
-          <small>Manage</small>
-        </Link>
+              const content = (
+                <>
+                  <span aria-hidden="true">
+                    {shortcut.icon}
+                  </span>
+                  <strong>
+                    {shortcut.label}
+                  </strong>
+                  <small>
+                    {description}
+                  </small>
+                </>
+              );
 
-        <button
-          type="button"
-          onClick={() =>
-            void openQuickActivity('receipt')
-          }
-        >
-          <span aria-hidden="true">R</span>
-          <strong>Scan</strong>
-          <small>Receipt</small>
-        </button>
+              if (
+                shortcut.action
+                  === 'trips'
+              ) {
+                return (
+                  <button
+                    type="button"
+                    data-trip-picker-v116
+                    key={
+                      shortcut.id
+                      + '-'
+                      + index
+                    }
+                    onClick={() =>
+                      setShowTripPicker(true)
+                    }
+                  >
+                    {content}
+                  </button>
+                );
+              }
+
+              if (
+                shortcut.action
+                  === 'receipt'
+              ) {
+                return (
+                  <button
+                    type="button"
+                    key={
+                      shortcut.id
+                      + '-'
+                      + index
+                    }
+                    onClick={() =>
+                      void openQuickActivity(
+                        'receipt',
+                      )
+                    }
+                  >
+                    {content}
+                  </button>
+                );
+              }
+
+              return (
+                <Link
+                  to={shortcut.route || '/'}
+                  key={
+                    shortcut.id
+                    + '-'
+                    + index
+                  }
+                >
+                  {content}
+                </Link>
+              );
+            },
+          )}
+        </div>
       </section>
-
-      {personalTripSpaces.length > 0 && (
-        <section className="personal-trip-shortcuts-v116">
-          <div className="bajetbn-home-section-title">
-            <h2>Trips</h2>
-            <Link to="/more">More trips</Link>
-          </div>
-
-          <div className="personal-trip-shortcut-rail-v116">
-            {personalTripSpaces.slice(0, 4).map((trip) => (
-              <Link
-                to={'/spaces/' + trip.id}
-                className="personal-trip-shortcut-v116"
-                key={trip.id}
-              >
-                <SpaceAvatar space={trip} />
-
-                <span>
-                  <strong>{trip.name}</strong>
-                  <small>Trip</small>
-                </span>
-
-                <b aria-hidden="true">›</b>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
 
       <section className="home-v110-section bajetbn-home-recent-section">
         <div className="bajetbn-home-section-title">
@@ -1710,22 +2097,7 @@ export function DashboardPage() {
         )}
       </section>
 
-      <section className="home-v110-secondary-grid">
-        <Link to="/budgets">
-          <span>Budgets</span>
-          <strong>Open</strong>
-        </Link>
-
-        <Link to="/goals">
-          <span>Goals</span>
-          <strong>Open</strong>
-        </Link>
-
-        <Link to="/subscription">
-          <span>Your plan</span>
-          <strong>View</strong>
-        </Link>
-
+      <section className="home-v110-secondary-grid bajetbn-desktop-secondary-only-v116">
         <Link
           to="/bills"
           className="bajetbn-desktop-side-extra"
@@ -1944,6 +2316,258 @@ initialType={quickInitialType}
           currency={currency}
         />
       )}
+
+      {homeSpacePicker && (
+        <Modal
+          title={
+            homeSpacePicker === 'personal'
+              ? 'Personal Spaces'
+              : 'Businesses'
+          }
+          onClose={() =>
+            setHomeSpacePicker(null)
+          }
+        >
+          <div
+            className="home-space-picker-list-v116"
+            data-home-space-picker-v116={homeSpacePicker}
+          >
+            {homeSpacePicker === 'personal' ? (
+              personalPickerSpaces.length > 0 ? (
+                personalPickerSpaces.map((space) =>
+                  space.type === 'personal' ? (
+                    <button
+                      type="button"
+                      className="home-space-picker-row-v116"
+                      key={space.id}
+                      onClick={() => {
+                        setHomeSpacePicker(null);
+                        selectHomeMode('personal');
+                      }}
+                    >
+                      <SpaceAvatar space={space} />
+                      <span>
+                        <strong>Personal</strong>
+                        <small>Personal</small>
+                      </span>
+                      <b aria-hidden="true">›</b>
+                    </button>
+                  ) : (
+                    <Link
+                      to={'/spaces/' + space.id}
+                      className="home-space-picker-row-v116"
+                      key={space.id}
+                      onClick={() =>
+                        setHomeSpacePicker(null)
+                      }
+                    >
+                      <SpaceAvatar space={space} />
+                      <span>
+                        <strong>{space.name}</strong>
+                        <small>
+                          {space.type === 'household'
+                            ? 'Household'
+                            : 'Space'}
+                        </small>
+                      </span>
+                      <b aria-hidden="true">›</b>
+                    </Link>
+                  ),
+                )
+              ) : (
+                <p className="muted">
+                  No Personal Spaces available.
+                </p>
+              )
+            ) : businessSpaces.length > 0 ? (
+              businessSpaces.map((space) => (
+                <Link
+                  to={'/business/' + space.id}
+                  className="home-space-picker-row-v116"
+                  key={space.id}
+                  onClick={() =>
+                    setHomeSpacePicker(null)
+                  }
+                >
+                  <SpaceAvatar space={space} />
+                  <span>
+                    <strong>{space.name}</strong>
+                    <small>Business</small>
+                  </span>
+                  <b aria-hidden="true">›</b>
+                </Link>
+              ))
+            ) : (
+              <p className="muted">
+                No Business Spaces available.
+              </p>
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() =>
+                setHomeSpacePicker(null)
+              }
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showShortcutEditor && (
+        <Modal
+          title="Edit Home shortcuts"
+          onClose={() =>
+            setShowShortcutEditor(false)
+          }
+        >
+          <div
+            className="home-shortcut-editor-v116"
+            data-home-shortcut-editor-v116
+          >
+            <p className="muted">
+              Choose the six shortcuts shown on Personal Home.
+              Your choices are saved on this device.
+            </p>
+
+            {homeShortcutDraft.map(
+              (shortcutId, index) => (
+                <label
+                  className="home-shortcut-editor-row-v116"
+                  key={'shortcut-slot-' + index}
+                >
+                  <span>
+                    Slot {index + 1}
+                  </span>
+
+                  <select
+                    value={shortcutId}
+                    onChange={(event) =>
+                      setHomeShortcutDraft(
+                        (current) =>
+                          current.map(
+                            (item, itemIndex) =>
+                              itemIndex === index
+                                ? event.target.value as HomeShortcutId
+                                : item,
+                          ),
+                      )
+                    }
+                  >
+                    {homeShortcutChoices.map(
+                      (choice) => (
+                        <option
+                          value={choice.id}
+                          key={choice.id}
+                          disabled={
+                            homeShortcutDraft.some(
+                              (
+                                selected,
+                                selectedIndex,
+                              ) =>
+                                selectedIndex
+                                  !== index
+                                && selected
+                                  === choice.id,
+                            )
+                          }
+                        >
+                          {choice.label}
+                          {' · '}
+                          {choice.description}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+              ),
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button ghost"
+              onClick={resetShortcutEditor}
+            >
+              Reset defaults
+            </button>
+
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() =>
+                setShowShortcutEditor(false)
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              className="button primary"
+              onClick={saveShortcutEditor}
+            >
+              Save shortcuts
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showTripPicker && (
+        <Modal
+          title="Trips"
+          onClose={() =>
+            setShowTripPicker(false)
+          }
+        >
+          <div
+            className="home-space-picker-list-v116"
+            data-trip-picker-list-v116
+          >
+            {personalTripSpaces.length > 0 ? (
+              personalTripSpaces.map((trip) => (
+                <Link
+                  to={'/spaces/' + trip.id}
+                  className="home-space-picker-row-v116"
+                  key={trip.id}
+                  onClick={() =>
+                    setShowTripPicker(false)
+                  }
+                >
+                  <SpaceAvatar space={trip} />
+                  <span>
+                    <strong>{trip.name}</strong>
+                    <small>Trip</small>
+                  </span>
+                  <b aria-hidden="true">›</b>
+                </Link>
+              ))
+            ) : (
+              <p className="muted">
+                No active trips yet.
+              </p>
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() =>
+                setShowTripPicker(false)
+              }
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
+
 
     </main>
   );

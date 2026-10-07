@@ -99,14 +99,14 @@ check(
 const start = shell.indexOf('<nav className="mobile-bottom-nav"');
 const end = shell.indexOf('</nav>', start);
 const mobile = start >= 0 && end > start ? shell.slice(start, end) : '';
-for (const token of ['<small>Home</small>', '<small>Transactions</small>', 'mobile-bottom-add', '<small>Goals</small>', '<small>More</small>']) {
+for (const token of ['<small>Home</small>', '<small>Transactions</small>', 'mobile-bottom-add', '<small>Spaces</small>', '<small>More</small>']) {
   check(mobile.includes(token), `Mobile navigation missing ${token}.`);
 }
 check(mobile.includes('to="/transactions"'), 'Mobile Transactions destination is missing.');
 check(mobile.includes("navigate('/?quick=1')"), 'Mobile Add action is missing.');
-check(mobile.includes('to="/goals"'), 'Mobile Goals destination is missing.');
+check(mobile.includes('to="/spaces"'), 'Mobile Spaces destination is missing.');
 check(mobile.includes('to="/more"'), 'Mobile More destination is missing.');
-check(!mobile.includes('<small>Business</small>') && !mobile.includes('<small>Space</small>'), 'Business and Space are no longer dedicated mobile bottom-nav destinations.');
+check(!mobile.includes('<small>Business</small>') && !mobile.includes('<small>Goals</small>'), 'Business and Goals do not occupy fixed mobile bottom-nav slots.');
 check(
   morePage.includes('more-space-shortcuts-v116')
     && morePage.includes('Manage Spaces')

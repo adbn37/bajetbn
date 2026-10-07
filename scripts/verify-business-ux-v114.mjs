@@ -306,7 +306,7 @@ const tokens = [
   '<small>Home</small>',
   '<small>Transactions</small>',
   'mobile-bottom-add',
-  '<small>Goals</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ];
 
@@ -334,15 +334,15 @@ check(
       '<small>Business</small>',
     )
     && !nav.includes(
-      '<small>Space</small>',
+      '<small>Goals</small>',
     )
     && nav.includes(
       'to="/transactions"',
     )
     && nav.includes(
-      'to="/goals"',
+      'to="/spaces"',
     ),
-  'Mobile navigation order is Home | Transactions | + | Goals | More.',
+  'Mobile navigation order is Home | Transactions | + | Spaces | More.',
 );
 
 check(
@@ -352,10 +352,10 @@ check(
     && !nav.includes(
       '<small>Alerts</small>',
     )
-    && !nav.includes(
+    && nav.includes(
       'to="/spaces"',
     ),
-  'Spaces are accessed from More instead of a dedicated mobile bottom-navigation slot.',
+  'Spaces has a dedicated mobile bottom-navigation slot while More remains available.',
 );
 
 check(
@@ -491,7 +491,7 @@ console.log(
   'Business terminology: COMPLETE',
 );
 console.log(
-  'Mobile layout       : Home | Transactions | + | Goals | More',
+  'Mobile layout       : Home | Transactions | + | Spaces | More',
 );
 console.log(
   'Mobile Alerts       : HEADER',

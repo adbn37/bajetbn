@@ -116,9 +116,9 @@ const addIndex =
     'mobile-bottom-add',
   );
 
-const goalsIndex =
+const spacesIndex =
   mobileNavigation.indexOf(
-    '<small>Goals</small>',
+    '<small>Spaces</small>',
   );
 
 const moreIndex =
@@ -130,9 +130,9 @@ need(
   homeIndex >= 0
     && homeIndex < transactionsIndex
     && transactionsIndex < addIndex
-    && addIndex < goalsIndex
-    && goalsIndex < moreIndex,
-  'Mobile bottom navigation must remain Home, Transactions, Add, Goals, More.',
+    && addIndex < spacesIndex
+    && spacesIndex < moreIndex,
+  'Mobile bottom navigation must remain Home, Transactions, Add, Spaces, More.',
 );
 
 need(
@@ -140,9 +140,9 @@ need(
     '<small>Business</small>',
   )
     && !mobileNavigation.includes(
-      '<small>Space</small>',
+      '<small>Goals</small>',
     ),
-  'Business and Space must not occupy dedicated mobile bottom-navigation slots.',
+  'Business and Goals must not occupy fixed mobile bottom-navigation slots.',
 );
 
 need(
@@ -161,9 +161,9 @@ need(
 
 need(
   mobileNavigation.includes(
-    'to="/goals"',
+    'to="/spaces"',
   ),
-  'Mobile Goals destination is missing.',
+  'Mobile Spaces destination is missing.',
 );
 
 need(

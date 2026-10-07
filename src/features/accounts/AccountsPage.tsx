@@ -975,7 +975,7 @@ function AccountList({
           ? <small className="account-secondary-detail">Opening: {formatMoney(account.openingBalanceMinor, account.currency)}</small>
           : <small className="account-secondary-detail">The Business owner controls balance visibility.</small>}
       </div>
-      <div className="account-actions">
+      <div className="account-actions account-actions-v116">
         {canViewLedger && (
           <Link
             className="text-button account-view-activity"
@@ -997,33 +997,69 @@ function AccountList({
             View activity
           </Link>
         )}
-        {canManage
-          && account.classification === 'business'
-          && onUnlink
-          && spaceIdOverride
-          && (
-            <button
-              className="text-button"
-              disabled={busyId === account.id}
-              onClick={() =>
-                void onUnlink(account)
-              }
-            >
-              Unlink from Business
-            </button>
-          )}
 
-        {canManage && account.classification === 'business' && (
-          <button className="text-button" onClick={() => onShare(account)}>Share</button>
-        )}
         {canManage && (
-          <button className="text-button" onClick={() => onEdit(account)}>Edit</button>
-        )}
-        {canManage && (
-          <button className="text-button" disabled={busyId === account.id} onClick={() => onClose(account)}>Close</button>
-        )}
-        {canManage && (
-          <button className="text-button danger" disabled={busyId === account.id} onClick={() => onDelete(account)}>Delete</button>
+          <details className="account-more-v116">
+            <summary
+              className="icon-button account-more-summary-v116"
+              aria-label={`More actions for ${account.name}`}
+              title="More actions"
+            >
+              •••
+            </summary>
+
+            <div className="account-more-menu-v116">
+              {account.classification === 'business'
+                && onUnlink
+                && spaceIdOverride
+                && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={busyId === account.id}
+                    onClick={() => void onUnlink(account)}
+                  >
+                    Unlink from Business
+                  </button>
+                )}
+
+              {account.classification === 'business' && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => onShare(account)}
+                >
+                  Share
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => onEdit(account)}
+              >
+                Edit account
+              </button>
+
+              <button
+                type="button"
+                className="text-button"
+                disabled={busyId === account.id}
+                onClick={() => onClose(account)}
+              >
+                Close account
+              </button>
+
+              <button
+                type="button"
+                className="text-button danger"
+                disabled={busyId === account.id}
+                onClick={() => onDelete(account)}
+              >
+                Delete account
+              </button>
+            </div>
+          </details>
         )}
       </div>
     </article>;

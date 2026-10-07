@@ -8,6 +8,7 @@ const businessMoney = read('src/features/business/BusinessMoneyActivityPage.tsx'
 const dashboard = read('src/pages/DashboardPage.tsx');
 const more = read('src/pages/MorePage.tsx');
 const goals = read('src/features/goals/GoalsPage.tsx');
+const spacesPage = read('src/features/spaces/SpacesPage.tsx');
 const hub = read('src/features/spaces/SpaceActionHub.tsx');
 const details = read('src/features/spaces/SpaceDetailsPage.tsx');
 
@@ -70,25 +71,124 @@ check(
 );
 
 check(
-  more.includes("{ to: '/goals', label: 'Goals, plans & debt' }")
-    && !more.includes("{ to: '/debt', label: 'Debt' }")
-    && more.includes("space.type !== 'goal'"),
-  'More routes planning discovery through Goals and keeps Plan Spaces out of the general launcher.',
+  more.includes("{ to: '/goals', label: 'Goals', icon: 'goals' }")
+    && more.includes("{ to: '/spaces', label: 'Spaces', icon: 'spaces' }")
+    && more.includes('more-shortcut-grid-v116')
+    && more.includes('function MoreIcon')
+    && more.includes('more-signout-v116')
+    && !more.includes('listSpaces')
+    && !more.includes('<SpaceAvatar'),
+  'More keeps Spaces behind one shortcut and uses polished grid launchers.',
 );
 
 check(
   goals.includes('data-goals-plan-hub-v116')
-    && goals.includes("item.type === 'goal'")
+    && goals.includes('setGoals(nextGoals);')
+    && goals.includes('setContributions(nextContributions);')
+    && goals.includes('visibleGoals')
     && goals.includes('to="/debt"')
-    && goals.includes('<SpaceAvatar space={plan} />'),
-  'Goals surfaces Plan Spaces and Debt planning together.',
+    && !goals.includes('<SpaceAvatar space={plan} />'),
+  'Goals presents personal, Space-owned savings goals and legacy Plan targets in one view.',
 );
 
 check(
-  dashboard.includes('<strong>Goals</strong>')
-    && dashboard.includes('<small>Plans & debt</small>')
-    && dashboard.includes("item.type === 'trip'"),
-  'Personal Home keeps Trips separate while Goals communicates Plans and Debt.',
+  spacesPage.includes("item.type !== 'goal'")
+    && !spacesPage.includes('<option value="goal">Plan / saving goal</option>'),
+  'New saving Plans are goals rather than Spaces; existing Plan data remains compatible.',
+);
+
+check(
+  goals.includes("'Plan'") && !goals.includes("'Legacy plan'")
+    && goals.includes("['spaces', 'Space goals']")
+    && goals.includes('goal-card-more-v116')
+    && goals.includes('goals-debt-shortcut-v116')
+    && goals.includes('View plan details →')
+    && !goals.includes('Open Plan workspace'),
+  'Goals mobile UI keeps legacy Plan compatibility while simplifying user-facing actions.',
+);
+
+check(
+  /const\s+HOME_SHORTCUT_DEFAULTS:\s*HomeShortcutId\[\]\s*=\s*\[\s*'trips',\s*'bills',\s*'goals',\s*'budgets',\s*'recurring',\s*'subscription',\s*\]/m.test(dashboard)
+    && dashboard.includes("id: 'receipt'")
+    && dashboard.includes("label: 'Subscription'")
+    && dashboard.includes('data-home-shortcut-grid-v116')
+    && dashboard.includes('data-trip-picker-v116')
+    && dashboard.includes('data-trip-picker-list-v116')
+    && !dashboard.includes('personal-trip-shortcuts-v116')
+    && !dashboard.includes('personal-trip-shortcut-rail-v116')
+    && !dashboard.includes('personalTripSpaces.slice(0, 4)'),
+  'Personal Home defaults to Trips, Bills, Goals, Budgets, Recurring and Subscription; Receipt remains optional.',
+);
+
+check(
+  dashboard.includes('data-home-shortcut-editor-v116')
+    && dashboard.includes('HOME_SHORTCUT_STORAGE_PREFIX')
+    && dashboard.includes('window.localStorage.setItem')
+    && dashboard.includes('homeShortcutDraft')
+    && dashboard.includes("id: 'goals'")
+    && dashboard.includes("id: 'reports'")
+    && dashboard.includes("id: 'debt'")
+    && dashboard.includes('`space:${space.id}`')
+    && dashboard.includes("space.type === 'sme'")
+    && dashboard.includes("'/business/' + space.id")
+    && dashboard.includes("'/spaces/' + space.id"),
+  'Home shortcut editor supports saved custom app and Space destinations.',
+);
+
+check(
+  dashboard.includes('data-home-overview-trigger-v116="personal"')
+    && dashboard.includes('data-home-overview-trigger-v116="business"')
+    && dashboard.includes('data-home-space-picker-trigger-v116="personal"')
+    && dashboard.includes('data-home-space-picker-trigger-v116="business"')
+    && dashboard.includes("selectHomeMode('personal')")
+    && dashboard.includes("selectHomeMode('business')")
+    && dashboard.includes("openHomeSpacePicker('personal')")
+    && dashboard.includes("openHomeSpacePicker('business')")
+    && dashboard.includes('data-home-space-picker-v116={homeSpacePicker}')
+    && dashboard.includes("item.type === 'sme'")
+    && dashboard.includes("to={'/business/' + space.id}")
+    && dashboard.includes("to={'/spaces/' + space.id}"),
+  'Personal and Business labels switch overview while separate arrows open their matching Space pickers.',
+);
+
+check(
+  dashboard.includes(
+    "function openHomeSpacePicker(\n"
+      + "    nextMode: 'personal' | 'business',\n"
+      + "  ) {\n"
+      + "    setHomeSpacePicker(nextMode);\n"
+      + "  }",
+  ),
+  'Opening a Home Space picker does not change the current overview.',
+);
+
+check(
+  dashboard.indexOf('      {homeSpacePicker && (')
+    > dashboard.indexOf('        <GlobalBusinessOverview')
+    && dashboard.indexOf('      {showTripPicker && (')
+    > dashboard.indexOf('        <GlobalBusinessOverview'),
+  'Home Space and Trip pickers render outside the Personal-only branch.',
+);
+
+
+check(
+  (() => {
+    const pickerStart = dashboard.indexOf('const personalPickerSpaces =');
+    const businessStart = dashboard.indexOf('const businessSpaces =', pickerStart);
+    const markupStart = dashboard.indexOf("{homeSpacePicker === 'personal' ? (");
+    const markupEnd = dashboard.indexOf(') : businessSpaces.length > 0 ? (', markupStart);
+
+    return pickerStart !== -1
+      && businessStart > pickerStart
+      && markupStart !== -1
+      && markupEnd > markupStart
+      && dashboard.slice(pickerStart, businessStart).includes("item.type !== 'trip'")
+      && dashboard.slice(markupStart, markupEnd).includes('personalPickerSpaces.map((space)')
+      && !dashboard.slice(markupStart, markupEnd).includes('quickPersonalSpaces.map((space)')
+      && dashboard.includes('personalTripSpaces.map((trip)')
+      && dashboard.includes('spaces={quickPersonalSpaces}');
+  })(),
+  'Trip Spaces appear in Trips, not Personal Spaces, while Personal money entry still supports Trip context.',
 );
 
 if (failures.length) {
@@ -104,6 +204,9 @@ if (failures.length) {
       + ' check(s).',
   );
 }
+
+
+
 
 console.log('');
 console.log('BAJETBN v116 CONTEXT SIMPLIFICATION VERIFICATION PASS');

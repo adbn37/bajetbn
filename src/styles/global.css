@@ -22364,3 +22364,753 @@ select.trip-sheet-cell-input {
     font-size: .62rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V116 HOME SPACE PICKERS
+   Personal / Business tabs open their Spaces.
+   Trips shortcut opens all active Trip Spaces.
+   ========================================================== */
+
+.bajetbn-reference-actions-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.bajetbn-home-mode-option-v116 {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 12px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.bajetbn-home-mode-option-v116.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.bajetbn-home-mode-switch-v115
+.bajetbn-home-mode-option-v116
+> button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+
+.bajetbn-home-mode-overview-v116 {
+  flex: 1 1 auto;
+  padding-inline: .75rem .25rem;
+}
+
+.bajetbn-home-mode-picker-v116 {
+  flex: 0 0 42px;
+  width: 42px;
+  padding: 0;
+  border-left: 1px solid color-mix(
+    in srgb,
+    var(--accent) 28%,
+    var(--border)
+  ) !important;
+  background: color-mix(
+    in srgb,
+    var(--accent) 7%,
+    transparent
+  ) !important;
+}
+
+.bajetbn-home-mode-option-v116.active
+.bajetbn-home-mode-picker-v116 {
+  background: color-mix(
+    in srgb,
+    var(--accent) 14%,
+    transparent
+  ) !important;
+}
+
+.bajetbn-home-mode-picker-v116 span {
+  font-size: .76rem;
+  line-height: 1;
+  opacity: .8;
+}
+
+.bajetbn-home-mode-picker-v116:hover,
+.bajetbn-home-mode-picker-v116:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.home-space-picker-list-v116 {
+  display: grid;
+  gap: .55rem;
+}
+
+.home-space-picker-row-v116 {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .65rem;
+  min-height: 64px;
+  padding: .65rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.home-space-picker-row-v116:hover,
+.home-space-picker-row-v116:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+}
+
+.home-space-picker-row-v116 .space-avatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+}
+
+.home-space-picker-row-v116 > span {
+  min-width: 0;
+}
+
+.home-space-picker-row-v116 strong,
+.home-space-picker-row-v116 small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-space-picker-row-v116 small {
+  margin-top: .12rem;
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.home-space-picker-row-v116 > b {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+@media (max-width: 520px) {
+  .bajetbn-reference-actions-three {
+    gap: .55rem;
+  }
+
+  .bajetbn-reference-actions-three > a,
+  .bajetbn-reference-actions-three > button {
+    min-width: 0;
+    padding-inline: .45rem;
+  }
+}
+
+
+/* ==========================================================
+   BAJETBN V116 CUSTOM HOME SHORTCUT GRID
+   Six user-configurable Personal Home slots in a 3-column grid.
+   ========================================================== */
+
+.home-shortcut-hub-v116 {
+  margin: 1rem 0 1.25rem;
+}
+
+.home-shortcut-heading-v116 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .55rem;
+}
+
+.home-shortcut-heading-v116 > strong {
+  font-size: .82rem;
+}
+
+.home-shortcut-heading-v116 .text-button {
+  font-size: .72rem;
+}
+
+.bajetbn-reference-actions-six {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  margin: 0 !important;
+}
+
+.home-shortcut-editor-v116 {
+  display: grid;
+  gap: .7rem;
+}
+
+.home-shortcut-editor-v116 > p {
+  margin: 0 0 .15rem;
+}
+
+.home-shortcut-editor-row-v116 {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: .7rem;
+}
+
+.home-shortcut-editor-row-v116 > span {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.home-shortcut-editor-row-v116 select {
+  width: 100%;
+  min-width: 0;
+}
+
+.bajetbn-desktop-secondary-only-v116 {
+  display: none;
+}
+
+@media (min-width: 1240px) {
+  .bajetbn-desktop-secondary-only-v116 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .bajetbn-reference-actions-six {
+    gap: .55rem !important;
+  }
+
+  .home-shortcut-editor-row-v116 {
+    grid-template-columns: 1fr;
+    gap: .3rem;
+  }
+}
+
+
+/* BAJETBN V116 GOALS CONSOLIDATED MOBILE REFINEMENT */
+.goals-filter-row-v116 {
+  margin: 1rem 0;
+}
+
+.goal-plan-details-link-v116 {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: .2rem;
+}
+
+.goal-card-primary-actions-v116 {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  width: 100%;
+}
+
+.goal-card-more-v116 {
+  position: relative;
+  margin-left: auto;
+}
+
+.goal-card-more-v116 > summary {
+  display: grid;
+  place-items: center;
+  list-style: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  letter-spacing: .08em;
+}
+
+.goal-card-more-v116 > summary::-webkit-details-marker {
+  display: none;
+}
+
+.goal-card-more-menu-v116 {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + .5rem);
+  z-index: 15;
+  min-width: 175px;
+  padding: .45rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .2rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .32);
+}
+
+.goal-card-more-menu-v116 .text-button {
+  width: 100%;
+  padding: .65rem .7rem;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.goal-card-more-menu-v116 .text-button:hover {
+  background: var(--surface-2);
+}
+
+.goals-debt-shortcut-v116 {
+  margin-top: 1rem;
+  padding: .9rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(11, 21, 34, .62);
+  color: var(--text);
+}
+
+.goals-debt-shortcut-v116 span {
+  min-width: 0;
+}
+
+.goals-debt-shortcut-v116 strong,
+.goals-debt-shortcut-v116 small {
+  display: block;
+}
+
+.goals-debt-shortcut-v116 small {
+  margin-top: .22rem;
+  color: var(--muted);
+}
+
+.goals-debt-shortcut-v116 b {
+  color: var(--accent-2);
+  font-size: 1.15rem;
+}
+
+@media (max-width: 780px) {
+  .goals-filter-row-v116 {
+    gap: .45rem;
+  }
+
+  .goals-filter-row-v116 .button {
+    min-height: 38px;
+    padding: .5rem .75rem;
+  }
+
+  .goal-card-primary-actions-v116 {
+    flex-wrap: nowrap;
+  }
+
+  .goal-card-primary-actions-v116 > .button {
+    flex: 1 1 auto;
+  }
+
+  .goal-card-more-v116 {
+    flex: 0 0 auto;
+  }
+}
+
+
+/* BAJETBN MOBILE CONSISTENCY V8 */
+
+.account-actions-v116 {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .4rem;
+}
+
+.account-more-v116 {
+  position: relative;
+}
+
+.account-more-summary-v116 {
+  display: grid;
+  place-items: center;
+  list-style: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  letter-spacing: .08em;
+}
+
+.account-more-summary-v116::-webkit-details-marker {
+  display: none;
+}
+
+.account-more-menu-v116 {
+  position: absolute;
+  z-index: 60;
+  right: 0;
+  top: calc(100% + .45rem);
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .15rem;
+  padding: .45rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .38);
+}
+
+.account-more-menu-v116 .text-button {
+  width: 100%;
+  padding: .65rem .7rem;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.account-more-menu-v116 .text-button:hover {
+  background: var(--surface-2);
+}
+
+@media (max-width: 780px) {
+  html {
+    scroll-padding-bottom:
+      calc(11rem + env(safe-area-inset-bottom));
+  }
+
+  .app-main {
+    padding-bottom:
+      calc(6.5rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-main > main,
+  .app-main > .page {
+    padding-bottom:
+      calc(11rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .account-actions-v116 {
+    grid-column: 2;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .account-view-activity {
+    flex: 1 1 auto;
+  }
+
+  .account-more-v116 {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+}
+
+/* Trip Overview: turn only the two overview tables into stacked mobile cards.
+   Other Trip spreadsheets keep their existing horizontal worksheet behaviour. */
+@media (max-width: 680px) {
+  .trip-sheet-scroll:has(> .trip-overview-money-table),
+  .trip-sheet-scroll:has(> .trip-overview-team-table) {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .trip-overview-money-table,
+  .trip-overview-team-table {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+    border: 0;
+  }
+
+  .trip-overview-money-table thead,
+  .trip-overview-team-table thead {
+    display: none;
+  }
+
+  .trip-overview-money-table tbody,
+  .trip-overview-team-table tbody {
+    display: grid;
+    gap: .6rem;
+  }
+
+  .trip-overview-money-table tr,
+  .trip-overview-team-table tr {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background:
+      color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+  }
+
+  .trip-overview-money-table tr {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trip-overview-team-table tr {
+    grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr);
+  }
+
+  .trip-overview-money-table td,
+  .trip-overview-team-table td {
+    display: grid;
+    min-width: 0 !important;
+    gap: .16rem;
+    padding: .62rem !important;
+    border: 0 !important;
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--border) 82%, transparent) !important;
+    background: transparent !important;
+    overflow-wrap: anywhere;
+  }
+
+  .trip-overview-money-table td::before,
+  .trip-overview-team-table td::before {
+    color: var(--muted);
+    font-size: .57rem;
+    font-weight: 750;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .trip-overview-money-table td:first-child,
+  .trip-overview-team-table td:first-child {
+    grid-column: 1 / -1;
+    background:
+      color-mix(in srgb, var(--surface-2) 74%, transparent) !important;
+  }
+
+  .trip-overview-money-table td:first-child {
+    font-size: .86rem;
+  }
+
+  .trip-overview-money-table td:nth-child(1)::before {
+    content: 'Area';
+  }
+
+  .trip-overview-money-table td:nth-child(2)::before {
+    content: 'Target / Plan';
+  }
+
+  .trip-overview-money-table td:nth-child(3)::before {
+    content: 'Collected / Spent';
+  }
+
+  .trip-overview-money-table td:nth-child(4)::before {
+    content: 'Available / Left';
+  }
+
+  .trip-overview-money-table td:nth-child(5)::before {
+    content: 'Status';
+  }
+
+  .trip-overview-team-table td:nth-child(1)::before {
+    content: 'Item';
+  }
+
+  .trip-overview-team-table td:nth-child(2)::before {
+    content: 'Current';
+  }
+
+  .trip-overview-team-table td:nth-child(3)::before {
+    content: 'Attention';
+  }
+
+  .trip-overview-money-table td:last-child,
+  .trip-overview-team-table td:last-child {
+    border-bottom: 0 !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .trip-overview-money-table tr,
+  .trip-overview-team-table tr {
+    grid-template-columns: 1fr;
+  }
+
+  .trip-overview-money-table td:first-child,
+  .trip-overview-team-table td:first-child {
+    grid-column: 1;
+  }
+}
+
+/* BAJETBN V116 MORE POLISH V11.1 */
+
+.more-grid-launcher-v116 {
+  width: min(100%, 760px);
+}
+
+.more-grid-launcher-v116 .more-v110-header {
+  margin-bottom: 1.25rem;
+}
+
+.more-grid-launcher-v116 .more-v110-header p {
+  margin-top: .2rem;
+  font-size: .76rem;
+}
+
+.more-grid-launcher-v116 .more-v110-group {
+  margin-bottom: 1.35rem;
+}
+
+.more-shortcut-grid-v116 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .6rem;
+}
+
+.more-grid-shortcut-v116 {
+  min-width: 0;
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .68rem .45rem;
+  border-radius: 15px;
+  text-align: center;
+}
+
+.more-grid-shortcut-v116 > strong {
+  max-width: 100%;
+  color: var(--text);
+  font-size: .72rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.more-grid-shortcut-icon-v116,
+.more-signout-icon-v116 {
+  display: grid;
+  place-items: center;
+}
+
+.more-grid-shortcut-icon-v116 {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background:
+    color-mix(in srgb, var(--accent) 13%, var(--surface-2));
+  color: var(--accent-2);
+}
+
+.more-grid-svg-v116 {
+  width: 19px;
+  height: 19px;
+}
+
+.more-grid-shortcut-v116:hover,
+.more-grid-shortcut-v116:focus-visible {
+  border-color:
+    color-mix(in srgb, var(--accent) 42%, var(--border));
+  background:
+    color-mix(in srgb, var(--accent) 7%, var(--surface));
+  outline: none;
+}
+
+.more-signout-section-v116 {
+  margin-top: .25rem;
+}
+
+.more-signout-v116 {
+  width: 100%;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .7rem;
+  padding: .62rem .72rem;
+  border: 1px solid
+    color-mix(in srgb, var(--danger) 25%, var(--border));
+  border-radius: 14px;
+  background:
+    color-mix(in srgb, var(--danger) 4%, var(--surface));
+  color: var(--text);
+  text-align: left;
+}
+
+.more-signout-v116:hover,
+.more-signout-v116:focus-visible {
+  border-color:
+    color-mix(in srgb, var(--danger) 48%, var(--border));
+  background:
+    color-mix(in srgb, var(--danger) 8%, var(--surface));
+  outline: none;
+}
+
+.more-signout-icon-v116 {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background:
+    color-mix(in srgb, var(--danger) 11%, var(--surface-2));
+  color: var(--danger);
+}
+
+.more-signout-icon-v116 .more-grid-svg-v116 {
+  width: 18px;
+  height: 18px;
+}
+
+.more-signout-v116 > strong {
+  color: color-mix(in srgb, var(--danger) 82%, var(--text));
+  font-size: .78rem;
+}
+
+.more-signout-arrow-v116 {
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+@media (max-width: 780px) {
+  .app-main > .more-grid-launcher-v116 {
+    padding-bottom:
+      calc(7rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .more-grid-launcher-v116 {
+    padding-inline: .8rem;
+  }
+
+  .more-grid-launcher-v116 .more-v110-grid,
+  .more-shortcut-grid-v116 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .more-grid-shortcut-v116 {
+    min-height: 88px !important;
+    padding: .62rem .35rem;
+  }
+
+  .more-grid-shortcut-v116 > strong {
+    font-size: .69rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .more-shortcut-grid-v116 {
+    gap: .45rem;
+  }
+
+  .more-grid-shortcut-v116 {
+    min-height: 84px !important;
+    padding: .55rem .28rem;
+  }
+
+  .more-grid-shortcut-icon-v116 {
+    width: 32px;
+    height: 32px;
+  }
+
+  .more-grid-shortcut-v116 > strong {
+    font-size: .64rem;
+  }
+}
