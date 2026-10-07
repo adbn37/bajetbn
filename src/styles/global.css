@@ -22517,3 +22517,83 @@ select.trip-sheet-cell-input {
     padding-inline: .45rem;
   }
 }
+
+
+/* ==========================================================
+   BAJETBN V116 CUSTOM HOME SHORTCUT GRID
+   Six user-configurable Personal Home slots in a 3-column grid.
+   ========================================================== */
+
+.home-shortcut-hub-v116 {
+  margin: 1rem 0 1.25rem;
+}
+
+.home-shortcut-heading-v116 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .55rem;
+}
+
+.home-shortcut-heading-v116 > strong {
+  font-size: .82rem;
+}
+
+.home-shortcut-heading-v116 .text-button {
+  font-size: .72rem;
+}
+
+.bajetbn-reference-actions-six {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  margin: 0 !important;
+}
+
+.home-shortcut-editor-v116 {
+  display: grid;
+  gap: .7rem;
+}
+
+.home-shortcut-editor-v116 > p {
+  margin: 0 0 .15rem;
+}
+
+.home-shortcut-editor-row-v116 {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: .7rem;
+}
+
+.home-shortcut-editor-row-v116 > span {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.home-shortcut-editor-row-v116 select {
+  width: 100%;
+  min-width: 0;
+}
+
+.bajetbn-desktop-secondary-only-v116 {
+  display: none;
+}
+
+@media (min-width: 1240px) {
+  .bajetbn-desktop-secondary-only-v116 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .bajetbn-reference-actions-six {
+    gap: .55rem !important;
+  }
+
+  .home-shortcut-editor-row-v116 {
+    grid-template-columns: 1fr;
+    gap: .3rem;
+  }
+}

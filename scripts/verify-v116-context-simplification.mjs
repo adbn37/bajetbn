@@ -85,16 +85,31 @@ check(
 );
 
 check(
-  !dashboard.includes('<strong>Goals</strong>')
-    && dashboard.includes('<strong>Trips</strong>')
-    && dashboard.includes('<strong>Receipt</strong>')
+  /const\s+HOME_SHORTCUT_DEFAULTS:\s*HomeShortcutId\[\]\s*=\s*\[\s*'trips',\s*'bills',\s*'goals',\s*'budgets',\s*'recurring',\s*'subscription',\s*\]/m.test(dashboard)
+    && dashboard.includes("id: 'receipt'")
+    && dashboard.includes("label: 'Subscription'")
+    && dashboard.includes('data-home-shortcut-grid-v116')
     && dashboard.includes('data-trip-picker-v116')
     && dashboard.includes('data-trip-picker-list-v116')
-    && dashboard.includes('setShowTripPicker(true)')
     && !dashboard.includes('personal-trip-shortcuts-v116')
     && !dashboard.includes('personal-trip-shortcut-rail-v116')
     && !dashboard.includes('personalTripSpaces.slice(0, 4)'),
-  'Personal Home uses the Trips shortcut and popup without duplicating Trip cards below.',
+  'Personal Home defaults to Trips, Bills, Goals, Budgets, Recurring and Subscription; Receipt remains optional.',
+);
+
+check(
+  dashboard.includes('data-home-shortcut-editor-v116')
+    && dashboard.includes('HOME_SHORTCUT_STORAGE_PREFIX')
+    && dashboard.includes('window.localStorage.setItem')
+    && dashboard.includes('homeShortcutDraft')
+    && dashboard.includes("id: 'goals'")
+    && dashboard.includes("id: 'reports'")
+    && dashboard.includes("id: 'debt'")
+    && dashboard.includes('`space:${space.id}`')
+    && dashboard.includes("space.type === 'sme'")
+    && dashboard.includes("'/business/' + space.id")
+    && dashboard.includes("'/spaces/' + space.id"),
+  'Home shortcut editor supports saved custom app and Space destinations.',
 );
 
 check(

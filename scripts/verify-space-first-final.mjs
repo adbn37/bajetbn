@@ -248,7 +248,7 @@ const navTokens = [
   '<small>Home</small>',
   '<small>Transactions</small>',
   'mobile-bottom-add',
-  '<small>Goals</small>',
+  '<small>Spaces</small>',
   '<small>More</small>',
 ];
 
@@ -276,15 +276,15 @@ check(
       '<small>Business</small>',
     )
     && !nav.includes(
-      '<small>Space</small>',
+      '<small>Goals</small>',
     )
     && nav.includes(
       'to="/transactions"',
     )
     && nav.includes(
-      'to="/goals"',
+      'to="/spaces"',
     ),
-  'Home | Transactions | + | Goals | More is the mobile navigation.',
+  'Home | Transactions | + | Spaces | More is the mobile navigation.',
 );
 
 if (failures.length) {
