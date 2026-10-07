@@ -90,8 +90,11 @@ check(
     && dashboard.includes('<strong>Receipt</strong>')
     && dashboard.includes('data-trip-picker-v116')
     && dashboard.includes('data-trip-picker-list-v116')
-    && dashboard.includes('setShowTripPicker(true)'),
-  'Personal Home keeps Trips, Bills and Receipt without duplicating Goals; Trips opens the Trip picker.',
+    && dashboard.includes('setShowTripPicker(true)')
+    && !dashboard.includes('personal-trip-shortcuts-v116')
+    && !dashboard.includes('personal-trip-shortcut-rail-v116')
+    && !dashboard.includes('personalTripSpaces.slice(0, 4)'),
+  'Personal Home uses the Trips shortcut and popup without duplicating Trip cards below.',
 );
 
 check(

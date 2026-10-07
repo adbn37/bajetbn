@@ -1612,42 +1612,6 @@ export function DashboardPage() {
         </button>
       </section>
 
-      {personalTripSpaces.length > 0 && (
-        <section className="personal-trip-shortcuts-v116">
-          <div className="bajetbn-home-section-title">
-            <h2>Trips</h2>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() =>
-                setShowTripPicker(true)
-              }
-            >
-              More trips
-            </button>
-          </div>
-
-          <div className="personal-trip-shortcut-rail-v116">
-            {personalTripSpaces.slice(0, 4).map((trip) => (
-              <Link
-                to={'/spaces/' + trip.id}
-                className="personal-trip-shortcut-v116"
-                key={trip.id}
-              >
-                <SpaceAvatar space={trip} />
-
-                <span>
-                  <strong>{trip.name}</strong>
-                  <small>Trip</small>
-                </span>
-
-                <b aria-hidden="true">›</b>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
       <section className="home-v110-section bajetbn-home-recent-section">
         <div className="bajetbn-home-section-title">
           <h2>Recent Activity</h2>
