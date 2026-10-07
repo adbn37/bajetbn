@@ -71,12 +71,14 @@ check(
 );
 
 check(
-  more.includes("{ to: '/goals', label: 'Goals', icon: 'G' }")
-    && more.includes("{ to: '/spaces', label: 'Spaces', icon: 'S' }")
+  more.includes("{ to: '/goals', label: 'Goals', icon: 'goals' }")
+    && more.includes("{ to: '/spaces', label: 'Spaces', icon: 'spaces' }")
     && more.includes('more-shortcut-grid-v116')
+    && more.includes('function MoreIcon')
+    && more.includes('more-signout-v116')
     && !more.includes('listSpaces')
     && !more.includes('<SpaceAvatar'),
-  'More keeps Spaces behind one shortcut and uses compact grid launchers.',
+  'More keeps Spaces behind one shortcut and uses polished grid launchers.',
 );
 
 check(
