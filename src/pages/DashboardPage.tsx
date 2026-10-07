@@ -1212,7 +1212,6 @@ export function DashboardPage() {
   function openHomeSpacePicker(
     nextMode: 'personal' | 'business',
   ) {
-    selectHomeMode(nextMode);
     setHomeSpacePicker(nextMode);
   }
 
@@ -1315,51 +1314,87 @@ export function DashboardPage() {
         data-home-mode-switch-v115
         aria-label="Home view"
       >
-        <button
-          type="button"
+        <div
           className={
-            homeMode === 'personal'
-              ? 'active'
-              : ''
-          }
-          aria-pressed={
-            homeMode === 'personal'
-          }
-          aria-haspopup="dialog"
-          aria-expanded={
-            homeSpacePicker === 'personal'
-          }
-          data-home-space-picker-trigger-v116="personal"
-          onClick={() =>
-            openHomeSpacePicker('personal')
+            'bajetbn-home-mode-option-v116 '
+            + (
+              homeMode === 'personal'
+                ? 'active'
+                : ''
+            )
           }
         >
-          <span>Personal</span>
-          <b aria-hidden="true">⌄</b>
-        </button>
+          <button
+            type="button"
+            className="bajetbn-home-mode-overview-v116"
+            aria-pressed={
+              homeMode === 'personal'
+            }
+            data-home-overview-trigger-v116="personal"
+            onClick={() =>
+              selectHomeMode('personal')
+            }
+          >
+            Personal
+          </button>
 
-        <button
-          type="button"
+          <button
+            type="button"
+            className="bajetbn-home-mode-picker-v116"
+            aria-label="Choose Personal Space"
+            aria-haspopup="dialog"
+            aria-expanded={
+              homeSpacePicker === 'personal'
+            }
+            data-home-space-picker-trigger-v116="personal"
+            onClick={() =>
+              openHomeSpacePicker('personal')
+            }
+          >
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
+
+        <div
           className={
-            homeMode === 'business'
-              ? 'active'
-              : ''
-          }
-          aria-pressed={
-            homeMode === 'business'
-          }
-          aria-haspopup="dialog"
-          aria-expanded={
-            homeSpacePicker === 'business'
-          }
-          data-home-space-picker-trigger-v116="business"
-          onClick={() =>
-            openHomeSpacePicker('business')
+            'bajetbn-home-mode-option-v116 '
+            + (
+              homeMode === 'business'
+                ? 'active'
+                : ''
+            )
           }
         >
-          <span>Business</span>
-          <b aria-hidden="true">⌄</b>
-        </button>
+          <button
+            type="button"
+            className="bajetbn-home-mode-overview-v116"
+            aria-pressed={
+              homeMode === 'business'
+            }
+            data-home-overview-trigger-v116="business"
+            onClick={() =>
+              selectHomeMode('business')
+            }
+          >
+            Business
+          </button>
+
+          <button
+            type="button"
+            className="bajetbn-home-mode-picker-v116"
+            aria-label="Choose Business Space"
+            aria-haspopup="dialog"
+            aria-expanded={
+              homeSpacePicker === 'business'
+            }
+            data-home-space-picker-trigger-v116="business"
+            onClick={() =>
+              openHomeSpacePicker('business')
+            }
+          >
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
       </nav>
 
       {homeMode === 'personal' ? (

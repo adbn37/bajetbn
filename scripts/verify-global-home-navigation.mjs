@@ -173,12 +173,21 @@ check(
 
 check(
   dashboard.includes(
-    "openHomeSpacePicker('business')",
+    "selectHomeMode('business')",
   )
+    && dashboard.includes(
+      "openHomeSpacePicker('business')",
+    )
+    && dashboard.includes(
+      'data-home-overview-trigger-v116="business"',
+    )
+    && dashboard.includes(
+      'data-home-space-picker-trigger-v116="business"',
+    )
     && dashboard.includes(
       "homeMode === 'business'",
     ),
-  'Business remains a Home-level mode instead of a dedicated bottom-nav destination.',
+  'Business overview and Business Space picker remain separate Home-level actions.',
 );
 
 check(

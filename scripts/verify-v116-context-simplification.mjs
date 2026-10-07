@@ -95,13 +95,30 @@ check(
 );
 
 check(
-  dashboard.includes('data-home-space-picker-trigger-v116="personal"')
+  dashboard.includes('data-home-overview-trigger-v116="personal"')
+    && dashboard.includes('data-home-overview-trigger-v116="business"')
+    && dashboard.includes('data-home-space-picker-trigger-v116="personal"')
     && dashboard.includes('data-home-space-picker-trigger-v116="business"')
+    && dashboard.includes("selectHomeMode('personal')")
+    && dashboard.includes("selectHomeMode('business')")
+    && dashboard.includes("openHomeSpacePicker('personal')")
+    && dashboard.includes("openHomeSpacePicker('business')")
     && dashboard.includes('data-home-space-picker-v116={homeSpacePicker}')
     && dashboard.includes("item.type === 'sme'")
     && dashboard.includes("to={'/business/' + space.id}")
     && dashboard.includes("to={'/spaces/' + space.id}"),
-  'Personal and Business Home controls open their matching Space pickers.',
+  'Personal and Business labels switch overview while separate arrows open their matching Space pickers.',
+);
+
+check(
+  dashboard.includes(
+    "function openHomeSpacePicker(\n"
+      + "    nextMode: 'personal' | 'business',\n"
+      + "  ) {\n"
+      + "    setHomeSpacePicker(nextMode);\n"
+      + "  }",
+  ),
+  'Opening a Home Space picker does not change the current overview.',
 );
 
 check(

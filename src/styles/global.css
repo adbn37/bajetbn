@@ -22376,17 +22376,56 @@ select.trip-sheet-cell-input {
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
 }
 
-.bajetbn-home-mode-switch-v115 button {
+.bajetbn-home-mode-option-v116 {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 12px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.bajetbn-home-mode-option-v116.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.bajetbn-home-mode-switch-v115
+.bajetbn-home-mode-option-v116
+> button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: .35rem;
+  min-width: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
 }
 
-.bajetbn-home-mode-switch-v115 button > b {
-  font-size: .72rem;
+.bajetbn-home-mode-overview-v116 {
+  flex: 1 1 auto;
+  padding-inline: .75rem .25rem;
+}
+
+.bajetbn-home-mode-picker-v116 {
+  flex: 0 0 42px;
+  width: 42px;
+  padding: 0;
+}
+
+.bajetbn-home-mode-picker-v116 span {
+  font-size: .76rem;
   line-height: 1;
-  opacity: .75;
+  opacity: .8;
+}
+
+.bajetbn-home-mode-picker-v116:hover,
+.bajetbn-home-mode-picker-v116:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .home-space-picker-list-v116 {
