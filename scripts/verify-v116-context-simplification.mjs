@@ -71,10 +71,12 @@ check(
 );
 
 check(
-  more.includes("{ to: '/goals', label: 'Goals, plans & debt' }")
-    && !more.includes("{ to: '/debt', label: 'Debt' }")
-    && more.includes("space.type !== 'goal'"),
-  'More routes planning discovery through Goals and keeps Plan Spaces out of the general launcher.',
+  more.includes("{ to: '/goals', label: 'Goals', icon: 'G' }")
+    && more.includes("{ to: '/spaces', label: 'Spaces', icon: 'S' }")
+    && more.includes('more-shortcut-grid-v116')
+    && !more.includes('listSpaces')
+    && !more.includes('<SpaceAvatar'),
+  'More keeps Spaces behind one shortcut and uses compact grid launchers.',
 );
 
 check(
