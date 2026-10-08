@@ -123,6 +123,22 @@ check(
   'Accounts summary keeps balances separated by currency instead of combining unlike currencies.',
 );
 
+check(
+  /const \[classification, setClassification\][\s\S]{0,180}?initial\?\.classification\s*\|\|\s*lockedClassification\s*\|\|\s*'personal'/m
+    .test(accountsPage),
+  'Editing an existing account from an embedded Space preserves its original Personal or Business classification.',
+);
+
+check(
+  /const lockedBusinessCreation\s*=\s*!initial\s*&&\s*lockedClassification\s*===\s*'business'/m
+    .test(accountsPage)
+    && /lockedBusinessCreation[\s\S]{0,280}?spaces[\s\S]{0,220}?space\.currency\s*===\s*currency[\s\S]{0,180}?space\.id/m
+      .test(accountsPage)
+    && /Boolean\(space\.archivedAt\)\s*\|\|\s*lockedBusinessCreation/m
+      .test(accountsPage),
+  'New Business accounts created inside a Business Space are automatically and mandatorily linked to that Space.',
+);
+
 if (failures.length) {
   console.error('');
 

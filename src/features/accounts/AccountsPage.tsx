@@ -1387,8 +1387,8 @@ function AccountForm({
   const [institution, setInstitution] = useState(initial?.institution || institutionDisplay(initial || { type: 'bank' }));
   const [type, setType] = useState<AccountType>(initial?.type || 'bank');
   const [classification, setClassification] = useState<AccountClassification>(
-    lockedClassification
-      || initial?.classification
+    initial?.classification
+      || lockedClassification
       || 'personal',
   );
   const [personalUseEnabled, setPersonalUseEnabled] = useState(
@@ -1402,8 +1402,28 @@ function AccountForm({
    */
   const lockedPersonal =
     lockedClassification === 'personal';
+  const lockedBusinessCreation =
+    !initial
+    && lockedClassification === 'business';
+
   const [businessSpaceIds, setBusinessSpaceIds] = useState<string[]>(
-    () => initial ? businessSpaceIdsForAccount(initial) : [],
+    () =>
+      initial
+        ? businessSpaceIdsForAccount(
+            initial,
+          )
+        : lockedBusinessCreation
+          ? spaces
+              .filter(
+                (space) =>
+                  !space.archivedAt
+                  && space.currency === currency,
+              )
+              .map(
+                (space) =>
+                  space.id,
+              )
+          : [],
   );
   const [opening, setOpening] = useState(initial ? String(initial.openingBalanceMinor / 100) : '0.00');
   const [busy, setBusy] = useState(false);
@@ -1513,6 +1533,7 @@ function AccountForm({
                 checked={linked}
                 disabled={
                   Boolean(space.archivedAt)
+                  || lockedBusinessCreation
                   || (
                     !linked
                     && !currencyMatches
