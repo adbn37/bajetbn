@@ -17,6 +17,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
 import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
+import { institutionDisplay } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import {
@@ -3023,15 +3024,9 @@ function SpaceHomeOverview({
                   <div className="space-home-v115-account-copy">
                     <strong>{account.name}</strong>
                     <small className="muted">
-                      {account.institution
-                        || (
-                          account.type === 'cash'
-                            ? 'Cash'
-                            : account.type.replace(
-                                /_/g,
-                                ' ',
-                              )
-                        )}
+                      {institutionDisplay(
+                        account,
+                      )}
                     </small>
                   </div>
 
@@ -3926,19 +3921,24 @@ function SpaceOverview({
                       key={item.id}
                       className="space-scoped-row"
                     >
-                      <div>
-                        <strong>
-                          {item.name}
-                        </strong>
-                        <small>
-                          {item.institution
-                            || item.type.replace(
-                              '_',
-                              ' ',
+                      <div className="space-scoped-account-identity">
+                        <AccountAvatar
+                          account={item}
+                          size="small"
+                        />
+
+                        <div>
+                          <strong>
+                            {item.name}
+                          </strong>
+                          <small>
+                            {institutionDisplay(
+                              item,
                             )}
-                          {' · '}
-                          {item.currency}
-                        </small>
+                            {' · '}
+                            {item.currency}
+                          </small>
+                        </div>
                       </div>
 
                       <div className="space-scoped-amount">
@@ -4138,7 +4138,9 @@ function SpaceOverview({
           )}
         </div>}
 
-        {space.type !== 'personal' && section === 'instalments' && (
+        {space.type !== 'personal'
+          && space.type !== 'sme'
+          && section === 'instalments' && (
           <div className="space-scoped-list">
             {instalmentRows.length
               ? instalmentRows.map(
@@ -4185,8 +4187,8 @@ function SpaceOverview({
                 )
               : (
                 <EmptyState
-                  title="No instalments in this Personal Space"
-                  description="Add an instalment for this Personal Space to track its payments and due dates."
+                  title="No instalments in this Space"
+                  description="Add an instalment for this Space to track its payments and due dates."
                 />
               )}
           </div>

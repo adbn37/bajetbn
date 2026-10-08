@@ -129,6 +129,8 @@ export function AccountsPage({
               (account) =>
                 account.classification
                   === 'business'
+                && account.currency
+                  === targetSpace.currency
                 && !account.archivedAt
                 && !account.closedAt
                 && !businessSpaceIdsForAccount(
@@ -260,16 +262,64 @@ export function AccountsPage({
     [active, user?.uid],
   );
   const closed = useMemo(() => accounts.filter((item) => item.archivedAt || item.closedAt), [accounts]);
-  const total = active
-    .filter(
-      (item) =>
-        item.type !== 'credit_card'
-        && (
-          item.ownerId === user?.uid
-          || item.sharedCanViewBalance === true
-        ),
-    )
-    .reduce((sum, item) => sum + item.ledgerBalanceMinor, 0);
+  const totalsByCurrency =
+    useMemo(
+      () => {
+        const totals =
+          new Map<string, number>();
+
+        active
+          .filter(
+            (item) =>
+              item.type !== 'credit_card'
+              && (
+                item.ownerId === user?.uid
+                || item.sharedCanViewBalance === true
+              ),
+          )
+          .forEach(
+            (item) =>
+              totals.set(
+                item.currency,
+                (
+                  totals.get(
+                    item.currency,
+                  )
+                  || 0
+                )
+                + item.ledgerBalanceMinor,
+              ),
+          );
+
+        return [...totals.entries()]
+          .sort(
+            ([currencyA], [currencyB]) =>
+              currencyA.localeCompare(
+                currencyB,
+              ),
+          );
+      },
+      [
+        active,
+        user?.uid,
+      ],
+    );
+
+  const totalMoneyAvailable =
+    totalsByCurrency.length
+      ? totalsByCurrency
+          .map(
+            ([currency, amount]) =>
+              formatMoney(
+                amount,
+                currency,
+              ),
+          )
+          .join(' · ')
+      : formatMoney(
+          0,
+          profile?.currency || 'BND',
+        );
   const ownedSmeSpaces = useMemo(
     () => spaces.filter((item) => item.type === 'sme' && item.ownerId === user?.uid),
     [spaces, user?.uid],
@@ -424,10 +474,7 @@ export function AccountsPage({
       <div>
         <span>Total money available</span>
         <strong>
-          {formatMoney(
-            total,
-            profile?.currency || 'BND',
-          )}
+          {totalMoneyAvailable}
         </strong>
       </div>
 
@@ -699,7 +746,10 @@ export function AccountsPage({
 
     {modal === 'create' && profile && canManageEmbeddedAccounts && (
       <AccountForm
-        currency={profile.currency}
+        currency={
+          embeddedSpace?.currency
+          || profile.currency
+        }
         spaces={visibleSmeSpaces}
         lockedClassification={
           embeddedSpace?.type === 'sme'
@@ -1337,8 +1387,8 @@ function AccountForm({
   const [institution, setInstitution] = useState(initial?.institution || institutionDisplay(initial || { type: 'bank' }));
   const [type, setType] = useState<AccountType>(initial?.type || 'bank');
   const [classification, setClassification] = useState<AccountClassification>(
-    lockedClassification
-      || initial?.classification
+    initial?.classification
+      || lockedClassification
       || 'personal',
   );
   const [personalUseEnabled, setPersonalUseEnabled] = useState(
@@ -1352,8 +1402,28 @@ function AccountForm({
    */
   const lockedPersonal =
     lockedClassification === 'personal';
+  const lockedBusinessCreation =
+    !initial
+    && lockedClassification === 'business';
+
   const [businessSpaceIds, setBusinessSpaceIds] = useState<string[]>(
-    () => initial ? businessSpaceIdsForAccount(initial) : [],
+    () =>
+      initial
+        ? businessSpaceIdsForAccount(
+            initial,
+          )
+        : lockedBusinessCreation
+          ? spaces
+              .filter(
+                (space) =>
+                  !space.archivedAt
+                  && space.currency === currency,
+              )
+              .map(
+                (space) =>
+                  space.id,
+              )
+          : [],
   );
   const [opening, setOpening] = useState(initial ? String(initial.openingBalanceMinor / 100) : '0.00');
   const [busy, setBusy] = useState(false);
@@ -1453,17 +1523,33 @@ function AccountForm({
       <div className="form-stack compact">
         {spaces.map((space) => {
           const linked = businessSpaceIds.includes(space.id);
+          const currencyMatches =
+            space.currency === currency;
+
           return <div className="panel" key={space.id}>
             <label className="checkbox-field">
               <input
                 type="checkbox"
                 checked={linked}
-                disabled={Boolean(space.archivedAt)}
+                disabled={
+                  Boolean(space.archivedAt)
+                  || lockedBusinessCreation
+                  || (
+                    !linked
+                    && !currencyMatches
+                  )
+                }
                 onChange={(event) => toggleBusinessSpace(space.id, event.target.checked)}
               />
               <span>
                 <strong>{space.name}{space.archivedAt ? ' (Archived)' : ''}</strong>
-                <small>Make this Business account available inside this Business Space.</small>
+                <small>
+                  {currencyMatches
+                    ? 'Make this Business account available inside this Business Space.'
+                    : linked
+                      ? `Currency mismatch: this account is ${currency} while this Space is ${space.currency}. Unlink it to prevent new cross-currency use.`
+                      : `Requires ${space.currency}; this account is ${currency}.`}
+                </small>
               </span>
             </label>
           </div>;
