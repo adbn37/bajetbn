@@ -618,8 +618,12 @@ async function validateBusinessAccountSpaces(
 
   for (const spaceId of businessSpaceIds) {
     const space = await requireOwnedSmeSpaceForAccount(spaceId, uid);
-    if (posSpaceIds.includes(spaceId) && space.currency !== currency) {
-      throw new HttpsError('failed-precondition', 'A POS-enabled Business account must use the same currency as that Business Space.');
+
+    if (space.currency !== currency) {
+      throw new HttpsError(
+        'failed-precondition',
+        'A Business account must use the same currency as every linked Business Space.',
+      );
     }
   }
 }
@@ -3673,8 +3677,23 @@ export const postTransaction = onCall({ region }, async (request) => {
     ]);
 
     if (!spaceSnapshot.exists || spaceSnapshot.data()?.archivedAt) throw new HttpsError('failed-precondition', 'The selected Space is unavailable.');
-    if (!memberSnapshot.exists || memberSnapshot.data()?.canUseAccounts !== true) {
-      throw new HttpsError('permission-denied', 'You cannot post transactions in this Space.');
+    const memberStatus =
+      String(
+        memberSnapshot.data()?.status
+        || '',
+      );
+
+    if (
+      !memberSnapshot.exists
+      || ['suspended', 'removed'].includes(
+        memberStatus,
+      )
+      || memberSnapshot.data()?.canUseAccounts !== true
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'You cannot post transactions in this Space.',
+      );
     }
 
     const account = await assertAccountForSpaceActor(
@@ -7403,6 +7422,19 @@ export const reviewFinancialApprovalRequest = onCall(
           );
         }
 
+        const spaceCurrency =
+          String(
+            spaceSnapshot.data()?.currency
+            || '',
+          );
+
+        if (account.currency !== spaceCurrency) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Account and Business Space currencies must match.',
+          );
+        }
+
         const destination =
           destinationSnapshot
             ? assertAccount(
@@ -7413,6 +7445,13 @@ export const reviewFinancialApprovalRequest = onCall(
             : null;
 
         if (transactionType === 'transfer') {
+          if (destinationAccountId === accountId) {
+            throw new HttpsError(
+              'failed-precondition',
+              'Transfer accounts must be different.',
+            );
+          }
+
           if (
             !destinationRef
             || !destination
@@ -12227,6 +12266,19 @@ export const reverseTransaction = onCall({ region }, async (request) => {
     if (original.status !== 'posted' || original.reversedBy) {
       throw new HttpsError('failed-precondition', 'This transaction has already been reversed.');
     }
+
+    if (
+      original.type === 'transfer'
+      && original.destinationAccountId
+      && String(original.destinationAccountId)
+        === String(original.accountId)
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The original transfer is invalid because its source and destination accounts are the same.',
+      );
+    }
+
     if (original.sharedBillPaymentId) {
       throw new HttpsError('failed-precondition', 'Reverse shared bill payments from Sharing so the assignment and commitment reopen correctly.');
     }
