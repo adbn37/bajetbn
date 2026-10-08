@@ -11,6 +11,7 @@ const goals = read('src/features/goals/GoalsPage.tsx');
 const spacesPage = read('src/features/spaces/SpacesPage.tsx');
 const hub = read('src/features/spaces/SpaceActionHub.tsx');
 const details = read('src/features/spaces/SpaceDetailsPage.tsx');
+const styles = read('src/styles/global.css');
 
 const failures = [];
 
@@ -152,13 +153,41 @@ check(
 );
 
 check(
-  dashboard.includes(
-    "function openHomeSpacePicker(\n"
-      + "    nextMode: 'personal' | 'business',\n"
-      + "  ) {\n"
-      + "    setHomeSpacePicker(nextMode);\n"
-      + "  }",
-  ),
+  (() => {
+    const pickerStart =
+      dashboard.indexOf(
+        'function openHomeSpacePicker(',
+      );
+
+    const pickerEnd =
+      dashboard.indexOf(
+        'function openShortcutEditor(',
+        pickerStart,
+      );
+
+    if (
+      pickerStart === -1
+      || pickerEnd <= pickerStart
+    ) {
+      return false;
+    }
+
+    const pickerBody =
+      dashboard.slice(
+        pickerStart,
+        pickerEnd,
+      );
+
+    return pickerBody.includes(
+      'setHomeSpacePicker(nextMode);',
+    )
+      && !pickerBody.includes(
+        'selectHomeMode(',
+      )
+      && !pickerBody.includes(
+        'setSearchParams(',
+      );
+  })(),
   'Opening a Home Space picker does not change the current overview.',
 );
 
@@ -191,6 +220,16 @@ check(
   'Trip Spaces appear in Trips, not Personal Spaces, while Personal money entry still supports Trip context.',
 );
 
+
+check(
+  details.includes('className="trip-workbook-tabs-v115"')
+    && details.includes('TRIP_WORKBOOK_PRIMARY_SHEETS.map')
+    && styles.includes('BAJETBN V116 TRIP MOBILE TAB POLISH V12')
+    && styles.includes('scroll-snap-type: x proximity')
+    && styles.includes('min-height: 40px')
+    && styles.includes('font-size: .78rem'),
+  'Trip workbook tabs remain swipeable with readable mobile touch targets.',
+);
 if (failures.length) {
   console.error('');
 
