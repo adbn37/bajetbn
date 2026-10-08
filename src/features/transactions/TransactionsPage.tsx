@@ -515,8 +515,28 @@ export function TransactionsPage() {
         },
       );
 
+      const excludedPersonalMoneySpaceIds =
+        new Set(
+          nextSpaces
+            .filter(
+              (space) =>
+                space.type === 'sme'
+                || space.type === 'goal',
+            )
+            .map(
+              (space) =>
+                space.id,
+            ),
+        );
+
       const personalTransactions =
         [...transactionMap.values()]
+          .filter(
+            (item) =>
+              !excludedPersonalMoneySpaceIds.has(
+                item.spaceId,
+              ),
+          )
           .sort(
             (a, b) => {
               const dateCompare =

@@ -12,6 +12,9 @@ const details =
 const transactions =
   read('src/features/transactions/TransactionsPage.tsx');
 
+const accountsPage =
+  read('src/features/accounts/AccountsPage.tsx');
+
 const businessMoney =
   read('src/features/business/BusinessMoneyActivityPage.tsx');
 
@@ -80,6 +83,22 @@ check(
     && /lockedSpaceId=\{space\.id\}/m
       .test(businessMoney),
   'Business Move Money remains locked to accounts authorized for that Business Space.',
+);
+
+check(
+  /currency=\{\s*embeddedSpace\?\.currency\s*\|\|\s*profile\.currency\s*\}/m
+    .test(accountsPage),
+  'Embedded account creation inherits the active Space currency instead of forcing the profile currency.',
+);
+
+check(
+  /const excludedPersonalMoneySpaceIds\s*=\s*new Set/m
+    .test(transactions)
+    && /space\.type\s*===\s*'sme'\s*\|\|\s*space\.type\s*===\s*'goal'/m
+      .test(transactions)
+    && /!excludedPersonalMoneySpaceIds\.has\s*\(\s*item\.spaceId\s*,?\s*\)/m
+      .test(transactions),
+  'Personal Money excludes Business and legacy Goal/Plan ledger rows even when an account is shared across scopes.',
 );
 
 if (failures.length) {

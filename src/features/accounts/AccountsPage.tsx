@@ -699,7 +699,10 @@ export function AccountsPage({
 
     {modal === 'create' && profile && canManageEmbeddedAccounts && (
       <AccountForm
-        currency={profile.currency}
+        currency={
+          embeddedSpace?.currency
+          || profile.currency
+        }
         spaces={visibleSmeSpaces}
         lockedClassification={
           embeddedSpace?.type === 'sme'
