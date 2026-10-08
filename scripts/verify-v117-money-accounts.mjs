@@ -101,6 +101,28 @@ check(
   'Personal Money excludes Business and legacy Goal/Plan ledger rows even when an account is shared across scopes.',
 );
 
+check(
+  /account\.currency\s*===\s*targetSpace\.currency/m
+    .test(accountsPage)
+    && /const currencyMatches\s*=\s*space\.currency\s*===\s*currency/m
+      .test(accountsPage)
+    && /!linked\s*&&\s*!currencyMatches/m
+      .test(accountsPage),
+  'Business accounts cannot be newly linked to Business Spaces with a different currency.',
+);
+
+check(
+  /const totalsByCurrency\s*=\s*useMemo/m
+    .test(accountsPage)
+    && /totals\.set\s*\(\s*item\.currency/m
+      .test(accountsPage)
+    && /\.join\(' · '\)/m
+      .test(accountsPage)
+    && /\{totalMoneyAvailable\}/m
+      .test(accountsPage),
+  'Accounts summary keeps balances separated by currency instead of combining unlike currencies.',
+);
+
 if (failures.length) {
   console.error('');
 
