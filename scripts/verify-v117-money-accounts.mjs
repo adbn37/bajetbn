@@ -9,6 +9,12 @@ const commitments =
 const details =
   read('src/features/spaces/SpaceDetailsPage.tsx');
 
+const accountAvatar =
+  read('src/features/accounts/AccountAvatar.tsx');
+
+const globalStyles =
+  read('src/styles/global.css');
+
 const transactions =
   read('src/features/transactions/TransactionsPage.tsx');
 
@@ -137,6 +143,28 @@ check(
     && /Boolean\(space\.archivedAt\)\s*\|\|\s*lockedBusinessCreation/m
       .test(accountsPage),
   'New Business accounts created inside a Business Space are automatically and mandatorily linked to that Space.',
+);
+
+check(
+  /className="space-scoped-account-identity"[\s\S]{0,260}?<AccountAvatar[\s\S]{0,160}?account=\{item\}/m
+    .test(details)
+    && /institutionDisplay\s*\(\s*item\s*,?\s*\)/m
+      .test(details)
+    && /institutionDisplay\s*\(\s*account\s*,?\s*\)/m
+      .test(details)
+    && /BAJETBN V117 SPACE ACCOUNT IDENTITY/m
+      .test(globalStyles),
+  'Space account lists reuse the shared account icon and institution display.',
+);
+
+check(
+  /account\.institutionCode\s*&&\s*account\.institutionCode\s*!==\s*'other'/m
+    .test(accountAvatar)
+    && /value\.includes\('baiduri'\)/m
+      .test(accountAvatar)
+    && /value\.includes\('bibd'\)/m
+      .test(accountAvatar),
+  'Legacy accounts with a generic institution code can still recover known Brunei bank branding from institution text.',
 );
 
 if (failures.length) {

@@ -23166,3 +23166,17 @@ select.trip-sheet-cell-input {
     font-size: .76rem;
   }
 }
+
+/* BAJETBN V117 SPACE ACCOUNT IDENTITY */
+.personal-space-account-list .space-scoped-row > .space-scoped-account-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.space-scoped-account-identity > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}

@@ -14,7 +14,10 @@ import {
 function inferredInstitutionCode(
   account: Account,
 ): InstitutionCode | null {
-  if (account.institutionCode) {
+  if (
+    account.institutionCode
+    && account.institutionCode !== 'other'
+  ) {
     return account.institutionCode;
   }
 
