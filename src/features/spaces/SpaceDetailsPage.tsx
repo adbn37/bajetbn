@@ -4138,7 +4138,9 @@ function SpaceOverview({
           )}
         </div>}
 
-        {space.type !== 'personal' && section === 'instalments' && (
+        {space.type !== 'personal'
+          && space.type !== 'sme'
+          && section === 'instalments' && (
           <div className="space-scoped-list">
             {instalmentRows.length
               ? instalmentRows.map(
@@ -4185,8 +4187,8 @@ function SpaceOverview({
                 )
               : (
                 <EmptyState
-                  title="No instalments in this Personal Space"
-                  description="Add an instalment for this Personal Space to track its payments and due dates."
+                  title="No instalments in this Space"
+                  description="Add an instalment for this Space to track its payments and due dates."
                 />
               )}
           </div>

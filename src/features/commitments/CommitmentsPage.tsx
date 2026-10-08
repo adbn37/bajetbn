@@ -11,6 +11,8 @@ import { suggestedPaymentMethod } from '../../config/bruneiMoneyOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_TRANSACTION_CATEGORIES, categoryIconGlyph } from '../categories/defaultCategories';
 import {
+  accountSupportsPersonalUse,
+  businessSpaceIdsForAccount,
   listAccounts,
   listAccountsForSpace,
 } from '../../repositories/accountRepository';
@@ -447,12 +449,19 @@ export function CommitmentsPage({
           businessAccount
             ? (
                 account.classification === 'business'
+                && businessSpaceIdsForAccount(
+                  account,
+                ).includes(
+                  commitment.spaceId,
+                )
                 && (
                   account.ownerId === user?.uid
                   || account.sharedCanUseAccount === true
                 )
               )
-            : account.classification !== 'business'
+            : accountSupportsPersonalUse(
+                account,
+              )
         ),
     );
   };
@@ -1577,10 +1586,21 @@ function CommitmentForm({
           === selectedSpace?.currency
         && (
           scope === 'business'
-            ? account.classification
-              === 'business'
-            : account.classification
-              !== 'business'
+            ? (
+                Boolean(
+                  selectedSpace,
+                )
+                && account.classification
+                  === 'business'
+                && businessSpaceIdsForAccount(
+                  account,
+                ).includes(
+                  selectedSpace?.id || '',
+                )
+              )
+            : accountSupportsPersonalUse(
+                account,
+              )
         ),
     );
 
