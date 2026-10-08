@@ -23114,3 +23114,55 @@ select.trip-sheet-cell-input {
     font-size: .64rem;
   }
 }
+
+/* BAJETBN V116 TRIP MOBILE TAB POLISH V12 */
+
+@media (max-width: 680px) {
+  .trip-workbook-tabs-v115,
+  .trip-workbook-support-tabs-v115 {
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .trip-workbook-tabs-v115::-webkit-scrollbar,
+  .trip-workbook-support-tabs-v115::-webkit-scrollbar {
+    display: none;
+  }
+
+  .trip-workbook-tabs-v115 {
+    gap: .28rem;
+    min-height: 48px;
+    padding: .38rem .5rem 0;
+  }
+
+  .trip-workbook-tabs-v115 button {
+    scroll-snap-align: start;
+    min-height: 40px;
+    padding: .52rem .86rem;
+    border-radius: 9px 9px 0 0;
+    font-size: .78rem;
+    line-height: 1;
+  }
+
+  .trip-workbook-support-tabs-v115 {
+    gap: .3rem;
+    min-height: 44px;
+    padding: .32rem .5rem;
+  }
+
+  .trip-workbook-support-tabs-v115 button {
+    scroll-snap-align: start;
+    min-height: 36px;
+    padding: .46rem .72rem;
+    font-size: .76rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .trip-workbook-tabs-v115 button {
+    padding-inline: .78rem;
+    font-size: .76rem;
+  }
+}
