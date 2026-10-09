@@ -69,6 +69,44 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
 const statusLabels = { posted: 'Saved', reversed: 'Undone' } as const;
 
+function activityKindLabel(
+  item: FinancialTransaction,
+): string {
+  if (item.type !== 'reversal') {
+    return typeLabels[item.type];
+  }
+
+  if (item.originalType === 'income') {
+    return 'Undo Money in';
+  }
+
+  if (item.originalType === 'expense') {
+    return 'Undo Money out';
+  }
+
+  if (item.originalType === 'transfer') {
+    return 'Undo Move money';
+  }
+
+  return 'Undo';
+}
+
+function activityStatusLabel(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'Undo record'
+    : statusLabels[item.status];
+}
+
+function activityStatusClass(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'reversal'
+    : item.status;
+}
+
 const financialApprovalActionLabels: Record<
   FinancialApprovalRequest['action'],
   string
@@ -1398,11 +1436,20 @@ export function TransactionsPage() {
             const space = spaceMap.get(item.spaceId);
             const isOutflow = item.type === 'expense';
             const isIncome = item.type === 'income';
+            const isTransferFlow =
+              item.type === 'transfer'
+              || item.originalType === 'transfer';
             const category = item.categoryId ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item) : transactionCategorySnapshot(item);
             return <article className={`transaction-row ${item.status === 'reversed' ? 'reversed' : ''}`} key={item.id}>
               <CategoryIconVisual category={category} />
               <div className="transaction-main">
                 <div>
+                  <span
+                    className={`transaction-kind-badge ${item.type}`}
+                  >
+                    {activityKindLabel(item)}
+                  </span>
+
                   <h2>{item.category || typeLabels[item.type]}</h2>
                   <p>{item.counterparty || item.note || typeLabels[item.type]}</p>
 
@@ -1422,16 +1469,49 @@ export function TransactionsPage() {
 
 
               </div>
-              <div className="transaction-context">
-                <strong>{space?.type === 'personal' ? 'Personal' : space?.name || 'Unknown'}</strong>
-                <small>{source?.name || 'Unknown Account'}{destination ? ` â†’ ${destination.name}` : ''}</small>
+              <div
+                className={`transaction-context ${
+                  isTransferFlow
+                    ? 'transfer-route'
+                    : ''
+                }`}
+              >
+                {isTransferFlow && destination ? (
+                  <>
+                    <div className="transaction-route">
+                      <span>
+                        {source?.name || 'Unknown Account'}
+                      </span>
+                      <b>to</b>
+                      <span>{destination.name}</span>
+                    </div>
+
+                    <small>
+                      {space?.type === 'personal'
+                        ? 'Personal'
+                        : space?.name || 'Unknown'}
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <strong>
+                      {space?.type === 'personal'
+                        ? 'Personal'
+                        : space?.name || 'Unknown'}
+                    </strong>
+
+                    <small>
+                      {source?.name || 'Unknown Account'}
+                    </small>
+                  </>
+                )}
               </div>
               <div className="transaction-amount">
                 <strong className={isIncome ? 'money-positive' : isOutflow ? 'money-negative' : ''}>{isIncome ? '+' : isOutflow ? 'âˆ’' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
                 <small>{item.transactionDate}</small>
               </div>
               <div className="transaction-status">
-                <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
+                <span className={`status-badge ${activityStatusClass(item)}`}>{activityStatusLabel(item)}</span>
                 {(item.type !== 'reversal' || (transactionAttachmentCounts[item.id] || 0) > 0) && <button
                   type="button"
                   className="text-button receipt-shortcut"

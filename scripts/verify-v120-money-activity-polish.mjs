@@ -107,6 +107,44 @@ if (
   );
 }
 
+for (const [label, source] of [
+  ['Personal', personal],
+  ['Business', business],
+]) {
+  for (const expected of [
+    'function activityKindLabel(',
+    'function activityStatusLabel(',
+    'transaction-kind-badge',
+    'const isTransferFlow',
+    'transaction-route',
+    '<b>to</b>',
+    'activityStatusLabel(item)',
+  ]) {
+    if (!source.includes(expected)) {
+      fail(
+        label
+        + ' Transaction row clarity is missing: '
+        + expected,
+      );
+    }
+  }
+}
+
+for (const expected of [
+  'BAJETBN V1.20 TRANSACTION ROW CLARITY',
+  '.transaction-kind-badge.transfer',
+  '.transaction-kind-badge.reversal',
+  '.transaction-route {',
+  '.status-badge.reversal',
+]) {
+  if (!styles.includes(expected)) {
+    fail(
+      'Transaction row clarity styling is missing: '
+      + expected,
+    );
+  }
+}
+
 console.log(
   'BAJETBN v120 MONEY ACTIVITY POLISH VERIFICATION PASS',
 );

@@ -23315,3 +23315,70 @@ select.trip-sheet-cell-input {
 }
 
 /* END BAJETBN V1.20 MOBILE MONEY FILTERS */
+
+
+/* BAJETBN V1.20 TRANSACTION ROW CLARITY */
+
+.transaction-kind-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: .35rem;
+  padding: .22rem .48rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: .62rem;
+  font-weight: 800;
+}
+
+.transaction-kind-badge.income {
+  color: var(--accent-2);
+}
+
+.transaction-kind-badge.expense {
+  color: #fda4af;
+}
+
+.transaction-kind-badge.transfer {
+  color: #93c5fd;
+}
+
+.transaction-kind-badge.reversal {
+  color: #c4b5fd;
+}
+
+.transaction-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.transaction-route span {
+  color: var(--text);
+  font-size: .82rem;
+  font-weight: 800;
+}
+
+.transaction-route b {
+  color: var(--muted);
+  font-size: .62rem;
+  text-transform: uppercase;
+}
+
+.status-badge.reversal {
+  color: #ddd6fe;
+  background: rgba(124, 58, 237, .18);
+}
+
+@media (max-width: 780px) {
+  .transaction-route span {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* END BAJETBN V1.20 TRANSACTION ROW CLARITY */

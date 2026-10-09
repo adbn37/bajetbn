@@ -63,6 +63,44 @@ const statusLabels = {
   reversed: 'Undone',
 } as const;
 
+function activityKindLabel(
+  item: FinancialTransaction,
+): string {
+  if (item.type !== 'reversal') {
+    return typeLabels[item.type];
+  }
+
+  if (item.originalType === 'income') {
+    return 'Undo Money in';
+  }
+
+  if (item.originalType === 'expense') {
+    return 'Undo Money out';
+  }
+
+  if (item.originalType === 'transfer') {
+    return 'Undo Move money';
+  }
+
+  return 'Undo';
+}
+
+function activityStatusLabel(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'Undo record'
+    : statusLabels[item.status];
+}
+
+function activityStatusClass(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'reversal'
+    : item.status;
+}
+
 const paymentMethods: PaymentMethodCode[] = [
   'bank_transfer',
   'cash',
@@ -1662,6 +1700,10 @@ export function BusinessMoneyActivityPage() {
             const isExpense =
               item.type === 'expense';
 
+            const isTransferFlow =
+              item.type === 'transfer'
+              || item.originalType === 'transfer';
+
             return (
               <article
                 className={
@@ -1685,6 +1727,12 @@ export function BusinessMoneyActivityPage() {
 
                 <div className="transaction-main">
                   <div>
+                    <span
+                      className={`transaction-kind-badge ${item.type}`}
+                    >
+                      {activityKindLabel(item)}
+                    </span>
+
                     <h2>
                       {item.category
                         || typeLabels[item.type]}
@@ -1715,19 +1763,34 @@ export function BusinessMoneyActivityPage() {
                   </div>
                 </div>
 
-                <div className="transaction-context">
-                  <strong>
-                    {space.name}
-                  </strong>
-                  <small>
-                    {source?.name
-                      || 'Business Account'}
-                    {destination
-                      ? ` -> ${destination.name}`
-                      : ''}
-                  </small>
-                </div>
+                <div
+                  className={`transaction-context ${
+                    isTransferFlow
+                      ? 'transfer-route'
+                      : ''
+                  }`}
+                >
+                  {isTransferFlow && destination ? (
+                    <>
+                      <div className="transaction-route">
+                        <span>
+                          {source?.name || 'Business Account'}
+                        </span>
+                        <b>to</b>
+                        <span>{destination.name}</span>
+                      </div>
 
+                      <small>{space.name}</small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{space.name}</strong>
+                      <small>
+                        {source?.name || 'Business Account'}
+                      </small>
+                    </>
+                  )}
+                </div>
                 <div className="transaction-amount">
                   <strong
                     className={
@@ -1756,12 +1819,10 @@ export function BusinessMoneyActivityPage() {
                 <div className="transaction-status">
                   <span
                     className={
-                      `status-badge ${item.status}`
+                      `status-badge ${activityStatusClass(item)}`
                     }
                   >
-                    {statusLabels[
-                      item.status
-                    ]}
+                    {activityStatusLabel(item)}
                   </span>
 
                   <button
