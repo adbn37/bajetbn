@@ -10,7 +10,9 @@ const skipTypecheck =
   );
 
 if (!['production', 'staging'].includes(mode)) {
-  throw new Error('Build mode must be production or staging.');
+  throw new Error(
+    'Build mode must be production or staging.',
+  );
 }
 
 if (
@@ -69,31 +71,107 @@ function parseEnvironment(content) {
 
 function readEnvironmentFile(file) {
   if (!fs.existsSync(file)) return {};
-  return parseEnvironment(fs.readFileSync(file, 'utf8'));
+
+  return parseEnvironment(
+    fs.readFileSync(file, 'utf8'),
+  );
 }
+
+const policyPath =
+  'config/deployment-environments.json';
+
+if (!fs.existsSync(policyPath)) {
+  throw new Error(
+    'Deployment environment policy is missing: '
+    + policyPath,
+  );
+}
+
+const policy = JSON.parse(
+  fs.readFileSync(policyPath, 'utf8'),
+);
+
+const stagingProject =
+  String(
+    policy?.firebaseProjects?.staging
+    || '',
+  ).trim();
+
+const productionProject =
+  String(
+    policy?.firebaseProjects?.production
+    || '',
+  ).trim();
+
+if (!stagingProject || !productionProject) {
+  throw new Error(
+    'Deployment policy must define staging and production Firebase projects.',
+  );
+}
+
+const projectsAreShared =
+  stagingProject === productionProject;
+
+if (
+  projectsAreShared
+  !== (policy.allowSharedFirebaseProject === true)
+) {
+  throw new Error(
+    'Deployment policy shared-project setting does not match '
+    + 'the configured Firebase project IDs.',
+  );
+}
+
+const expectedProject =
+  mode === 'production'
+    ? productionProject
+    : stagingProject;
 
 const modeFile =
   mode === 'production'
     ? '.env.production'
     : '.env.staging';
 
-let fileValues = readEnvironmentFile(modeFile);
+const modeFileExists =
+  fs.existsSync(modeFile);
 
-if (
-  mode === 'production'
-  && !fs.existsSync(modeFile)
-  && fs.existsSync('.env.staging')
-) {
-  fileValues = readEnvironmentFile('.env.staging');
-}
+const fileValues =
+  readEnvironmentFile(modeFile);
 
 const processValues = {};
 
-for (const key of [...requiredKeys, ...optionalKeys]) {
+for (
+  const key
+  of [...requiredKeys, ...optionalKeys]
+) {
   const value = process.env[key];
 
-  if (typeof value === 'string' && value.trim()) {
-    processValues[key] = value.trim();
+  if (
+    typeof value === 'string'
+    && value.trim()
+  ) {
+    processValues[key] =
+      value.trim();
+  }
+}
+
+if (!modeFileExists) {
+  const missingProcessKeys =
+    requiredKeys.filter(
+      (key) =>
+        !String(
+          processValues[key]
+          ?? '',
+        ).trim(),
+    );
+
+  if (missingProcessKeys.length > 0) {
+    throw new Error(
+      `${mode} Firebase configuration is missing. `
+      + `Provide ${modeFile} or all required environment variables. `
+      + 'Cross-environment fallback is disabled. Missing: '
+      + missingProcessKeys.join(', '),
+    );
   }
 }
 
@@ -108,7 +186,11 @@ const buildValues = {
 };
 
 const missing = requiredKeys.filter(
-  (key) => !String(buildValues[key] ?? '').trim(),
+  (key) =>
+    !String(
+      buildValues[key]
+      ?? '',
+    ).trim(),
 );
 
 if (missing.length) {
@@ -118,26 +200,88 @@ if (missing.length) {
   );
 }
 
+if (
+  String(buildValues.VITE_FIREBASE_PROJECT_ID)
+  !== expectedProject
+) {
+  throw new Error(
+    `${mode} Firebase project does not match deployment policy. `
+    + `Expected ${expectedProject}, received `
+    + String(
+      buildValues.VITE_FIREBASE_PROJECT_ID,
+    )
+    + '.',
+  );
+}
+
 const childEnv = {
   ...process.env,
 };
 
-for (const key of [...requiredKeys, ...optionalKeys, 'VITE_APP_ENV']) {
+for (
+  const key
+  of [
+    ...requiredKeys,
+    ...optionalKeys,
+    'VITE_APP_ENV',
+  ]
+) {
   delete childEnv[key];
 }
 
-for (const [key, value] of Object.entries(buildValues)) {
-  if (key.startsWith('VITE_') && value != null) {
-    childEnv[key] = String(value);
+for (
+  const [key, value]
+  of Object.entries(buildValues)
+) {
+  if (
+    key.startsWith('VITE_')
+    && value != null
+  ) {
+    childEnv[key] =
+      String(value);
   }
 }
 
-console.log('BajetBN build environment:', mode);
-console.log('Firebase project:', buildValues.VITE_FIREBASE_PROJECT_ID);
-console.log('Functions region:', buildValues.VITE_FIREBASE_FUNCTIONS_REGION);
-console.log('Environment badge:', buildValues.VITE_APP_ENV);
+const configurationSource =
+  modeFileExists
+    ? (
+      Object.keys(processValues).length
+        ? `${modeFile} + environment overrides`
+        : modeFile
+    )
+    : 'environment variables';
 
-function runNodeScript(scriptPath, args) {
+console.log(
+  'BajetBN build environment:',
+  mode,
+);
+console.log(
+  'Configuration source:',
+  configurationSource,
+);
+console.log(
+  'Firebase project:',
+  buildValues.VITE_FIREBASE_PROJECT_ID,
+);
+console.log(
+  'Firebase project policy:',
+  projectsAreShared
+    ? 'shared backend explicitly allowed'
+    : 'dedicated backend',
+);
+console.log(
+  'Functions region:',
+  buildValues.VITE_FIREBASE_FUNCTIONS_REGION,
+);
+console.log(
+  'Environment badge:',
+  buildValues.VITE_APP_ENV,
+);
+
+function runNodeScript(
+  scriptPath,
+  args,
+) {
   const result = spawnSync(
     process.execPath,
     [
@@ -161,7 +305,9 @@ function runNodeScript(scriptPath, args) {
 
 if (!skipTypecheck) {
   runNodeScript(
-    path.resolve('node_modules/typescript/bin/tsc'),
+    path.resolve(
+      'node_modules/typescript/bin/tsc',
+    ),
     ['-b'],
   );
 } else {
@@ -171,7 +317,9 @@ if (!skipTypecheck) {
 }
 
 runNodeScript(
-  path.resolve('node_modules/vite/bin/vite.js'),
+  path.resolve(
+    'node_modules/vite/bin/vite.js',
+  ),
   [
     'build',
     '--mode',

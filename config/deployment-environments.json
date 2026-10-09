@@ -1,0 +1,8 @@
+{
+  "firebaseProjects": {
+    "staging": "bajetbn-staging",
+    "production": "bajetbn-staging"
+  },
+  "allowSharedFirebaseProject": true,
+  "note": "Production and staging currently share the same Firebase backend intentionally. Change the production project here before migrating production to a dedicated Firebase project."
+}
