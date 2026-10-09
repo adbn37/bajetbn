@@ -54,7 +54,11 @@ if (
 }
 
 for (const expected of [
-  "'--cwd'",
+  'process.env.npm_execpath',
+  "'--package'",
+  "'wrangler@4.107.0'",
+  'cwd: distPath',
+  'result.error',
   'distPath',
   "'wrangler@4.107.0'",
   "'pages'",

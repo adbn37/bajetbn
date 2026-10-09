@@ -134,16 +134,25 @@ console.log(
   distPath,
 );
 
-const npxCommand =
-  process.platform === 'win32'
-    ? 'npx.cmd'
-    : 'npx';
+const npmCli =
+  process.env.npm_execpath;
+
+if (!npmCli) {
+  throw new Error(
+    'npm_execpath is unavailable. Run this deployment through the npm script.',
+  );
+}
 
 const result = spawnSync(
-  npxCommand,
+  process.execPath,
   [
+    npmCli,
+    'exec',
     '--yes',
+    '--package',
     'wrangler@4.107.0',
+    '--',
+    'wrangler',
     'pages',
     'deploy',
     '.',
@@ -153,14 +162,18 @@ const result = spawnSync(
     deployment.branch,
     '--commit-hash',
     commit,
-    '--cwd',
-    distPath,
   ],
   {
-    cwd: process.cwd(),
+    cwd: distPath,
     stdio: 'inherit',
   },
 );
+
+if (result.error) {
+  throw new Error(
+    `Failed to launch Cloudflare Pages deployment: ${result.error.message}`,
+  );
+}
 
 if (result.status !== 0) {
   throw new Error(
