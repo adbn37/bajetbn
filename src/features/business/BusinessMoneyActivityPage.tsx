@@ -1400,9 +1400,8 @@ export function BusinessMoneyActivityPage() {
           <summary>
             <span>More filters</span>
             <strong>
-              Filters
               {activeFilterCount > 0
-                ? ' (' + activeFilterCount + ')'
+                ? activeFilterCount + ' active'
                 : ''}
             </strong>
           </summary>
