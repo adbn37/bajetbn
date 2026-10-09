@@ -23213,3 +23213,105 @@ select.trip-sheet-cell-input {
 }
 
 /* END BAJETBN V1.20 MONEY ACTIVITY FILTER CLARITY */
+
+
+/* BAJETBN V1.20 MOBILE MONEY FILTERS */
+
+.transaction-advanced-filters {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.transaction-advanced-filters > summary {
+  display: none;
+}
+
+.transaction-advanced-filters:not([open])
+> .transaction-filter-grid {
+  display: grid;
+}
+
+.transaction-advanced-filters:not([open])
+> .form-grid {
+  display: grid;
+}
+
+.transaction-advanced-filters
+> .form-grid {
+  margin-top: .7rem;
+}
+
+@media (max-width: 780px) {
+  .transaction-advanced-filters {
+    border-top: 1px solid var(--border);
+    padding-top: .7rem;
+  }
+
+  .transaction-advanced-filters
+  > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    padding: .65rem .8rem;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .transaction-advanced-filters
+  > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .transaction-advanced-filters
+  > summary span {
+    color: var(--muted);
+    font-size: .72rem;
+  }
+
+  .transaction-advanced-filters
+  > summary strong {
+    font-size: .78rem;
+  }
+
+  .transaction-advanced-filters
+  > summary::after {
+    content: 'âŒ„';
+    margin-left: .6rem;
+    color: var(--muted);
+  }
+
+  .transaction-advanced-filters[open]
+  > summary::after {
+    content: 'âŒƒ';
+  }
+
+  .transaction-advanced-filters:not([open])
+  > .transaction-filter-grid,
+  .transaction-advanced-filters:not([open])
+  > .form-grid {
+    display: none;
+  }
+
+  .transaction-advanced-filters[open]
+  > .transaction-filter-grid {
+    display: grid;
+    margin-top: .7rem;
+  }
+
+  .transaction-advanced-filters[open]
+  > .form-grid {
+    display: grid;
+    margin-top: .7rem;
+  }
+
+  .transaction-filter-status {
+    padding-top: .65rem;
+  }
+}
+
+/* END BAJETBN V1.20 MOBILE MONEY FILTERS */

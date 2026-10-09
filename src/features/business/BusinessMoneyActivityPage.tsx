@@ -1396,7 +1396,18 @@ export function BusinessMoneyActivityPage() {
           placeholder="Search category, #label, account or payee..."
         />
 
-        <div className="transaction-filter-grid">
+        <details className="transaction-advanced-filters">
+          <summary>
+            <span>More filters</span>
+            <strong>
+              Filters
+              {activeFilterCount > 0
+                ? ' (' + activeFilterCount + ')'
+                : ''}
+            </strong>
+          </summary>
+
+          <div className="transaction-filter-grid">
           <label>
             Period
             <select
@@ -1554,6 +1565,7 @@ export function BusinessMoneyActivityPage() {
           </div>
         )}
 
+        </details>
         <div
           className="transaction-filter-status"
           aria-live="polite"

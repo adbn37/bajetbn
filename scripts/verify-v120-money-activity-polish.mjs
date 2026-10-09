@@ -67,6 +67,46 @@ if (
   );
 }
 
+for (const [label, source] of [
+  ['Personal', personal],
+  ['Business', business],
+]) {
+  if (
+    !source.includes(
+      'transaction-advanced-filters',
+    )
+  ) {
+    fail(
+      label
+      + ' Mobile advanced Money Activity filters are missing.',
+    );
+  }
+
+  if (
+    !source.includes(
+      '<span>More filters</span>',
+    )
+  ) {
+    fail(
+      label
+      + ' Mobile filter summary is missing.',
+    );
+  }
+}
+
+if (
+  !styles.includes(
+    'BAJETBN V1.20 MOBILE MONEY FILTERS',
+  )
+  || !styles.includes(
+    '.transaction-advanced-filters:not([open])',
+  )
+) {
+  fail(
+    'Mobile Money Activity filter collapse styling is missing.',
+  );
+}
+
 console.log(
   'BAJETBN v120 MONEY ACTIVITY POLISH VERIFICATION PASS',
 );

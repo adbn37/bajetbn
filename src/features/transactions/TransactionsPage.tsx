@@ -1285,7 +1285,18 @@ export function TransactionsPage() {
           {(['all', 'income', 'expense', 'transfer'] as const).map((value) => <button key={value} type="button" className={typeFilter === value ? 'active' : ''} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All' : typeLabels[value]}</button>)}
         </div>
         <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, account or payee…" />
-        <div className="transaction-filter-grid">
+        <details className="transaction-advanced-filters">
+          <summary>
+            <span>More filters</span>
+            <strong>
+              Filters
+              {activeFilterCount > 0
+                ? ' (' + activeFilterCount + ')'
+                : ''}
+            </strong>
+          </summary>
+
+          <div className="transaction-filter-grid">
           <label>Period<select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}><option value="current_month">This month</option><option value="all">All time</option></select></label>
           <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Saved</option><option value="reversed">Undone</option></select></label>
           <div className="transaction-account-filter">
@@ -1347,6 +1358,7 @@ export function TransactionsPage() {
           <label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{allCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           <label>Label<select value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}><option value="all">All labels</option>{availableLabels.map((label) => <option key={label.toLowerCase()} value={label}>{transactionLabelText(label)}</option>)}</select></label>
         </div>
+        </details>
 
         <div
           className="transaction-filter-status"
