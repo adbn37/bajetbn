@@ -160,7 +160,7 @@ const spaceTypeLabels: Record<Space['type'], string> = {
 
 function spaceDisplayLabel(space: Space): string {
   if (space.type === 'personal') return 'Personal';
-  return [space.name, spaceTypeLabels[space.type], space.currency].join(' Ã‚Â· ');
+  return [space.name, spaceTypeLabels[space.type], space.currency].join(' - ');
 }
 
 export function MoneyScopeSwitch({
@@ -1322,7 +1322,7 @@ export function TransactionsPage() {
         <div className="segmented-control" role="group" aria-label="Transaction type filter">
           {(['all', 'income', 'expense', 'transfer'] as const).map((value) => <button key={value} type="button" className={typeFilter === value ? 'active' : ''} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All' : typeLabels[value]}</button>)}
         </div>
-        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, account or payeeÃ¢â‚¬Â¦" />
+        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, account or payee..." />
         <details className="transaction-advanced-filters">
           <summary>
             <span>More filters</span>
@@ -1426,7 +1426,7 @@ export function TransactionsPage() {
 
       </section>
 
-      {loading ? <div className="loading-panel">Loading money activityÃ¢â‚¬Â¦</div> : visibleTransactions.length === 0 ? (
+      {loading ? <div className="loading-panel">Loading money activity...</div> : visibleTransactions.length === 0 ? (
         <EmptyState title="No matching money activity" description="Change the filters or add money in, money out, or a money move." action={activeWritableAccounts.length && writableSpaces.length ? <button className="button primary" onClick={() => setShowForm(true)}>Add money activity</button> : undefined} />
       ) : (
         <section className="transaction-list">
@@ -1616,7 +1616,7 @@ lockedSpaceId={
 
             {approvalLoading && (
               <div className="loading-panel">
-                Loading approvalsÃ¢â‚¬Â¦
+                Loading approvals...
               </div>
             )}
 
@@ -1692,7 +1692,7 @@ lockedSpaceId={
                         <strong>
                           {approval.accountName || 'Business account'}
                           {approval.destinationAccountName
-                            ? ` Ã¢â€ â€™ ${approval.destinationAccountName}`
+                            ? " to " + approval.destinationAccountName
                             : ''}
                         </strong>
                       </div>
@@ -1739,7 +1739,7 @@ lockedSpaceId={
                           }
                         >
                           {approvalBusyId === approval.id
-                            ? 'ReviewingÃ¢â‚¬Â¦'
+                            ? 'Reviewing...'
                             : 'Reject'}
                         </button>
 
@@ -1755,7 +1755,7 @@ lockedSpaceId={
                           }
                         >
                           {approvalBusyId === approval.id
-                            ? 'ReviewingÃ¢â‚¬Â¦'
+                            ? 'Reviewing...'
                             : 'Approve & post'}
                         </button>
                       </div>
@@ -2115,7 +2115,7 @@ export function MoneyActivityModal({
               : sourceAccount.type === 'cash'
                 ? 'Cash account'
                 : 'Bank account',
-        ].join(' Ã‚Â· ')
+        ].join(' - ')
       : 'Choose account';
 
   const destinationAccountVisualIndex =
@@ -2146,7 +2146,7 @@ export function MoneyActivityModal({
                 === 'cash'
                 ? 'Cash account'
                 : 'Bank account',
-        ].join(' Ã‚Â· ')
+        ].join(' - ')
       : 'Choose account';
 
   function currentShareSnapshot(
@@ -2473,14 +2473,14 @@ export function MoneyActivityModal({
       </div>}
       <div className="modal-actions">
         <button type="button" className="button secondary" disabled={busy} onClick={() => void finishSaved(queued ? 'Saved on this device. Attachments can be added after it syncs.' : 'Money activity saved. You can add the remaining attachments later from Details.', !queued)}>{queued ? 'Close' : 'Finish without remaining attachments'}</button>
-        {!queued && savedState.transactionId && pendingFiles.length > 0 && <button type="button" className="button primary" disabled={busy || !online} onClick={() => void retryAttachments()}>{busy ? 'RetryingÃ¢â‚¬Â¦' : 'Retry attachments'}</button>}
+        {!queued && savedState.transactionId && pendingFiles.length > 0 && <button type="button" className="button primary" disabled={busy || !online} onClick={() => void retryAttachments()}>{busy ? 'Retrying...' : 'Retry attachments'}</button>}
       </div>
     </Modal>;
   }
 
   const closeForm = () => { if (!busy) onClose(); };
   const saveLabel = busy
-    ? pendingFiles.length > 0 ? 'Saving and uploadingÃ¢â‚¬Â¦' : 'SavingÃ¢â‚¬Â¦'
+    ? pendingFiles.length > 0 ? 'Saving...' : 'Saving...'
     : initialValues
       ? 'Save corrected activity'
       : !online ? 'Save on this device'
@@ -2517,9 +2517,7 @@ export function MoneyActivityModal({
           <span
             className="bajetbn-move-guide-icon"
             aria-hidden="true"
-          >
-            Ã¢â€ â€
-          </span>
+          >{'->'}</span>
           <div>
             <strong>
               Move money between your accounts
@@ -2585,9 +2583,7 @@ export function MoneyActivityModal({
             <span
               className="bajetbn-identity-chevron"
               aria-hidden="true"
-            >
-              Ã¢â‚¬Âº
-            </span>
+            >{'>'}</span>
 
             <select
               className="bajetbn-identity-native-select"
@@ -2606,7 +2602,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} Ã‚Â· {
+                    {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -2626,7 +2622,7 @@ export function MoneyActivityModal({
           className="bajetbn-transfer-direction bajetbn-move-reference-direction"
           aria-hidden="true"
         >
-          <span>Ã¢â€ â€œ</span>
+          <span>to</span>
         </div>
 
         <div className="bajetbn-move-account-field">
@@ -2683,9 +2679,7 @@ export function MoneyActivityModal({
             <span
               className="bajetbn-identity-chevron"
               aria-hidden="true"
-            >
-              Ã¢â‚¬Âº
-            </span>
+            >{'>'}</span>
 
             <select
               className="bajetbn-identity-native-select"
@@ -2708,7 +2702,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} Ã‚Â· {
+                    {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -2813,7 +2807,7 @@ export function MoneyActivityModal({
             }
           >
             {busy
-              ? 'Moving moneyÃ¢â‚¬Â¦'
+              ? 'Moving money...'
               : 'Move money'}
           </button>
         </div>
@@ -2977,9 +2971,7 @@ export function MoneyActivityModal({
         <span
           className="bajetbn-identity-chevron"
           aria-hidden="true"
-        >
-          Ã¢â‚¬Âº
-        </span>
+        >{'>'}</span>
 
         <select
           className="bajetbn-identity-native-select"
@@ -2996,7 +2988,7 @@ export function MoneyActivityModal({
         >
           {compatibleAccounts.map((account) => (
             <option value={account.id} key={account.id}>
-              {account.name} Ã‚Â· {account.sharedCanViewBalance === false
+              {account.name} - {account.sharedCanViewBalance === false
                 ? 'Balance hidden'
                 : formatMoney(
                     account.ledgerBalanceMinor,
@@ -3057,9 +3049,7 @@ export function MoneyActivityModal({
               : ''}
           </span>
 
-          <span className="bajetbn-identity-chevron" aria-hidden="true">
-            Ã¢â‚¬Âº
-          </span>
+          <span className="bajetbn-identity-chevron" aria-hidden="true">{'>'}</span>
 
           <select
             className="bajetbn-identity-native-select"
@@ -3073,7 +3063,7 @@ export function MoneyActivityModal({
             <option value="">Choose account</option>
             {destinationOptions.map((account) => (
               <option value={account.id} key={account.id}>
-                {account.name} Ã‚Â· {account.sharedCanViewBalance === false
+                {account.name} - {account.sharedCanViewBalance === false
                   ? 'Balance hidden'
                   : formatMoney(
                       account.ledgerBalanceMinor,
@@ -3105,7 +3095,7 @@ export function MoneyActivityModal({
                   spaceTypeLabels[selectedSpace.type],
                   selectedSpace.currency,
                   'Locked to this Space',
-                ].join(' Ã‚Â· ')
+                ].join(' - ')
               : 'Locked to this Space'}
           </small>
         </span>
@@ -3235,7 +3225,7 @@ export function MoneyActivityModal({
                 className="category-icon category-slate"
                 aria-hidden="true"
               >
-                {showAllCategories ? 'Ã¢â€ Â' : 'Ã¢â€ â€™'}
+                {showAllCategories ? '<' : '>'}
               </span>
 
               <span>
@@ -3573,7 +3563,7 @@ function TransactionEditDetails({
 
       <div className="modal-actions">
         <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Cancel</button>
-        <button className="button primary" disabled={busy || !online}>{busy ? 'SavingÃ¢â‚¬Â¦' : 'Save details'}</button>
+        <button className="button primary" disabled={busy || !online}>{busy ? 'Saving...' : 'Save details'}</button>
       </div>
     </form>
   </Modal>;
@@ -3707,7 +3697,7 @@ function TransactionDetails({ item, source, destination, space, category, online
     {!receiptsOnly && <>
     <div className="transaction-detail-hero">
       <CategoryBadge category={category} />
-      <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? 'Ã¢Ë†â€™' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
+      <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? '-' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
       <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
     </div>
     <dl className="detail-list">
@@ -3715,8 +3705,8 @@ function TransactionDetails({ item, source, destination, space, category, online
       <Detail label="Type">{item.type === 'reversal' && item.originalType ? `Undo of ${typeLabels[item.originalType]}` : typeLabels[item.type]}</Detail>
       <Detail label="Date">{item.transactionDate}</Detail>
       <Detail label="Space">{space?.name || 'Unknown Space'}</Detail>
-      <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ` Ã¢â€ â€™ ${destination.name}` : ''}</Detail>
-      <Detail label={item.type === 'income' ? 'Money from' : 'Paid to'}>{item.counterparty || 'Ã¢â‚¬â€'}</Detail>
+      <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ' to ' + destination.name : ''}</Detail>
+      <Detail label={item.type === 'income' ? 'Money from' : 'Paid to'}>{item.counterparty || 'Not set'}</Detail>
       <Detail label="Payment method">{paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel)}</Detail>
       {(item.labels || []).length > 0 && (
         <Detail label="Labels">
@@ -3732,7 +3722,7 @@ function TransactionDetails({ item, source, destination, space, category, online
           </div>
         </Detail>
       )}
-      <Detail label="Note">{item.note || 'Ã¢â‚¬â€'}</Detail>
+      <Detail label="Note">{item.note || 'Not set'}</Detail>
       {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
       {item.commitmentId && <Detail label="Bill or instalment">Linked bill or instalment</Detail>}
       {item.sharedBillAssignmentId && <Detail label="Person's bill share">{item.sharedBillAssignmentId}</Detail>}
@@ -3769,7 +3759,7 @@ function TransactionDetails({ item, source, destination, space, category, online
       </div>}
       {item.type !== 'reversal' && attachments.length < 5 && <div className="transaction-attachment-upload">
         <input type="file" accept="image/*,application/pdf" disabled={!online || attachmentBusy} onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} />
-        <button type="button" className="button secondary" disabled={!online || !selectedFile || attachmentBusy} onClick={() => void addAttachment()}>{attachmentBusy ? 'SavingÃ¢â‚¬Â¦' : 'Attach file'}</button>
+        <button type="button" className="button secondary" disabled={!online || !selectedFile || attachmentBusy} onClick={() => void addAttachment()}>{attachmentBusy ? 'Saving...' : 'Attach file'}</button>
       </div>}
       {!online && <div className="notice warning">Connect to the internet to add or remove receipts and documents.</div>}
       {attachmentError && <div className="notice error">{attachmentError}</div>}
@@ -3870,7 +3860,7 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
     <div className="category-manager-intro"><div><strong>Brunei-ready defaults</strong><p>{DEFAULT_TRANSACTION_CATEGORIES.length} built-in categories are available automatically. Add custom categories for your own household or Business workflow.</p></div><div className="button-row"><Link className="button secondary archive-button" to="/categories/archived" onClick={onClose}>Hidden Categories <span>{hidden.length}</span></Link><button className="button primary" onClick={() => { setEditing(null); setShowEditor(true); }}>+ Custom category</button></div></div>
     {error && <div className="notice error">{error}</div>}
     {active.length === 0 ? <EmptyState title="No custom categories" description="Ready-made categories are available. Add your own only when you need a different name." /> : <div className="category-manager-list">
-      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} Ã‚Â· {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'delete')}>Delete</button></div></div>)}
+      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} - {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'delete')}>Delete</button></div></div>)}
     </div>}
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button></div>
