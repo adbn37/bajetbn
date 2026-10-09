@@ -1045,52 +1045,6 @@ export function TransactionsPage() {
 
   const currentMonth = monthPrefix(profile?.timezone || 'Asia/Brunei');
 
-  const monthlyPosted = transactions.filter(
-    (item) => (
-      item.status === 'posted'
-      && item.transactionDate.startsWith(currentMonth)
-      && accountMatchesFilter(item)
-    ),
-  );
-
-  const income = monthlyPosted
-    .filter((item) => item.type === 'income')
-    .reduce((sum, item) => sum + item.amountMinor, 0);
-
-  const expenses = monthlyPosted
-    .filter((item) => item.type === 'expense')
-    .reduce((sum, item) => sum + item.amountMinor, 0);
-
-  const transferCount = monthlyPosted
-    .filter((item) => item.type === 'transfer')
-    .length;
-
-  const expenseCategorySummary = (() => {
-    const totals = new Map<
-      string,
-      { category: TransactionCategory; amountMinor: number }
-    >();
-
-    monthlyPosted
-      .filter((item) => item.type === 'expense')
-      .forEach((item) => {
-        const category = item.categoryId
-          ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item)
-          : transactionCategorySnapshot(item);
-
-        const current = totals.get(category.id);
-
-        totals.set(category.id, {
-          category,
-          amountMinor: (current?.amountMinor || 0) + item.amountMinor,
-        });
-      });
-
-    return [...totals.values()]
-      .sort((a, b) => b.amountMinor - a.amountMinor)
-      .slice(0, 5);
-  })();
-
   const visibleTransactions = transactions.filter((item) => {
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
     if (statusFilter !== 'all' && item.status !== statusFilter) return false;
@@ -1139,6 +1093,174 @@ export function TransactionsPage() {
         value?.toLowerCase().includes(needle),
     );
   });
+
+  const personalSummaryRows =
+    visibleTransactions.filter(
+      (item) =>
+        item.status === 'posted'
+        && item.type !== 'reversal',
+    );
+
+  const personalSummaryByCurrency = (() => {
+    const totals = new Map<
+      string,
+      {
+        currency: string;
+        income: number;
+        expenses: number;
+        transferCount: number;
+      }
+    >();
+
+    personalSummaryRows.forEach((item) => {
+      const current =
+        totals.get(item.currency)
+        || {
+          currency: item.currency,
+          income: 0,
+          expenses: 0,
+          transferCount: 0,
+        };
+
+      if (item.type === 'income') {
+        current.income += item.amountMinor;
+      }
+
+      if (item.type === 'expense') {
+        current.expenses += item.amountMinor;
+      }
+
+      if (item.type === 'transfer') {
+        current.transferCount += 1;
+      }
+
+      totals.set(
+        item.currency,
+        current,
+      );
+    });
+
+    return [...totals.values()]
+      .sort(
+        (a, b) =>
+          a.currency.localeCompare(
+            b.currency,
+          ),
+      );
+  })();
+
+  const personalSummaryCurrencies =
+    personalSummaryByCurrency.length > 0
+      ? personalSummaryByCurrency
+      : [
+          {
+            currency:
+              (
+                selectedAccountIds
+                && selectedAccountIds.length === 1
+                  ? accountMap.get(
+                      selectedAccountIds[0],
+                    )?.currency
+                  : undefined
+              )
+              || profile?.currency
+              || 'BND',
+            income: 0,
+            expenses: 0,
+            transferCount: 0,
+          },
+        ];
+
+  const personalTransferCount =
+    personalSummaryByCurrency.reduce(
+      (sum, item) =>
+        sum + item.transferCount,
+      0,
+    );
+
+  const personalSummaryLabel =
+    periodFilter === 'current_month'
+      ? 'This month'
+      : 'All time';
+
+  const expenseCategorySummary = (() => {
+    const currencies = new Map<
+      string,
+      Map<
+        string,
+        {
+          category: TransactionCategory;
+          amountMinor: number;
+        }
+      >
+    >();
+
+    personalSummaryRows
+      .filter(
+        (item) =>
+          item.type === 'expense',
+      )
+      .forEach((item) => {
+        const category =
+          item.categoryId
+            ? (
+              categoryMap.get(
+                item.categoryId,
+              )
+              || transactionCategorySnapshot(
+                item,
+              )
+            )
+            : transactionCategorySnapshot(
+                item,
+              );
+
+        const currencyTotals =
+          currencies.get(item.currency)
+          || new Map();
+
+        const current =
+          currencyTotals.get(
+            category.id,
+          );
+
+        currencyTotals.set(
+          category.id,
+          {
+            category,
+            amountMinor:
+              (current?.amountMinor || 0)
+              + item.amountMinor,
+          },
+        );
+
+        currencies.set(
+          item.currency,
+          currencyTotals,
+        );
+      });
+
+    return [...currencies.entries()]
+      .sort(
+        ([currencyA], [currencyB]) =>
+          currencyA.localeCompare(
+            currencyB,
+          ),
+      )
+      .map(
+        ([currency, totals]) => ({
+          currency,
+          items:
+            [...totals.values()]
+              .sort(
+                (a, b) =>
+                  b.amountMinor
+                  - a.amountMinor,
+              )
+              .slice(0, 5),
+        }),
+      );
+  })();
 
   const activeFilterCount = [
     typeFilter !== 'all',
@@ -1294,10 +1416,88 @@ export function TransactionsPage() {
       <div className="info-banner"><strong>Personal money only.</strong><span>Business activity is kept inside its specific Business Space. You can still assign Personal money activity to a Household, Trip or another non-Business Space without duplicating the transaction. Plans are managed from Goals.</span></div>
 
       <section className="transaction-summary">
-        <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
-        <div><span>Money out this month</span><strong className="money-negative">{formatMoney(expenses, profile?.currency || 'BND')}</strong></div>
-        <div><span>Money left this month</span><strong>{formatMoney(income - expenses, profile?.currency || 'BND')}</strong></div>
-        <div><span>Money moves this month</span><strong>{transferCount}</strong></div>
+        <div>
+          <span>Money in</span>
+          <div className="transaction-summary-values">
+            {personalSummaryCurrencies.map(
+              (item) => (
+                <strong
+                  className="money-positive"
+                  key={item.currency}
+                >
+                  {formatMoney(
+                    item.income,
+                    item.currency,
+                  )}
+                </strong>
+              ),
+            )}
+          </div>
+          <small>
+            {personalSummaryLabel}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
+        </div>
+
+        <div>
+          <span>Money out</span>
+          <div className="transaction-summary-values">
+            {personalSummaryCurrencies.map(
+              (item) => (
+                <strong
+                  className="money-negative"
+                  key={item.currency}
+                >
+                  {formatMoney(
+                    item.expenses,
+                    item.currency,
+                  )}
+                </strong>
+              ),
+            )}
+          </div>
+          <small>
+            {personalSummaryLabel}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
+        </div>
+
+        <div>
+          <span>Money left</span>
+          <div className="transaction-summary-values">
+            {personalSummaryCurrencies.map(
+              (item) => (
+                <strong key={item.currency}>
+                  {formatMoney(
+                    item.income
+                    - item.expenses,
+                    item.currency,
+                  )}
+                </strong>
+              ),
+            )}
+          </div>
+          <small>
+            Currencies stay separate
+          </small>
+        </div>
+
+        <div>
+          <span>Money moves</span>
+          <strong>
+            {personalTransferCount}
+          </strong>
+          <small>
+            {personalSummaryLabel}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
+        </div>
       </section>
 
       <div className="transaction-account-scope" aria-live="polite">
@@ -1305,15 +1505,72 @@ export function TransactionsPage() {
         <strong>{accountFilterLabel}</strong>
       </div>
 
-      {expenseCategorySummary.length > 0 && <section className="category-summary-panel">
-        <div className="section-heading"><div><span>Where your money went</span><h2>Top categories this month</h2></div><small>{expenseCategorySummary.length} categories</small></div>
-        <div className="category-summary-grid">
-          {expenseCategorySummary.map(({ category, amountMinor }) => <div className="category-summary-item" key={category.id}>
-            <CategoryBadge category={category} />
-            <strong>{formatMoney(amountMinor, profile?.currency || 'BND')}</strong>
-          </div>)}
-        </div>
-      </section>}
+      {expenseCategorySummary.length > 0 && (
+        <section className="category-summary-panel">
+          <div className="section-heading">
+            <div>
+              <span>Where your money went</span>
+              <h2>
+                Top categories in this view
+              </h2>
+            </div>
+
+            <small>
+              Currency-safe totals
+            </small>
+          </div>
+
+          {expenseCategorySummary.map(
+            (group) => (
+              <div
+                className="category-summary-currency"
+                key={group.currency}
+              >
+                <div className="category-summary-currency-heading">
+                  <strong>
+                    {group.currency}
+                  </strong>
+                  <small>
+                    {group.items.length}
+                    {' '}
+                    {group.items.length === 1
+                      ? 'category'
+                      : 'categories'}
+                  </small>
+                </div>
+
+                <div className="category-summary-grid">
+                  {group.items.map(
+                    ({
+                      category,
+                      amountMinor,
+                    }) => (
+                      <div
+                        className="category-summary-item"
+                        key={
+                          group.currency
+                          + '-'
+                          + category.id
+                        }
+                      >
+                        <CategoryBadge
+                          category={category}
+                        />
+                        <strong>
+                          {formatMoney(
+                            amountMinor,
+                            group.currency,
+                          )}
+                        </strong>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+            ),
+          )}
+        </section>
+      )}
 
       {!accounts.length && !loading && <div className="notice">Add an account before recording money.</div>}
       {!spaces.length && !loading && <div className="notice">Your personal budget is not ready. Refresh BajetBN and try again.</div>}

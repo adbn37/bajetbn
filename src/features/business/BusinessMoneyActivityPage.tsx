@@ -791,43 +791,6 @@ export function BusinessMoneyActivityPage() {
     ],
   );
 
-  const summaryRows =
-    periodRows.filter(
-      (item) =>
-        item.status === 'posted'
-        && item.type !== 'reversal',
-    );
-
-  const moneyIn =
-    summaryRows
-      .filter(
-        (item) =>
-          item.type === 'income',
-      )
-      .reduce(
-        (sum, item) =>
-          sum + item.amountMinor,
-        0,
-      );
-
-  const moneyOut =
-    summaryRows
-      .filter(
-        (item) =>
-          item.type === 'expense',
-      )
-      .reduce(
-        (sum, item) =>
-          sum + item.amountMinor,
-        0,
-      );
-
-  const transferCount =
-    summaryRows.filter(
-      (item) =>
-        item.type === 'transfer',
-    ).length;
-
   const visibleRows = useMemo(() => {
     const needle =
       search.trim().toLowerCase();
@@ -923,6 +886,43 @@ export function BusinessMoneyActivityPage() {
     statusFilter,
     typeFilter,
   ]);
+
+  const summaryRows =
+    visibleRows.filter(
+      (item) =>
+        item.status === 'posted'
+        && item.type !== 'reversal',
+    );
+
+  const moneyIn =
+    summaryRows
+      .filter(
+        (item) =>
+          item.type === 'income',
+      )
+      .reduce(
+        (sum, item) =>
+          sum + item.amountMinor,
+        0,
+      );
+
+  const moneyOut =
+    summaryRows
+      .filter(
+        (item) =>
+          item.type === 'expense',
+      )
+      .reduce(
+        (sum, item) =>
+          sum + item.amountMinor,
+        0,
+      );
+
+  const transferCount =
+    summaryRows.filter(
+      (item) =>
+        item.type === 'transfer',
+    ).length;
 
   const activeFilterCount = [
     typeFilter !== 'all',
@@ -1358,7 +1358,12 @@ export function BusinessMoneyActivityPage() {
               space.currency,
             )}
           </strong>
-          <small>{periodWindow.label}</small>
+          <small>
+            {periodWindow.label}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
         </div>
 
         <div>
@@ -1369,7 +1374,12 @@ export function BusinessMoneyActivityPage() {
               space.currency,
             )}
           </strong>
-          <small>{periodWindow.label}</small>
+          <small>
+            {periodWindow.label}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
         </div>
 
         <div>
@@ -1388,7 +1398,12 @@ export function BusinessMoneyActivityPage() {
         <div>
           <span>Money moves</span>
           <strong>{transferCount}</strong>
-          <small>{periodWindow.label}</small>
+          <small>
+            {periodWindow.label}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
         </div>
       </section>
 

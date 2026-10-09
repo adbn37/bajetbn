@@ -23382,3 +23382,42 @@ select.trip-sheet-cell-input {
 }
 
 /* END BAJETBN V1.20 TRANSACTION ROW CLARITY */
+
+
+/* BAJETBN V1.20 SUMMARY INTEGRITY */
+
+.transaction-summary-values {
+  display: flex;
+  flex-direction: column;
+  gap: .18rem;
+}
+
+.transaction-summary-values strong {
+  margin: .1rem 0;
+}
+
+.category-summary-currency
++ .category-summary-currency {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.category-summary-currency-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .65rem;
+}
+
+.category-summary-currency-heading strong {
+  font-size: .78rem;
+}
+
+.category-summary-currency-heading small {
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+/* END BAJETBN V1.20 SUMMARY INTEGRITY */

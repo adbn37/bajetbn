@@ -145,6 +145,62 @@ for (const expected of [
   }
 }
 
+for (const expected of [
+  'const personalSummaryRows =',
+  'const personalSummaryByCurrency =',
+  'const personalSummaryCurrencies =',
+  'const personalTransferCount =',
+  'Top categories in this view',
+  'category-summary-currency',
+  'Currencies stay separate',
+]) {
+  if (!personal.includes(expected)) {
+    fail(
+      'Personal Summary integrity is missing: '
+      + expected,
+    );
+  }
+}
+
+if (
+  personal.includes(
+    "formatMoney(income, profile?.currency",
+  )
+  || personal.includes(
+    "formatMoney(expenses, profile?.currency",
+  )
+) {
+  fail(
+    'Personal summary still combines unlike currencies.',
+  );
+}
+
+for (const expected of [
+  'const summaryRows =',
+  'visibleRows.filter(',
+  "' - filtered'",
+]) {
+  if (!business.includes(expected)) {
+    fail(
+      'Business Summary integrity is missing: '
+      + expected,
+    );
+  }
+}
+
+for (const expected of [
+  'BAJETBN V1.20 SUMMARY INTEGRITY',
+  '.transaction-summary-values {',
+  '.category-summary-currency',
+]) {
+  if (!styles.includes(expected)) {
+    fail(
+      'Summary integrity styling is missing: '
+      + expected,
+    );
+  }
+}
+
 console.log(
   'BAJETBN v120 MONEY ACTIVITY POLISH VERIFICATION PASS',
 );
