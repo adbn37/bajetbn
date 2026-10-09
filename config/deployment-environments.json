@@ -4,5 +4,15 @@
     "production": "bajetbn-staging"
   },
   "allowSharedFirebaseProject": true,
-  "note": "Production and staging currently share the same Firebase backend intentionally. Change the production project here before migrating production to a dedicated Firebase project."
+  "note": "Production and staging currently share the same Firebase backend intentionally. Change the production project here before migrating production to a dedicated Firebase project.",
+  "cloudflarePages": {
+    "staging": {
+      "project": "bajetbn-staging",
+      "branch": "staging"
+    },
+    "production": {
+      "project": "bajetbn",
+      "branch": "main"
+    }
+  }
 }
