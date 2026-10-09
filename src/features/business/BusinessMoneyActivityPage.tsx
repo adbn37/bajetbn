@@ -835,13 +835,40 @@ export function BusinessMoneyActivityPage() {
 
       if (!needle) return true;
 
+      const sourceName =
+        accountMap.get(
+          item.accountId,
+        )?.name
+        || item.accountId;
+
+      const destinationName =
+        item.destinationAccountId
+          ? (
+            accountMap.get(
+              item.destinationAccountId,
+            )?.name
+            || item.destinationAccountId
+          )
+          : '';
+
       return [
         item.category,
         item.counterparty,
         item.note,
-        item.accountId,
-        item.destinationAccountId,
-        ...(item.labels || []),
+        typeLabels[item.type],
+        statusLabels[item.status],
+        item.transactionDate,
+        formatMoney(
+          item.amountMinor,
+          item.currency,
+        ),
+        sourceName,
+        destinationName,
+        ...(item.labels || [])
+          .map(
+            (label) =>
+              '#' + label,
+          ),
       ]
         .filter(Boolean)
         .join(' ')
@@ -850,6 +877,7 @@ export function BusinessMoneyActivityPage() {
     });
   }, [
     accountFilter,
+    accountMap,
     categoryFilter,
     labelFilter,
     periodRows,
@@ -857,6 +885,40 @@ export function BusinessMoneyActivityPage() {
     statusFilter,
     typeFilter,
   ]);
+
+  const activeFilterCount = [
+    typeFilter !== 'all',
+    statusFilter !== 'all',
+    periodFilter !== 'current_month',
+    accountFilter !== 'all',
+    categoryFilter !== 'all',
+    labelFilter !== 'all',
+    Boolean(search.trim()),
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setPeriodFilter(
+      'current_month',
+    );
+    setAccountFilter('all');
+    setCategoryFilter('all');
+    setLabelFilter('all');
+    setSearch('');
+
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    next.delete('accountId');
+
+    setSearchParams(
+      next,
+      { replace: true },
+    );
+  };
 
   const sortedRows =
     [...visibleRows].sort(
@@ -1491,6 +1553,34 @@ export function BusinessMoneyActivityPage() {
             </label>
           </div>
         )}
+
+        <div
+          className="transaction-filter-status"
+          aria-live="polite"
+        >
+          <span>
+            Showing{' '}
+            <strong>
+              {sortedRows.length}
+            </strong>
+            {' '}of{' '}
+            <strong>
+              {transactions.length}
+            </strong>
+            {' '}Business money records
+          </span>
+
+          {activeFilterCount > 0 && (
+            <button
+              className="text-button"
+              type="button"
+              onClick={resetFilters}
+            >
+              Reset filters ({activeFilterCount})
+            </button>
+          )}
+        </div>
+
       </section>
 
       {sortedRows.length === 0 ? (

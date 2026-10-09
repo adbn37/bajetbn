@@ -23180,3 +23180,36 @@ select.trip-sheet-cell-input {
   gap: 0.2rem;
   min-width: 0;
 }
+
+
+/* BAJETBN V1.20 MONEY ACTIVITY FILTER CLARITY */
+
+.transaction-filter-status {
+  grid-column: 1 / -1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding-top: .8rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.transaction-filter-status strong {
+  color: var(--text);
+}
+
+.transaction-filter-status .text-button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 600px) {
+  .transaction-filter-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* END BAJETBN V1.20 MONEY ACTIVITY FILTER CLARITY */

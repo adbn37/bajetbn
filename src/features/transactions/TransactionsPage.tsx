@@ -1084,6 +1084,13 @@ export function TransactionsPage() {
       item.category,
       item.counterparty,
       item.note,
+      typeLabels[item.type],
+      statusLabels[item.status],
+      item.transactionDate,
+      formatMoney(
+        item.amountMinor,
+        item.currency,
+      ),
       source,
       destination,
       space,
@@ -1094,6 +1101,38 @@ export function TransactionsPage() {
         value?.toLowerCase().includes(needle),
     );
   });
+
+  const activeFilterCount = [
+    typeFilter !== 'all',
+    statusFilter !== 'all',
+    periodFilter !== 'current_month',
+    selectedAccountIds !== null,
+    categoryFilter !== 'all',
+    labelFilter !== 'all',
+    Boolean(search.trim()),
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setPeriodFilter('current_month');
+    setSelectedAccountIds(null);
+    setCategoryFilter('all');
+    setLabelFilter('all');
+    setSearch('');
+
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    next.delete('accountId');
+
+    setSearchParams(
+      next,
+      { replace: true },
+    );
+  };
 
   const updateAttachmentCount = (transactionId: string, count: number) => {
     setTransactionAttachmentCounts((current) => ({ ...current, [transactionId]: count }));
@@ -1308,6 +1347,34 @@ export function TransactionsPage() {
           <label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{allCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           <label>Label<select value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}><option value="all">All labels</option>{availableLabels.map((label) => <option key={label.toLowerCase()} value={label}>{transactionLabelText(label)}</option>)}</select></label>
         </div>
+
+        <div
+          className="transaction-filter-status"
+          aria-live="polite"
+        >
+          <span>
+            Showing{' '}
+            <strong>
+              {visibleTransactions.length}
+            </strong>
+            {' '}of{' '}
+            <strong>
+              {transactions.length}
+            </strong>
+            {' '}money records
+          </span>
+
+          {activeFilterCount > 0 && (
+            <button
+              className="text-button"
+              type="button"
+              onClick={resetFilters}
+            >
+              Reset filters ({activeFilterCount})
+            </button>
+          )}
+        </div>
+
       </section>
 
       {loading ? <div className="loading-panel">Loading money activity…</div> : visibleTransactions.length === 0 ? (
