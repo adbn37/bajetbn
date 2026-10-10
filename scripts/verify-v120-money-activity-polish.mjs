@@ -201,6 +201,59 @@ for (const expected of [
   }
 }
 
+
+for (const [label, source] of [
+  ['Personal', personal],
+  ['Business', business],
+]) {
+  for (const expected of [
+    'formatTransactionAuditTime(',
+    'Record history',
+    'transaction-audit',
+    'activityStatusClass(item)',
+    'activityStatusLabel(item)',
+    'Undo relationship',
+    'item.displayId || item.id',
+    'Account route',
+  ]) {
+    if (!source.includes(expected)) {
+      fail(
+        label
+        + ' Transaction detail audit is missing: '
+        + expected,
+      );
+    }
+  }
+}
+
+if (
+  !business.includes(
+    'spaceName={space.name}',
+  )
+  || !business.includes(
+    '<dt>Business Space</dt>',
+  )
+) {
+  fail(
+    'Business transaction details are missing Business Space context.',
+  );
+}
+
+for (const expected of [
+  'BAJETBN V1.20 TRANSACTION DETAIL AUDIT',
+  '.transaction-audit {',
+  '.transaction-audit-heading {',
+  '.transaction-audit-list {',
+  '.transaction-audit-note {',
+]) {
+  if (!styles.includes(expected)) {
+    fail(
+      'Transaction detail audit styling is missing: '
+      + expected,
+    );
+  }
+}
+
 console.log(
   'BAJETBN v120 MONEY ACTIVITY POLISH VERIFICATION PASS',
 );

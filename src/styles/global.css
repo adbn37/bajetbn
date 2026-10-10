@@ -23421,3 +23421,68 @@ select.trip-sheet-cell-input {
 }
 
 /* END BAJETBN V1.20 SUMMARY INTEGRITY */
+
+
+/* BAJETBN V1.20 TRANSACTION DETAIL AUDIT */
+
+.transaction-audit {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(7, 17, 31, .68);
+}
+
+.transaction-audit-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .85rem .95rem;
+}
+
+.transaction-audit-heading > div {
+  display: grid;
+  gap: .2rem;
+}
+
+.transaction-audit-heading strong {
+  font-size: .9rem;
+}
+
+.transaction-audit-heading small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.transaction-audit-heading > span {
+  flex: 0 0 auto;
+  color: var(--accent-2);
+  font-size: .68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.transaction-audit-list {
+  padding: 0 .95rem;
+}
+
+.transaction-audit-list > div:last-child {
+  border-bottom: 0;
+}
+
+.transaction-audit-note {
+  color: var(--muted);
+}
+
+@media (max-width: 500px) {
+  .transaction-audit-heading {
+    display: grid;
+    gap: .45rem;
+  }
+
+  .transaction-audit-heading > span {
+    justify-self: start;
+  }
+}

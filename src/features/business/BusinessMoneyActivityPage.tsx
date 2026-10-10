@@ -151,6 +151,17 @@ function transactionTimestampMillis(value: unknown): number {
   return Number(timestamp.seconds ?? timestamp._seconds ?? 0) * 1000;
 }
 
+function formatTransactionAuditTime(
+  value: unknown,
+): string {
+  const millis =
+    transactionTimestampMillis(value);
+
+  if (!millis) return '';
+
+  return new Date(millis).toLocaleString();
+}
+
 function transactionCategorySnapshot(
   item: FinancialTransaction,
 ): TransactionCategory {
@@ -1941,6 +1952,7 @@ export function BusinessMoneyActivityPage() {
       {detail && (
         <BusinessMoneyDetailsModal
           item={detail}
+          spaceName={space.name}
           accountMap={accountMap}
           canManage={canManage}
           online={online}
@@ -2151,6 +2163,7 @@ export function BusinessMoneyActivityPage() {
 
 function BusinessMoneyDetailsModal({
   item,
+  spaceName,
   accountMap,
   canManage,
   online,
@@ -2167,6 +2180,7 @@ function BusinessMoneyDetailsModal({
   onReverse,
 }: {
   item: FinancialTransaction;
+  spaceName: string;
   accountMap: Map<string, Account>;
   canManage: boolean;
   online: boolean;
@@ -2248,6 +2262,30 @@ function BusinessMoneyDetailsModal({
     && item.type !== 'reversal'
     && !managedSource;
 
+  const isTransferFlow =
+    item.type === 'transfer'
+    || item.originalType === 'transfer';
+
+  const createdTime =
+    formatTransactionAuditTime(
+      item.createdAt,
+    );
+
+  const postedTime =
+    formatTransactionAuditTime(
+      item.postedAt,
+    );
+
+  const updatedTime =
+    formatTransactionAuditTime(
+      item.updatedAt,
+    );
+
+  const editedTime =
+    formatTransactionAuditTime(
+      item.editedAt,
+    );
+
   return (
     <Modal
       title="Business money activity details"
@@ -2281,10 +2319,10 @@ function BusinessMoneyDetailsModal({
 
         <span
           className={
-            `status-badge ${item.status}`
+            `status-badge ${activityStatusClass(item)}`
           }
         >
-          {statusLabels[item.status]}
+          {activityStatusLabel(item)}
         </span>
       </div>
 
@@ -2309,14 +2347,7 @@ function BusinessMoneyDetailsModal({
         <div>
           <dt>Type</dt>
           <dd>
-            {item.type === 'reversal'
-              && item.originalType
-                ? `Undo of ${
-                  typeLabels[
-                    item.originalType
-                  ]
-                }`
-                : typeLabels[item.type]}
+            {activityKindLabel(item)}
           </dd>
         </div>
 
@@ -2326,13 +2357,33 @@ function BusinessMoneyDetailsModal({
         </div>
 
         <div>
-          <dt>Account</dt>
+          <dt>Business Space</dt>
+          <dd>{spaceName}</dd>
+        </div>
+
+        <div>
+          <dt>
+            {isTransferFlow
+              ? 'Account route'
+              : 'Account'}
+          </dt>
           <dd>
-            {source?.name
-              || 'Business Account'}
-            {destination
-              ? ` -> ${destination.name}`
-              : ''}
+            {isTransferFlow ? (
+              <span className="transaction-route">
+                <span>
+                  {source?.name
+                    || 'Business Account'}
+                </span>
+                <b>to</b>
+                <span>
+                  {destination?.name
+                    || 'Destination Account'}
+                </span>
+              </span>
+            ) : (
+              source?.name
+              || 'Business Account'
+            )}
           </dd>
         </div>
 
@@ -2371,6 +2422,98 @@ function BusinessMoneyDetailsModal({
           </dd>
         </div>
       </dl>
+
+      <section
+        className="transaction-audit"
+        aria-label="Record history"
+      >
+        <div className="transaction-audit-heading">
+          <div>
+            <strong>Record history</strong>
+            <small>
+              Audit trail for this Business money activity.
+            </small>
+          </div>
+          <span>
+            {activityStatusLabel(item)}
+          </span>
+        </div>
+
+        <dl className="detail-list transaction-audit-list">
+          <div>
+            <dt>Record ID</dt>
+            <dd>{item.displayId || item.id}</dd>
+          </div>
+
+          <div>
+            <dt>Status</dt>
+            <dd>{activityStatusLabel(item)}</dd>
+          </div>
+
+          {createdTime && (
+            <div>
+              <dt>Created</dt>
+              <dd>{createdTime}</dd>
+            </div>
+          )}
+
+          {postedTime && (
+            <div>
+              <dt>Posted</dt>
+              <dd>{postedTime}</dd>
+            </div>
+          )}
+
+          {updatedTime && (
+            <div>
+              <dt>Last updated</dt>
+              <dd>{updatedTime}</dd>
+            </div>
+          )}
+
+          {Boolean(item.editCount) && (
+            <div>
+              <dt>Edited</dt>
+              <dd>
+                {item.editCount} time{
+                  item.editCount === 1 ? '' : 's'
+                }{
+                  editedTime
+                    ? ' - ' + editedTime
+                    : ''
+                }
+              </dd>
+            </div>
+          )}
+
+          {item.reversalOf && (
+            <div>
+              <dt>Undo relationship</dt>
+              <dd className="transaction-audit-note">
+                This record undoes {item.reversalOf}.
+              </dd>
+            </div>
+          )}
+
+          {item.reversedBy && (
+            <div>
+              <dt>Undo relationship</dt>
+              <dd className="transaction-audit-note">
+                This record was undone by {item.reversedBy}.
+              </dd>
+            </div>
+          )}
+
+          {item.financialApprovalId && (
+            <div>
+              <dt>Approval</dt>
+              <dd>
+                Linked approval {item.financialApprovalId}
+              </dd>
+            </div>
+          )}
+        </dl>
+      </section>
 
       <div className="modal-actions">
         <button

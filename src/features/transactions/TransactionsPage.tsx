@@ -340,6 +340,17 @@ function transactionTimestampMillis(value: unknown): number {
   );
 }
 
+function formatTransactionAuditTime(
+  value: unknown,
+): string {
+  const millis =
+    transactionTimestampMillis(value);
+
+  if (!millis) return '';
+
+  return new Date(millis).toLocaleString();
+}
+
 function transactionCategorySnapshot(item: FinancialTransaction): TransactionCategory {
   return {
     id: item.categoryId || `legacy-${item.category}`,
@@ -3950,20 +3961,70 @@ function TransactionDetails({ item, source, destination, space, category, online
     && item.status === 'posted'
     && !transactionHasManagedSource(item);
 
+  const isTransferFlow =
+    item.type === 'transfer'
+    || item.originalType === 'transfer';
+
+  const createdTime =
+    formatTransactionAuditTime(
+      item.createdAt,
+    );
+
+  const postedTime =
+    formatTransactionAuditTime(
+      item.postedAt,
+    );
+
+  const updatedTime =
+    formatTransactionAuditTime(
+      item.updatedAt,
+    );
+
+  const editedTime =
+    formatTransactionAuditTime(
+      item.editedAt,
+    );
+
   return <Modal title={receiptsOnly ? 'Receipts & documents' : 'Money activity details'} onClose={onClose}>
     {!receiptsOnly && <>
     <div className="transaction-detail-hero">
       <CategoryBadge category={category} />
       <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? '-' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
-      <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
+      <span className={`status-badge ${activityStatusClass(item)}`}>{activityStatusLabel(item)}</span>
     </div>
     <dl className="detail-list">
 
-      <Detail label="Type">{item.type === 'reversal' && item.originalType ? `Undo of ${typeLabels[item.originalType]}` : typeLabels[item.type]}</Detail>
+      <Detail label="Type">{activityKindLabel(item)}</Detail>
       <Detail label="Date">{item.transactionDate}</Detail>
       <Detail label="Space">{space?.name || 'Unknown Space'}</Detail>
-      <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ' to ' + destination.name : ''}</Detail>
-      <Detail label={item.type === 'income' ? 'Money from' : 'Paid to'}>{item.counterparty || 'Not set'}</Detail>
+      <Detail label={isTransferFlow ? 'Account route' : 'Account'}>
+        {isTransferFlow ? (
+          <span className="transaction-route">
+            <span>
+              {source?.name || 'Unknown Account'}
+            </span>
+            <b>to</b>
+            <span>
+              {destination?.name || 'Unknown Account'}
+            </span>
+          </span>
+        ) : (
+          source?.name || 'Unknown Account'
+        )}
+      </Detail>
+      <Detail
+        label={
+          item.type === 'income'
+          || item.originalType === 'income'
+            ? 'Money from'
+            : item.type === 'expense'
+              || item.originalType === 'expense'
+                ? 'Paid to'
+                : 'Payee / source'
+        }
+      >
+        {item.counterparty || 'Not set'}
+      </Detail>
       <Detail label="Payment method">{paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel)}</Detail>
       {(item.labels || []).length > 0 && (
         <Detail label="Labels">
@@ -3987,10 +4048,86 @@ function TransactionDetails({ item, source, destination, space, category, online
       {item.paymentProofPath && <Detail label="Payment proof">Attached in its Space</Detail>}
       {item.recurringTemplateId && <Detail label="Recurring money"><Link to="/recurring">Created automatically from a recurring template</Link></Detail>}
       {item.recurringScheduledDate && <Detail label="Scheduled date">{item.recurringScheduledDate}</Detail>}
-      {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
-      {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
-      {Boolean(item.editCount) && <Detail label="Details edited">{item.editCount} time{item.editCount === 1 ? '' : 's'}</Detail>}
     </dl>
+
+    <section
+      className="transaction-audit"
+      aria-label="Record history"
+    >
+      <div className="transaction-audit-heading">
+        <div>
+          <strong>Record history</strong>
+          <small>
+            Audit trail for this money activity.
+          </small>
+        </div>
+        <span>
+          {activityStatusLabel(item)}
+        </span>
+      </div>
+
+      <dl className="detail-list transaction-audit-list">
+        <Detail label="Record ID">
+          {item.displayId || item.id}
+        </Detail>
+
+        <Detail label="Status">
+          {activityStatusLabel(item)}
+        </Detail>
+
+        {createdTime && (
+          <Detail label="Created">
+            {createdTime}
+          </Detail>
+        )}
+
+        {postedTime && (
+          <Detail label="Posted">
+            {postedTime}
+          </Detail>
+        )}
+
+        {updatedTime && (
+          <Detail label="Last updated">
+            {updatedTime}
+          </Detail>
+        )}
+
+        {Boolean(item.editCount) && (
+          <Detail label="Edited">
+            {item.editCount} time{
+              item.editCount === 1 ? '' : 's'
+            }{
+              editedTime
+                ? ' - ' + editedTime
+                : ''
+            }
+          </Detail>
+        )}
+
+        {item.reversalOf && (
+          <Detail label="Undo relationship">
+            <span className="transaction-audit-note">
+              This record undoes {item.reversalOf}.
+            </span>
+          </Detail>
+        )}
+
+        {item.reversedBy && (
+          <Detail label="Undo relationship">
+            <span className="transaction-audit-note">
+              This record was undone by {item.reversedBy}.
+            </span>
+          </Detail>
+        )}
+
+        {item.financialApprovalId && (
+          <Detail label="Approval">
+            Linked approval {item.financialApprovalId}
+          </Detail>
+        )}
+      </dl>
+    </section>
     </>}
 
     {receiptsOnly && <div className="transaction-receipt-shortcut-summary"><strong>{item.category || typeLabels[item.type]}</strong><span>{item.transactionDate}</span></div>}
