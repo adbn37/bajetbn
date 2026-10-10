@@ -542,8 +542,28 @@ export function BusinessMoneyActivityPage() {
 
       setSpace(nextSpace);
 
-      const accessibleSpaces =
+      const listedSpaces =
         await listSpaces(user.uid);
+
+      /*
+       * Legacy / owner Business Spaces may be
+       * directly readable even when an old
+       * spaceMembers record is missing.
+       *
+       * The current Business has already been
+       * loaded successfully, so always include
+       * it in the Add Money context.
+       */
+      const accessibleSpaces =
+        listedSpaces.some(
+          (item) =>
+            item.id === nextSpace.id,
+        )
+          ? listedSpaces
+          : [
+              nextSpace,
+              ...listedSpaces,
+            ];
 
       const activeBusinessSpaces =
         accessibleSpaces

@@ -72,6 +72,9 @@ for (const expected of [
 }
 
 for (const expected of [
+  'listedSpaces',
+  'item.id === nextSpace.id',
+  'nextSpace,',
   'entryAccounts',
   'entrySpaces',
   'entryCategories',
