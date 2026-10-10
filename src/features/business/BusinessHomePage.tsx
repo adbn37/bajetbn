@@ -6,6 +6,7 @@ import {
 } from 'react';
 import {
   Link,
+  useNavigate,
   useParams,
   useSearchParams,
 } from 'react-router-dom';
@@ -19,6 +20,7 @@ import {
 } from '../../repositories/smePosRepository';
 import {
   getSpace,
+  listSpaces,
   prepareAdbnTechIntegration,
 } from '../../repositories/spaceRepository';
 import {
@@ -189,6 +191,7 @@ function workspaceViewFromSearch(
 export function BusinessHomePage() {
   const { spaceId = '' } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [
     searchParams,
     setSearchParams,
@@ -207,6 +210,11 @@ export function BusinessHomePage() {
 
   const [space, setSpace] =
     useState<Space | null>(null);
+
+  const [
+    businessSpaces,
+    setBusinessSpaces,
+  ] = useState<Space[]>([]);
 
   const [transactions, setTransactions] =
     useState<FinancialTransaction[]>([]);
@@ -402,6 +410,57 @@ export function BusinessHomePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!user) {
+      setBusinessSpaces([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    void listSpaces(user.uid)
+      .then((items) => {
+        if (cancelled) return;
+
+        const nextBusinesses =
+          items
+            .filter(
+              (item) =>
+                item.type === 'sme'
+                && !item.archivedAt,
+            )
+            .filter(
+              (item) =>
+                canAccessInternalAdbnTechSpace(
+                  item,
+                  {
+                    uid: user.uid,
+                    email: user.email,
+                  },
+                ),
+            )
+            .sort(
+              (a, b) =>
+                a.name.localeCompare(
+                  b.name,
+                ),
+            );
+
+        setBusinessSpaces(
+          nextBusinesses,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBusinessSpaces([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (workspaceView === 'setup') {
@@ -965,6 +1024,21 @@ export function BusinessHomePage() {
     }
   }
 
+  const switchBusiness = (
+    nextSpaceId: string,
+  ) => {
+    if (
+      !nextSpaceId
+      || nextSpaceId === space.id
+    ) {
+      return;
+    }
+
+    navigate(
+      '/business/' + nextSpaceId,
+    );
+  };
+
   return (
     <main
       className="page business-home-v115"
@@ -994,6 +1068,37 @@ export function BusinessHomePage() {
           className="header-actions"
           data-space-home-add-shortcut
         >
+          {businessSpaces.length > 1 && (
+            <label
+              className="business-home-switcher-v121"
+            >
+              <span>
+                Switch Business
+              </span>
+
+              <select
+                aria-label="Switch Business"
+                value={space.id}
+                onChange={(event) =>
+                  switchBusiness(
+                    event.target.value,
+                  )
+                }
+              >
+                {businessSpaces.map(
+                  (business) => (
+                    <option
+                      key={business.id}
+                      value={business.id}
+                    >
+                      {business.name}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+          )}
+
           <Link
             className="button primary"
             to={
