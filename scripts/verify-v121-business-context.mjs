@@ -14,6 +14,16 @@ const styles = fs.readFileSync(
   'utf8',
 );
 
+const transactions = fs.readFileSync(
+  'src/features/transactions/TransactionsPage.tsx',
+  'utf8',
+);
+
+const businessMoney = fs.readFileSync(
+  'src/features/business/BusinessMoneyActivityPage.tsx',
+  'utf8',
+);
+
 for (const expected of [
   'useNavigate',
   'listSpaces',
@@ -56,6 +66,98 @@ for (const expected of [
   if (!styles.includes(expected)) {
     fail(
       'v1.21 Business switcher styling is missing: '
+      + expected,
+    );
+  }
+}
+
+for (const expected of [
+  'entryAccounts',
+  'entrySpaces',
+  'entryCategories',
+  'listPersonalAccounts',
+  'listAccountsForSpace',
+  'initialSpaceId={',
+  'requestMoveOnly',
+]) {
+  if (!businessMoney.includes(expected)) {
+    fail(
+      'v1.21 flexible Business Add is missing: '
+      + expected,
+    );
+  }
+}
+
+const addStart =
+  businessMoney.indexOf(
+    '{showAdd && (',
+  );
+
+const correctionStart =
+  businessMoney.indexOf(
+    '{correctionDraft && (',
+    addStart,
+  );
+
+const addBlock =
+  addStart >= 0
+  && correctionStart > addStart
+    ? businessMoney.slice(
+        addStart,
+        correctionStart,
+      )
+    : '';
+
+if (
+  !addBlock.includes(
+    'requestMoveOnly'
+  )
+  || !addBlock.includes(
+    ': entryAccounts'
+  )
+  || !addBlock.includes(
+    ': entrySpaces'
+  )
+  || !addBlock.includes(
+    '? space.id'
+  )
+  || !addBlock.includes(
+    ': undefined'
+  )
+) {
+  fail(
+    'Normal Business Add must be flexible while Request Move remains scoped.',
+  );
+}
+
+for (const expected of [
+  'initialSpaceId?: string',
+  'money-entry-owner-switch-v121',
+  'aria-label="Money owner"',
+  "selectEntryOwnerMode(",
+  "'personal'",
+  "'business'",
+  'aria-label="Choose Business"',
+  'businessEntrySpaces.map',
+  'personalEntrySpaces.map',
+]) {
+  if (!transactions.includes(expected)) {
+    fail(
+      'v1.21 shared Add Money context is missing: '
+      + expected,
+    );
+  }
+}
+
+for (const expected of [
+  'BAJETBN V1.21 FLEXIBLE MONEY ENTRY CONTEXT',
+  '.money-entry-owner-v121 {',
+  '.money-entry-owner-switch-v121 {',
+  '.money-entry-business-v121 {',
+]) {
+  if (!styles.includes(expected)) {
+    fail(
+      'v1.21 flexible Add styling is missing: '
       + expected,
     );
   }

@@ -2120,6 +2120,7 @@ export function MoneyActivityModal({
   initialType,
   entryMode = 'activity',
   initialValues,
+  initialSpaceId,
   lockedSpaceId,
   onCategoriesChanged,
   onClose,
@@ -2135,6 +2136,7 @@ export function MoneyActivityModal({
   initialType?: PrimaryType;
   entryMode?: 'activity' | 'move' | 'receipt';
   initialValues?: TransactionInput;
+  initialSpaceId?: string;
   lockedSpaceId?: string;
   onCategoriesChanged?: () => Promise<TransactionCategory[]>;
   onClose: () => void;
@@ -2153,27 +2155,136 @@ export function MoneyActivityModal({
         ? 'expense'
         : initialValues?.type || initialType || 'expense',
   );
-  const requestedInitialSpaceId = initialValues?.spaceId || lockedSpaceId || '';
+  const requestedInitialSpaceId =
+    initialValues?.spaceId
+    || initialSpaceId
+    || lockedSpaceId
+    || '';
   const preferredPersonalSpaceId = spaces.find((space) => space.type === 'personal')?.id || '';
-  const initialSpaceId = requestedInitialSpaceId && spaces.some((space) => space.id === requestedInitialSpaceId)
+  const resolvedInitialSpaceId = requestedInitialSpaceId && spaces.some((space) => space.id === requestedInitialSpaceId)
     ? requestedInitialSpaceId
     : preferredPersonalSpaceId || spaces[0]?.id || '';
-  const [spaceId, setSpaceId] = useState(initialSpaceId);
+  const [spaceId, setSpaceId] = useState(resolvedInitialSpaceId);
   const [spaceChooserOpen, setSpaceChooserOpen] = useState(false);
-  const selectedSpace = spaces.find((space) => space.id === spaceId);
-  const ownsAccountsInThisForm = accounts.some((account) => account.ownerId === user?.uid);
-  const canManageCategories = selectedSpace?.type !== 'sme' || ownsAccountsInThisForm;
-  const canAttachFiles = selectedSpace?.type !== 'sme' || ownsAccountsInThisForm;
-  const [localCategories, setLocalCategories] = useState<TransactionCategory[]>(categories);
-  const [showCategoryEditor, setShowCategoryEditor] = useState(false);
-  const accountAvailableInSelectedSpace = (account: Account) => {
-    if (!selectedSpace) return true;
-    if (selectedSpace.type === 'sme') {
-      return account.classification === 'business'
-        && businessSpaceIdsForAccount(account).includes(selectedSpace.id);
+  const selectedSpace =
+    spaces.find(
+      (space) =>
+        space.id === spaceId,
+    );
+
+  const personalEntrySpaces =
+    spaces.filter(
+      (space) =>
+        space.type !== 'sme',
+    );
+
+  const businessEntrySpaces =
+    spaces.filter(
+      (space) =>
+        space.type === 'sme',
+    );
+
+  const entryOwnerMode:
+    'personal' | 'business' =
+      selectedSpace?.type === 'sme'
+        ? 'business'
+        : 'personal';
+
+  const accountAvailableInSelectedSpace =
+    (account: Account) => {
+      if (!selectedSpace) {
+        return true;
+      }
+
+      if (
+        selectedSpace.type === 'sme'
+      ) {
+        return (
+          account.classification
+            === 'business'
+          && businessSpaceIdsForAccount(
+            account,
+          ).includes(
+            selectedSpace.id,
+          )
+        );
+      }
+
+      return accountSupportsPersonalUse(
+        account,
+      );
+    };
+
+  const ownsAccountsInThisForm =
+    accounts.some(
+      (account) =>
+        account.ownerId === user?.uid
+        && accountAvailableInSelectedSpace(
+          account,
+        ),
+    );
+
+  const canManageCategories =
+    selectedSpace?.type !== 'sme'
+    || ownsAccountsInThisForm;
+
+  const canAttachFiles =
+    selectedSpace?.type !== 'sme'
+    || ownsAccountsInThisForm;
+
+  const [localCategories, setLocalCategories] =
+    useState<TransactionCategory[]>(
+      categories,
+    );
+
+  const [
+    showCategoryEditor,
+    setShowCategoryEditor,
+  ] = useState(false);
+
+  function selectEntryOwnerMode(
+    nextMode: 'personal' | 'business',
+  ) {
+    if (
+      nextMode === entryOwnerMode
+    ) {
+      return;
     }
-    return accountSupportsPersonalUse(account);
-  };
+
+    if (nextMode === 'business') {
+      const nextBusiness =
+        businessEntrySpaces[0];
+
+      if (!nextBusiness) {
+        return;
+      }
+
+      setSpaceId(
+        nextBusiness.id,
+      );
+
+      setSpaceChooserOpen(false);
+      return;
+    }
+
+    const nextPersonal =
+      personalEntrySpaces.find(
+        (entrySpace) =>
+          entrySpace.type
+            === 'personal',
+      )
+      || personalEntrySpaces[0];
+
+    if (!nextPersonal) {
+      return;
+    }
+
+    setSpaceId(
+      nextPersonal.id,
+    );
+
+    setSpaceChooserOpen(false);
+  }
   const compatibleAccounts = accounts.filter(
     (account) =>
       (!selectedSpace || account.currency === selectedSpace.currency)
@@ -3129,6 +3240,93 @@ export function MoneyActivityModal({
       </section>
     )}
     {!online && <div className="notice warning compact-notice"><strong>Saving offline</strong><span>This money activity will stay on this device and sync safely when internet returns.</span></div>}
+
+    {!lockedSpaceId
+      && !initialValues
+      && entryMode === 'activity'
+      && (
+        <section
+          className="money-entry-owner-v121"
+        >
+          <div
+            className="segmented-control money-entry-owner-switch-v121"
+            role="group"
+            aria-label="Money owner"
+          >
+            <button
+              type="button"
+              className={
+                entryOwnerMode === 'personal'
+                  ? 'active'
+                  : ''
+              }
+              disabled={
+                personalEntrySpaces.length === 0
+              }
+              onClick={() =>
+                selectEntryOwnerMode(
+                  'personal',
+                )
+              }
+            >
+              Personal
+            </button>
+
+            <button
+              type="button"
+              className={
+                entryOwnerMode === 'business'
+                  ? 'active'
+                  : ''
+              }
+              disabled={
+                businessEntrySpaces.length === 0
+              }
+              onClick={() =>
+                selectEntryOwnerMode(
+                  'business',
+                )
+              }
+            >
+              Business
+            </button>
+          </div>
+
+          {entryOwnerMode === 'business'
+            && businessEntrySpaces.length > 0
+            && (
+              <label
+                className="money-entry-business-v121"
+              >
+                <span>
+                  Business
+                </span>
+
+                <select
+                  aria-label="Choose Business"
+                  value={spaceId}
+                  onChange={(event) =>
+                    setSpaceId(
+                      event.target.value,
+                    )
+                  }
+                >
+                  {businessEntrySpaces.map(
+                    (businessSpace) => (
+                      <option
+                        key={businessSpace.id}
+                        value={businessSpace.id}
+                      >
+                        {businessSpace.name}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            )}
+        </section>
+      )}
+
     <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
       {typeOptions.map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
     </div>
@@ -3395,9 +3593,12 @@ export function MoneyActivityModal({
             </div>
           </div>
 
-          {spaces.some(
-            (space) => space.type !== 'personal',
-          ) && (
+          {entryOwnerMode === 'personal'
+            && personalEntrySpaces.some(
+              (space) =>
+                space.type !== 'personal',
+            )
+            && (
             <button
               type="button"
               className="text-button contextual-space-change"
@@ -3426,14 +3627,18 @@ export function MoneyActivityModal({
                 setSpaceChooserOpen(false);
               }}
             >
-              {spaces.map((space) => (
-                <option
-                  value={space.id}
-                  key={space.id}
-                >
-                  {spaceDisplayLabel(space)}
-                </option>
-              ))}
+              {personalEntrySpaces.map(
+                (space) => (
+                  <option
+                    value={space.id}
+                    key={space.id}
+                  >
+                    {spaceDisplayLabel(
+                      space,
+                    )}
+                  </option>
+                ),
+              )}
             </select>
           </label>
         )}

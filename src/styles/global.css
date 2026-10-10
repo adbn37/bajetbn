@@ -23534,3 +23534,46 @@ select.trip-sheet-cell-input {
     width: 100%;
   }
 }
+
+
+/* BAJETBN V1.21 FLEXIBLE MONEY ENTRY CONTEXT */
+
+.money-entry-owner-v121 {
+  display: grid;
+  gap: .7rem;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.money-entry-owner-switch-v121 {
+  width: 100%;
+}
+
+.money-entry-owner-switch-v121 > button {
+  flex: 1 1 0;
+}
+
+.money-entry-business-v121 {
+  display: grid;
+  gap: .35rem;
+}
+
+.money-entry-business-v121 > span {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.money-entry-business-v121 select {
+  width: 100%;
+  min-height: 42px;
+}
+
+@media (max-width: 500px) {
+  .money-entry-owner-v121 {
+    padding: .65rem;
+  }
+}
