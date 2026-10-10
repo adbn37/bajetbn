@@ -69,6 +69,44 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
 const statusLabels = { posted: 'Saved', reversed: 'Undone' } as const;
 
+function activityKindLabel(
+  item: FinancialTransaction,
+): string {
+  if (item.type !== 'reversal') {
+    return typeLabels[item.type];
+  }
+
+  if (item.originalType === 'income') {
+    return 'Undo Money in';
+  }
+
+  if (item.originalType === 'expense') {
+    return 'Undo Money out';
+  }
+
+  if (item.originalType === 'transfer') {
+    return 'Undo Move money';
+  }
+
+  return 'Undo';
+}
+
+function activityStatusLabel(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'Undo record'
+    : statusLabels[item.status];
+}
+
+function activityStatusClass(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'reversal'
+    : item.status;
+}
+
 const financialApprovalActionLabels: Record<
   FinancialApprovalRequest['action'],
   string
@@ -122,7 +160,7 @@ const spaceTypeLabels: Record<Space['type'], string> = {
 
 function spaceDisplayLabel(space: Space): string {
   if (space.type === 'personal') return 'Personal';
-  return [space.name, spaceTypeLabels[space.type], space.currency].join(' · ');
+  return [space.name, spaceTypeLabels[space.type], space.currency].join(' - ');
 }
 
 export function MoneyScopeSwitch({
@@ -300,6 +338,17 @@ function transactionTimestampMillis(value: unknown): number {
         : 0
     )
   );
+}
+
+function formatTransactionAuditTime(
+  value: unknown,
+): string {
+  const millis =
+    transactionTimestampMillis(value);
+
+  if (!millis) return '';
+
+  return new Date(millis).toLocaleString();
 }
 
 function transactionCategorySnapshot(item: FinancialTransaction): TransactionCategory {
@@ -1007,52 +1056,6 @@ export function TransactionsPage() {
 
   const currentMonth = monthPrefix(profile?.timezone || 'Asia/Brunei');
 
-  const monthlyPosted = transactions.filter(
-    (item) => (
-      item.status === 'posted'
-      && item.transactionDate.startsWith(currentMonth)
-      && accountMatchesFilter(item)
-    ),
-  );
-
-  const income = monthlyPosted
-    .filter((item) => item.type === 'income')
-    .reduce((sum, item) => sum + item.amountMinor, 0);
-
-  const expenses = monthlyPosted
-    .filter((item) => item.type === 'expense')
-    .reduce((sum, item) => sum + item.amountMinor, 0);
-
-  const transferCount = monthlyPosted
-    .filter((item) => item.type === 'transfer')
-    .length;
-
-  const expenseCategorySummary = (() => {
-    const totals = new Map<
-      string,
-      { category: TransactionCategory; amountMinor: number }
-    >();
-
-    monthlyPosted
-      .filter((item) => item.type === 'expense')
-      .forEach((item) => {
-        const category = item.categoryId
-          ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item)
-          : transactionCategorySnapshot(item);
-
-        const current = totals.get(category.id);
-
-        totals.set(category.id, {
-          category,
-          amountMinor: (current?.amountMinor || 0) + item.amountMinor,
-        });
-      });
-
-    return [...totals.values()]
-      .sort((a, b) => b.amountMinor - a.amountMinor)
-      .slice(0, 5);
-  })();
-
   const visibleTransactions = transactions.filter((item) => {
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
     if (statusFilter !== 'all' && item.status !== statusFilter) return false;
@@ -1084,6 +1087,13 @@ export function TransactionsPage() {
       item.category,
       item.counterparty,
       item.note,
+      typeLabels[item.type],
+      statusLabels[item.status],
+      item.transactionDate,
+      formatMoney(
+        item.amountMinor,
+        item.currency,
+      ),
       source,
       destination,
       space,
@@ -1094,6 +1104,206 @@ export function TransactionsPage() {
         value?.toLowerCase().includes(needle),
     );
   });
+
+  const personalSummaryRows =
+    visibleTransactions.filter(
+      (item) =>
+        item.status === 'posted'
+        && item.type !== 'reversal',
+    );
+
+  const personalSummaryByCurrency = (() => {
+    const totals = new Map<
+      string,
+      {
+        currency: string;
+        income: number;
+        expenses: number;
+        transferCount: number;
+      }
+    >();
+
+    personalSummaryRows.forEach((item) => {
+      const current =
+        totals.get(item.currency)
+        || {
+          currency: item.currency,
+          income: 0,
+          expenses: 0,
+          transferCount: 0,
+        };
+
+      if (item.type === 'income') {
+        current.income += item.amountMinor;
+      }
+
+      if (item.type === 'expense') {
+        current.expenses += item.amountMinor;
+      }
+
+      if (item.type === 'transfer') {
+        current.transferCount += 1;
+      }
+
+      totals.set(
+        item.currency,
+        current,
+      );
+    });
+
+    return [...totals.values()]
+      .sort(
+        (a, b) =>
+          a.currency.localeCompare(
+            b.currency,
+          ),
+      );
+  })();
+
+  const personalSummaryCurrencies =
+    personalSummaryByCurrency.length > 0
+      ? personalSummaryByCurrency
+      : [
+          {
+            currency:
+              (
+                selectedAccountIds
+                && selectedAccountIds.length === 1
+                  ? accountMap.get(
+                      selectedAccountIds[0],
+                    )?.currency
+                  : undefined
+              )
+              || profile?.currency
+              || 'BND',
+            income: 0,
+            expenses: 0,
+            transferCount: 0,
+          },
+        ];
+
+  const personalTransferCount =
+    personalSummaryByCurrency.reduce(
+      (sum, item) =>
+        sum + item.transferCount,
+      0,
+    );
+
+  const personalSummaryLabel =
+    periodFilter === 'current_month'
+      ? 'This month'
+      : 'All time';
+
+  const expenseCategorySummary = (() => {
+    const currencies = new Map<
+      string,
+      Map<
+        string,
+        {
+          category: TransactionCategory;
+          amountMinor: number;
+        }
+      >
+    >();
+
+    personalSummaryRows
+      .filter(
+        (item) =>
+          item.type === 'expense',
+      )
+      .forEach((item) => {
+        const category =
+          item.categoryId
+            ? (
+              categoryMap.get(
+                item.categoryId,
+              )
+              || transactionCategorySnapshot(
+                item,
+              )
+            )
+            : transactionCategorySnapshot(
+                item,
+              );
+
+        const currencyTotals =
+          currencies.get(item.currency)
+          || new Map();
+
+        const current =
+          currencyTotals.get(
+            category.id,
+          );
+
+        currencyTotals.set(
+          category.id,
+          {
+            category,
+            amountMinor:
+              (current?.amountMinor || 0)
+              + item.amountMinor,
+          },
+        );
+
+        currencies.set(
+          item.currency,
+          currencyTotals,
+        );
+      });
+
+    return [...currencies.entries()]
+      .sort(
+        ([currencyA], [currencyB]) =>
+          currencyA.localeCompare(
+            currencyB,
+          ),
+      )
+      .map(
+        ([currency, totals]) => ({
+          currency,
+          items:
+            [...totals.values()]
+              .sort(
+                (a, b) =>
+                  b.amountMinor
+                  - a.amountMinor,
+              )
+              .slice(0, 5),
+        }),
+      );
+  })();
+
+  const activeFilterCount = [
+    typeFilter !== 'all',
+    statusFilter !== 'all',
+    periodFilter !== 'current_month',
+    selectedAccountIds !== null,
+    categoryFilter !== 'all',
+    labelFilter !== 'all',
+    Boolean(search.trim()),
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setPeriodFilter('current_month');
+    setSelectedAccountIds(null);
+    setCategoryFilter('all');
+    setLabelFilter('all');
+    setSearch('');
+
+    const next =
+      new URLSearchParams(
+        searchParams,
+      );
+
+    next.delete('accountId');
+
+    setSearchParams(
+      next,
+      { replace: true },
+    );
+  };
 
   const updateAttachmentCount = (transactionId: string, count: number) => {
     setTransactionAttachmentCounts((current) => ({ ...current, [transactionId]: count }));
@@ -1217,10 +1427,88 @@ export function TransactionsPage() {
       <div className="info-banner"><strong>Personal money only.</strong><span>Business activity is kept inside its specific Business Space. You can still assign Personal money activity to a Household, Trip or another non-Business Space without duplicating the transaction. Plans are managed from Goals.</span></div>
 
       <section className="transaction-summary">
-        <div><span>Money in this month</span><strong className="money-positive">{formatMoney(income, profile?.currency || 'BND')}</strong></div>
-        <div><span>Money out this month</span><strong className="money-negative">{formatMoney(expenses, profile?.currency || 'BND')}</strong></div>
-        <div><span>Money left this month</span><strong>{formatMoney(income - expenses, profile?.currency || 'BND')}</strong></div>
-        <div><span>Money moves this month</span><strong>{transferCount}</strong></div>
+        <div>
+          <span>Money in</span>
+          <div className="transaction-summary-values">
+            {personalSummaryCurrencies.map(
+              (item) => (
+                <strong
+                  className="money-positive"
+                  key={item.currency}
+                >
+                  {formatMoney(
+                    item.income,
+                    item.currency,
+                  )}
+                </strong>
+              ),
+            )}
+          </div>
+          <small>
+            {personalSummaryLabel}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
+        </div>
+
+        <div>
+          <span>Money out</span>
+          <div className="transaction-summary-values">
+            {personalSummaryCurrencies.map(
+              (item) => (
+                <strong
+                  className="money-negative"
+                  key={item.currency}
+                >
+                  {formatMoney(
+                    item.expenses,
+                    item.currency,
+                  )}
+                </strong>
+              ),
+            )}
+          </div>
+          <small>
+            {personalSummaryLabel}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
+        </div>
+
+        <div>
+          <span>Money left</span>
+          <div className="transaction-summary-values">
+            {personalSummaryCurrencies.map(
+              (item) => (
+                <strong key={item.currency}>
+                  {formatMoney(
+                    item.income
+                    - item.expenses,
+                    item.currency,
+                  )}
+                </strong>
+              ),
+            )}
+          </div>
+          <small>
+            Currencies stay separate
+          </small>
+        </div>
+
+        <div>
+          <span>Money moves</span>
+          <strong>
+            {personalTransferCount}
+          </strong>
+          <small>
+            {personalSummaryLabel}
+            {activeFilterCount > 0
+              ? ' - filtered'
+              : ''}
+          </small>
+        </div>
       </section>
 
       <div className="transaction-account-scope" aria-live="polite">
@@ -1228,15 +1516,72 @@ export function TransactionsPage() {
         <strong>{accountFilterLabel}</strong>
       </div>
 
-      {expenseCategorySummary.length > 0 && <section className="category-summary-panel">
-        <div className="section-heading"><div><span>Where your money went</span><h2>Top categories this month</h2></div><small>{expenseCategorySummary.length} categories</small></div>
-        <div className="category-summary-grid">
-          {expenseCategorySummary.map(({ category, amountMinor }) => <div className="category-summary-item" key={category.id}>
-            <CategoryBadge category={category} />
-            <strong>{formatMoney(amountMinor, profile?.currency || 'BND')}</strong>
-          </div>)}
-        </div>
-      </section>}
+      {expenseCategorySummary.length > 0 && (
+        <section className="category-summary-panel">
+          <div className="section-heading">
+            <div>
+              <span>Where your money went</span>
+              <h2>
+                Top categories in this view
+              </h2>
+            </div>
+
+            <small>
+              Currency-safe totals
+            </small>
+          </div>
+
+          {expenseCategorySummary.map(
+            (group) => (
+              <div
+                className="category-summary-currency"
+                key={group.currency}
+              >
+                <div className="category-summary-currency-heading">
+                  <strong>
+                    {group.currency}
+                  </strong>
+                  <small>
+                    {group.items.length}
+                    {' '}
+                    {group.items.length === 1
+                      ? 'category'
+                      : 'categories'}
+                  </small>
+                </div>
+
+                <div className="category-summary-grid">
+                  {group.items.map(
+                    ({
+                      category,
+                      amountMinor,
+                    }) => (
+                      <div
+                        className="category-summary-item"
+                        key={
+                          group.currency
+                          + '-'
+                          + category.id
+                        }
+                      >
+                        <CategoryBadge
+                          category={category}
+                        />
+                        <strong>
+                          {formatMoney(
+                            amountMinor,
+                            group.currency,
+                          )}
+                        </strong>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+            ),
+          )}
+        </section>
+      )}
 
       {!accounts.length && !loading && <div className="notice">Add an account before recording money.</div>}
       {!spaces.length && !loading && <div className="notice">Your personal budget is not ready. Refresh BajetBN and try again.</div>}
@@ -1245,8 +1590,18 @@ export function TransactionsPage() {
         <div className="segmented-control" role="group" aria-label="Transaction type filter">
           {(['all', 'income', 'expense', 'transfer'] as const).map((value) => <button key={value} type="button" className={typeFilter === value ? 'active' : ''} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All' : typeLabels[value]}</button>)}
         </div>
-        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, account or payee…" />
-        <div className="transaction-filter-grid">
+        <input className="transaction-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search category, #label, account or payee..." />
+        <details className="transaction-advanced-filters">
+          <summary>
+            <span>More filters</span>
+            <strong>
+              {activeFilterCount > 0
+                ? activeFilterCount + ' active'
+                : ''}
+            </strong>
+          </summary>
+
+          <div className="transaction-filter-grid">
           <label>Period<select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as PeriodFilter)}><option value="current_month">This month</option><option value="all">All time</option></select></label>
           <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="posted">Saved</option><option value="reversed">Undone</option></select></label>
           <div className="transaction-account-filter">
@@ -1308,9 +1663,38 @@ export function TransactionsPage() {
           <label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{allCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           <label>Label<select value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}><option value="all">All labels</option>{availableLabels.map((label) => <option key={label.toLowerCase()} value={label}>{transactionLabelText(label)}</option>)}</select></label>
         </div>
+        </details>
+
+        <div
+          className="transaction-filter-status"
+          aria-live="polite"
+        >
+          <span>
+            Showing{' '}
+            <strong>
+              {visibleTransactions.length}
+            </strong>
+            {' '}of{' '}
+            <strong>
+              {transactions.length}
+            </strong>
+            {' '}money records
+          </span>
+
+          {activeFilterCount > 0 && (
+            <button
+              className="text-button"
+              type="button"
+              onClick={resetFilters}
+            >
+              Reset filters ({activeFilterCount})
+            </button>
+          )}
+        </div>
+
       </section>
 
-      {loading ? <div className="loading-panel">Loading money activity…</div> : visibleTransactions.length === 0 ? (
+      {loading ? <div className="loading-panel">Loading money activity...</div> : visibleTransactions.length === 0 ? (
         <EmptyState title="No matching money activity" description="Change the filters or add money in, money out, or a money move." action={activeWritableAccounts.length && writableSpaces.length ? <button className="button primary" onClick={() => setShowForm(true)}>Add money activity</button> : undefined} />
       ) : (
         <section className="transaction-list">
@@ -1320,11 +1704,20 @@ export function TransactionsPage() {
             const space = spaceMap.get(item.spaceId);
             const isOutflow = item.type === 'expense';
             const isIncome = item.type === 'income';
+            const isTransferFlow =
+              item.type === 'transfer'
+              || item.originalType === 'transfer';
             const category = item.categoryId ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item) : transactionCategorySnapshot(item);
             return <article className={`transaction-row ${item.status === 'reversed' ? 'reversed' : ''}`} key={item.id}>
               <CategoryIconVisual category={category} />
               <div className="transaction-main">
                 <div>
+                  <span
+                    className={`transaction-kind-badge ${item.type}`}
+                  >
+                    {activityKindLabel(item)}
+                  </span>
+
                   <h2>{item.category || typeLabels[item.type]}</h2>
                   <p>{item.counterparty || item.note || typeLabels[item.type]}</p>
 
@@ -1344,16 +1737,49 @@ export function TransactionsPage() {
 
 
               </div>
-              <div className="transaction-context">
-                <strong>{space?.type === 'personal' ? 'Personal' : space?.name || 'Unknown'}</strong>
-                <small>{source?.name || 'Unknown Account'}{destination ? ` → ${destination.name}` : ''}</small>
+              <div
+                className={`transaction-context ${
+                  isTransferFlow
+                    ? 'transfer-route'
+                    : ''
+                }`}
+              >
+                {isTransferFlow && destination ? (
+                  <>
+                    <div className="transaction-route">
+                      <span>
+                        {source?.name || 'Unknown Account'}
+                      </span>
+                      <b>to</b>
+                      <span>{destination.name}</span>
+                    </div>
+
+                    <small>
+                      {space?.type === 'personal'
+                        ? 'Personal'
+                        : space?.name || 'Unknown'}
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <strong>
+                      {space?.type === 'personal'
+                        ? 'Personal'
+                        : space?.name || 'Unknown'}
+                    </strong>
+
+                    <small>
+                      {source?.name || 'Unknown Account'}
+                    </small>
+                  </>
+                )}
               </div>
               <div className="transaction-amount">
-                <strong className={isIncome ? 'money-positive' : isOutflow ? 'money-negative' : ''}>{isIncome ? '+' : isOutflow ? '−' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
+                <strong className={isIncome ? 'money-positive' : isOutflow ? 'money-negative' : ''}>{isIncome ? '+' : isOutflow ? '-' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
                 <small>{item.transactionDate}</small>
               </div>
               <div className="transaction-status">
-                <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
+                <span className={`status-badge ${activityStatusClass(item)}`}>{activityStatusLabel(item)}</span>
                 {(item.type !== 'reversal' || (transactionAttachmentCounts[item.id] || 0) > 0) && <button
                   type="button"
                   className="text-button receipt-shortcut"
@@ -1458,7 +1884,7 @@ lockedSpaceId={
 
             {approvalLoading && (
               <div className="loading-panel">
-                Loading approvals…
+                Loading approvals...
               </div>
             )}
 
@@ -1534,7 +1960,7 @@ lockedSpaceId={
                         <strong>
                           {approval.accountName || 'Business account'}
                           {approval.destinationAccountName
-                            ? ` → ${approval.destinationAccountName}`
+                            ? " to " + approval.destinationAccountName
                             : ''}
                         </strong>
                       </div>
@@ -1581,7 +2007,7 @@ lockedSpaceId={
                           }
                         >
                           {approvalBusyId === approval.id
-                            ? 'Reviewing…'
+                            ? 'Reviewing...'
                             : 'Reject'}
                         </button>
 
@@ -1597,7 +2023,7 @@ lockedSpaceId={
                           }
                         >
                           {approvalBusyId === approval.id
-                            ? 'Reviewing…'
+                            ? 'Reviewing...'
                             : 'Approve & post'}
                         </button>
                       </div>
@@ -1957,7 +2383,7 @@ export function MoneyActivityModal({
               : sourceAccount.type === 'cash'
                 ? 'Cash account'
                 : 'Bank account',
-        ].join(' · ')
+        ].join(' - ')
       : 'Choose account';
 
   const destinationAccountVisualIndex =
@@ -1988,7 +2414,7 @@ export function MoneyActivityModal({
                 === 'cash'
                 ? 'Cash account'
                 : 'Bank account',
-        ].join(' · ')
+        ].join(' - ')
       : 'Choose account';
 
   function currentShareSnapshot(
@@ -2315,14 +2741,14 @@ export function MoneyActivityModal({
       </div>}
       <div className="modal-actions">
         <button type="button" className="button secondary" disabled={busy} onClick={() => void finishSaved(queued ? 'Saved on this device. Attachments can be added after it syncs.' : 'Money activity saved. You can add the remaining attachments later from Details.', !queued)}>{queued ? 'Close' : 'Finish without remaining attachments'}</button>
-        {!queued && savedState.transactionId && pendingFiles.length > 0 && <button type="button" className="button primary" disabled={busy || !online} onClick={() => void retryAttachments()}>{busy ? 'Retrying…' : 'Retry attachments'}</button>}
+        {!queued && savedState.transactionId && pendingFiles.length > 0 && <button type="button" className="button primary" disabled={busy || !online} onClick={() => void retryAttachments()}>{busy ? 'Retrying...' : 'Retry attachments'}</button>}
       </div>
     </Modal>;
   }
 
   const closeForm = () => { if (!busy) onClose(); };
   const saveLabel = busy
-    ? pendingFiles.length > 0 ? 'Saving and uploading…' : 'Saving…'
+    ? pendingFiles.length > 0 ? 'Saving...' : 'Saving...'
     : initialValues
       ? 'Save corrected activity'
       : !online ? 'Save on this device'
@@ -2359,9 +2785,7 @@ export function MoneyActivityModal({
           <span
             className="bajetbn-move-guide-icon"
             aria-hidden="true"
-          >
-            ↔
-          </span>
+          >{'->'}</span>
           <div>
             <strong>
               Move money between your accounts
@@ -2427,9 +2851,7 @@ export function MoneyActivityModal({
             <span
               className="bajetbn-identity-chevron"
               aria-hidden="true"
-            >
-              ›
-            </span>
+            >{'>'}</span>
 
             <select
               className="bajetbn-identity-native-select"
@@ -2448,7 +2870,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} · {
+                    {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -2468,7 +2890,7 @@ export function MoneyActivityModal({
           className="bajetbn-transfer-direction bajetbn-move-reference-direction"
           aria-hidden="true"
         >
-          <span>↓</span>
+          <span>to</span>
         </div>
 
         <div className="bajetbn-move-account-field">
@@ -2525,9 +2947,7 @@ export function MoneyActivityModal({
             <span
               className="bajetbn-identity-chevron"
               aria-hidden="true"
-            >
-              ›
-            </span>
+            >{'>'}</span>
 
             <select
               className="bajetbn-identity-native-select"
@@ -2550,7 +2970,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} · {
+                    {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -2655,7 +3075,7 @@ export function MoneyActivityModal({
             }
           >
             {busy
-              ? 'Moving money…'
+              ? 'Moving money...'
               : 'Move money'}
           </button>
         </div>
@@ -2819,9 +3239,7 @@ export function MoneyActivityModal({
         <span
           className="bajetbn-identity-chevron"
           aria-hidden="true"
-        >
-          ›
-        </span>
+        >{'>'}</span>
 
         <select
           className="bajetbn-identity-native-select"
@@ -2838,7 +3256,7 @@ export function MoneyActivityModal({
         >
           {compatibleAccounts.map((account) => (
             <option value={account.id} key={account.id}>
-              {account.name} · {account.sharedCanViewBalance === false
+              {account.name} - {account.sharedCanViewBalance === false
                 ? 'Balance hidden'
                 : formatMoney(
                     account.ledgerBalanceMinor,
@@ -2899,9 +3317,7 @@ export function MoneyActivityModal({
               : ''}
           </span>
 
-          <span className="bajetbn-identity-chevron" aria-hidden="true">
-            ›
-          </span>
+          <span className="bajetbn-identity-chevron" aria-hidden="true">{'>'}</span>
 
           <select
             className="bajetbn-identity-native-select"
@@ -2915,7 +3331,7 @@ export function MoneyActivityModal({
             <option value="">Choose account</option>
             {destinationOptions.map((account) => (
               <option value={account.id} key={account.id}>
-                {account.name} · {account.sharedCanViewBalance === false
+                {account.name} - {account.sharedCanViewBalance === false
                   ? 'Balance hidden'
                   : formatMoney(
                       account.ledgerBalanceMinor,
@@ -2947,7 +3363,7 @@ export function MoneyActivityModal({
                   spaceTypeLabels[selectedSpace.type],
                   selectedSpace.currency,
                   'Locked to this Space',
-                ].join(' · ')
+                ].join(' - ')
               : 'Locked to this Space'}
           </small>
         </span>
@@ -3077,7 +3493,7 @@ export function MoneyActivityModal({
                 className="category-icon category-slate"
                 aria-hidden="true"
               >
-                {showAllCategories ? '←' : '→'}
+                {showAllCategories ? '<' : '>'}
               </span>
 
               <span>
@@ -3415,7 +3831,7 @@ function TransactionEditDetails({
 
       <div className="modal-actions">
         <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Cancel</button>
-        <button className="button primary" disabled={busy || !online}>{busy ? 'Saving…' : 'Save details'}</button>
+        <button className="button primary" disabled={busy || !online}>{busy ? 'Saving...' : 'Save details'}</button>
       </div>
     </form>
   </Modal>;
@@ -3545,20 +3961,70 @@ function TransactionDetails({ item, source, destination, space, category, online
     && item.status === 'posted'
     && !transactionHasManagedSource(item);
 
+  const isTransferFlow =
+    item.type === 'transfer'
+    || item.originalType === 'transfer';
+
+  const createdTime =
+    formatTransactionAuditTime(
+      item.createdAt,
+    );
+
+  const postedTime =
+    formatTransactionAuditTime(
+      item.postedAt,
+    );
+
+  const updatedTime =
+    formatTransactionAuditTime(
+      item.updatedAt,
+    );
+
+  const editedTime =
+    formatTransactionAuditTime(
+      item.editedAt,
+    );
+
   return <Modal title={receiptsOnly ? 'Receipts & documents' : 'Money activity details'} onClose={onClose}>
     {!receiptsOnly && <>
     <div className="transaction-detail-hero">
       <CategoryBadge category={category} />
-      <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? '−' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
-      <span className={`status-badge ${item.status}`}>{statusLabels[item.status]}</span>
+      <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? '-' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
+      <span className={`status-badge ${activityStatusClass(item)}`}>{activityStatusLabel(item)}</span>
     </div>
     <dl className="detail-list">
 
-      <Detail label="Type">{item.type === 'reversal' && item.originalType ? `Undo of ${typeLabels[item.originalType]}` : typeLabels[item.type]}</Detail>
+      <Detail label="Type">{activityKindLabel(item)}</Detail>
       <Detail label="Date">{item.transactionDate}</Detail>
       <Detail label="Space">{space?.name || 'Unknown Space'}</Detail>
-      <Detail label="Account">{source?.name || 'Unknown Account'}{destination ? ` → ${destination.name}` : ''}</Detail>
-      <Detail label={item.type === 'income' ? 'Money from' : 'Paid to'}>{item.counterparty || '—'}</Detail>
+      <Detail label={isTransferFlow ? 'Account route' : 'Account'}>
+        {isTransferFlow ? (
+          <span className="transaction-route">
+            <span>
+              {source?.name || 'Unknown Account'}
+            </span>
+            <b>to</b>
+            <span>
+              {destination?.name || 'Unknown Account'}
+            </span>
+          </span>
+        ) : (
+          source?.name || 'Unknown Account'
+        )}
+      </Detail>
+      <Detail
+        label={
+          item.type === 'income'
+          || item.originalType === 'income'
+            ? 'Money from'
+            : item.type === 'expense'
+              || item.originalType === 'expense'
+                ? 'Paid to'
+                : 'Payee / source'
+        }
+      >
+        {item.counterparty || 'Not set'}
+      </Detail>
       <Detail label="Payment method">{paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel)}</Detail>
       {(item.labels || []).length > 0 && (
         <Detail label="Labels">
@@ -3574,7 +4040,7 @@ function TransactionDetails({ item, source, destination, space, category, online
           </div>
         </Detail>
       )}
-      <Detail label="Note">{item.note || '—'}</Detail>
+      <Detail label="Note">{item.note || 'Not set'}</Detail>
       {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
       {item.commitmentId && <Detail label="Bill or instalment">Linked bill or instalment</Detail>}
       {item.sharedBillAssignmentId && <Detail label="Person's bill share">{item.sharedBillAssignmentId}</Detail>}
@@ -3582,10 +4048,86 @@ function TransactionDetails({ item, source, destination, space, category, online
       {item.paymentProofPath && <Detail label="Payment proof">Attached in its Space</Detail>}
       {item.recurringTemplateId && <Detail label="Recurring money"><Link to="/recurring">Created automatically from a recurring template</Link></Detail>}
       {item.recurringScheduledDate && <Detail label="Scheduled date">{item.recurringScheduledDate}</Detail>}
-      {item.reversalOf && <Detail label="Undoing record">{item.reversalOf}</Detail>}
-      {item.reversedBy && <Detail label="Undone by">{item.reversedBy}</Detail>}
-      {Boolean(item.editCount) && <Detail label="Details edited">{item.editCount} time{item.editCount === 1 ? '' : 's'}</Detail>}
     </dl>
+
+    <section
+      className="transaction-audit"
+      aria-label="Record history"
+    >
+      <div className="transaction-audit-heading">
+        <div>
+          <strong>Record history</strong>
+          <small>
+            Audit trail for this money activity.
+          </small>
+        </div>
+        <span>
+          {activityStatusLabel(item)}
+        </span>
+      </div>
+
+      <dl className="detail-list transaction-audit-list">
+        <Detail label="Record ID">
+          {item.displayId || item.id}
+        </Detail>
+
+        <Detail label="Status">
+          {activityStatusLabel(item)}
+        </Detail>
+
+        {createdTime && (
+          <Detail label="Created">
+            {createdTime}
+          </Detail>
+        )}
+
+        {postedTime && (
+          <Detail label="Posted">
+            {postedTime}
+          </Detail>
+        )}
+
+        {updatedTime && (
+          <Detail label="Last updated">
+            {updatedTime}
+          </Detail>
+        )}
+
+        {Boolean(item.editCount) && (
+          <Detail label="Edited">
+            {item.editCount} time{
+              item.editCount === 1 ? '' : 's'
+            }{
+              editedTime
+                ? ' - ' + editedTime
+                : ''
+            }
+          </Detail>
+        )}
+
+        {item.reversalOf && (
+          <Detail label="Undo relationship">
+            <span className="transaction-audit-note">
+              This record undoes {item.reversalOf}.
+            </span>
+          </Detail>
+        )}
+
+        {item.reversedBy && (
+          <Detail label="Undo relationship">
+            <span className="transaction-audit-note">
+              This record was undone by {item.reversedBy}.
+            </span>
+          </Detail>
+        )}
+
+        {item.financialApprovalId && (
+          <Detail label="Approval">
+            Linked approval {item.financialApprovalId}
+          </Detail>
+        )}
+      </dl>
+    </section>
     </>}
 
     {receiptsOnly && <div className="transaction-receipt-shortcut-summary"><strong>{item.category || typeLabels[item.type]}</strong><span>{item.transactionDate}</span></div>}
@@ -3611,7 +4153,7 @@ function TransactionDetails({ item, source, destination, space, category, online
       </div>}
       {item.type !== 'reversal' && attachments.length < 5 && <div className="transaction-attachment-upload">
         <input type="file" accept="image/*,application/pdf" disabled={!online || attachmentBusy} onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} />
-        <button type="button" className="button secondary" disabled={!online || !selectedFile || attachmentBusy} onClick={() => void addAttachment()}>{attachmentBusy ? 'Saving…' : 'Attach file'}</button>
+        <button type="button" className="button secondary" disabled={!online || !selectedFile || attachmentBusy} onClick={() => void addAttachment()}>{attachmentBusy ? 'Saving...' : 'Attach file'}</button>
       </div>}
       {!online && <div className="notice warning">Connect to the internet to add or remove receipts and documents.</div>}
       {attachmentError && <div className="notice error">{attachmentError}</div>}
@@ -3712,7 +4254,7 @@ function CategoryManager({ customCategories, onClose, onChanged }: {
     <div className="category-manager-intro"><div><strong>Brunei-ready defaults</strong><p>{DEFAULT_TRANSACTION_CATEGORIES.length} built-in categories are available automatically. Add custom categories for your own household or Business workflow.</p></div><div className="button-row"><Link className="button secondary archive-button" to="/categories/archived" onClick={onClose}>Hidden Categories <span>{hidden.length}</span></Link><button className="button primary" onClick={() => { setEditing(null); setShowEditor(true); }}>+ Custom category</button></div></div>
     {error && <div className="notice error">{error}</div>}
     {active.length === 0 ? <EmptyState title="No custom categories" description="Ready-made categories are available. Add your own only when you need a different name." /> : <div className="category-manager-list">
-      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} · {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'delete')}>Delete</button></div></div>)}
+      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} - {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'delete')}>Delete</button></div></div>)}
     </div>}
     {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
     <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button></div>
