@@ -40,7 +40,7 @@ check(
 check(
   businessMoney.includes('<MoneyScopeSwitch mode="business"')
     && !businessMoney.includes('scopeControls={<MoneyScopeSwitch'),
-  'Business switching remains page-level while Business add stays locked to its Business.',
+  'Business switching remains page-level while flexible Business add keeps scoped request and correction flows locked.',
 );
 
 check(
@@ -68,7 +68,7 @@ check(
   hub.includes('lockedSpaceId={space.id}')
     && details.includes('lockedSpaceId={space.id}')
     && businessMoney.includes('lockedSpaceId={space.id}'),
-  'Specific Space and Business add flows keep automatic locked context.',
+  'Specific Space quick-add flows and scoped Business request/correction flows keep automatic locked context.',
 );
 
 check(
@@ -215,9 +215,9 @@ check(
       && dashboard.slice(markupStart, markupEnd).includes('personalPickerSpaces.map((space)')
       && !dashboard.slice(markupStart, markupEnd).includes('quickPersonalSpaces.map((space)')
       && dashboard.includes('personalTripSpaces.map((trip)')
-      && dashboard.includes('spaces={quickPersonalSpaces}');
+      && dashboard.includes('spaces={quickEntrySpaces}');
   })(),
-  'Trip Spaces appear in Trips, not Personal Spaces, while Personal money entry still supports Trip context.',
+  'Trip Spaces remain outside the Personal Space picker while global Money entry supports Personal, Trip and Business contexts.',
 );
 
 

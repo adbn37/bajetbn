@@ -6,7 +6,14 @@ import { Modal } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
-import { listAccountsForSpace } from '../../repositories/accountRepository';
+import {
+  accountSupportsPersonalUse,
+  listAccountsForSpace,
+  listPersonalAccounts,
+} from '../../repositories/accountRepository';
+import {
+  listAllCustomCategories,
+} from '../../repositories/categoryRepository';
 import {
   reverseStaleAdbnPaymentMoneyActivity,
   reverseBusinessMoneyActivity,
@@ -407,6 +414,24 @@ export function BusinessMoneyActivityPage() {
   const [space, setSpace] = useState<Space | null>(null);
   const [businessSpaces, setBusinessSpaces] = useState<Space[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+
+  const [
+    entryAccounts,
+    setEntryAccounts,
+  ] = useState<Account[]>([]);
+
+  const [
+    entrySpaces,
+    setEntrySpaces,
+  ] = useState<Space[]>([]);
+
+  const [
+    entryCategories,
+    setEntryCategories,
+  ] = useState<TransactionCategory[]>(
+    DEFAULT_TRANSACTION_CATEGORIES,
+  );
+
   const [transactions, setTransactions] =
     useState<FinancialTransaction[]>([]);
   const [canView, setCanView] = useState(false);
@@ -517,10 +542,30 @@ export function BusinessMoneyActivityPage() {
 
       setSpace(nextSpace);
 
-      const accessibleSpaces =
+      const listedSpaces =
         await listSpaces(user.uid);
 
-      setBusinessSpaces(
+      /*
+       * Legacy / owner Business Spaces may be
+       * directly readable even when an old
+       * spaceMembers record is missing.
+       *
+       * The current Business has already been
+       * loaded successfully, so always include
+       * it in the Add Money context.
+       */
+      const accessibleSpaces =
+        listedSpaces.some(
+          (item) =>
+            item.id === nextSpace.id,
+        )
+          ? listedSpaces
+          : [
+              nextSpace,
+              ...listedSpaces,
+            ];
+
+      const activeBusinessSpaces =
         accessibleSpaces
           .filter(
             (item) =>
@@ -529,8 +574,144 @@ export function BusinessMoneyActivityPage() {
           )
           .sort(
             (a, b) =>
-              a.name.localeCompare(b.name),
+              a.name.localeCompare(
+                b.name,
+              ),
+          );
+
+      setBusinessSpaces(
+        activeBusinessSpaces,
+      );
+
+      const [
+        personalEntryAccounts,
+        customEntryCategories,
+        businessAccountGroups,
+      ] = await Promise.all([
+        listPersonalAccounts(
+          user.uid,
+        ).catch(() => []),
+
+        listAllCustomCategories(
+          user.uid,
+        ).catch(() => []),
+
+        Promise.all(
+          activeBusinessSpaces.map(
+            (businessSpace) =>
+              listAccountsForSpace(
+                businessSpace.id,
+              ).catch(() => []),
           ),
+        ),
+      ]);
+
+      const entryAccountMap =
+        new Map<string, Account>();
+
+      personalEntryAccounts.forEach(
+        (account) =>
+          entryAccountMap.set(
+            account.id,
+            account,
+          ),
+      );
+
+      businessAccountGroups
+        .flat()
+        .forEach(
+          (account) =>
+            entryAccountMap.set(
+              account.id,
+              account,
+            ),
+        );
+
+      const nextEntryAccounts =
+        [...entryAccountMap.values()]
+          .filter(
+            (account) =>
+              !account.archivedAt
+              && !account.closedAt
+              && account.sharedCanUseAccount
+                !== false,
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
+          );
+
+      const nextEntrySpaces =
+        accessibleSpaces
+          .filter(
+            (entrySpace) =>
+              !entrySpace.archivedAt
+              && entrySpace.type !== 'goal',
+          )
+          .filter(
+            (entrySpace) => {
+              if (
+                entrySpace.type === 'sme'
+              ) {
+                /*
+                 * Business visibility follows accessible
+                 * Business Spaces. Account compatibility
+                 * is resolved after Business selection.
+                 */
+                return true;
+              }
+
+              return nextEntryAccounts.some(
+                (account) =>
+                  accountSupportsPersonalUse(
+                    account,
+                  )
+                  && account.currency
+                    === entrySpace.currency,
+              );
+            },
+          );
+
+      const entryCategoryMap =
+        new Map<
+          string,
+          TransactionCategory
+        >();
+
+      DEFAULT_TRANSACTION_CATEGORIES
+        .forEach(
+          (category) =>
+            entryCategoryMap.set(
+              category.id,
+              category,
+            ),
+        );
+
+      customEntryCategories
+        .filter(
+          (category) =>
+            !category.archivedAt,
+        )
+        .forEach(
+          (category) =>
+            entryCategoryMap.set(
+              category.id,
+              category,
+            ),
+        );
+
+      setEntryAccounts(
+        nextEntryAccounts,
+      );
+
+      setEntrySpaces(
+        nextEntrySpaces,
+      );
+
+      setEntryCategories(
+        [...entryCategoryMap.values()],
       );
 
       const members =
@@ -633,7 +814,8 @@ export function BusinessMoneyActivityPage() {
       searchParams.get('quick') !== '1'
       || loading
       || !canManage
-      || writableAccounts.length === 0
+      || entryAccounts.length === 0
+      || entrySpaces.length === 0
     ) {
       return;
     }
@@ -656,7 +838,8 @@ export function BusinessMoneyActivityPage() {
     loading,
     searchParams,
     setSearchParams,
-    writableAccounts.length,
+    entryAccounts.length,
+    entrySpaces.length,
   ]);
 
   const allCategories = useMemo(() => {
@@ -1285,7 +1468,8 @@ export function BusinessMoneyActivityPage() {
                 type="button"
                 disabled={
                   !online
-                  || writableAccounts.length === 0
+                  || entryAccounts.length === 0
+                  || entrySpaces.length === 0
                 }
                 onClick={() => {
                   setRequestMoveOnly(false);
@@ -1885,9 +2069,21 @@ export function BusinessMoneyActivityPage() {
 
       {showAdd && (
         <MoneyActivityModal
-          accounts={writableAccounts}
-          spaces={[space]}
-          categories={allCategories}
+          accounts={
+            requestMoveOnly
+              ? writableAccounts
+              : entryAccounts
+          }
+          spaces={
+            requestMoveOnly
+              ? [space]
+              : entrySpaces
+          }
+          categories={
+            requestMoveOnly
+              ? allCategories
+              : entryCategories
+          }
           labelSuggestions={availableLabels}
           timezone={timezone}
           online={online}
@@ -1896,8 +2092,16 @@ export function BusinessMoneyActivityPage() {
               ? 'move'
               : undefined
           }
-
-          lockedSpaceId={space.id}
+          initialSpaceId={
+            requestMoveOnly
+              ? undefined
+              : space.id
+          }
+          lockedSpaceId={
+            requestMoveOnly
+              ? space.id
+              : undefined
+          }
           onClose={() => {
             setShowAdd(false);
             setRequestMoveOnly(false);

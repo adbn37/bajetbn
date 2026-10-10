@@ -482,6 +482,33 @@ export function DashboardPage() {
       [accounts],
     );
 
+  /*
+   * Global + Add is intentionally broader than
+   * Personal Home.
+   *
+   * The modal decides which Accounts are valid
+   * after Personal or a Business is selected.
+   */
+  const quickEntryAccounts =
+    useMemo(
+      () =>
+        accounts
+          .filter(
+            (account) =>
+              !account.archivedAt
+              && !account.closedAt
+              && account.sharedCanUseAccount
+                !== false,
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
+          ),
+      [accounts],
+    );
+
   const personalAssetAccounts =
     useMemo(
       () =>
@@ -589,6 +616,28 @@ export function DashboardPage() {
           .sort(
             (a, b) =>
               a.name.localeCompare(b.name),
+          ),
+      [activeSpaces],
+    );
+
+  /*
+   * Global + Add can record into Personal or
+   * Business context. Goal/Plan Spaces remain
+   * excluded from direct Money Activity entry.
+   */
+  const quickEntrySpaces =
+    useMemo(
+      () =>
+        activeSpaces
+          .filter(
+            (item) =>
+              item.type !== 'goal',
+          )
+          .sort(
+            (a, b) =>
+              a.name.localeCompare(
+                b.name,
+              ),
           ),
       [activeSpaces],
     );
@@ -913,10 +962,10 @@ export function DashboardPage() {
       if (
         loading
         || quickLoading
-        || quickAccounts.length === 0
+        || quickEntryAccounts.length === 0
         || (
           entryMode === 'move'
-          && quickAccounts.length < 2
+          && quickEntryAccounts.length < 2
         )
       ) {
         return;
@@ -936,7 +985,7 @@ export function DashboardPage() {
         setShowMoneyActivity(true);
       }
     }, [
-      quickAccounts.length,
+      quickEntryAccounts.length,
       loadQuickOptions,
       loading,
       quickLoading,
@@ -2083,7 +2132,7 @@ export function DashboardPage() {
               disabled={
                 loading
                 || quickLoading
-                || quickAccounts.length === 0
+                || quickEntryAccounts.length === 0
               }
               onClick={() =>
                 void openQuickActivity()
@@ -2276,8 +2325,8 @@ export function DashboardPage() {
         && profile
         && (
           <MoneyActivityModal
-            accounts={quickAccounts}
-            spaces={quickPersonalSpaces}
+            accounts={quickEntryAccounts}
+            spaces={quickEntrySpaces}
             categories={
               allCategories
             }
