@@ -24,6 +24,11 @@ const businessMoney = fs.readFileSync(
   'utf8',
 );
 
+const dashboard = fs.readFileSync(
+  'src/pages/DashboardPage.tsx',
+  'utf8',
+);
+
 for (const expected of [
   'useNavigate',
   'listSpaces',
@@ -143,6 +148,30 @@ if (
 ) {
   fail(
     'Accessible Business Spaces must remain selectable before account compatibility is resolved.',
+  );
+}
+
+for (const expected of [
+  'const quickEntryAccounts =',
+  'const quickEntrySpaces =',
+  'accounts={quickEntryAccounts}',
+  'spaces={quickEntrySpaces}',
+]) {
+  if (!dashboard.includes(expected)) {
+    fail(
+      'v1.21 global Add Money context is missing: '
+      + expected,
+    );
+  }
+}
+
+if (
+  dashboard.includes(
+    'accounts={quickAccounts}\n            spaces={quickPersonalSpaces}'
+  )
+) {
+  fail(
+    'Home global + must not remain Personal-only.',
   );
 }
 

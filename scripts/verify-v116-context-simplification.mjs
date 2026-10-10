@@ -215,9 +215,9 @@ check(
       && dashboard.slice(markupStart, markupEnd).includes('personalPickerSpaces.map((space)')
       && !dashboard.slice(markupStart, markupEnd).includes('quickPersonalSpaces.map((space)')
       && dashboard.includes('personalTripSpaces.map((trip)')
-      && dashboard.includes('spaces={quickPersonalSpaces}');
+      && dashboard.includes('spaces={quickEntrySpaces}');
   })(),
-  'Trip Spaces appear in Trips, not Personal Spaces, while Personal money entry still supports Trip context.',
+  'Trip Spaces remain outside the Personal Space picker while global Money entry supports Personal, Trip and Business contexts.',
 );
 
 
