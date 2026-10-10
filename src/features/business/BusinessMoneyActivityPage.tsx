@@ -8,7 +8,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import {
   accountSupportsPersonalUse,
-  businessSpaceIdsForAccount,
   listAccountsForSpace,
   listPersonalAccounts,
 } from '../../repositories/accountRepository';
@@ -636,18 +635,12 @@ export function BusinessMoneyActivityPage() {
               if (
                 entrySpace.type === 'sme'
               ) {
-                return nextEntryAccounts.some(
-                  (account) =>
-                    account.classification
-                      === 'business'
-                    && account.currency
-                      === entrySpace.currency
-                    && businessSpaceIdsForAccount(
-                      account,
-                    ).includes(
-                      entrySpace.id,
-                    ),
-                );
+                /*
+                 * Business visibility follows accessible
+                 * Business Spaces. Account compatibility
+                 * is resolved after Business selection.
+                 */
+                return true;
               }
 
               return nextEntryAccounts.some(

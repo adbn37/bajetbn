@@ -130,6 +130,19 @@ if (
   );
 }
 
+if (
+  !businessMoney.includes(
+    'Business visibility follows accessible'
+  )
+  || businessMoney.includes(
+    'businessSpaceIdsForAccount('
+  )
+) {
+  fail(
+    'Accessible Business Spaces must remain selectable before account compatibility is resolved.',
+  );
+}
+
 for (const expected of [
   'initialSpaceId?: string',
   'money-entry-owner-switch-v121',
