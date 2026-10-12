@@ -589,23 +589,87 @@ export function BusinessMoneyActivityPage() {
       const entryAccountMap =
         new Map<string, Account>();
 
+      /*
+       * Personal-capable accounts are available as
+       * Personal sources, but legacy Business linkage
+       * must not make them appear inside a Business
+       * unless listAccountsForSpace() confirms it.
+       */
       personalEntryAccounts.forEach(
         (account) =>
           entryAccountMap.set(
             account.id,
-            account,
+            account.classification === 'business'
+              ? {
+                  ...account,
+                  businessSpaceIds: [],
+                  spaceId: null,
+                }
+              : account,
           ),
       );
 
-      businessAccountGroups
-        .flat()
-        .forEach(
-          (account) =>
-            entryAccountMap.set(
-              account.id,
-              account,
-            ),
-        );
+      /*
+       * Build Business linkage from the authoritative
+       * per-Space account results returned by
+       * listAccountsForSpace().
+       *
+       * This keeps the Add Money source picker aligned
+       * with the server's Business account validation.
+       */
+      const canonicalBusinessLinks =
+        new Map<
+          string,
+          Set<string>
+        >();
+
+      businessAccountGroups.forEach(
+        (
+          businessAccounts,
+          index,
+        ) => {
+          const linkedBusinessId =
+            activeBusinessSpaces[
+              index
+            ]?.id;
+
+          businessAccounts.forEach(
+            (account) => {
+              const linkedIds =
+                canonicalBusinessLinks.get(
+                  account.id,
+                )
+                || new Set<string>();
+
+              if (linkedBusinessId) {
+                linkedIds.add(
+                  linkedBusinessId,
+                );
+              }
+
+              canonicalBusinessLinks.set(
+                account.id,
+                linkedIds,
+              );
+
+              const existing =
+                entryAccountMap.get(
+                  account.id,
+                );
+
+              entryAccountMap.set(
+                account.id,
+                {
+                  ...existing,
+                  ...account,
+                  businessSpaceIds:
+                    [...linkedIds],
+                },
+              );
+            },
+          );
+        },
+      );
 
       const nextEntryAccounts =
         [...entryAccountMap.values()]
