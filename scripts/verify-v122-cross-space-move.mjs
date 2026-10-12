@@ -14,7 +14,9 @@ const checks = [
   ],
 
   [
-    /const destinationOptions\s*=\s*type === 'transfer'[\s\S]*?\?\s*accounts\.filter/
+    /const transferDestinationOptions\s*=\s*accounts\.filter/
+      .test(source)
+    && /const destinationOptions\s*=\s*type === 'transfer'[\s\S]*?\?\s*transferDestinationOptions/
       .test(source),
     'Move Money destination picker can use accounts outside the selected Space.',
   ],

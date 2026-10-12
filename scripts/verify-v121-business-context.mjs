@@ -83,7 +83,7 @@ for (const expected of [
   'entryAccounts',
   'entrySpaces',
   'entryCategories',
-  'listPersonalAccounts',
+  'listAccounts',
   'listAccountsForSpace',
   'initialSpaceId={',
   'requestMoveOnly',

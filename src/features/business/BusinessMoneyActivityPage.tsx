@@ -8,8 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import {
   accountSupportsPersonalUse,
+  listAccounts,
   listAccountsForSpace,
-  listPersonalAccounts,
 } from '../../repositories/accountRepository';
 import {
   listAllCustomCategories,
@@ -564,11 +564,11 @@ export function BusinessMoneyActivityPage() {
       );
 
       const [
-        personalEntryAccounts,
+        ownedEntryAccounts,
         customEntryCategories,
         businessAccountGroups,
       ] = await Promise.all([
-        listPersonalAccounts(
+        listAccounts(
           user.uid,
         ).catch(() => []),
 
@@ -590,12 +590,15 @@ export function BusinessMoneyActivityPage() {
         new Map<string, Account>();
 
       /*
-       * Personal-capable accounts are available as
-       * Personal sources, but legacy Business linkage
-       * must not make them appear inside a Business
-       * unless listAccountsForSpace() confirms it.
+       * All active owned accounts are available to the
+       * transfer destination picker.
+       *
+       * Business source eligibility is still rebuilt
+       * only from authoritative listAccountsForSpace()
+       * results below, so a Personal/global account
+       * cannot become a Business source accidentally.
        */
-      personalEntryAccounts.forEach(
+      ownedEntryAccounts.forEach(
         (account) =>
           entryAccountMap.set(
             account.id,

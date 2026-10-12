@@ -2628,22 +2628,25 @@ export function MoneyActivityModal({
     online,
   ]);
 
+  const transferDestinationOptions =
+    accounts.filter(
+      (account) =>
+        account.id !== accountId
+        && !account.archivedAt
+        && !account.closedAt
+        && account.sharedCanUseAccount !== false
+        && (
+          !sourceAccount
+          || (
+            account.currency === sourceAccount.currency
+            && account.ownerId === sourceAccount.ownerId
+          )
+        ),
+    );
+
   const destinationOptions =
     type === 'transfer'
-      ? accounts.filter(
-          (account) =>
-            account.id !== accountId
-            && !account.archivedAt
-            && !account.closedAt
-            && account.sharedCanUseAccount !== false
-            && (
-              !sourceAccount
-              || (
-                account.currency === sourceAccount.currency
-                && account.ownerId === sourceAccount.ownerId
-              )
-            ),
-        )
+      ? transferDestinationOptions
       : compatibleAccounts.filter(
           (account) =>
             account.id !== accountId,
@@ -2921,7 +2924,8 @@ export function MoneyActivityModal({
           : 'Save transaction';
 
   const canTransferBetweenAccounts =
-    compatibleAccounts.length >= 2;
+    compatibleAccounts.length >= 1
+    && transferDestinationOptions.length >= 1;
 
   const typeOptions: PrimaryType[] =
     lockedSpaceId
@@ -3235,7 +3239,7 @@ export function MoneyActivityModal({
             className="button primary"
             disabled={
               busy
-              || compatibleAccounts.length < 2
+              || transferDestinationOptions.length === 0
               || !destinationAccountId
             }
           >
