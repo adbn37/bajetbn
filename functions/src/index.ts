@@ -27344,6 +27344,130 @@ async function assertBasicSmeCapacityInTransaction(
   );
 }
 
+
+export const repairOwnedSpaceMemberships =
+  onCall(
+    { region },
+    async (request) => {
+      const uid =
+        requireAuth(request.auth?.uid);
+
+      const ownedSpaces =
+        await db
+          .collection('spaces')
+          .where('ownerId', '==', uid)
+          .get();
+
+      let repaired = 0;
+
+      for (
+        const ownedSpace
+        of ownedSpaces.docs
+      ) {
+        const memberRef =
+          db
+            .collection('spaceMembers')
+            .doc(
+              ownedSpace.id
+              + '_'
+              + uid,
+            );
+
+        const didRepair =
+          await db.runTransaction(
+            async (transaction) => {
+              const [
+                spaceSnapshot,
+                memberSnapshot,
+              ] = await Promise.all([
+                transaction.get(
+                  ownedSpace.ref,
+                ),
+                transaction.get(
+                  memberRef,
+                ),
+              ]);
+
+              if (
+                !spaceSnapshot.exists
+                || String(
+                  spaceSnapshot
+                    .data()
+                    ?.ownerId
+                  || '',
+                ) !== uid
+              ) {
+                return false;
+              }
+
+              const member =
+                memberSnapshot.data()
+                || {};
+
+              const needsRepair =
+                !memberSnapshot.exists
+                || member.spaceId
+                  !== ownedSpace.id
+                || member.uid
+                  !== uid
+                || member.role
+                  !== 'owner'
+                || member.status
+                  !== 'active'
+                || member.canUseAccounts
+                  !== true
+                || member.canViewBalances
+                  !== true
+                || member.canViewLedger
+                  !== true;
+
+              if (!needsRepair) {
+                return false;
+              }
+
+              const now =
+                FieldValue
+                  .serverTimestamp();
+
+              transaction.set(
+                memberRef,
+                {
+                  spaceId:
+                    ownedSpace.id,
+                  uid,
+                  role: 'owner',
+                  status: 'active',
+                  canUseAccounts: true,
+                  canViewBalances: true,
+                  canViewLedger: true,
+                  ...(
+                    member.joinedAt
+                      ? {}
+                      : {
+                          joinedAt: now,
+                        }
+                  ),
+                },
+                { merge: true },
+              );
+
+              return true;
+            },
+          );
+
+        if (didRepair) {
+          repaired += 1;
+        }
+      }
+
+      return {
+        checked:
+          ownedSpaces.size,
+        repaired,
+      };
+    },
+  );
+
 export const createSpaceWithEntitlement =
   onCall(
     { region },
