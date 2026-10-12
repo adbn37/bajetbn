@@ -2419,6 +2419,32 @@ export function MoneyActivityModal({
         && accountAvailableInSelectedSpace(account),
     );
 
+    const currentSourceAccount =
+      accounts.find(
+        (account) =>
+          account.id === accountId,
+      );
+
+    const nextDestinationAccounts =
+      type === 'transfer'
+        ? accounts.filter(
+            (account) =>
+              account.id !== accountId
+              && !account.archivedAt
+              && !account.closedAt
+              && account.sharedCanUseAccount !== false
+              && (
+                !currentSourceAccount
+                || (
+                  account.currency
+                    === currentSourceAccount.currency
+                  && account.ownerId
+                    === currentSourceAccount.ownerId
+                )
+              ),
+          )
+        : nextAccounts;
+
     let cancelled = false;
 
     queueMicrotask(() => {
@@ -2430,7 +2456,10 @@ export function MoneyActivityModal({
 
       if (
         destinationAccountId === accountId
-        || !nextAccounts.some((account) => account.id === destinationAccountId)
+        || !nextDestinationAccounts.some(
+          (account) =>
+            account.id === destinationAccountId,
+        )
       ) {
         setDestinationAccountId('');
       }
@@ -2439,7 +2468,13 @@ export function MoneyActivityModal({
     return () => {
       cancelled = true;
     };
-  }, [accountId, accounts, destinationAccountId, selectedSpace]);
+  }, [
+    accountId,
+    accounts,
+    destinationAccountId,
+    selectedSpace,
+    type,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2593,7 +2628,26 @@ export function MoneyActivityModal({
     online,
   ]);
 
-  const destinationOptions = compatibleAccounts.filter((account) => account.id !== accountId);
+  const destinationOptions =
+    type === 'transfer'
+      ? accounts.filter(
+          (account) =>
+            account.id !== accountId
+            && !account.archivedAt
+            && !account.closedAt
+            && account.sharedCanUseAccount !== false
+            && (
+              !sourceAccount
+              || (
+                account.currency === sourceAccount.currency
+                && account.ownerId === sourceAccount.ownerId
+              )
+            ),
+        )
+      : compatibleAccounts.filter(
+          (account) =>
+            account.id !== accountId,
+        );
   let amountMinor = 0;
   try { amountMinor = amount ? toMinorUnits(amount) : 0; } catch { amountMinor = 0; }
   const projectedSource = sourceAccount ? sourceAccount.ledgerBalanceMinor + accountEffectForPreview(sourceAccount, type, amountMinor) : 0;
