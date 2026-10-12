@@ -131,11 +131,11 @@ async function ensureOwnedSpaceMembershipsRepaired(
 }
 
 export async function listSpaces(uid: string): Promise<Space[]> {
-    await ensureOwnedSpaceMembershipsRepaired(
+  await ensureOwnedSpaceMembershipsRepaired(
     uid,
   );
 
-const { db } = requireFirebase();
+  const { db } = requireFirebase();
 
   const memberSnapshot =
     await getDocs(
@@ -257,9 +257,9 @@ const { db } = requireFirebase();
  * only to locate the current one.
  */
 export async function getSpace(spaceId: string): Promise<Space | null> {
-    await ensureOwnedSpaceMembershipsRepaired();
+  await ensureOwnedSpaceMembershipsRepaired();
 
-const { db } = requireFirebase();
+  const { db } = requireFirebase();
   const snapshot = await getDoc(doc(db, 'spaces', spaceId));
 
   return snapshot.exists()

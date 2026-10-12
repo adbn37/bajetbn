@@ -78,8 +78,8 @@ for (const expected of [
 
 for (const expected of [
   'listedSpaces',
-  'item.id === nextSpace.id',
-  'nextSpace,',
+  'const activeBusinessSpaces =',
+  'const nextEntrySpaces =',
   'entryAccounts',
   'entrySpaces',
   'entryCategories',
@@ -140,7 +140,7 @@ if (
 
 if (
   !businessMoney.includes(
-    'Business visibility follows accessible'
+    'Business visibility follows canonical'
   )
   || businessMoney.includes(
     'businessSpaceIdsForAccount('

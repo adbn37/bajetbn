@@ -545,28 +545,8 @@ export function BusinessMoneyActivityPage() {
       const listedSpaces =
         await listSpaces(user.uid);
 
-      /*
-       * Legacy / owner Business Spaces may be
-       * directly readable even when an old
-       * spaceMembers record is missing.
-       *
-       * The current Business has already been
-       * loaded successfully, so always include
-       * it in the Add Money context.
-       */
-      const accessibleSpaces =
-        listedSpaces.some(
-          (item) =>
-            item.id === nextSpace.id,
-        )
-          ? listedSpaces
-          : [
-              nextSpace,
-              ...listedSpaces,
-            ];
-
       const activeBusinessSpaces =
-        accessibleSpaces
+        listedSpaces
           .filter(
             (item) =>
               item.type === 'sme'
@@ -644,7 +624,7 @@ export function BusinessMoneyActivityPage() {
           );
 
       const nextEntrySpaces =
-        accessibleSpaces
+        listedSpaces
           .filter(
             (entrySpace) =>
               !entrySpace.archivedAt
@@ -656,7 +636,7 @@ export function BusinessMoneyActivityPage() {
                 entrySpace.type === 'sme'
               ) {
                 /*
-                 * Business visibility follows accessible
+                 * Business visibility follows canonical
                  * Business Spaces. Account compatibility
                  * is resolved after Business selection.
                  */
