@@ -3705,17 +3705,26 @@ export const postTransaction = onCall({ region }, async (request) => {
       memberSnapshot.data() || {},
       'Account',
     );
-    const destination = destinationSnapshot
-      ? await assertAccountForSpaceActor(
-          transaction,
-          destinationSnapshot,
-          uid,
-          spaceId,
-          spaceSnapshot.data() || {},
-          memberSnapshot.data() || {},
-          'Destination account',
-        )
-      : null;
+    const destination =
+      destinationSnapshot
+        ? (
+            type === 'transfer'
+              ? assertAccount(
+                  destinationSnapshot.data(),
+                  account.ownerId,
+                  'Destination account',
+                )
+              : await assertAccountForSpaceActor(
+                  transaction,
+                  destinationSnapshot,
+                  uid,
+                  spaceId,
+                  spaceSnapshot.data() || {},
+                  memberSnapshot.data() || {},
+                  'Destination account',
+                )
+          )
+        : null;
     if (destination && destination.ownerId !== account.ownerId) {
       throw new HttpsError('failed-precondition', 'Business transfers must stay between accounts owned by the same Business account owner.');
     }
