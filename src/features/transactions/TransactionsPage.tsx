@@ -1765,7 +1765,7 @@ export function TransactionsPage() {
 
                         <span>
                           <strong>{account.name}</strong>
-                          <small>{accountContextLabel(account, spaces)} ? {account.currency}</small>
+                          <small>{accountContextLabel(account, spaces)} - {account.currency}</small>
                         </span>
                       </label>
                     );
@@ -1869,12 +1869,12 @@ export function TransactionsPage() {
                     <div className="transaction-route">
                       <span>
                         {source
-                          ? accountContextLabel(source, spaces) + ' ? ' + source.name
+                          ? accountContextLabel(source, spaces) + ' - ' + source.name
                           : 'Unknown Account'}
                       </span>
                       <b>to</b>
                       <span>
-                        {accountContextLabel(destination, spaces) + ' ? ' + destination.name}
+                        {accountContextLabel(destination, spaces) + ' - ' + destination.name}
                       </span>
                     </div>
 
@@ -4400,13 +4400,13 @@ function TransactionDetails({ item, source, destination, space, spaces, category
           <span className="transaction-route">
             <span>
               {source
-                ? accountContextLabel(source, spaces) + ' ? ' + source.name
+                ? accountContextLabel(source, spaces) + ' - ' + source.name
                 : 'Unknown Account'}
             </span>
             <b>to</b>
             <span>
               {destination
-                ? accountContextLabel(destination, spaces) + ' ? ' + destination.name
+                ? accountContextLabel(destination, spaces) + ' - ' + destination.name
                 : 'Unknown Account'}
             </span>
           </span>
@@ -4592,11 +4592,11 @@ function TransactionDetails({ item, source, destination, space, spaces, category
                   : space?.name,
               sourceAccountName:
                 source
-                  ? accountContextLabel(source, spaces) + ' ? ' + source.name
+                  ? accountContextLabel(source, spaces) + ' - ' + source.name
                   : undefined,
               destinationAccountName:
                 destination
-                  ? accountContextLabel(destination, spaces) + ' ? ' + destination.name
+                  ? accountContextLabel(destination, spaces) + ' - ' + destination.name
                   : undefined,
             })
           }

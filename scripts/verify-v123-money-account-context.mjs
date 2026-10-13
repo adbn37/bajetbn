@@ -42,7 +42,7 @@ const checks = [
     'Native account pickers show context before account name.',
   ],
   [
-    /<small>\s*\{accountContextLabel\(\s*account,\s*spaces\s*\)\}\s*?\s*\{account\.currency\}\s*<\/small>/
+    /<small>\s*\{accountContextLabel\(\s*account,\s*spaces\s*\)\}\s*-\s*\{account\.currency\}\s*<\/small>/
       .test(source),
     'Account filters retain account context.',
   ],
