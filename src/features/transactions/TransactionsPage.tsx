@@ -164,6 +164,54 @@ function spaceDisplayLabel(space: Space): string {
   return [space.name, spaceTypeLabels[space.type], space.currency].join(' - ');
 }
 
+function accountContextLabel(
+  account: Account,
+  spaces: Space[],
+): string {
+  const contexts: string[] = [];
+
+  if (
+    accountSupportsPersonalUse(
+      account,
+    )
+  ) {
+    contexts.push('Personal');
+  }
+
+  const businessNames =
+    businessSpaceIdsForAccount(
+      account,
+    )
+      .map(
+        (spaceId) =>
+          spaces.find(
+            (space) =>
+              space.id === spaceId
+              && space.type === 'sme',
+          )?.name,
+      )
+      .filter(
+        (name): name is string =>
+          Boolean(name),
+      );
+
+  businessNames.forEach(
+    (name) => {
+      if (!contexts.includes(name)) {
+        contexts.push(name);
+      }
+    },
+  );
+
+  if (contexts.length > 0) {
+    return contexts.join(' + ');
+  }
+
+  return account.classification === 'business'
+    ? 'Business'
+    : 'Personal';
+}
+
 export function MoneyScopeSwitch({
   mode,
   businessSpaces,
@@ -2593,6 +2641,10 @@ export function MoneyActivityModal({
   const sourceAccountSubtitle =
     sourceAccount
       ? [
+          accountContextLabel(
+            sourceAccount,
+            spaces,
+          ),
           institutionDisplay(sourceAccount),
           sourceAccount.type === 'e_wallet'
             ? 'E-wallet'
@@ -2619,6 +2671,10 @@ export function MoneyActivityModal({
   const destinationAccountSubtitle =
     destinationAccount
       ? [
+          accountContextLabel(
+            destinationAccount,
+            spaces,
+          ),
           institutionDisplay(
             destinationAccount,
           ),
@@ -3111,7 +3167,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} - {
+                    {accountContextLabel(account, spaces)} · {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -3211,7 +3267,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} - {
+                    {accountContextLabel(account, spaces)} · {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -3584,7 +3640,7 @@ export function MoneyActivityModal({
         >
           {compatibleAccounts.map((account) => (
             <option value={account.id} key={account.id}>
-              {account.name} - {account.sharedCanViewBalance === false
+              {accountContextLabel(account, spaces)} · {account.name} - {account.sharedCanViewBalance === false
                 ? 'Balance hidden'
                 : formatMoney(
                     account.ledgerBalanceMinor,
@@ -3659,7 +3715,7 @@ export function MoneyActivityModal({
             <option value="">Choose account</option>
             {destinationOptions.map((account) => (
               <option value={account.id} key={account.id}>
-                {account.name} - {account.sharedCanViewBalance === false
+                {accountContextLabel(account, spaces)} · {account.name} - {account.sharedCanViewBalance === false
                   ? 'Balance hidden'
                   : formatMoney(
                       account.ledgerBalanceMinor,
