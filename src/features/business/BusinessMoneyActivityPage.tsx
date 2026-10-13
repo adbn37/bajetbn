@@ -8,8 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOfflineSync } from '../../contexts/OfflineSyncContext';
 import {
   accountSupportsPersonalUse,
+  listAccounts,
   listAccountsForSpace,
-  listPersonalAccounts,
 } from '../../repositories/accountRepository';
 import {
   listAllCustomCategories,
@@ -545,28 +545,8 @@ export function BusinessMoneyActivityPage() {
       const listedSpaces =
         await listSpaces(user.uid);
 
-      /*
-       * Legacy / owner Business Spaces may be
-       * directly readable even when an old
-       * spaceMembers record is missing.
-       *
-       * The current Business has already been
-       * loaded successfully, so always include
-       * it in the Add Money context.
-       */
-      const accessibleSpaces =
-        listedSpaces.some(
-          (item) =>
-            item.id === nextSpace.id,
-        )
-          ? listedSpaces
-          : [
-              nextSpace,
-              ...listedSpaces,
-            ];
-
       const activeBusinessSpaces =
-        accessibleSpaces
+        listedSpaces
           .filter(
             (item) =>
               item.type === 'sme'
@@ -584,11 +564,11 @@ export function BusinessMoneyActivityPage() {
       );
 
       const [
-        personalEntryAccounts,
+        ownedEntryAccounts,
         customEntryCategories,
         businessAccountGroups,
       ] = await Promise.all([
-        listPersonalAccounts(
+        listAccounts(
           user.uid,
         ).catch(() => []),
 
@@ -609,23 +589,90 @@ export function BusinessMoneyActivityPage() {
       const entryAccountMap =
         new Map<string, Account>();
 
-      personalEntryAccounts.forEach(
+      /*
+       * All active owned accounts are available to the
+       * transfer destination picker.
+       *
+       * Business source eligibility is still rebuilt
+       * only from authoritative listAccountsForSpace()
+       * results below, so a Personal/global account
+       * cannot become a Business source accidentally.
+       */
+      ownedEntryAccounts.forEach(
         (account) =>
           entryAccountMap.set(
             account.id,
-            account,
+            account.classification === 'business'
+              ? {
+                  ...account,
+                  businessSpaceIds: [],
+                  spaceId: null,
+                }
+              : account,
           ),
       );
 
-      businessAccountGroups
-        .flat()
-        .forEach(
-          (account) =>
-            entryAccountMap.set(
-              account.id,
-              account,
-            ),
-        );
+      /*
+       * Build Business linkage from the authoritative
+       * per-Space account results returned by
+       * listAccountsForSpace().
+       *
+       * This keeps the Add Money source picker aligned
+       * with the server's Business account validation.
+       */
+      const canonicalBusinessLinks =
+        new Map<
+          string,
+          Set<string>
+        >();
+
+      businessAccountGroups.forEach(
+        (
+          businessAccounts,
+          index,
+        ) => {
+          const linkedBusinessId =
+            activeBusinessSpaces[
+              index
+            ]?.id;
+
+          businessAccounts.forEach(
+            (account) => {
+              const linkedIds =
+                canonicalBusinessLinks.get(
+                  account.id,
+                )
+                || new Set<string>();
+
+              if (linkedBusinessId) {
+                linkedIds.add(
+                  linkedBusinessId,
+                );
+              }
+
+              canonicalBusinessLinks.set(
+                account.id,
+                linkedIds,
+              );
+
+              const existing =
+                entryAccountMap.get(
+                  account.id,
+                );
+
+              entryAccountMap.set(
+                account.id,
+                {
+                  ...existing,
+                  ...account,
+                  businessSpaceIds:
+                    [...linkedIds],
+                },
+              );
+            },
+          );
+        },
+      );
 
       const nextEntryAccounts =
         [...entryAccountMap.values()]
@@ -644,7 +691,7 @@ export function BusinessMoneyActivityPage() {
           );
 
       const nextEntrySpaces =
-        accessibleSpaces
+        listedSpaces
           .filter(
             (entrySpace) =>
               !entrySpace.archivedAt
@@ -656,7 +703,7 @@ export function BusinessMoneyActivityPage() {
                 entrySpace.type === 'sme'
               ) {
                 /*
-                 * Business visibility follows accessible
+                 * Business visibility follows canonical
                  * Business Spaces. Account compatibility
                  * is resolved after Business selection.
                  */

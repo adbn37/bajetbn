@@ -41,7 +41,100 @@ function isPermissionDenied(
   );
 }
 
+
+const repairedOwnedSpaceUsers =
+  new Set<string>();
+
+const ownedSpaceRepairRequests =
+  new Map<
+    string,
+    Promise<void>
+  >();
+
+async function ensureOwnedSpaceMembershipsRepaired(
+  requestedUid?: string,
+): Promise<void> {
+  const {
+    auth,
+    functions,
+  } = requireFirebase();
+
+  const uid =
+    requestedUid
+    || auth.currentUser?.uid
+    || '';
+
+  if (
+    !uid
+    || auth.currentUser?.uid
+      !== uid
+    || repairedOwnedSpaceUsers.has(
+      uid,
+    )
+  ) {
+    return;
+  }
+
+  const existingRequest =
+    ownedSpaceRepairRequests.get(
+      uid,
+    );
+
+  if (existingRequest) {
+    await existingRequest;
+    return;
+  }
+
+  const repair =
+    httpsCallable<
+      Record<string, never>,
+      {
+        checked: number;
+        repaired: number;
+      }
+    >(
+      functions,
+      'repairOwnedSpaceMemberships',
+    );
+
+  const request =
+    repair({})
+      .then(() => {
+        repairedOwnedSpaceUsers.add(
+          uid,
+        );
+      })
+      .catch((error) => {
+        /*
+         * Do not make every Space screen unavailable
+         * if the repair callable is temporarily offline.
+         * Existing valid memberships can still load.
+         */
+        console.warn(
+          '[BajetBN Space membership repair] '
+          + 'Unable to verify legacy owner memberships.',
+          error,
+        );
+      })
+      .finally(() => {
+        ownedSpaceRepairRequests.delete(
+          uid,
+        );
+      });
+
+  ownedSpaceRepairRequests.set(
+    uid,
+    request,
+  );
+
+  await request;
+}
+
 export async function listSpaces(uid: string): Promise<Space[]> {
+  await ensureOwnedSpaceMembershipsRepaired(
+    uid,
+  );
+
   const { db } = requireFirebase();
 
   const memberSnapshot =
@@ -164,6 +257,8 @@ export async function listSpaces(uid: string): Promise<Space[]> {
  * only to locate the current one.
  */
 export async function getSpace(spaceId: string): Promise<Space | null> {
+  await ensureOwnedSpaceMembershipsRepaired();
+
   const { db } = requireFirebase();
   const snapshot = await getDoc(doc(db, 'spaces', spaceId));
 
