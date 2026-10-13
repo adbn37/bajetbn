@@ -41,6 +41,26 @@ const checks = [
       .test(source),
     'Native account pickers show context before account name.',
   ],
+  [
+    /<small>\s*\{accountContextLabel\(\s*account,\s*spaces\s*\)\}\s*?\s*\{account\.currency\}\s*<\/small>/
+      .test(source),
+    'Account filters retain account context.',
+  ],
+  [
+    /accountContextLabel\(source, spaces\)[\s\S]*?source\.name[\s\S]*?accountContextLabel\(destination, spaces\)[\s\S]*?destination\.name/
+      .test(source),
+    'Saved transfer routes retain source and destination contexts.',
+  ],
+  [
+    (source.match(/spaces=\{spaces\}/g) || []).length >= 2,
+    'Transaction detail views receive Space context.',
+  ],
+  [
+    /sourceAccountName:[\s\S]*?accountContextLabel\(source, spaces\)[\s\S]*?destinationAccountName:[\s\S]*?accountContextLabel\(destination, spaces\)/
+      .test(source),
+    'Shared transfer details retain account context.',
+  ],
+
 ];
 
 let failed = false;

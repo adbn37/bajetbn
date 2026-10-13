@@ -1765,7 +1765,7 @@ export function TransactionsPage() {
 
                         <span>
                           <strong>{account.name}</strong>
-                          <small>{account.currency}</small>
+                          <small>{accountContextLabel(account, spaces)} ? {account.currency}</small>
                         </span>
                       </label>
                     );
@@ -1868,10 +1868,14 @@ export function TransactionsPage() {
                   <>
                     <div className="transaction-route">
                       <span>
-                        {source?.name || 'Unknown Account'}
+                        {source
+                          ? accountContextLabel(source, spaces) + ' ? ' + source.name
+                          : 'Unknown Account'}
                       </span>
                       <b>to</b>
-                      <span>{destination.name}</span>
+                      <span>
+                        {accountContextLabel(destination, spaces) + ' ? ' + destination.name}
+                      </span>
                     </div>
 
                     <small>
@@ -2174,6 +2178,7 @@ lockedSpaceId={
 
       {selectedTransaction && <TransactionDetails
         item={selectedTransaction}
+        spaces={spaces}
         source={accountMap.get(selectedTransaction.accountId)}
         destination={selectedTransaction.destinationAccountId ? accountMap.get(selectedTransaction.destinationAccountId) : undefined}
         space={spaceMap.get(selectedTransaction.spaceId)}
@@ -2192,6 +2197,7 @@ lockedSpaceId={
 
       {receiptTransaction && <TransactionDetails
         item={receiptTransaction}
+        spaces={spaces}
         source={accountMap.get(receiptTransaction.accountId)}
         destination={receiptTransaction.destinationAccountId ? accountMap.get(receiptTransaction.destinationAccountId) : undefined}
         space={spaceMap.get(receiptTransaction.spaceId)}
@@ -4228,11 +4234,12 @@ function TransactionEditDetails({
   </Modal>;
 }
 
-function TransactionDetails({ item, source, destination, space, category, online, receiptsOnly = false, onClose, onReverse, onCorrect, onUpdated, onAttachmentsChanged }: {
+function TransactionDetails({ item, source, destination, space, spaces, category, online, receiptsOnly = false, onClose, onReverse, onCorrect, onUpdated, onAttachmentsChanged }: {
   item: FinancialTransaction;
   source?: Account;
   destination?: Account;
   space?: Space;
+  spaces: Space[];
   category: TransactionCategory;
   online: boolean;
   receiptsOnly?: boolean;
@@ -4392,11 +4399,15 @@ function TransactionDetails({ item, source, destination, space, category, online
         {isTransferFlow ? (
           <span className="transaction-route">
             <span>
-              {source?.name || 'Unknown Account'}
+              {source
+                ? accountContextLabel(source, spaces) + ' ? ' + source.name
+                : 'Unknown Account'}
             </span>
             <b>to</b>
             <span>
-              {destination?.name || 'Unknown Account'}
+              {destination
+                ? accountContextLabel(destination, spaces) + ' ? ' + destination.name
+                : 'Unknown Account'}
             </span>
           </span>
         ) : (
@@ -4580,9 +4591,13 @@ function TransactionDetails({ item, source, destination, space, category, online
                   ? 'Personal'
                   : space?.name,
               sourceAccountName:
-                source?.name,
+                source
+                  ? accountContextLabel(source, spaces) + ' ? ' + source.name
+                  : undefined,
               destinationAccountName:
-                destination?.name,
+                destination
+                  ? accountContextLabel(destination, spaces) + ' ? ' + destination.name
+                  : undefined,
             })
           }
         >
