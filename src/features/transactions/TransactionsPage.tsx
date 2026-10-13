@@ -31,6 +31,7 @@ import {
 import {
   accountSupportsPersonalUse,
   businessSpaceIdsForAccount,
+  listAccounts,
   listPersonalAccounts,
 } from '../../repositories/accountRepository';
 import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
@@ -439,6 +440,10 @@ export function TransactionsPage() {
   ] = useSearchParams();
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [
+    transactionAccounts,
+    setTransactionAccounts,
+  ] = useState<Account[]>([]);
   const [writableAccounts, setWritableAccounts] = useState<Account[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [businessSpaces, setBusinessSpaces] = useState<Space[]>([]);
@@ -516,11 +521,15 @@ export function TransactionsPage() {
     try {
       const [
         nextAccounts,
+        nextTransactionAccounts,
         nextSpaces,
         nextCustomCategories,
         nextAttachments,
       ] = await Promise.all([
         listPersonalAccounts(
+          user.uid,
+        ),
+        listAccounts(
           user.uid,
         ),
         listSpaces(
@@ -564,6 +573,14 @@ export function TransactionsPage() {
         },
       );
 
+      const personalAccountIds =
+        new Set(
+          nextAccounts.map(
+            (account) =>
+              account.id,
+          ),
+        );
+
       const excludedPersonalMoneySpaceIds =
         new Set(
           nextSpaces
@@ -581,10 +598,32 @@ export function TransactionsPage() {
       const personalTransactions =
         [...transactionMap.values()]
           .filter(
-            (item) =>
-              !excludedPersonalMoneySpaceIds.has(
-                item.spaceId,
-              ),
+            (item) => {
+              if (
+                !excludedPersonalMoneySpaceIds.has(
+                  item.spaceId,
+                )
+              ) {
+                return true;
+              }
+
+              /*
+               * A Business -> Personal transfer is one
+               * transaction, but it belongs in both
+               * context views.
+               *
+               * Business income/expense records remain
+               * Business-only.
+               */
+              return (
+                item.type === 'transfer'
+                && typeof item.destinationAccountId
+                  === 'string'
+                && personalAccountIds.has(
+                  item.destinationAccountId,
+                )
+              );
+            },
           )
           .sort(
             (a, b) => {
@@ -658,6 +697,15 @@ export function TransactionsPage() {
 
       setTransactions(
         personalTransactions,
+      );
+
+      setTransactionAccounts(
+        nextTransactionAccounts
+          .filter(
+            (account) =>
+              !account.archivedAt
+              && !account.closedAt,
+          ),
       );
 
       setAccounts(
@@ -883,7 +931,16 @@ export function TransactionsPage() {
     return [...DEFAULT_TRANSACTION_CATEGORIES, ...nextCustomCategories.filter((item) => !item.archivedAt)];
   }
   const categoryMap = useMemo(() => new Map(allCategories.map((category) => [category.id, category])), [allCategories]);
-  const accountMap = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
+  const accountMap = useMemo(
+    () =>
+      new Map(
+        transactionAccounts.map(
+          (account) =>
+            [account.id, account],
+        ),
+      ),
+    [transactionAccounts],
+  );
 
   const historyAccounts = useMemo(
     () => accounts.filter(
@@ -978,7 +1035,22 @@ export function TransactionsPage() {
     writableSpaces,
   ]);
 
-  const spaceMap = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
+  const spaceMap = useMemo(
+    () =>
+      new Map(
+        [
+          ...spaces,
+          ...businessSpaces,
+        ].map(
+          (space) =>
+            [space.id, space],
+        ),
+      ),
+    [
+      spaces,
+      businessSpaces,
+    ],
+  );
 
   const availableLabels = useMemo(() => {
     const byKey = new Map<string, string>();
