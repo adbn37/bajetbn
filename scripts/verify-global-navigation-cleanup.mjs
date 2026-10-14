@@ -108,14 +108,25 @@ check(mobile.includes('to="/spaces"'), 'Mobile Spaces destination is missing.');
 check(mobile.includes('to="/more"'), 'Mobile More destination is missing.');
 check(!mobile.includes('<small>Business</small>') && !mobile.includes('<small>Goals</small>'), 'Business and Goals do not occupy fixed mobile bottom-nav slots.');
 check(
-  morePage.includes('more-space-shortcuts-v116')
-    && morePage.includes('Manage Spaces')
-    && morePage.includes('to="/spaces"'),
-  'More keeps Space shortcuts and Space management access.',
+  morePage.includes(
+    "{ to: '/spaces', label: 'Spaces', icon: 'spaces' }",
+  )
+    && morePage.includes(
+      'more-shortcut-grid-v116',
+    )
+    && morePage.includes(
+      'function MoreIcon',
+    ),
+  'More keeps Spaces behind one polished shortcut.',
 );
 check(
-  morePage.includes("space.type !== 'goal'"),
-  'Goal / Plan Spaces stay out of the general More Space launcher.',
+  !morePage.includes(
+    'listSpaces',
+  )
+    && !morePage.includes(
+      '<SpaceAvatar',
+    ),
+  'More does not enumerate individual Spaces or Goal / Plan Spaces.',
 );
 check(morePage.includes('data-simplified-more'), 'More page simplification marker is missing.');
 check(!morePage.includes('NAVIGATION_DESCRIPTIONS'), 'More no longer repeats descriptions for every tool.');

@@ -168,13 +168,10 @@ need(
 
 need(
   morePage.includes(
-    'more-space-shortcuts-v116',
+    "{ to: '/spaces', label: 'Spaces', icon: 'spaces' }",
   )
     && morePage.includes(
-      'Manage Spaces',
-    )
-    && morePage.includes(
-      'to="/spaces"',
+      'more-shortcut-grid-v116',
     ),
   'Spaces must remain reachable from More.',
 );

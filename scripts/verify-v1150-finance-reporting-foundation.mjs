@@ -37,17 +37,14 @@ const release =
 
 assert.equal(
   pkg.version,
-  '1.15.0',
-);
-
-assert.equal(
   release.version,
-  '1.15.0',
+  'Package and release versions must stay aligned.',
 );
 
 assert.equal(
   release.label,
-  'BajetBN v1.15.0',
+  `BajetBN v${release.version}`,
+  'Release label must match the current version.',
 );
 
 for (

@@ -164,6 +164,54 @@ function spaceDisplayLabel(space: Space): string {
   return [space.name, spaceTypeLabels[space.type], space.currency].join(' - ');
 }
 
+function accountContextLabel(
+  account: Account,
+  spaces: Space[],
+): string {
+  const contexts: string[] = [];
+
+  if (
+    accountSupportsPersonalUse(
+      account,
+    )
+  ) {
+    contexts.push('Personal');
+  }
+
+  const businessNames =
+    businessSpaceIdsForAccount(
+      account,
+    )
+      .map(
+        (spaceId) =>
+          spaces.find(
+            (space) =>
+              space.id === spaceId
+              && space.type === 'sme',
+          )?.name,
+      )
+      .filter(
+        (name): name is string =>
+          Boolean(name),
+      );
+
+  businessNames.forEach(
+    (name) => {
+      if (!contexts.includes(name)) {
+        contexts.push(name);
+      }
+    },
+  );
+
+  if (contexts.length > 0) {
+    return contexts.join(' + ');
+  }
+
+  return account.classification === 'business'
+    ? 'Business'
+    : 'Personal';
+}
+
 export function MoneyScopeSwitch({
   mode,
   businessSpaces,
@@ -1717,7 +1765,7 @@ export function TransactionsPage() {
 
                         <span>
                           <strong>{account.name}</strong>
-                          <small>{account.currency}</small>
+                          <small>{accountContextLabel(account, spaces)} - {account.currency}</small>
                         </span>
                       </label>
                     );
@@ -1820,10 +1868,14 @@ export function TransactionsPage() {
                   <>
                     <div className="transaction-route">
                       <span>
-                        {source?.name || 'Unknown Account'}
+                        {source
+                          ? accountContextLabel(source, spaces) + ' - ' + source.name
+                          : 'Unknown Account'}
                       </span>
                       <b>to</b>
-                      <span>{destination.name}</span>
+                      <span>
+                        {accountContextLabel(destination, spaces) + ' - ' + destination.name}
+                      </span>
                     </div>
 
                     <small>
@@ -2126,6 +2178,7 @@ lockedSpaceId={
 
       {selectedTransaction && <TransactionDetails
         item={selectedTransaction}
+        spaces={spaces}
         source={accountMap.get(selectedTransaction.accountId)}
         destination={selectedTransaction.destinationAccountId ? accountMap.get(selectedTransaction.destinationAccountId) : undefined}
         space={spaceMap.get(selectedTransaction.spaceId)}
@@ -2144,6 +2197,7 @@ lockedSpaceId={
 
       {receiptTransaction && <TransactionDetails
         item={receiptTransaction}
+        spaces={spaces}
         source={accountMap.get(receiptTransaction.accountId)}
         destination={receiptTransaction.destinationAccountId ? accountMap.get(receiptTransaction.destinationAccountId) : undefined}
         space={spaceMap.get(receiptTransaction.spaceId)}
@@ -2593,6 +2647,10 @@ export function MoneyActivityModal({
   const sourceAccountSubtitle =
     sourceAccount
       ? [
+          accountContextLabel(
+            sourceAccount,
+            spaces,
+          ),
           institutionDisplay(sourceAccount),
           sourceAccount.type === 'e_wallet'
             ? 'E-wallet'
@@ -2619,6 +2677,10 @@ export function MoneyActivityModal({
   const destinationAccountSubtitle =
     destinationAccount
       ? [
+          accountContextLabel(
+            destinationAccount,
+            spaces,
+          ),
           institutionDisplay(
             destinationAccount,
           ),
@@ -3111,7 +3173,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} - {
+                    {accountContextLabel(account, spaces)} · {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -3211,7 +3273,7 @@ export function MoneyActivityModal({
                     value={account.id}
                     key={account.id}
                   >
-                    {account.name} - {
+                    {accountContextLabel(account, spaces)} · {account.name} - {
                       account.sharedCanViewBalance
                         === false
                         ? 'Balance hidden'
@@ -3584,7 +3646,7 @@ export function MoneyActivityModal({
         >
           {compatibleAccounts.map((account) => (
             <option value={account.id} key={account.id}>
-              {account.name} - {account.sharedCanViewBalance === false
+              {accountContextLabel(account, spaces)} · {account.name} - {account.sharedCanViewBalance === false
                 ? 'Balance hidden'
                 : formatMoney(
                     account.ledgerBalanceMinor,
@@ -3659,7 +3721,7 @@ export function MoneyActivityModal({
             <option value="">Choose account</option>
             {destinationOptions.map((account) => (
               <option value={account.id} key={account.id}>
-                {account.name} - {account.sharedCanViewBalance === false
+                {accountContextLabel(account, spaces)} · {account.name} - {account.sharedCanViewBalance === false
                   ? 'Balance hidden'
                   : formatMoney(
                       account.ledgerBalanceMinor,
@@ -4172,11 +4234,12 @@ function TransactionEditDetails({
   </Modal>;
 }
 
-function TransactionDetails({ item, source, destination, space, category, online, receiptsOnly = false, onClose, onReverse, onCorrect, onUpdated, onAttachmentsChanged }: {
+function TransactionDetails({ item, source, destination, space, spaces, category, online, receiptsOnly = false, onClose, onReverse, onCorrect, onUpdated, onAttachmentsChanged }: {
   item: FinancialTransaction;
   source?: Account;
   destination?: Account;
   space?: Space;
+  spaces: Space[];
   category: TransactionCategory;
   online: boolean;
   receiptsOnly?: boolean;
@@ -4336,11 +4399,15 @@ function TransactionDetails({ item, source, destination, space, category, online
         {isTransferFlow ? (
           <span className="transaction-route">
             <span>
-              {source?.name || 'Unknown Account'}
+              {source
+                ? accountContextLabel(source, spaces) + ' - ' + source.name
+                : 'Unknown Account'}
             </span>
             <b>to</b>
             <span>
-              {destination?.name || 'Unknown Account'}
+              {destination
+                ? accountContextLabel(destination, spaces) + ' - ' + destination.name
+                : 'Unknown Account'}
             </span>
           </span>
         ) : (
@@ -4524,9 +4591,13 @@ function TransactionDetails({ item, source, destination, space, category, online
                   ? 'Personal'
                   : space?.name,
               sourceAccountName:
-                source?.name,
+                source
+                  ? accountContextLabel(source, spaces) + ' - ' + source.name
+                  : undefined,
               destinationAccountName:
-                destination?.name,
+                destination
+                  ? accountContextLabel(destination, spaces) + ' - ' + destination.name
+                  : undefined,
             })
           }
         >
