@@ -220,15 +220,18 @@ check(
 
 check(
   morePage.includes(
-    'more-space-shortcuts-v116',
+    "{ to: '/spaces', label: 'Spaces', icon: 'spaces' }",
   )
     && morePage.includes(
-      'Manage Spaces',
+      'more-shortcut-grid-v116',
     )
-    && morePage.includes(
-      'to="/spaces"',
+    && !morePage.includes(
+      'listSpaces',
+    )
+    && !morePage.includes(
+      '<SpaceAvatar',
     ),
-  'More retains the detailed Space launcher and management alongside bottom-nav Spaces.',
+  'More keeps Spaces reachable through the simplified polished shortcut alongside bottom-nav Spaces.',
 );
 
 check(
