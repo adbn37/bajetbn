@@ -126,7 +126,8 @@
     "verify:v1150-adbn-customer-portal-redesign": "node scripts/verify-v1150-adbn-customer-portal-redesign.mjs",
     "deploy:pages:staging": "npm run build:staging && node scripts/deploy-pages.mjs staging",
     "deploy:pages:production": "npm run build && node scripts/deploy-pages.mjs production",
-    "verify:pages-deployment-safety": "node scripts/verify-pages-deployment-safety.mjs"
+    "verify:pages-deployment-safety": "node scripts/verify-pages-deployment-safety.mjs",
+    "verify:v124-cross-scope-transfers": "node scripts/verify-v124-cross-scope-transfers.mjs"
   },
   "dependencies": {
     "@bwip-js/browser": "4.11.2",

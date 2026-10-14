@@ -636,15 +636,44 @@ async function assertAccountForSpaceActor(
   space: DocumentData,
   member: DocumentData,
   label: string,
+  allowOwnedPersonalTransferAccount = false,
 ): Promise<AccountRecord> {
-  const account = accountRecord(snapshot.data(), label);
+  const accountData =
+    snapshot.data() || {};
+
+  const account =
+    accountRecord(
+      accountData,
+      label,
+    );
 
   if (account.ownerId === actorUid) {
     if (space.type === 'sme') {
-      if (snapshot.data()?.classification !== 'business' || !accountLinkedToBusinessSpace(snapshot.data() || {}, spaceId)) {
-        throw new HttpsError('failed-precondition', 'Choose a Business account linked to this Business Space.');
+      const linkedBusinessAccount =
+        accountData.classification === 'business'
+        && accountLinkedToBusinessSpace(
+          accountData,
+          spaceId,
+        );
+
+      const ownedPersonalTransferAccount =
+        allowOwnedPersonalTransferAccount
+        && (
+          accountData.classification === 'personal'
+          || accountData.personalUseEnabled === true
+        );
+
+      if (
+        !linkedBusinessAccount
+        && !ownedPersonalTransferAccount
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Choose an account linked to this Business Space, or one of your Personal accounts for this transfer.',
+        );
       }
     }
+
     return account;
   }
 
@@ -3704,30 +3733,110 @@ export const postTransaction = onCall({ region }, async (request) => {
       spaceSnapshot.data() || {},
       memberSnapshot.data() || {},
       'Account',
+      type === 'transfer',
     );
     const destination =
       destinationSnapshot
-        ? (
-            type === 'transfer'
-              ? assertAccount(
-                  destinationSnapshot.data(),
-                  account.ownerId,
-                  'Destination account',
-                )
-              : await assertAccountForSpaceActor(
-                  transaction,
-                  destinationSnapshot,
-                  uid,
-                  spaceId,
-                  spaceSnapshot.data() || {},
-                  memberSnapshot.data() || {},
-                  'Destination account',
-                )
+        ? await assertAccountForSpaceActor(
+            transaction,
+            destinationSnapshot,
+            uid,
+            spaceId,
+            spaceSnapshot.data() || {},
+            memberSnapshot.data() || {},
+            'Destination account',
+            type === 'transfer',
           )
         : null;
-    if (destination && destination.ownerId !== account.ownerId) {
-      throw new HttpsError('failed-precondition', 'Business transfers must stay between accounts owned by the same Business account owner.');
+    if (
+      destination
+      && destination.ownerId !== account.ownerId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Transfers must stay between accounts owned by the same account owner.',
+      );
     }
+
+    const sourceAccountData =
+      accountSnapshot.data() || {};
+
+    const destinationAccountData =
+      destinationSnapshot?.data() || {};
+
+    /*
+     * A transfer posted in a Business Space must
+     * involve at least one account canonically linked
+     * to that Business Space.
+     *
+     * This allows:
+     *   Personal <-> Business
+     *   Business <-> Business in the same Business
+     *
+     * It blocks Personal <-> Personal from being
+     * incorrectly posted as Business activity.
+     */
+    if (
+      type === 'transfer'
+      && spaceSnapshot.data()?.type === 'sme'
+    ) {
+      const sourceLinkedToBusiness =
+        sourceAccountData.classification
+          === 'business'
+        && accountLinkedToBusinessSpace(
+          sourceAccountData,
+          spaceId,
+        );
+
+      const destinationLinkedToBusiness =
+        destinationAccountData.classification
+          === 'business'
+        && accountLinkedToBusinessSpace(
+          destinationAccountData,
+          spaceId,
+        );
+
+      if (
+        !sourceLinkedToBusiness
+        && !destinationLinkedToBusiness
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'A Business transfer must include an account linked to that Business Space.',
+        );
+      }
+    }
+
+    /*
+     * A Business-only account must never be posted
+     * through a Personal/Household/etc. Space.
+     *
+     * The client normally resolves these transfers to
+     * the correct Business Space automatically; this
+     * remains the server-side integrity guard.
+     */
+    if (
+      type === 'transfer'
+      && spaceSnapshot.data()?.type !== 'sme'
+    ) {
+      const containsBusinessOnlyAccount =
+        [
+          sourceAccountData,
+          destinationAccountData,
+        ].some(
+          (data) =>
+            data.classification === 'business'
+            && data.personalUseEnabled !== true,
+        );
+
+      if (containsBusinessOnlyAccount) {
+        throw new HttpsError(
+          'failed-precondition',
+          'A Business-only account transfer must be recorded in its Business Space.',
+        );
+      }
+    }
+
     const spaceCurrency = spaceSnapshot.data()?.currency;
     if (account.currency !== spaceCurrency) throw new HttpsError('failed-precondition', 'Account and Space currencies must match.');
     if (destination && destination.currency !== account.currency) {

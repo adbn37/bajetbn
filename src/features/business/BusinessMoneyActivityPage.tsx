@@ -30,6 +30,7 @@ import {
 import {
   listBusinessTransactionsForSpace,
   postTransaction,
+  reverseTransaction,
   type TransactionInput,
 } from '../../repositories/transactionRepository';
 import type {
@@ -1229,13 +1230,24 @@ export function BusinessMoneyActivityPage() {
     setError('');
 
     try {
-      await reverseBusinessMoneyActivity({
-        transactionId:
+      if (
+        reverseDialog.payload.type === 'transfer'
+        && reverseDialog.payload.ownerId === user?.uid
+      ) {
+        await reverseTransaction(
           reverseDialog.payload.id,
-        transactionDate: today,
-        reason:
+          today,
           'Deleted / undone from Business Money Activity.',
-      });
+        );
+      } else {
+        await reverseBusinessMoneyActivity({
+          transactionId:
+            reverseDialog.payload.id,
+          transactionDate: today,
+          reason:
+            'Deleted / undone from Business Money Activity.',
+        });
+      }
 
       setReverseDialog(null);
       setDetail(null);
@@ -2118,7 +2130,11 @@ export function BusinessMoneyActivityPage() {
         <MoneyActivityModal
           accounts={
             requestMoveOnly
-              ? writableAccounts
+              ? (
+                  space.ownerId === user?.uid
+                    ? entryAccounts
+                    : writableAccounts
+                )
               : entryAccounts
           }
           spaces={
