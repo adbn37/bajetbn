@@ -54,9 +54,15 @@ for (const token of [
 
 need(
   page.includes(
-    "&& accountMatchesFilter(item)",
-  ),
-  'Monthly Money Activity summary must respect selected Accounts.',
+    'const personalSummaryRows =',
+  )
+    && page.includes(
+      'visibleTransactions.filter(',
+    )
+    && page.includes(
+      'if (!accountMatchesFilter(item)) return false;',
+    ),
+  'Money Activity summary must derive from the Account-filtered visible set.',
 );
 
 need(
@@ -68,24 +74,24 @@ need(
 
 need(
   page.includes(
-    "const income = monthlyPosted",
+    'personalSummaryRows.forEach((item) => {',
   )
     && page.includes(
-      "const expenses = monthlyPosted",
+      'current.income += item.amountMinor;',
     )
     && page.includes(
-      "const transferCount = monthlyPosted",
+      'current.expenses += item.amountMinor;',
+    )
+    && page.includes(
+      'current.transferCount += 1;',
     ),
-  'Monthly summary values must derive from the Account-filtered monthly set.',
+  'Money Activity summary values must derive from the filtered visible rows.',
 );
 
 need(
-  compact(page).includes(
-    compact(
-      "monthlyPosted.filter((item) => item.type === 'expense')",
-    ),
-  ),
-  'Top categories must derive from the filtered monthly set.',
+  /personalSummaryRows\s*\.filter\(\s*\(item\)\s*=>\s*item\.type\s*===\s*'expense'\s*,?\s*\)/
+    .test(page),
+  'Top categories must derive from the filtered visible set.',
 );
 
 need(

@@ -18,7 +18,19 @@ requireText('src/features/transactions/TransactionsPage.tsx', "trip: 'Trip'");
 requireText('src/features/transactions/TransactionsPage.tsx', "const preferredPersonalSpaceId = spaces.find((space) => space.type === 'personal')?.id || '';");
 requireText('src/features/transactions/TransactionsPage.tsx', 'Recorded in');
 requireText('src/features/transactions/TransactionsPage.tsx', 'contextual-space-field');
-requireText('src/features/transactions/TransactionsPage.tsx', 'spaceDisplayLabel(space)');
+{
+  const transactionPage =
+    read('src/features/transactions/TransactionsPage.tsx');
+
+  if (
+    !/\{spaceDisplayLabel\(\s*space,?\s*\)\}/
+      .test(transactionPage)
+  ) {
+    throw new Error(
+      'Transaction UX must use spaceDisplayLabel for Space chooser options.'
+    );
+  }
+}
 requireText('src/styles/global.css', '.contextual-space-change');
 requireText('src/features/transactions/TransactionsPage.tsx', "'Add receipt'");
 requireText('src/features/transactions/TransactionsPage.tsx', 'View receipts (');

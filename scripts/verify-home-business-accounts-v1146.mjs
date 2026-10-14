@@ -66,9 +66,15 @@ check(
 
 check(
   dashboard.includes(
-    'accounts={quickAccounts}',
-  ),
-  'Home quick money form receives only Personal accounts.',
+    'accounts={quickEntryAccounts}',
+  )
+    && dashboard.includes(
+      'const quickEntryAccounts =',
+    )
+    && dashboard.includes(
+      'account.sharedCanUseAccount',
+    ),
+  'Global Add receives the broader eligible Account pool while Personal Home remains Personal-filtered.',
 );
 
 check(
