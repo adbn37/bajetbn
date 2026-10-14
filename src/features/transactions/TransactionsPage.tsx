@@ -420,6 +420,83 @@ function accountEffectForPreview(account: Account, type: PrimaryType, amountMino
   return account.type === 'credit_card' ? -assetEffect : assetEffect;
 }
 
+
+function resolveTransferPostingSpaceId(
+  source: Account | undefined,
+  destination: Account | undefined,
+  fallbackSpaceId: string,
+): string {
+  const businessOnlySpaceIds = (
+    account: Account | undefined,
+  ): string[] => {
+    if (
+      !account
+      || account.classification !== 'business'
+      || accountSupportsPersonalUse(account)
+    ) {
+      return [];
+    }
+
+    const ids =
+      businessSpaceIdsForAccount(account);
+
+    if (ids.length === 0) {
+      throw new Error(
+        'This Business account is not linked to a Business Space yet. Link it before moving money to or from Personal.',
+      );
+    }
+
+    return ids;
+  };
+
+  const sourceIds =
+    businessOnlySpaceIds(source);
+
+  const destinationIds =
+    businessOnlySpaceIds(destination);
+
+  if (
+    sourceIds.length === 0
+    && destinationIds.length === 0
+  ) {
+    return fallbackSpaceId;
+  }
+
+  if (
+    sourceIds.length > 0
+    && destinationIds.length > 0
+  ) {
+    const sharedIds =
+      sourceIds.filter(
+        (id) =>
+          destinationIds.includes(id),
+      );
+
+    if (sharedIds.length === 0) {
+      throw new Error(
+        'Move money between different Business Spaces is not supported in one transfer. Use a Personal account with one Business, or choose two accounts from the same Business.',
+      );
+    }
+
+    return sharedIds.includes(
+      fallbackSpaceId,
+    )
+      ? fallbackSpaceId
+      : sharedIds[0];
+  }
+
+  const businessIds =
+    sourceIds.length > 0
+      ? sourceIds
+      : destinationIds;
+
+  return businessIds.includes(
+    fallbackSpaceId,
+  )
+    ? fallbackSpaceId
+    : businessIds[0];
+}
+
 const MAX_TRANSACTION_LABELS = 8;
 const MAX_TRANSACTION_LABEL_LENGTH = 32;
 
@@ -2318,6 +2395,13 @@ export function MoneyActivityModal({
 
   const accountAvailableInSelectedSpace =
     (account: Account) => {
+      if (
+        type === 'transfer'
+        && account.ownerId === user?.uid
+      ) {
+        return true;
+      }
+
       if (!selectedSpace) {
         return true;
       }
@@ -2416,6 +2500,32 @@ export function MoneyActivityModal({
       (!selectedSpace || account.currency === selectedSpace.currency)
       && accountAvailableInSelectedSpace(account),
   );
+
+  const accountLinkedToSelectedBusiness = (
+    account: Account | undefined,
+  ) =>
+    Boolean(
+      account
+      && selectedSpace?.type === 'sme'
+      && account.classification === 'business'
+      && businessSpaceIdsForAccount(
+        account,
+      ).includes(
+        selectedSpace.id,
+      ),
+    );
+
+  const transferPairAllowed = (
+    sourceAccount: Account | undefined,
+    destinationAccount: Account | undefined,
+  ) =>
+    selectedSpace?.type !== 'sme'
+    || accountLinkedToSelectedBusiness(
+      sourceAccount,
+    )
+    || accountLinkedToSelectedBusiness(
+      destinationAccount,
+    );
   const [accountId, setAccountId] = useState(
     initialValues?.accountId
     && compatibleAccounts.some((account) => account.id === initialValues.accountId)
@@ -2545,29 +2655,59 @@ export function MoneyActivityModal({
         && accountAvailableInSelectedSpace(account),
     );
 
-    const currentSourceAccount =
-      accounts.find(
+    const nextSourceAccount =
+      nextAccounts.find(
         (account) =>
           account.id === accountId,
-      );
+      )
+      || nextAccounts[0];
 
     const nextDestinationAccounts =
       type === 'transfer'
         ? accounts.filter(
-            (account) =>
-              account.id !== accountId
-              && !account.archivedAt
-              && !account.closedAt
-              && account.sharedCanUseAccount !== false
-              && (
-                !currentSourceAccount
-                || (
+            (account) => {
+              if (
+                account.id === nextSourceAccount?.id
+                || account.archivedAt
+                || account.closedAt
+                || account.sharedCanUseAccount === false
+              ) {
+                return false;
+              }
+
+              if (
+                nextSourceAccount
+                && (
                   account.currency
-                    === currentSourceAccount.currency
-                  && account.ownerId
-                    === currentSourceAccount.ownerId
+                    !== nextSourceAccount.currency
+                  || account.ownerId
+                    !== nextSourceAccount.ownerId
                 )
-              ),
+              ) {
+                return false;
+              }
+
+              if (
+                !transferPairAllowed(
+                  nextSourceAccount,
+                  account,
+                )
+              ) {
+                return false;
+              }
+
+              try {
+                resolveTransferPostingSpaceId(
+                  nextSourceAccount,
+                  account,
+                  spaceId,
+                );
+
+                return true;
+              } catch {
+                return false;
+              }
+            },
           )
         : nextAccounts;
 
@@ -2576,15 +2716,24 @@ export function MoneyActivityModal({
     queueMicrotask(() => {
       if (cancelled) return;
 
-      if (!nextAccounts.some((account) => account.id === accountId)) {
-        setAccountId(nextAccounts[0]?.id || '');
+      if (
+        !nextAccounts.some(
+          (account) =>
+            account.id === accountId,
+        )
+      ) {
+        setAccountId(
+          nextAccounts[0]?.id || '',
+        );
       }
 
       if (
-        destinationAccountId === accountId
+        destinationAccountId
+          === nextSourceAccount?.id
         || !nextDestinationAccounts.some(
           (account) =>
-            account.id === destinationAccountId,
+            account.id
+              === destinationAccountId,
         )
       ) {
         setDestinationAccountId('');
@@ -2599,6 +2748,7 @@ export function MoneyActivityModal({
     accounts,
     destinationAccountId,
     selectedSpace,
+    spaceId,
     type,
   ]);
 
@@ -2700,14 +2850,22 @@ export function MoneyActivityModal({
   function currentShareSnapshot(
     nextAmountMinor: number,
     transactionId?: string,
+    targetSpaceId = spaceId,
   ): TransactionShareSnapshot {
+    const targetSpace =
+      spaces.find(
+        (space) =>
+          space.id === targetSpaceId,
+      )
+      || selectedSpace;
+
     return {
       transactionId,
       type,
       amountMinor: nextAmountMinor,
       currency:
         sourceAccount?.currency
-        || selectedSpace?.currency
+        || targetSpace?.currency
         || 'BND',
       transactionDate,
       category:
@@ -2719,9 +2877,9 @@ export function MoneyActivityModal({
         note.trim()
         || undefined,
       spaceName:
-        selectedSpace?.type === 'personal'
+        targetSpace?.type === 'personal'
           ? 'Personal'
-          : selectedSpace?.name,
+          : targetSpace?.name,
       sourceAccountName:
         sourceAccount?.name,
       destinationAccountName:
@@ -2764,18 +2922,49 @@ export function MoneyActivityModal({
 
   const transferDestinationOptions =
     accounts.filter(
-      (account) =>
-        account.id !== accountId
-        && !account.archivedAt
-        && !account.closedAt
-        && account.sharedCanUseAccount !== false
-        && (
-          !sourceAccount
-          || (
-            account.currency === sourceAccount.currency
-            && account.ownerId === sourceAccount.ownerId
+      (account) => {
+        if (
+          account.id === accountId
+          || account.archivedAt
+          || account.closedAt
+          || account.sharedCanUseAccount === false
+        ) {
+          return false;
+        }
+
+        if (
+          sourceAccount
+          && (
+            account.currency
+              !== sourceAccount.currency
+            || account.ownerId
+              !== sourceAccount.ownerId
           )
-        ),
+        ) {
+          return false;
+        }
+
+        if (
+          !transferPairAllowed(
+            sourceAccount,
+            account,
+          )
+        ) {
+          return false;
+        }
+
+        try {
+          resolveTransferPostingSpaceId(
+            sourceAccount,
+            account,
+            spaceId,
+          );
+
+          return true;
+        } catch {
+          return false;
+        }
+      },
     );
 
   const destinationOptions =
@@ -2892,11 +3081,38 @@ export function MoneyActivityModal({
 
       const labels = parseTransactionLabels(labelDraft);
 
+      if (
+        type === 'transfer'
+        && !transferPairAllowed(
+          sourceAccount,
+          destinationAccount,
+        )
+      ) {
+        throw new Error(
+          'A Business transfer must include an account linked to that Business Space.',
+        );
+      }
+
+      const postingSpaceId =
+        type === 'transfer'
+          ? resolveTransferPostingSpaceId(
+              sourceAccount,
+              destinationAccount,
+              spaceId,
+            )
+          : spaceId;
+
+      if (!postingSpaceId) {
+        throw new Error(
+          'Choose where this money belongs.',
+        );
+      }
+
       const outcome = await onSubmit({
         type,
         accountId,
         destinationAccountId: type === 'transfer' ? destinationAccountId : undefined,
-        spaceId,
+        spaceId: postingSpaceId,
         amountMinor: nextAmountMinor,
         currency: sourceAccount?.currency || selectedSpace?.currency,
         transactionDate,
@@ -2914,7 +3130,7 @@ export function MoneyActivityModal({
 
       if (outcome.mode === 'queued') {
         if (pendingFiles.length > 0) {
-          setSavedState({ mode: 'queued_with_files', spaceId, uploadedCount: 0 });
+          setSavedState({ mode: 'queued_with_files', spaceId: postingSpaceId, uploadedCount: 0 });
           setAttachmentError('Money activity was saved on this device, but attachments cannot be queued. After it syncs, open Details to attach these files.');
           return;
         }
@@ -2943,18 +3159,19 @@ export function MoneyActivityModal({
             currentShareSnapshot(
               nextAmountMinor,
               outcome.transactionId,
+              postingSpaceId,
             ),
         });
         return;
       }
 
       if (!outcome.transactionId) {
-        setSavedState({ mode: 'posted_with_failures', spaceId, uploadedCount: 0 });
+        setSavedState({ mode: 'posted_with_failures', spaceId: postingSpaceId, uploadedCount: 0 });
         setAttachmentError('Money activity was saved, but BajetBN could not link the selected attachments. Add them later from Details.');
         return;
       }
 
-      const result = await uploadFiles(outcome.transactionId, spaceId, pendingFiles);
+      const result = await uploadFiles(outcome.transactionId, postingSpaceId, pendingFiles);
       if (result.failed.length === 0) {
         setSharePrompt({
           message:
@@ -2963,13 +3180,14 @@ export function MoneyActivityModal({
             currentShareSnapshot(
               nextAmountMinor,
               outcome.transactionId,
+              postingSpaceId,
             ),
         });
         return;
       }
 
       setPendingFiles(result.failed);
-      setSavedState({ mode: 'posted_with_failures', transactionId: outcome.transactionId, spaceId, uploadedCount: result.uploaded });
+      setSavedState({ mode: 'posted_with_failures', transactionId: outcome.transactionId, spaceId: postingSpaceId, uploadedCount: result.uploaded });
       setAttachmentError(`Money activity was saved. ${result.failed.length} attachment${result.failed.length === 1 ? '' : 's'} could not be uploaded. ${result.lastError}`.trim());
     } catch (nextError) {
       setError(getErrorMessage(nextError));
