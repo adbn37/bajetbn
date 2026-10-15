@@ -754,51 +754,40 @@ export function DashboardPage() {
       ],
     );
 
+  // BAJETBN_PHASE71_HOME_HOOKS: sync an external browser preference after the effect, not during render.
+  const homePreferenceOwnerId = user?.uid || null;
   useEffect(() => {
-    if (!user) {
-      setHomeShortcutIds(
-        [...HOME_SHORTCUT_DEFAULTS],
-      );
-      setHomeShortcutDraft(
-        [...HOME_SHORTCUT_DEFAULTS],
-      );
-      return;
-    }
+    let active = true;
 
-    try {
-      const raw =
-        window.localStorage.getItem(
-          HOME_SHORTCUT_STORAGE_PREFIX
-            + user.uid,
-        );
+    queueMicrotask(() => {
+      if (!active) return;
 
-      const parsed =
-        raw
-          ? JSON.parse(raw)
-          : null;
-
-      if (
-        Array.isArray(parsed)
-        && parsed.length
-          === HOME_SHORTCUT_DEFAULTS.length
-        && parsed.every(
-          (item) =>
-            typeof item === 'string',
-        )
-      ) {
-        setHomeShortcutIds(
-          parsed as HomeShortcutId[],
-        );
-        return;
+      let next: HomeShortcutId[] = [...HOME_SHORTCUT_DEFAULTS];
+      if (homePreferenceOwnerId) {
+        try {
+          const raw = window.localStorage.getItem(
+            HOME_SHORTCUT_STORAGE_PREFIX + homePreferenceOwnerId,
+          );
+          const parsed: unknown = raw ? JSON.parse(raw) : null;
+          if (
+            Array.isArray(parsed)
+            && parsed.length === HOME_SHORTCUT_DEFAULTS.length
+            && parsed.every((item) => typeof item === 'string')
+          ) {
+            next = parsed as HomeShortcutId[];
+          }
+        } catch {
+          // Browser preferences are optional; retain the six defaults.
+        }
       }
-    } catch {
-      // Fall back to defaults if local shortcut preferences are invalid.
-    }
 
-    setHomeShortcutIds(
-      [...HOME_SHORTCUT_DEFAULTS],
-    );
-  }, [user]);
+      if (!active) return;
+      setHomeShortcutIds(next);
+      setHomeShortcutDraft([...next]);
+    });
+
+    return () => { active = false; };
+  }, [homePreferenceOwnerId]);
 
   useEffect(() => {
     if (!user) return;
@@ -855,43 +844,43 @@ export function DashboardPage() {
       }
     }, [user]);
 
+  // BAJETBN_PHASE71_HOME_HOOKS: discard stale requests when the selected account changes.
+  const accountActivityRequestRef = useRef(0);
   const loadAccountActivity =
-    useCallback(
-      async (accountId: string | null) => {
-        if (!user || !accountId) {
-          setTransactions([]);
-          setActivityUnavailable(false);
-          return;
-        }
+    useCallback(async (accountId: string | null) => {
+      const requestId = ++accountActivityRequestRef.current;
 
-        setActivityLoading(true);
+      if (!user || !accountId) {
+        setTransactions([]);
         setActivityUnavailable(false);
+        setActivityLoading(false);
+        return;
+      }
 
-        try {
-          const nextTransactions =
-            await listTransactionsForOwnerAccount(
-              user.uid,
-              accountId,
-            );
+      setActivityLoading(true);
+      setActivityUnavailable(false);
+      setTransactions([]);
 
-          setTransactions(
-            nextTransactions
-              .filter(
-                (item) =>
-                  item.status === 'posted'
-                  && item.type !== 'reversal',
-              )
-              ,
-          );
-        } catch {
-          setTransactions([]);
-          setActivityUnavailable(true);
-        } finally {
+      try {
+        const nextTransactions = await listTransactionsForOwnerAccount(
+          user.uid,
+          accountId,
+        );
+        if (accountActivityRequestRef.current !== requestId) return;
+
+        setTransactions(nextTransactions.filter(
+          (item) => item.status === 'posted' && item.type !== 'reversal',
+        ));
+      } catch {
+        if (accountActivityRequestRef.current !== requestId) return;
+        setTransactions([]);
+        setActivityUnavailable(true);
+      } finally {
+        if (accountActivityRequestRef.current === requestId) {
           setActivityLoading(false);
         }
-      },
-      [user],
-    );
+      }
+    }, [user]);
 
   const loadQuickOptions =
     useCallback(async () => {
@@ -992,96 +981,73 @@ export function DashboardPage() {
       quickLoading,
     ]);
 
+  // BAJETBN_PHASE71_HOME_HOOKS: defer loading; cancel if the owner or refresh token changes.
   useEffect(() => {
-    void loadAccounts();
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadAccounts();
+    });
+    return () => { active = false; };
   }, [
     loadAccounts,
     lastCompletedAt,
   ]);
 
+  // BAJETBN_PHASE71_HOME_HOOKS: measure/scroll the carousel in its animation frame.
   useEffect(() => {
-    if (
-      !user
-      || homeAccounts.length === 0
-    ) {
-      setActiveAccountIndex(0);
-      return;
-    }
+    const frame = window.requestAnimationFrame(() => {
+      if (!user || homeAccounts.length === 0) {
+        setActiveAccountIndex(0);
+        return;
+      }
 
-    const preferredId =
-      getPreferredHomeAccountId(
-        user.uid,
+      const preferredId = getPreferredHomeAccountId(user.uid);
+      const preferredIndex = homeAccounts.findIndex(
+        (account) => account.id === preferredId,
       );
+      const nextIndex = preferredIndex >= 0 ? preferredIndex : 0;
 
-    const preferredIndex =
-      homeAccounts.findIndex(
-        (account) =>
-          account.id === preferredId,
-      );
+      setActiveAccountIndex(nextIndex);
+      const carousel = accountCarouselRef.current;
+      if (carousel) {
+        carousel.scrollTo({
+          left: nextIndex * (carousel.clientWidth + 12),
+          behavior: 'auto',
+        });
+      }
+    });
 
-    const nextIndex =
-      preferredIndex >= 0
-        ? preferredIndex
-        : 0;
+    return () => window.cancelAnimationFrame(frame);
+  }, [user, homeAccounts]);
 
-    setActiveAccountIndex(
-      nextIndex,
-    );
-
-    const frame =
-      window.requestAnimationFrame(
-        () => {
-          const carousel =
-            accountCarouselRef.current;
-
-          if (!carousel) {
-            return;
-          }
-
-          carousel.scrollTo({
-            left:
-              nextIndex
-              * (
-                carousel.clientWidth
-                + 12
-              ),
-            behavior: 'auto',
-          });
-        },
-      );
-
-    return () =>
-      window.cancelAnimationFrame(
-        frame,
-      );
-  }, [
-    user,
-    homeAccounts,
-  ]);
-
+  // BAJETBN_PHASE71_HOME_HOOKS: request work outside the synchronous effect body.
   useEffect(() => {
-    void loadAccountActivity(
-      activeAccount?.id || null,
-    );
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadAccountActivity(activeAccount?.id || null);
+    });
+    return () => { active = false; };
   }, [
     activeAccount?.id,
     lastCompletedAt,
     loadAccountActivity,
   ]);
 
+  // BAJETBN_PHASE71_HOME_HOOKS: open the ?quick=1 entry after effect setup completes.
   useEffect(() => {
     if (
       homeMode !== 'personal'
-      || searchParams.get('quick')
-        !== '1'
+      || searchParams.get('quick') !== '1'
       || loading
       || showMoneyActivity
       || quickLoading
-    ) {
-      return;
-    }
+    ) return;
 
-    void openQuickActivity();
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void openQuickActivity();
+    });
+    return () => { active = false; };
   }, [
     homeMode,
     loading,
