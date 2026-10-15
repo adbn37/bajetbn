@@ -1,0 +1,193 @@
+/* BajetBN 1.24 — Phase 6 stabilization (UI only).
+   Consumes existing theme variables; never synthesizes financial values or states. */
+
+/* Keep the personal overview readable instead of allowing the old decorative
+   curve to cross its new monthly cash-flow section. */
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-home-assets-hero .bajetbn-home-assets-accent,
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-home-assets-hero .bajetbn-home-assets-accent::after {
+  display: none;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-home-assets-hero {
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--surface) 92%, var(--accent) 8%),
+    var(--surface));
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month {
+  isolation: isolate;
+  background: transparent;
+  border-top: 1px solid var(--v6-divider, var(--border));
+  margin-top: .6rem;
+  padding-top: .75rem;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-heading {
+  align-items: start;
+  gap: .45rem .85rem;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-heading strong {
+  font-size: .86rem;
+  line-height: 1.4;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-heading strong span {
+  display: block;
+  margin-top: .1rem;
+  color: var(--muted);
+  font-size: .74rem;
+  font-weight: 500;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-heading a {
+  flex: 0 0 auto;
+  padding: .3rem .05rem;
+  min-height: 32px;
+  color: var(--accent-2);
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-metrics {
+  gap: .75rem;
+  margin-top: .6rem;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-metrics strong {
+  font-size: clamp(.94rem, 3.8vw, 1.1rem);
+  line-height: 1.35;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-metrics .expense strong { color: var(--text); }
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-month-net {
+  margin-top: .55rem;
+  padding-top: .55rem;
+}
+.page.bajetbn-reference-home.bajetbn-design-motion-v6
+  .bajetbn-v6-scope-note {
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+/* Scroll clearance is defined on the actual Home container, including its
+   embedded Business view. We do not hide controls behind the navigation bar. */
+@media (max-width: 780px) {
+  .page.bajetbn-reference-home.bajetbn-design-motion-v6 {
+    padding-bottom: calc(190px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+  }
+  .page.bajetbn-reference-home.bajetbn-design-motion-v6
+    .bajetbn-v6-balance-details > summary { min-height: 44px; }
+}
+
+/* Structural form layout: the form now has a distinct scrollable fields region
+   and a submit footer that remains visible without duplicating its button or
+   triggering submission before React confirms it. */
+.bajetbn-v61-money-sheet.modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden !important;
+}
+.bajetbn-v61-money-sheet.modal > .bajetbn-reference-activity-form {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  max-width: 100%;
+  contain: none;
+}
+.bajetbn-v61-money-sheet .bajetbn-v61-form-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  padding: .18rem .15rem 1.1rem;
+}
+.bajetbn-v61-money-sheet .bajetbn-reference-amount input {
+  color: var(--text);
+  opacity: 1;
+  caret-color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.bajetbn-v61-money-sheet .bajetbn-reference-amount input::placeholder {
+  color: var(--muted);
+  opacity: .9;
+}
+.bajetbn-v61-money-sheet .transaction-type-picker button { min-height: 44px; }
+.bajetbn-v61-money-sheet .bajetbn-v61-form-scroll .bajetbn-reference-category-item {
+  min-height: 70px;
+  padding: .5rem .3rem;
+}
+.bajetbn-v61-money-sheet .bajetbn-v61-form-scroll
+  .bajetbn-reference-category-item .category-icon {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 12px;
+  font-size: 1.07rem;
+}
+.bajetbn-v61-money-sheet .bajetbn-v61-form-scroll
+  .bajetbn-reference-category-item > span:last-child {
+  font-size: .75rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.bajetbn-v61-money-sheet .bajetbn-reference-activity-form > .modal-actions {
+  position: relative;
+  flex: 0 0 auto;
+  bottom: auto;
+  z-index: 3;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  margin: 0;
+  padding: .85rem .15rem max(.7rem, env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -12px 28px color-mix(in srgb, var(--bg) 65%, transparent);
+}
+.bajetbn-v61-money-sheet .bajetbn-reference-activity-form > .modal-actions .button {
+  min-height: 48px;
+}
+.bajetbn-v61-money-sheet .bajetbn-v61-form-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (max-width: 780px) {
+  .bajetbn-v61-money-sheet.modal {
+    max-height: min(92dvh, 900px);
+    height: min(92dvh, 900px);
+    padding-bottom: .25rem;
+  }
+  .bajetbn-v61-money-sheet .bajetbn-v61-form-scroll {
+    scrollbar-gutter: auto;
+    padding-right: .05rem;
+  }
+  .bajetbn-v61-money-sheet .bajetbn-reference-activity-form > .modal-actions {
+    padding-bottom: max(.75rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (max-height: 560px) {
+  .bajetbn-v61-money-sheet.modal {
+    max-height: calc(100dvh - 12px);
+    height: calc(100dvh - 12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-v61-money-sheet *,
+  .page.bajetbn-reference-home.bajetbn-design-motion-v6 * {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

@@ -2,6 +2,15 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './app/App';
 import './styles/global.css';
+import './styles/design-combined-v1.css';
+import './styles/design-combined-v2.css';
+import './styles/design-motion-v3.css';
+import './styles/design-motion-v4.css';
+import './styles/design-motion-v5.css';
+import './styles/design-motion-v6.css';
+import './styles/design-motion-v6-stabilization.css';
+import './styles/design-motion-v6-money-repair.css';
+import './styles/design-stabilization-v7.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 

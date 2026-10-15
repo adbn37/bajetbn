@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.cwd();
+const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+assert.match(read('src/main.tsx'), /import '\.\/styles\/design-combined-v1\.css';/);
+assert.match(read('src/pages/DashboardPage.tsx'), /bajetbn-reference-home bajetbn-design-combined-v1/);
+const css = read('src/styles/design-combined-v1.css');
+assert.match(css, /prefers-reduced-motion: reduce/);
+assert.match(css, /font-variant-numeric: tabular-nums/);
+assert.match(css, /:focus-visible/);
+assert.match(css, /\.bajetbn-design-combined-v1/);
+assert.ok(!css.includes('animation: infinite'));
+console.log('BajetBN combined-design wiring: PASS (static checks only)');

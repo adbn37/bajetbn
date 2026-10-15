@@ -1,0 +1,237 @@
+/* BajetBN Phase 5 — genuine layout pass, scoped to v5 Home and money sheet.
+   Financial values, labels, permissions and account logic remain in React. */
+.bajetbn-design-motion-v5 {
+  --v5-radius: 18px;
+  --v5-hairline: color-mix(in srgb, var(--border) 80%, transparent);
+  --v5-highlight: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --v5-ease: cubic-bezier(.22,1,.36,1);
+}
+.bajetbn-design-motion-v5 .bajetbn-v5-financial-workspace {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: .72rem;
+  margin-bottom: .9rem;
+}
+.bajetbn-design-motion-v5 .bajetbn-v5-workspace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin: .25rem 0 0;
+}
+.bajetbn-v5-workspace-heading > div { display: grid; gap: .12rem; min-width: 0; }
+.bajetbn-v5-workspace-heading strong {
+  color: var(--text);
+  font-size: clamp(1.08rem, 2.8vw, 1.33rem);
+  letter-spacing: -.025em;
+}
+.bajetbn-v5-workspace-heading small { color: var(--muted); font-size: .77rem; line-height: 1.35; }
+.bajetbn-v5-workspace-heading a {
+  flex: none;
+  color: var(--accent-2);
+  font-size: .78rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+.bajetbn-design-motion-v5 .bajetbn-v5-financial-workspace > .bajetbn-home-assets-hero {
+  margin: 0;
+  border-radius: var(--v5-radius);
+  padding: 1.08rem 1.12rem;
+  min-height: 0;
+}
+.bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-head {
+  display: flex; align-items: flex-start; gap: .8rem;
+}
+.bajetbn-design-motion-v5 .bajetbn-total-assets-head > div { min-width: 0; }
+.bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-head small {
+  display: block;
+  font-size: .74rem;
+  line-height: 1.38;
+  max-width: 29ch;
+  overflow-wrap: normal;
+}
+.bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-value {
+  display: block;
+  font-size: clamp(1.7rem, 6vw, 2.7rem);
+  line-height: 1.1;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-breakdown {
+  margin-top: 1.15rem;
+  gap: .6rem;
+}
+.bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-breakdown span {
+  font-size: .7rem; line-height: 1.3;
+}
+.bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-breakdown strong {
+  font-size: clamp(.74rem, 2.15vw, .9rem);
+  font-variant-numeric: tabular-nums;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.bajetbn-design-motion-v5 .bajetbn-v4-account-month {
+  margin: 0;
+  border: 1px solid var(--v5-hairline);
+  border-radius: var(--v5-radius);
+  background: var(--surface);
+  padding: 1rem 1.05rem;
+  align-self: stretch;
+}
+.bajetbn-design-motion-v5 .bajetbn-v4-month-heading { gap: .7rem; }
+.bajetbn-design-motion-v5 .bajetbn-v4-month-heading strong { font-size: 1rem; }
+.bajetbn-design-motion-v5 .bajetbn-v4-month-heading small,
+.bajetbn-design-motion-v5 .bajetbn-v4-month-note { font-size: .71rem; line-height: 1.4; }
+.bajetbn-design-motion-v5 .bajetbn-v4-month-grid { gap: .65rem; }
+.bajetbn-design-motion-v5 .bajetbn-v4-month-stat { min-width: 0; padding: .85rem .8rem; border-radius: 12px; }
+.bajetbn-design-motion-v5 .bajetbn-v4-month-stat span { font-size: .75rem; }
+.bajetbn-design-motion-v5 .bajetbn-v4-month-stat strong {
+  font-size: clamp(.95rem, 2.6vw, 1.24rem);
+  letter-spacing: -.025em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.bajetbn-v5-net-flow {
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  gap: .3rem .7rem; padding: .7rem .1rem .35rem;
+  border-bottom: 1px solid var(--v5-hairline);
+}
+.bajetbn-v5-net-flow span { color: var(--muted); font-size: .76rem; }
+.bajetbn-v5-net-flow strong { font-size: .93rem; font-variant-numeric: tabular-nums; }
+.bajetbn-v5-net-flow strong.negative { color: var(--danger); }
+.bajetbn-v5-net-flow strong.positive { color: var(--accent-2); }
+.bajetbn-design-motion-v5 .bajetbn-v4-quick-actions {
+  margin: .35rem 0 1.2rem;
+  gap: .65rem;
+}
+.bajetbn-design-motion-v5 .bajetbn-v4-quick-actions .bajetbn-v3-action {
+  min-width: 0; min-height: 81px; padding: .7rem .55rem;
+  border-radius: 15px;
+  transition: border-color .16s ease, background-color .16s ease, transform .16s var(--v5-ease);
+}
+.bajetbn-design-motion-v5 .bajetbn-v4-quick-actions .bajetbn-v3-action strong { font-size: .81rem; line-height: 1.25; }
+.bajetbn-design-motion-v5 .bajetbn-v4-quick-actions .bajetbn-v3-action small { font-size: .7rem; line-height: 1.25; }
+.bajetbn-design-motion-v5 .bajetbn-v4-quick-actions .bajetbn-v3-action:focus-visible,
+.bajetbn-design-motion-v5 .bajetbn-home-account-card:focus-visible,
+.bajetbn-design-motion-v5 .bajetbn-home-mode-overview-v116:focus-visible,
+.bajetbn-design-motion-v5 .bajetbn-home-mode-picker-v116:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bajetbn-design-motion-v5 .bajetbn-v4-quick-actions .bajetbn-v3-action:hover,
+  .bajetbn-design-motion-v5 .bajetbn-home-account-card:hover { transform: translateY(-2px); }
+}
+.bajetbn-design-motion-v5 .bajetbn-home-account-card {
+  border-radius: 15px;
+  min-height: 116px;
+  transition: border-color .16s ease, transform .16s var(--v5-ease);
+}
+.bajetbn-design-motion-v5 .bajetbn-home-account-card b {
+  font-size: clamp(.93rem, 2.6vw, 1.14rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.bajetbn-design-motion-v5 .bajetbn-home-account-card-head strong { font-size: .86rem; }
+.bajetbn-design-motion-v5 .bajetbn-home-account-card-head small { font-size: .71rem; line-height: 1.35; }
+.bajetbn-design-motion-v5 .home-shortcut-hub-v116 { margin-top: .85rem; }
+.bajetbn-design-motion-v5 .home-shortcut-heading-v116 > strong { font-size: 1rem; }
+.bajetbn-design-motion-v5 .bajetbn-reference-actions-six > a,
+.bajetbn-design-motion-v5 .bajetbn-reference-actions-six > button {
+  min-height: 76px !important; border-radius: 14px; padding: .55rem .3rem !important;
+}
+.bajetbn-design-motion-v5 .bajetbn-reference-actions-six strong { font-size: .79rem; }
+.bajetbn-design-motion-v5 .bajetbn-reference-actions-six small { font-size: .68rem; }
+.bajetbn-design-motion-v5 .bajetbn-home-recent-section { margin-bottom: 1rem; }
+/* Focused money-entry sheet, not an imitation of a native-app modal. */
+.bajetbn-v5-money-sheet { overscroll-behavior: contain; }
+.bajetbn-v5-money-sheet .transaction-type-picker { margin: .3rem 0 .55rem; }
+.bajetbn-v5-money-sheet .bajetbn-reference-amount {
+  display: grid; gap: .45rem;
+  background: color-mix(in srgb, var(--surface-2) 68%, var(--surface));
+  border: 1px solid var(--border); border-radius: 16px;
+  padding: .85rem 1rem;
+}
+.bajetbn-v5-money-sheet .bajetbn-reference-amount input {
+  min-height: 60px; font-size: clamp(1.8rem, 8vw, 2.6rem);
+  font-weight: 800; font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em; border: 0;
+  background: transparent; padding: .2rem 0;
+}
+.bajetbn-v5-money-sheet .bajetbn-reference-amount input:focus {
+  box-shadow: none; outline: none;
+}
+.bajetbn-v5-money-sheet .bajetbn-reference-amount:focus-within {
+  border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.bajetbn-v5-money-sheet .bajetbn-identity-card { min-height: 64px; }
+.bajetbn-v5-money-sheet .bajetbn-identity-copy strong { font-size: .88rem; }
+.bajetbn-v5-money-sheet .bajetbn-reference-category-item,
+.bajetbn-v5-money-sheet .bajetbn-reference-category-more-item { min-height: 64px; }
+.bajetbn-v5-money-sheet .modal-actions {
+  position: sticky; bottom: -.1rem; z-index: 2;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: .85rem 0 max(.5rem, env(safe-area-inset-bottom));
+  margin-top: 1rem;
+}
+.bajetbn-v5-money-sheet .modal-actions .button { min-height: 48px; }
+/* Purely decorative feedback never implies money has posted. */
+@media (max-width: 780px) {
+  .bajetbn-design-motion-v5.page.bajetbn-reference-home {
+    padding-bottom: calc(7.5rem + env(safe-area-inset-bottom));
+  }
+  .bajetbn-design-motion-v5 .bajetbn-v5-workspace-heading { margin-top: .15rem; }
+  .bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-head small {
+    max-width: none;
+  }
+  .bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-breakdown { margin-top: 1rem; }
+  .bajetbn-design-motion-v5 .bajetbn-v4-month-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .bajetbn-design-motion-v5 .bajetbn-home-account-strip { scroll-padding-inline: .2rem; }
+  .bajetbn-design-motion-v5 .bajetbn-home-account-card {
+    flex: 0 0 min(76%, 270px) !important;
+    min-width: 0 !important;
+    max-width: 270px !important;
+  }
+  .bajetbn-v5-money-sheet.modal {
+    max-height: min(92dvh, 920px);
+    padding: 1rem 1rem max(1rem, env(safe-area-inset-bottom));
+    border-radius: 23px 23px 0 0;
+  }
+}
+@media (min-width: 781px) {
+  .bajetbn-design-motion-v5 .bajetbn-v5-financial-workspace {
+    grid-template-columns: minmax(0, 1.15fr) minmax(290px, .85fr);
+    align-items: stretch;
+  }
+  .bajetbn-design-motion-v5 .bajetbn-v5-workspace-heading { grid-column: 1 / -1; }
+  .bajetbn-design-motion-v5 .bajetbn-v5-financial-workspace > .bajetbn-home-assets-hero,
+  .bajetbn-design-motion-v5 .bajetbn-v5-financial-workspace > .bajetbn-v4-account-month {
+    height: 100%;
+  }
+}
+@media (min-width: 1240px) {
+  .page.bajetbn-design-motion-v5 > .bajetbn-v5-financial-workspace {
+    order: 3; grid-column: 1 / -1; width: 100%; min-width: 0;
+  }
+  .page.bajetbn-design-motion-v5 > .bajetbn-v4-quick-actions {
+    order: 4; grid-column: 1 / -1; width: 100%;
+  }
+}
+@media (max-width: 355px) {
+  .bajetbn-design-motion-v5 .bajetbn-home-assets-hero .bajetbn-total-assets-breakdown {
+    grid-template-columns: repeat(2,minmax(0,1fr)); row-gap: .7rem;
+  }
+  .bajetbn-design-motion-v5 .bajetbn-v4-month-grid { grid-template-columns: minmax(0,1fr); }
+  .bajetbn-design-motion-v5 .bajetbn-v4-quick-actions .bajetbn-v3-action strong { font-size: .72rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-design-motion-v5 *, .bajetbn-v5-money-sheet * {
+    animation-duration: .01ms !important; transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

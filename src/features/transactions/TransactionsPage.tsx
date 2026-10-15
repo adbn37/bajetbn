@@ -1905,7 +1905,7 @@ export function TransactionsPage() {
               item.type === 'transfer'
               || item.originalType === 'transfer';
             const category = item.categoryId ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item) : transactionCategorySnapshot(item);
-            return <article className={`transaction-row ${item.status === 'reversed' ? 'reversed' : ''}`} key={item.id}>
+            return <article className={`transaction-row bajetbn-v7-compact-row ${item.status === 'reversed' ? 'reversed' : ''}`} key={item.id}>
               <CategoryIconVisual category={category} />
               <div className="transaction-main">
                 <div>
@@ -3288,7 +3288,7 @@ export function MoneyActivityModal({
         : ['expense', 'income'];
 
   if (entryMode === 'move' && !initialValues) {
-    return <Modal title="Move Money" onClose={closeForm}>
+    return <Modal title="Move Money" className="bajetbn-v4-money-sheet bajetbn-v5-money-sheet" onClose={closeForm}>
       <form
         className="transaction-form bajetbn-move-money-form bajetbn-move-reference-form"
         onSubmit={submit}
@@ -3605,6 +3605,7 @@ export function MoneyActivityModal({
   }
 
   return <Modal
+    className="bajetbn-v4-money-sheet bajetbn-v5-money-sheet bajetbn-v6-money-sheet bajetbn-v61-money-sheet"
     title={
       initialValues
         ? 'Correct money activity'
@@ -3620,6 +3621,7 @@ export function MoneyActivityModal({
     }
     onSubmit={submit}
   >
+    <div className="bajetbn-v61-form-scroll">
 {initialValues && <div className="notice warning compact-notice"><strong>Creating a correction</strong><span>The original activity has already been undone. Review every field and save this replacement to finish the correction.</span></div>}
     {error && <div className="notice error">{error}</div>}
 
@@ -3737,10 +3739,6 @@ export function MoneyActivityModal({
         </section>
       )}
 
-    <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
-      {typeOptions.map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
-    </div>
-
     <label className="bajetbn-reference-amount bajetbn-add-amount">
       <span>
         Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})
@@ -3757,36 +3755,8 @@ export function MoneyActivityModal({
       />
     </label>
 
-    <div className="bajetbn-reference-date">
-      <span
-        className="bajetbn-reference-date-icon"
-        aria-hidden="true"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          focusable="false"
-        >
-          <path
-            d="M7 3v3M17 3v3M4.5 8.5h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
-      <label>
-        Date
-        <input
-          required
-          type="date"
-          value={transactionDate}
-          onChange={(event) =>
-            setTransactionDate(event.target.value)
-          }
-        />
-      </label>
+    <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
+      {typeOptions.map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
     </div>
 
     <div className="bajetbn-reference-account-row bajetbn-identity-field">
@@ -4055,6 +4025,38 @@ export function MoneyActivityModal({
       </div>
     )}
 
+    <div className="bajetbn-reference-date">
+      <span
+        className="bajetbn-reference-date-icon"
+        aria-hidden="true"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          focusable="false"
+        >
+          <path
+            d="M7 3v3M17 3v3M4.5 8.5h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <label>
+        Date
+        <input
+          required
+          type="date"
+          value={transactionDate}
+          onChange={(event) =>
+            setTransactionDate(event.target.value)
+          }
+        />
+      </label>
+    </div>
+
     {type !== 'transfer' && (
       <fieldset className="category-picker bajetbn-reference-category-picker">
         <legend className="category-picker-legend">
@@ -4170,6 +4172,8 @@ export function MoneyActivityModal({
         </section>
       )}
 
+    <details className="bajetbn-v4-optional-details">
+      <summary>Labels (optional)</summary>
     <section className="transaction-label-editor">
       <div className="transaction-label-editor-heading">
         <div>
@@ -4249,6 +4253,8 @@ export function MoneyActivityModal({
       </small>
     </section>
 
+    </details>
+
     <div className="form-grid">
       {type !== 'transfer' && <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} placeholder="Optional" maxLength={120} /></label>}
       <PaymentMethodField className={type === 'transfer' ? 'span-2' : ''} label={type === 'transfer' ? 'How was the money moved?' : 'Payment method'} value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
@@ -4284,6 +4290,7 @@ export function MoneyActivityModal({
     </div>}
 
     {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
+    </div>
     <div className="modal-actions"><button type="button" className="button secondary" disabled={busy} onClick={closeForm}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{saveLabel}</button></div>
   </form>
   {showCategoryEditor && canManageCategories && type !== 'transfer' && <CategoryEditor

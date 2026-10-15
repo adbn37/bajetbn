@@ -1891,9 +1891,9 @@ export function BusinessHomePage() {
         <section className="business-home-v115-hero">
           <div className="business-home-v115-hero-heading">
             <div>
-              <span>All-time Business total</span>
+              <span>All-time transaction net</span>
               <small>
-                Posted money in minus money out in this Business only
+                Posted money in less money out for this Business · Not a bank balance
               </small>
             </div>
 

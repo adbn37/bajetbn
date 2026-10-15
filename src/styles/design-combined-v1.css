@@ -1,0 +1,120 @@
+/* BajetBN Combined Design v1: UI UX Pro Max (structure), Taste Skill
+   (hierarchy), Design Motion Principles (purposeful feedback).
+   Scoped to Home only. No financial behaviour or theme tokens are changed. */
+
+.bajetbn-design-combined-v1 {
+  --bajetbn-design-fast: 140ms;
+  --bajetbn-design-normal: 210ms;
+  --bajetbn-design-ease: cubic-bezier(.22, .72, .26, 1);
+}
+
+/* Numeric accuracy and clear hierarchy matter more than decorative type. */
+.bajetbn-design-combined-v1 :is(
+  .bajetbn-total-assets-value,
+  .bajetbn-total-assets-breakdown strong,
+  .bajetbn-home-account-card b,
+  .bajetbn-home-activity-value b,
+  .global-business-total-v115 > strong,
+  .business-home-v115-hero-stats strong
+) {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum';
+}
+
+.bajetbn-design-combined-v1 .bajetbn-home-section-title h2,
+.bajetbn-design-combined-v1 .home-shortcut-heading-v116 strong {
+  letter-spacing: -.025em;
+  text-wrap: balance;
+}
+
+.bajetbn-design-combined-v1 .bajetbn-total-assets-value {
+  letter-spacing: -.045em;
+  overflow-wrap: anywhere;
+}
+
+/* Finance-first hierarchy without replacing the user's current theme. */
+.bajetbn-design-combined-v1 .bajetbn-home-assets-hero,
+.bajetbn-design-combined-v1 .global-business-total-v115 {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--bg) 26%, transparent);
+}
+
+.bajetbn-design-combined-v1 .bajetbn-home-account-card,
+.bajetbn-design-combined-v1 .home-v110-shortcuts > :is(a, button),
+.bajetbn-design-combined-v1 .bajetbn-home-recent-section .home-v110-activity-row {
+  transition:
+    background-color var(--bajetbn-design-normal) var(--bajetbn-design-ease),
+    border-color var(--bajetbn-design-normal) var(--bajetbn-design-ease),
+    box-shadow var(--bajetbn-design-normal) var(--bajetbn-design-ease),
+    transform var(--bajetbn-design-normal) var(--bajetbn-design-ease);
+}
+
+/* Separate overview and picker are distinct actions: keep their visible
+   boundaries and existing state behaviour intact. */
+.bajetbn-design-combined-v1 .bajetbn-home-mode-option-v116 {
+  transition:
+    background-color var(--bajetbn-design-fast) ease-out,
+    box-shadow var(--bajetbn-design-fast) ease-out,
+    color var(--bajetbn-design-fast) ease-out;
+}
+
+.bajetbn-design-combined-v1 :is(
+  .bajetbn-home-mode-overview-v116,
+  .bajetbn-home-mode-picker-v116,
+  .bajetbn-asset-visibility,
+  .bajetbn-home-account-card,
+  .home-v110-shortcuts > a,
+  .home-v110-shortcuts > button,
+  .home-v110-activity-row,
+  .text-button
+):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bajetbn-design-combined-v1 .bajetbn-home-account-card:hover,
+  .bajetbn-design-combined-v1 .home-v110-shortcuts > :is(a, button):hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+    transform: translateY(-1px);
+  }
+
+  .bajetbn-design-combined-v1 .bajetbn-home-recent-section .home-v110-activity-row:hover {
+    background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  }
+}
+
+/* Dialog entrance is brief and non-semantic: never animate or imply posting
+   a transaction succeeded. Only server confirmation controls success states. */
+@keyframes bajetbn-design-dialog-in {
+  from { opacity: .92; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bajetbn-design-combined-v1 .modal {
+  animation: bajetbn-design-dialog-in var(--bajetbn-design-normal) var(--bajetbn-design-ease) both;
+}
+
+@media (max-width: 420px) {
+  .bajetbn-design-combined-v1 .bajetbn-total-assets-value,
+  .bajetbn-design-combined-v1 .global-business-total-v115 > strong {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-design-combined-v1 .modal {
+    animation: none !important;
+  }
+
+  .bajetbn-design-combined-v1 :is(
+    .bajetbn-home-mode-option-v116,
+    .bajetbn-home-account-card,
+    .home-v110-shortcuts > a,
+    .home-v110-shortcuts > button,
+    .home-v110-activity-row
+  ) {
+    transition: none !important;
+    transform: none !important;
+  }
+}

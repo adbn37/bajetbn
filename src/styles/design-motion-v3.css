@@ -1,0 +1,213 @@
+/* BajetBN Design Motion Phase 3 — layout clarity, iconography, purposeful motion.
+   Scoped Home styles and motion-aware existing dialogs. No new financial data,
+   no posting-side effects, and no modification of theme preferences. */
+
+.bajetbn-design-motion-v3 {
+  --v3-ease: cubic-bezier(.22, .75, .25, 1);
+  --v3-fast: 145ms;
+  --v3-medium: 220ms;
+  --v3-card: color-mix(in srgb, var(--surface) 95%, var(--accent) 5%);
+  --v3-border: color-mix(in srgb, var(--border) 74%, var(--accent) 26%);
+  --v3-quiet: color-mix(in srgb, var(--surface-2) 82%, transparent);
+}
+
+/* Intentional layout difference from v1/v2: a compact money action toolbar. */
+.bajetbn-design-motion-v3 .bajetbn-v3-money-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(.42rem, 1.2vw, .8rem);
+  margin: .35rem 0 1.35rem;
+}
+.bajetbn-design-motion-v3 .bajetbn-v3-action {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  min-height: 70px;
+  padding: .8rem .9rem;
+  color: var(--text);
+  border: 1px solid var(--v3-border);
+  border-radius: 17px;
+  background: var(--v3-card);
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--v3-medium) var(--v3-ease),
+    border-color var(--v3-medium) var(--v3-ease), transform var(--v3-fast) ease-out;
+}
+.bajetbn-design-motion-v3 .bajetbn-v3-action:disabled { cursor: not-allowed; opacity: .56; }
+.bajetbn-design-motion-v3 .bajetbn-v3-action > span:last-child { min-width: 0; display: grid; gap: .12rem; }
+.bajetbn-design-motion-v3 .bajetbn-v3-action strong { font-size: .88rem; line-height: 1.25; letter-spacing: -.025em; }
+.bajetbn-design-motion-v3 .bajetbn-v3-action small { color: var(--muted); font-size: .72rem; line-height: 1.35; }
+.bajetbn-design-motion-v3 .bajetbn-v3-action-icon {
+  width: 40px; height: 40px; flex: 0 0 40px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 13px;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+  color: var(--accent-2);
+  font-size: 1.4rem; font-weight: 600;
+}
+.bajetbn-design-motion-v3 .bajetbn-v3-action-primary {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+.bajetbn-design-motion-v3 .bajetbn-v3-action-primary .bajetbn-v3-action-icon {
+  color: #03211d; background: var(--accent); border-color: transparent;
+}
+
+/* Design system: bank balances and labels read clearly and remain exact. */
+.bajetbn-design-motion-v3 .bajetbn-home-assets-hero {
+  padding: clamp(1.05rem, 2.5vw, 1.55rem);
+  border-radius: 22px;
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--bg) 35%, transparent);
+}
+.bajetbn-design-motion-v3 .bajetbn-total-assets-value {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  line-height: 1.12;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.05em;
+}
+.bajetbn-design-motion-v3 .bajetbn-home-account-card,
+.bajetbn-design-motion-v3 .bajetbn-home-recent-section .home-v110-activity-row { background: var(--v3-card); }
+.bajetbn-design-motion-v3 .bajetbn-home-account-card {
+  border-color: var(--v3-border);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--bg) 18%, transparent);
+}
+.bajetbn-design-motion-v3 .bajetbn-home-account-card b {
+  font-size: clamp(.95rem, 1.2vw, 1.11rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.025em;
+}
+.bajetbn-design-motion-v3 .bajetbn-home-section-title h2,
+.bajetbn-design-motion-v3 .home-shortcut-heading-v116 strong { font-size: 1.06rem; letter-spacing: -.03em; }
+.bajetbn-design-motion-v3 .bajetbn-home-recent-section .home-v110-activity-copy :is(strong, small) { white-space: normal; overflow-wrap: anywhere; }
+.bajetbn-design-motion-v3 .bajetbn-home-recent-section .bajetbn-home-activity-value b { font-variant-numeric: tabular-nums; }
+
+/* Consistent icons replace the old one-letter shortcuts, preserving routes and IDs. */
+.bajetbn-design-motion-v3 .home-v110-shortcuts.bajetbn-reference-actions > :is(a,button) {
+  min-height: 84px;
+  border-radius: 15px;
+  background: var(--v3-card);
+  border-color: var(--v3-border);
+  gap: .3rem;
+}
+.bajetbn-design-motion-v3 .bajetbn-v3-shortcut-symbol {
+  width: 39px; height: 39px;
+  border-radius: 13px;
+  display: inline-grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface-2));
+  color: var(--accent-2);
+}
+.bajetbn-design-motion-v3 .bajetbn-v3-shortcut-symbol svg { width: 23px; height: 23px; display: block; }
+.bajetbn-design-motion-v3 .bajetbn-v3-space-glyph { font-size: 1.1rem; font-weight: 800; }
+.bajetbn-design-motion-v3 .home-v110-shortcuts > :is(a,button) > strong { font-size: .81rem; line-height: 1.3; }
+.bajetbn-design-motion-v3 .home-v110-shortcuts > :is(a,button) > small { font-size: .68rem; }
+
+/* Real motion, not decorative loops: keyboard focus, press, and state feedback. */
+.bajetbn-design-motion-v3 :is(.bajetbn-v3-action,.bajetbn-home-account-card,.bajetbn-home-mode-overview-v116,.bajetbn-home-mode-picker-v116):focus-visible,
+.app-shell:has(.bajetbn-design-motion-v3) .mobile-bottom-nav :is(a,button):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.bajetbn-design-motion-v3 :is(.bajetbn-v3-action,.bajetbn-home-account-card):active:not(:disabled) { transform: translateY(1px); }
+@media (hover: hover) and (pointer: fine) {
+  .bajetbn-design-motion-v3 .bajetbn-v3-action:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  }
+}
+
+/* Preserve the original theme; in light mode, use crisp white surfaces. */
+:root[data-theme='light'] .bajetbn-design-motion-v3 {
+  --v3-card: color-mix(in srgb, white 96%, var(--accent) 4%);
+  --v3-quiet: #f4f8f8;
+}
+:root[data-theme='light'] .bajetbn-design-motion-v3 .bajetbn-v3-action-primary {
+  background: color-mix(in srgb, var(--accent) 13%, white);
+}
+
+/* Mobile: clearer, compact actions; preserve original Home shortcuts and menu. */
+@media (max-width: 780px) {
+  .page.bajetbn-design-motion-v3 {
+    padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+  }
+  .bajetbn-design-motion-v3 .bajetbn-v3-money-actions { gap: .5rem; margin: .15rem 0 1.05rem; }
+  .bajetbn-design-motion-v3 .bajetbn-v3-action {
+    min-height: 82px;
+    padding: .64rem .35rem;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: .38rem;
+    text-align: center;
+    border-radius: 15px;
+  }
+  .bajetbn-design-motion-v3 .bajetbn-v3-action-icon {
+    width: 36px; height: 36px; flex-basis: 36px;
+    border-radius: 11px;
+  }
+  .bajetbn-design-motion-v3 .bajetbn-v3-action strong { font-size: .77rem; }
+  .bajetbn-design-motion-v3 .bajetbn-v3-action small { display: none; }
+  .bajetbn-design-motion-v3 .home-v110-shortcuts.bajetbn-reference-actions > :is(a,button) {
+    min-height: 88px;
+    padding: .62rem .28rem !important;
+  }
+  .bajetbn-design-motion-v3 .bajetbn-v3-shortcut-symbol { width: 35px; height: 35px; border-radius: 11px; }
+  .bajetbn-design-motion-v3 .bajetbn-v3-shortcut-symbol svg { width: 21px; height: 21px; }
+  .bajetbn-design-motion-v3 .home-v110-shortcuts > :is(a,button) > small { display: none; }
+  .bajetbn-design-motion-v3 .bajetbn-total-assets-breakdown strong { font-size: .76rem; }
+  .app-shell:has(.bajetbn-design-motion-v3) .mobile-bottom-nav {
+    left: 9px; right: 9px; bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    width: calc(100% - 18px);
+    border: 1px solid color-mix(in srgb, var(--border) 72%, var(--accent) 28%);
+    border-radius: 20px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .22);
+    padding-bottom: .25rem;
+    overflow: visible;
+  }
+  .app-shell:has(.bajetbn-design-motion-v3) .mobile-bottom-nav a.active {
+    background: color-mix(in srgb, var(--accent) 13%, var(--surface-2));
+    border-radius: 12px;
+  }
+}
+@media (max-width: 365px) {
+  .bajetbn-design-motion-v3 .bajetbn-v3-action strong { font-size: .72rem; }
+  .bajetbn-design-motion-v3 .bajetbn-v3-money-actions { gap: .32rem; }
+}
+
+/* Slide-up modal entry like the chosen concept. Not a transaction-success signal. */
+@keyframes bajetbn-v3-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bajetbn-v3-dialog-in {
+  from { opacity: .8; transform: translate3d(0, 13px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.app-shell .modal-backdrop { animation: bajetbn-v3-backdrop-in 160ms ease-out both; }
+.app-shell .modal-backdrop > .modal {
+  animation: bajetbn-v3-dialog-in 230ms cubic-bezier(.18,.78,.25,1) both;
+}
+.app-shell .modal:has(.bajetbn-reference-activity-form) .bajetbn-add-amount input {
+  font-size: clamp(1.45rem, 5vw, 1.85rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.035em;
+}
+.app-shell .modal .transaction-type-picker button.active {
+  transition: color 150ms ease-out, background-color 150ms ease-out;
+}
+.app-shell .modal:has(.bajetbn-reference-activity-form) .modal-actions .button.primary,
+.app-shell .modal:has(.bajetbn-move-money-form) .modal-actions .button.primary {
+  min-height: 48px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-design-motion-v3 *,
+  .bajetbn-design-motion-v3 *::before,
+  .bajetbn-design-motion-v3 *::after,
+  .app-shell .modal-backdrop,
+  .app-shell .modal-backdrop > .modal,
+  .app-shell .modal .transaction-type-picker button.active {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .bajetbn-design-motion-v3 :is(.bajetbn-v3-action,.bajetbn-home-account-card):active:not(:disabled) { transform: none; }
+}

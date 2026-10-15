@@ -399,11 +399,11 @@ export function AppShell() {
           </button>
 
           <NavLink
-            to="/spaces"
+            to="/goals"
             className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">▦</span>
-            <small>Spaces</small>
+            <span aria-hidden="true">◎</span>
+            <small>Goals</small>
           </NavLink>
 
           <NavLink

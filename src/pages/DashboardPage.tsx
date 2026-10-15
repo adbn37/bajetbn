@@ -45,6 +45,7 @@ import {
 } from '../features/transactions/TransactionsPage';
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
 import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
+import { HomeShortcutSymbol } from '../components/HomeShortcutSymbol';
 import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
 
 function monthPrefix() {
@@ -1550,6 +1551,13 @@ export function DashboardPage() {
     );
   }
 
+  // Selected account only. Income/expenses exclude transfers and reversals.
+  // Never present this as all-accounts income or expenses.
+  const selectedAccountMonth =
+    activeAccount && !loading && !activityLoading && !activityUnavailable
+      ? accountMonthSummary(activeAccount.id)
+      : null;
+
   const firstName =
     profile?.fullName
       ?.trim()
@@ -1557,7 +1565,7 @@ export function DashboardPage() {
     || 'there';
 
   return (
-    <main className="page home-v110 bajetbn-reference-home">
+    <main className="page home-v110 bajetbn-reference-home bajetbn-design-combined-v1 bajetbn-design-motion-v3 bajetbn-design-motion-v4 bajetbn-design-motion-v5 bajetbn-design-motion-v6">
       <header className="bajetbn-home-profile-header">
         <div className="bajetbn-home-profile">
           <span className="bajetbn-home-avatar" aria-hidden="true">
@@ -1689,6 +1697,14 @@ export function DashboardPage() {
 
       {homeMode === 'personal' ? (
         <>
+      <div className="bajetbn-v5-financial-workspace" aria-label="Financial snapshot">
+        <div className="bajetbn-v5-workspace-heading">
+          <div>
+            <strong>Your money</strong>
+            <small>Personal and shared financial overview</small>
+          </div>
+          <Link to="/reports">Reports →</Link>
+        </div>
       <section
         className="bajetbn-total-assets-card bajetbn-home-assets-hero"
         aria-label="Personal total assets"
@@ -1696,7 +1712,7 @@ export function DashboardPage() {
         <div className="bajetbn-total-assets-head">
           <div>
             <span>Total Assets</span>
-            <small>Personal + explicitly shared global accounts · Business-only excluded</small>
+            <small>Personal + shared accounts · business-only excluded</small>
           </div>
 
           <button
@@ -1742,6 +1758,8 @@ export function DashboardPage() {
           aria-hidden="true"
         />
 
+        <details className="bajetbn-v6-balance-details">
+          <summary>Balance breakdown <span aria-hidden="true">⌄</span></summary>
         <div className="bajetbn-total-assets-breakdown">
           {personalAssetBreakdown.map(
             ([label, value]) => (
@@ -1762,7 +1780,41 @@ export function DashboardPage() {
             ),
           )}
         </div>
+        </details>
+
+        {selectedAccountMonth && activeAccount && (
+          <div className="bajetbn-v6-month" aria-label="This month for selected account">
+            <div className="bajetbn-v6-month-heading">
+              <strong>This month <span>· {activeAccount.name} only</span></strong>
+              <Link to={'/transactions?accountId=' + encodeURIComponent(activeAccount.id)}>Details →</Link>
+            </div>
+            <div className="bajetbn-v6-month-metrics">
+              <div className="income">
+                <span>Money in</span>
+                <strong>{assetsVisible ? formatMoney(selectedAccountMonth.income, activeAccount.currency) : '••••'}</strong>
+              </div>
+              <div className="expense">
+                <span>Money out</span>
+                <strong>{assetsVisible ? formatMoney(selectedAccountMonth.expenses, activeAccount.currency) : '••••'}</strong>
+              </div>
+            </div>
+            <div className="bajetbn-v6-month-net bajetbn-v5-net-flow">
+              <span>Monthly net flow</span>
+              <strong className={selectedAccountMonth.income >= selectedAccountMonth.expenses ? 'positive' : 'negative'}>
+                {assetsVisible
+                  ? (selectedAccountMonth.income < selectedAccountMonth.expenses ? '−' : selectedAccountMonth.income > selectedAccountMonth.expenses ? '+' : '')
+                    + formatMoney(Math.abs(selectedAccountMonth.income - selectedAccountMonth.expenses), activeAccount.currency)
+                  : '••••'}
+              </strong>
+            </div>
+            <small className="bajetbn-v6-scope-note">Posted income and expenses · selected account · transfers excluded</small>
+          </div>
+        )}
       </section>
+
+
+
+      </div>
 
       {homeAccounts.length > 0 ? (
         <section className="bajetbn-home-accounts-section">
@@ -1867,6 +1919,34 @@ export function DashboardPage() {
         </section>
       )}
 
+      <div className="bajetbn-v6-action-section" aria-label="Money actions">
+        <div className="bajetbn-v3-money-actions bajetbn-v4-quick-actions" role="group" aria-label="Quick money actions">
+          <button
+            type="button"
+            className="bajetbn-v3-action bajetbn-v3-action-primary"
+            onClick={() => void openQuickActivity('activity')}
+            disabled={loading || quickLoading || quickEntryAccounts.length === 0}
+          >
+            <span className="bajetbn-v3-action-icon" aria-hidden="true">+</span>
+            <span><strong>Add activity</strong><small>Record income or expenses</small></span>
+          </button>
+          <button
+            type="button"
+            className="bajetbn-v3-action"
+            onClick={() => void openQuickActivity('move')}
+            disabled={loading || quickLoading || quickEntryAccounts.length < 2}
+          >
+            <span className="bajetbn-v3-action-icon" aria-hidden="true">⇄</span>
+            <span><strong>Move money</strong><small>Between accounts</small></span>
+          </button>
+          <Link className="bajetbn-v3-action" to="/transactions">
+            <span className="bajetbn-v3-action-icon" aria-hidden="true">≡</span>
+            <span><strong>Activity</strong><small>Review transactions</small></span>
+          </Link>
+        </div>
+
+      </div>
+
       <section
         className="home-shortcut-hub-v116"
         data-home-shortcut-hub-v116
@@ -1901,8 +1981,8 @@ export function DashboardPage() {
 
               const content = (
                 <>
-                  <span aria-hidden="true">
-                    {shortcut.icon}
+                  <span aria-hidden="true" className="bajetbn-v3-shortcut-symbol">
+                    <HomeShortcutSymbol id={shortcut.id} fallback={shortcut.icon} />
                   </span>
                   <strong>
                     {shortcut.label}

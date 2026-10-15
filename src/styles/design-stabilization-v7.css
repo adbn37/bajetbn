@@ -1,0 +1,241 @@
+/* BajetBN v1.24 - Phase 7 targeted mobile usability pass.
+ * Scoped to the existing transaction list and commitment cards.
+ * Do not change transaction filters, posting logic, totals or permissions.
+ */
+
+/* Transaction cards: keep amount, context, status, receipt and Details actions visible. */
+@media (max-width: 780px) {
+  .bajetbn-v7-compact-row.transaction-row {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) max-content;
+    grid-template-rows: auto auto auto;
+    align-items: start;
+    column-gap: .65rem;
+    row-gap: .45rem;
+    padding: .8rem .75rem;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 15px;
+  }
+  .bajetbn-v7-compact-row > .category-icon,
+  .bajetbn-v7-compact-row > .transaction-icon,
+  .bajetbn-v7-compact-row > :first-child {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    margin: 0;
+    max-width: 2.5rem;
+    max-height: 2.5rem;
+  }
+  .bajetbn-v7-compact-row > .transaction-main {
+    grid-column: 2;
+    grid-row: 1;
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+  .bajetbn-v7-compact-row .transaction-main h2 {
+    margin: .17rem 0 .12rem;
+    font-size: .93rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .bajetbn-v7-compact-row .transaction-main p {
+    display: block;
+    margin: 0;
+    font-size: .75rem;
+    line-height: 1.35;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  .bajetbn-v7-compact-row > .transaction-amount {
+    grid-column: 3;
+    grid-row: 1;
+    margin: 0;
+    min-width: 0;
+    justify-self: end;
+    text-align: right;
+    align-items: flex-end;
+  }
+  .bajetbn-v7-compact-row .transaction-amount strong {
+    font-size: clamp(.83rem, 3vw, 1rem);
+    line-height: 1.35;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .bajetbn-v7-compact-row .transaction-amount small {
+    display: block;
+    margin-top: .22rem;
+    font-size: .69rem;
+    white-space: nowrap;
+  }
+  .bajetbn-v7-compact-row > .transaction-context {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    display: block;
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    text-align: left;
+  }
+  .bajetbn-v7-compact-row .transaction-context :is(strong,small),
+  .bajetbn-v7-compact-row .transaction-route :is(span,b) {
+    display: inline;
+    font-size: .74rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .bajetbn-v7-compact-row .transaction-context small::before { content: ' · '; }
+  .bajetbn-v7-compact-row .transaction-route { display: flex; flex-wrap: wrap; gap: .22rem; }
+  .bajetbn-v7-compact-row .transaction-context.transfer-route > small::before { content: none; }
+  .bajetbn-v7-compact-row > .transaction-status {
+    grid-column: 2 / -1;
+    grid-row: 3;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    align-self: stretch;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: .35rem .65rem;
+    padding-top: .42rem;
+    border-top: 1px solid var(--border);
+    text-align: left;
+  }
+  .bajetbn-v7-compact-row .transaction-status .text-button {
+    min-height: 36px;
+    min-width: 44px;
+    padding: .35rem .15rem;
+    line-height: 1.2;
+    font-size: .8rem;
+    overflow-wrap: anywhere;
+  }
+  .bajetbn-v7-compact-row .transaction-kind-badge { font-size: .68rem; }
+  .bajetbn-v7-compact-row .transaction-label-list.compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-top: .25rem;
+  }
+  .bajetbn-v7-compact-row:focus-within {
+    border-color: var(--accent);
+  }
+}
+@media (max-width: 380px) {
+  .bajetbn-v7-compact-row.transaction-row {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    row-gap: .36rem;
+  }
+  .bajetbn-v7-compact-row > .transaction-main { grid-column: 2; grid-row: 1; }
+  .bajetbn-v7-compact-row > .transaction-amount {
+    grid-column: 2; grid-row: 2;
+    justify-self: start; align-items: flex-start; text-align: left;
+  }
+  .bajetbn-v7-compact-row > .transaction-context { grid-column: 2; grid-row: 3; }
+  .bajetbn-v7-compact-row > .transaction-status { grid-column: 1 / -1; grid-row: 4; }
+  .bajetbn-v7-compact-row > :first-child { grid-row: 1 / 3; }
+}
+
+/* Commitment summary remains fully visible; history is discoverable on demand. */
+@media (max-width: 780px) {
+  .commitments-page-v115 .planning-card-grid { gap: .75rem; }
+  .commitments-page-v115 .commitment-card {
+    min-width: 0;
+    padding: .9rem .85rem;
+    border-radius: 15px;
+    overflow-wrap: anywhere;
+  }
+  .commitments-page-v115 .commitment-card .planning-card-head { gap: .5rem; margin-bottom: .48rem; }
+  .commitments-page-v115 .commitment-card .planning-card-head h3 {
+    font-size: 1rem;
+    line-height: 1.3;
+    margin-top: .18rem;
+  }
+  .commitments-page-v115 .commitment-card .budget-amount-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem .45rem;
+    align-items: baseline;
+    margin-block: .38rem;
+    min-width: 0;
+  }
+  .commitments-page-v115 .commitment-card .budget-amount-line strong {
+    font-size: 1.12rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .commitments-page-v115 .commitment-card .planning-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .2rem .55rem;
+    margin-block: .35rem;
+    font-size: .76rem;
+    line-height: 1.45;
+  }
+  .commitments-page-v115 .commitment-card .planning-meta span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .commitments-page-v115 .commitment-card .button-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .42rem;
+    margin-top: .7rem;
+    min-width: 0;
+  }
+  .commitments-page-v115 .commitment-card .button-row .button {
+    min-width: 0;
+    min-height: 40px;
+    padding: .52rem .7rem;
+    flex: 0 1 auto;
+  }
+  .commitments-page-v115 .commitment-card .button-row .button.primary {
+    flex: 1 0 40%;
+  }
+  .commitments-page-v115 .commitment-card .button-row .text-button {
+    min-width: 44px;
+    min-height: 40px;
+    padding: .38rem .3rem;
+  }
+  .commitments-page-v115 .commitment-card.state-overdue {
+    border-color: color-mix(in srgb, var(--danger) 52%, var(--border));
+  }
+  .commitments-page-v115 .commitment-card.state-overdue .planning-card-head .eyebrow {
+    color: var(--danger);
+  }
+  .commitments-page-v115 .bajetbn-v7-payment-history {
+    border-top: 1px solid var(--border);
+    padding-top: .42rem;
+    margin-top: .54rem;
+  }
+  .commitments-page-v115 .bajetbn-v7-payment-history > summary {
+    display: list-item;
+    cursor: pointer;
+    color: var(--accent-2);
+    min-height: 38px;
+    padding: .5rem .15rem;
+    font-size: .78rem;
+    font-weight: 700;
+  }
+  .commitments-page-v115 .bajetbn-v7-payment-history > summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .commitments-page-v115 .bajetbn-v7-payment-history .mini-history {
+    margin: .35rem 0 .1rem;
+  }
+  .commitments-page-v115 .bajetbn-v7-payment-history .mini-history > div {
+    min-width: 0;
+  }
+  .commitments-page-v115 { padding-bottom: max(7rem, calc(6rem + env(safe-area-inset-bottom))); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-v7-compact-row, .bajetbn-v7-payment-history {
+    animation: none !important; transition: none !important;
+  }
+}

@@ -585,7 +585,7 @@ export function CommitmentsPage({
     />{error && <div className="notice error">{error}</div>}
     {success && <div className="notice success">{success}</div>}
     {embedded && !canManageCurrentSpace && <div className="notice"><strong>Space payment history</strong><span>{canRequestCurrentSpacePayment ? 'You can request a payment from a shared Business account. The Account Owner must approve it before any money or commitment balance changes.' : 'Bills and instalments are visible here. Account-use permission is required before you can request a payment.'}</span></div>}
-    <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Instalments and upcoming bills</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
+    <section className="summary-grid"><article className="summary-card featured"><span>Still to pay</span><strong>{formatMoney(outstanding, profile?.currency || 'BND')}</strong><small>Remaining instalments + one cycle per active bill; not bank balance</small></article><article className="summary-card"><span>Coming up</span><strong>{upcoming}</strong><small>Due today or later</small></article><article className="summary-card"><span>Overdue</span><strong>{overdue}</strong><small>Needs attention</small></article><article className="summary-card"><span>Stopped</span><strong>{inactive.length}</strong><small>Can be restored when allowed</small></article></section>
     {!typeOverride && <div className="segmented-control planning-filter"><button className={typeFilter === 'all' ? 'active' : ''} onClick={() => setTypeFilter('all')}>All</button><button className={typeFilter === 'bill' ? 'active' : ''} onClick={() => setTypeFilter('bill')}>Bills</button><button className={typeFilter === 'instalment' ? 'active' : ''} onClick={() => setTypeFilter('instalment')}>Instalments</button></div>}
     {!spaceIdOverride && <div className="commitment-global-filter-v115"><label>Status<select value={commitmentStatusFilter} onChange={(event) => setCommitmentStatusFilter(event.target.value as 'all' | 'upcoming' | 'due' | 'overdue' | 'completed')}><option value="all">All statuses</option><option value="upcoming">Coming up</option><option value="due">Due today</option><option value="overdue">Overdue</option><option value="completed">Finished / paid</option></select></label><span>Grouped by Space · sorted by due date</span></div>}
     <CommitmentGrid items={visible} payments={payments} debtPayments={debtPayments} accountMap={accountMap} debtMap={debtMap} spaceMap={spaceMap} spaceTypeMap={spaceTypeMap} focusedCommitmentId={focusedCommitmentId} showSpace={!spaceIdOverride} groupBySpace={!spaceIdOverride} busyId={busyId} onPay={canRequestCurrentSpacePayment ? setPaying : undefined} onEdit={canManageCurrentSpace ? (item) => { setEditing(item); setShowForm(true); } : undefined} onLinkDebt={canManageCurrentSpace ? setLinkingInstalment : undefined} onUnlinkDebt={canManageCurrentSpace ? (item) => void runUnlinkDebt(item) : undefined} onStop={canManageCurrentSpace ? (item) => askLifecycle(item, 'stop') : undefined} onDelete={canManageCurrentSpace ? (item) => askLifecycle(item, 'delete') : undefined} onShare={canManageCurrentSpace ? (item, payment) => shareBillToWhatsApp(item, payment) : undefined} onViewHistory={setHistoryCommitment} />
@@ -767,6 +767,8 @@ function CommitmentGrid({
         </div>
       )}
       {recentHistory.length > 0 && (
+        <details className="bajetbn-v7-payment-history">
+          <summary>Recent payments · {fullPaymentHistory.length}</summary>
         <div
           className="mini-history"
           data-instalment-payment-history
@@ -814,6 +816,7 @@ function CommitmentGrid({
               </button>
             )}
         </div>
+        </details>
       )}
       {(onPay
         || onEdit
