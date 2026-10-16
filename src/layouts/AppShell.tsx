@@ -376,7 +376,7 @@ export function AppShell() {
             end
             className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">⌂</span>
+            <span className="bajetbn-v105-bottom-icon" aria-hidden="true"><img src="/category-icons-v102/home.svg" alt="" decoding="async" /></span>
             <small>Home</small>
           </NavLink>
 
@@ -384,7 +384,7 @@ export function AppShell() {
             to="/transactions"
             className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">↕</span>
+            <span className="bajetbn-v105-bottom-icon" aria-hidden="true"><img src="/navigation-icons-v104/activity.svg" alt="" decoding="async" /></span>
             <small>Transactions</small>
           </NavLink>
 
@@ -394,7 +394,7 @@ export function AppShell() {
             onClick={() => navigate('/?quick=1')}
             aria-label="Add income or expense"
           >
-            <span aria-hidden="true">+</span>
+            <span className="bajetbn-v105-bottom-icon" aria-hidden="true"><img src="/navigation-icons-v104/add.svg" alt="" decoding="async" /></span>
             <small>Add</small>
           </button>
 
@@ -402,7 +402,7 @@ export function AppShell() {
             to="/goals"
             className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">◎</span>
+            <span className="bajetbn-v105-bottom-icon" aria-hidden="true"><img src="/category-icons-v102/target.svg" alt="" decoding="async" /></span>
             <small>Goals</small>
           </NavLink>
 
@@ -410,7 +410,7 @@ export function AppShell() {
             to="/more"
             className={({ isActive }) => isActive ? 'active' : ''}
           >
-            <span aria-hidden="true">☷</span>
+            <span className="bajetbn-v105-bottom-icon" aria-hidden="true"><img src="/navigation-icons-v105/more.svg" alt="" decoding="async" /></span>
             <small>More</small>
           </NavLink>
         </nav>

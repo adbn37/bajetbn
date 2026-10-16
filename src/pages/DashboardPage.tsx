@@ -40,11 +40,11 @@ import type {
 import { formatMoney } from '../utils/money';
 import {
   DEFAULT_TRANSACTION_CATEGORIES,
-  categoryIconGlyph,
 } from '../features/categories/defaultCategories';
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
 import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { HomeShortcutSymbol } from '../components/HomeShortcutSymbol';
+import { RecentActivityIcon } from '../components/RecentActivityIcon';
 import { navigationIconSrc } from '../services/navigationIconAssets';
 import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
 
@@ -2111,26 +2111,7 @@ export function DashboardPage() {
                       )
                     }
                   >
-                    <span
-                      className={
-                        'home-v110-activity-icon '
-                        + transaction.type
-                        + ' category-'
-                        + (transaction.categoryColor || 'slate')
-                      }
-                      aria-hidden="true"
-                    >
-                      {categoryIconGlyph(
-                        transaction.categoryIcon
-                        || (
-                          transaction.type === 'transfer'
-                            ? 'transfer'
-                            : transaction.type === 'income'
-                              ? 'wallet'
-                              : 'dots'
-                        ),
-                      )}
-                    </span>
+                    <RecentActivityIcon transaction={transaction} ownerId={user?.uid || ''} />
 
                     <span className="home-v110-activity-copy">
                       <strong>

@@ -16,6 +16,7 @@ import './styles/design-smart-category-v10.css';
 import './styles/design-neon-icons-v102.css';
 import './styles/design-financial-avatars-v103.css';
 import './styles/design-navigation-icons-v104.css';
+import './styles/design-mobile-nav-activity-v105.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 
