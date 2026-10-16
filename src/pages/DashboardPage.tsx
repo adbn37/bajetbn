@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -40,13 +42,17 @@ import {
   DEFAULT_TRANSACTION_CATEGORIES,
   categoryIconGlyph,
 } from '../features/categories/defaultCategories';
-import {
-  MoneyActivityModal,
-} from '../features/transactions/TransactionsPage';
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
 import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { HomeShortcutSymbol } from '../components/HomeShortcutSymbol';
 import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
+
+// Load Money Activity only after a user opens Add. Keep Personal Home lightweight.
+const MoneyActivityModal = lazy(() =>
+  import('../features/transactions/TransactionsPage').then((module) => ({
+    default: module.MoneyActivityModal,
+  })),
+);
 
 function monthPrefix() {
   return new Date()
@@ -2370,7 +2376,8 @@ export function DashboardPage() {
       {showMoneyActivity
         && profile
         && (
-          <MoneyActivityModal
+          <Suspense fallback={<div className="loading-panel bajetbn-v9-home-on-demand" role="status">Preparing Add Money…</div>}>
+            <MoneyActivityModal
             accounts={quickEntryAccounts}
             spaces={quickEntrySpaces}
             categories={
@@ -2402,7 +2409,8 @@ initialType={quickInitialType}
                 );
               }
             }}
-          />
+            />
+          </Suspense>
         )}
         </>
       ) : (
