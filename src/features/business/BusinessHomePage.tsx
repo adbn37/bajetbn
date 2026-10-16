@@ -41,6 +41,7 @@ import type {
   SmePosSettings,
 } from '../../types/models';
 import { formatMoney } from '../../utils/money';
+import { businessShortcutIconV106 } from '../../services/smartCategoryIconV106';
 import {
   canAccessInternalAdbnTechSpace,
   isInternalAdbnTechSpace,
@@ -573,6 +574,9 @@ export function BusinessHomePage() {
 
   const monthNet =
     moneyIn - moneyOut;
+
+  // Same posted transactions, but excluding the current month: a display-only bridge.
+  const otherDatesNet = businessTransactionTotal - monthNet;
 
   if (loading) {
     return (
@@ -1949,6 +1953,15 @@ export function BusinessHomePage() {
               <small>This month</small>
             </div>
           </div>
+          <div className="business-home-v106-net-bridge" data-business-net-reconciliation>
+            <strong>How these totals tally</strong>
+            <div className="business-home-v106-equation">
+              <span>This month net: <b>{formatMoney(monthNet, space.currency)}</b></span>
+              <span>Other dates net: <b>{formatMoney(otherDatesNet, space.currency)}</b></span>
+              <span>All-time net: <b>{formatMoney(businessTransactionTotal, space.currency)}</b></span>
+            </div>
+            <small>All-time = this month + other dates. Based on posted money in/out, not bank balances. Invoice status events in the timeline are not counted again.</small>
+          </div>
         </section>
       ) : (
         <section className="business-home-v115-role-hero">
@@ -1980,7 +1993,7 @@ export function BusinessHomePage() {
                     }
                     to={action.to}
                   >
-                    <span>{action.icon}</span>
+                    <span><img className="bajetbn-v106-business-shortcut" src={businessShortcutIconV106(action.label)} alt="" loading="lazy" decoding="async" /></span>
                     <strong>
                       {action.label}
                     </strong>

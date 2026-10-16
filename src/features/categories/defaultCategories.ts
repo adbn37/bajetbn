@@ -76,7 +76,9 @@ export function suggestedCategoryIcon(name: string, fallback = 'dots'): string {
   const value = name.trim().toLowerCase();
   const rules: Array<[RegExp, string]> = [
     [/hotel|motel|resort|stay|room|rent|house|home/, 'home'],
-    [/electric|electricity|power|water|utility|utilities/, 'bill'],
+    [/electric|electricity|power/, 'electric'],
+    [/water/, 'water'],
+    [/utility|utilities/, 'bill'],
     [/internet|wifi|mobile|phone|telco|dst|progresif|imagine/, 'phone'],
     [/cloud|hosting|server|software|computer|tech/, 'laptop'],
     [/diy|hardware|repair|workshop|tool/, 'tools'],

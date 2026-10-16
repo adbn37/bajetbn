@@ -33,6 +33,7 @@ import type {
 } from '../../types/models';
 
 import { formatMoney } from '../../utils/money';
+import { resolveSmartCategoryIconAsset, businessActivityFallbackIconV106 } from '../../services/smartCategoryIconV106';
 
 type TimestampLike = {
   toMillis?: () => number;
@@ -54,6 +55,7 @@ interface BusinessActivityItem {
   currency: string;
   tone: ActivityTone;
   icon: string;
+  iconAsset?: string;
   time: number;
   to: string;
 }
@@ -194,6 +196,7 @@ function transactionActivity(
         : item.type === 'expense'
           ? '↑'
           : '↔',
+    iconAsset: resolveSmartCategoryIconAsset(item),
     time,
     to:
       '/spaces/'
@@ -990,7 +993,11 @@ export function BusinessActivityTimeline({
               className="business-activity-timeline-icon-v115"
               aria-hidden="true"
             >
-              {item.icon}
+              <img
+                className="bajetbn-v106-business-activity"
+                src={item.iconAsset || businessActivityFallbackIconV106(item.tone)}
+                alt="" loading="lazy" decoding="async"
+              />
             </span>
 
             <span className="business-activity-timeline-copy-v115">

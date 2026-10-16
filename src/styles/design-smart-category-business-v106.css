@@ -1,0 +1,40 @@
+/* BajetBN Phase 10.6: neon transaction history and read-only Business net bridge. */
+.business-home-v106-net-bridge {
+  margin-top: .8rem;
+  padding: .7rem .85rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  border-radius: 13px;
+  display: grid;
+  gap: .35rem;
+}
+.business-home-v106-net-bridge > strong { font-size: .79rem; }
+.business-home-v106-net-bridge .business-home-v106-equation {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: .5rem 1rem;
+  font-size: .76rem;
+}
+.business-home-v106-net-bridge .business-home-v106-equation b { font-variant-numeric: tabular-nums; }
+.business-home-v106-net-bridge small { color: var(--muted); font-size: .68rem; line-height: 1.5; }
+.business-home-v115-actions a > span:has(img.bajetbn-v106-business-shortcut) {
+  background: transparent !important; border: 0 !important;
+  overflow: visible; box-shadow: none !important;
+  padding: 0 !important; width: 42px; height: 42px;
+}
+.business-home-v115-actions img.bajetbn-v106-business-shortcut {
+  display: block; width: 100%; height: 100%; object-fit: contain;
+}
+.business-activity-timeline-icon-v115:has(img.bajetbn-v106-business-activity) {
+  background: transparent !important; border: 0 !important;
+  overflow: visible; box-shadow: none !important;
+}
+.business-activity-timeline-icon-v115 img.bajetbn-v106-business-activity {
+  width: 100%; height: 100%; display: block; object-fit: contain;
+}
+@media (max-width: 560px) {
+  .business-home-v106-net-bridge .business-home-v106-equation { font-size: .72rem; }
+  .business-home-v115-actions a > span:has(img.bajetbn-v106-business-shortcut) { width: 38px; height: 38px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-v106-business-activity, .bajetbn-v106-business-shortcut { animation: none !important; transition: none !important; }
+}

@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import type { FinancialTransaction } from '../types/models';
 import { categoryIconGlyph } from '../features/categories/defaultCategories';
-import { categoryIconAsset } from '../services/categoryIconAssets';
+import { resolveSmartCategoryIconAsset } from '../services/smartCategoryIconV106';
 import { CATEGORY_VISUAL_EVENT, getCategoryCustomIcon } from '../services/categoryVisualPreferences';
 
 type Props = {
@@ -30,9 +30,7 @@ export function RecentActivityIcon({ transaction, ownerId }: Props) {
       : transaction.type === 'reversal' ? 'reversal'
         : transaction.type === 'income' ? 'wallet' : 'dots'
   );
-  const src = categoryIconAsset(key)
-    || (key === 'transfer' ? '/navigation-icons-v104/move.svg' : '')
-    || (key === 'reversal' ? '/category-icons-v102/repeat.svg' : '');
+  const src = resolveSmartCategoryIconAsset(transaction);
 
   return (
     <span

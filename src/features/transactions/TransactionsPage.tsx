@@ -67,6 +67,7 @@ import type {
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 import { categoryIconAsset } from '../../services/categoryIconAssets';
+import { resolveSmartCategoryIconAsset } from '../../services/smartCategoryIconV106';
 import { readSmartCategoryUsage, recordSmartCategoryUsage, smartCategorySuggestions } from '../../services/smartCategoryUsage';
 
 const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
@@ -1908,7 +1909,7 @@ export function TransactionsPage() {
               || item.originalType === 'transfer';
             const category = item.categoryId ? categoryMap.get(item.categoryId) || transactionCategorySnapshot(item) : transactionCategorySnapshot(item);
             return <article className={`transaction-row bajetbn-v7-compact-row ${item.status === 'reversed' ? 'reversed' : ''}`} key={item.id}>
-              <CategoryIconVisual category={category} />
+              <CategoryIconVisual category={category} transaction={item} />
               <div className="transaction-main">
                 <div>
                   <span
@@ -2300,7 +2301,7 @@ lockedSpaceId={
   );
 }
 
-function CategoryIconVisual({ category, className = '' }: { category: TransactionCategory; className?: string; }) {
+function CategoryIconVisual({ category, className = '', transaction }: { category: TransactionCategory; className?: string; transaction?: FinancialTransaction; }) {
   const { user } = useAuth();
   const [customIcon, setCustomIcon] = useState('');
   useEffect(() => {
@@ -2308,7 +2309,12 @@ function CategoryIconVisual({ category, className = '' }: { category: Transactio
     refresh(); window.addEventListener(CATEGORY_VISUAL_EVENT, refresh);
     return () => window.removeEventListener(CATEGORY_VISUAL_EVENT, refresh);
   }, [category.id, user]);
-  const builtIn = categoryIconAsset(category.icon);
+  const builtIn = transaction
+    ? resolveSmartCategoryIconAsset({
+      ...transaction,
+      categoryIcon: category.icon === 'dots' ? transaction.categoryIcon : category.icon,
+    })
+    : categoryIconAsset(category.icon);
   return <span className={`category-icon category-${category.color} bajetbn-v102-neon-icon` + (className ? ` ${className}` : '')}>{customIcon ? <img className="bajetbn-v102-custom-icon" src={customIcon} alt="" /> : builtIn ? <img className="bajetbn-v102-vector-icon" src={builtIn} alt="" loading="lazy" decoding="async" /> : categoryIconGlyph(category.icon)}</span>;
 }
 
