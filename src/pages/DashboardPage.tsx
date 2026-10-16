@@ -45,6 +45,7 @@ import {
 import { AccountAvatar } from '../features/accounts/AccountAvatar';
 import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { HomeShortcutSymbol } from '../components/HomeShortcutSymbol';
+import { navigationIconSrc } from '../services/navigationIconAssets';
 import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
 
 // Load Money Activity only after a user opens Add. Keep Personal Home lightweight.
@@ -1916,7 +1917,7 @@ export function DashboardPage() {
             onClick={() => void openQuickActivity('activity')}
             disabled={loading || quickLoading || quickEntryAccounts.length === 0}
           >
-            <span className="bajetbn-v3-action-icon" aria-hidden="true">+</span>
+            <span className="bajetbn-v3-action-icon" aria-hidden="true"><img className="bajetbn-v104-navigation-art" src={navigationIconSrc('add')} alt="" draggable={false} /></span>
             <span><strong>Add activity</strong><small>Record income or expenses</small></span>
           </button>
           <button
@@ -1925,11 +1926,11 @@ export function DashboardPage() {
             onClick={() => void openQuickActivity('move')}
             disabled={loading || quickLoading || quickEntryAccounts.length < 2}
           >
-            <span className="bajetbn-v3-action-icon" aria-hidden="true">⇄</span>
+            <span className="bajetbn-v3-action-icon" aria-hidden="true"><img className="bajetbn-v104-navigation-art" src={navigationIconSrc('move')} alt="" draggable={false} /></span>
             <span><strong>Move money</strong><small>Between accounts</small></span>
           </button>
           <Link className="bajetbn-v3-action" to="/transactions">
-            <span className="bajetbn-v3-action-icon" aria-hidden="true">≡</span>
+            <span className="bajetbn-v3-action-icon" aria-hidden="true"><img className="bajetbn-v104-navigation-art" src={navigationIconSrc('activity')} alt="" draggable={false} /></span>
             <span><strong>Activity</strong><small>Review transactions</small></span>
           </Link>
         </div>
