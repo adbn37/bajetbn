@@ -354,6 +354,10 @@ export function DashboardPage() {
     setShowMoneyActivity,
   ] = useState(false);
 
+  // BAJETBN_PHASE91_QUICK_CLOSE_GUARD: prevent the URL-triggered quick entry from reopening
+  // after a close while React Router is removing the ?quick=1 parameter.
+  const quickOpenHandledRef = useRef(false);
+
   const [
     homeSpacePicker,
     setHomeSpacePicker,
@@ -1039,19 +1043,29 @@ export function DashboardPage() {
     loadAccountActivity,
   ]);
 
-  // BAJETBN_PHASE71_HOME_HOOKS: open the ?quick=1 entry after effect setup completes.
+  // BAJETBN_PHASE91_QUICK_CLOSE_GUARD: handle each ?quick=1 navigation once. The ref is
+  // claimed inside the microtask (not setup) to survive StrictMode cleanup.
   useEffect(() => {
     if (
       homeMode !== 'personal'
       || searchParams.get('quick') !== '1'
-      || loading
+    ) {
+      quickOpenHandledRef.current = false;
+      return;
+    }
+
+    if (
+      loading
       || showMoneyActivity
       || quickLoading
+      || quickOpenHandledRef.current
     ) return;
 
     let active = true;
     queueMicrotask(() => {
-      if (active) void openQuickActivity();
+      if (!active || quickOpenHandledRef.current) return;
+      quickOpenHandledRef.current = true;
+      void openQuickActivity();
     });
     return () => { active = false; };
   }, [
@@ -1064,7 +1078,8 @@ export function DashboardPage() {
   ]);
 
   function closeQuickActivity() {
-    setShowMoneyActivity(false);
+    // Keep this request claimed until navigation has cleared the query.
+    quickOpenHandledRef.current = true;
 
     if (searchParams.has('quick')) {
       const next =
@@ -1079,6 +1094,8 @@ export function DashboardPage() {
         { replace: true },
       );
     }
+
+    setShowMoneyActivity(false);
   }
 
   function selectHomeAccount(
