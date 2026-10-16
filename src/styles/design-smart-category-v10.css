@@ -1,0 +1,81 @@
+/* BajetBN Phase 10.1 — searchable category picker & on-device quick picks.
+   Scoped to MoneyActivityModal; respects current category icons and themes. */
+.bajetbn-v10-category-search {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin: .55rem 0 .7rem;
+  color: var(--muted);
+  font-size: .74rem;
+  font-weight: 650;
+}
+.bajetbn-v10-category-search input[type='search'] {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: .65rem .75rem;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: .85rem;
+}
+.bajetbn-v10-category-search input[type='search']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.bajetbn-v10-smart-picks { display: grid; gap: .5rem; margin-bottom: .7rem; }
+.bajetbn-v10-usage-group { display: grid; gap: .35rem; }
+.bajetbn-v10-usage-heading {
+  color: var(--muted);
+  font-size: .69rem;
+  font-weight: 750;
+  letter-spacing: .015em;
+}
+.bajetbn-v10-usage-list { display: flex; gap: .4rem; flex-wrap: wrap; }
+.bajetbn-v10-usage-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  gap: .4rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: .32rem .58rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: .75rem;
+  cursor: pointer;
+}
+.bajetbn-v10-usage-item .category-icon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 8px;
+  font-size: .7rem;
+}
+.bajetbn-v10-usage-item > span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.bajetbn-v10-usage-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.bajetbn-v10-usage-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.bajetbn-v10-category-empty {
+  padding: .75rem .65rem;
+  font-size: .78rem;
+  color: var(--muted);
+}
+@media (max-width: 430px) {
+  .bajetbn-v10-usage-item { max-width: calc(50% - .2rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-v10-category-search *, .bajetbn-v10-smart-picks * { transition: none !important; }
+}

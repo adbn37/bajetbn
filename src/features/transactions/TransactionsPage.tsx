@@ -66,6 +66,7 @@ import type {
 } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
 import { formatMoney, toMinorUnits } from '../../utils/money';
+import { readSmartCategoryUsage, recordSmartCategoryUsage, smartCategorySuggestions } from '../../services/smartCategoryUsage';
 
 const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
 const statusLabels = { posted: 'Saved', reversed: 'Undone' } as const;
@@ -2563,11 +2564,20 @@ export function MoneyActivityModal({
   const [error, setError] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
   const receiptAutoOpenedRef = useRef(false);
 
   const scope = spaceScope(selectedSpace);
+  const [smartCategoryUsage, setSmartCategoryUsage] = useState(
+    () => readSmartCategoryUsage(user?.uid || '', type === 'income' ? 'income' : 'expense', scope),
+  );
   const categoryOptions = localCategories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
+  const { recent: recentCategoryOptions, frequent: frequentCategoryOptions } = useMemo(
+    () => smartCategorySuggestions(categoryOptions, smartCategoryUsage),
+    [categoryOptions, smartCategoryUsage],
+  );
+  const normalizedCategorySearch = categorySearch.trim().toLocaleLowerCase();
 
   const primaryCategoryOptions = useMemo(() => {
     const preferredPersonalExpenseIds = [
@@ -2635,6 +2645,13 @@ export function MoneyActivityModal({
       categoryOptions,
       primaryCategoryOptions,
     ],
+  );
+
+  const moreCategoryOptions = useMemo(
+    () => normalizedCategorySearch
+      ? categoryOptions.filter((category) => category.name.toLocaleLowerCase().includes(normalizedCategorySearch))
+      : secondaryCategoryOptions,
+    [categoryOptions, secondaryCategoryOptions, normalizedCategorySearch],
   );
 
   useEffect(() => {
@@ -2775,10 +2792,23 @@ export function MoneyActivityModal({
 
   useEffect(() => {
     setShowAllCategories(false);
+    setCategorySearch('');
   }, [
     scope,
     type,
   ]);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setSmartCategoryUsage(
+          readSmartCategoryUsage(user?.uid || '', type === 'income' ? 'income' : 'expense', scope),
+        );
+      }
+    });
+    return () => { active = false; };
+  }, [user?.uid, type, scope]);
 
   const sourceAccount = accounts.find((account) => account.id === accountId);
   const destinationAccount = accounts.find((account) => account.id === destinationAccountId);
@@ -3150,6 +3180,14 @@ export function MoneyActivityModal({
           true,
         );
         return;
+      }
+
+      // Record only a confirmed posted category, never queued/pending/failed entries.
+      // This preference is local to the device and cannot change posting outcomes.
+      if (user?.uid && type !== 'transfer' && selectedCategory) {
+        setSmartCategoryUsage(
+          recordSmartCategoryUsage(user.uid, type, scope, selectedCategory.id),
+        );
       }
 
       if (pendingFiles.length === 0) {
@@ -4080,6 +4118,48 @@ export function MoneyActivityModal({
           )}
         </legend>
 
+        <label className="bajetbn-v10-category-search">
+          <span>Find a category</span>
+          <input
+            type="search"
+            aria-label="Search categories"
+            placeholder="Search categories..."
+            value={categorySearch}
+            onChange={(event) => {
+              const nextSearch = event.target.value;
+              setCategorySearch(nextSearch);
+              if (nextSearch.trim()) setShowAllCategories(true);
+            }}
+          />
+        </label>
+
+        {!normalizedCategorySearch && (recentCategoryOptions.length > 0 || frequentCategoryOptions.length > 0) && (
+          <div className="bajetbn-v10-smart-picks" aria-label="Categories used on this device">
+            {([
+              { title: 'Recent on this device', choices: recentCategoryOptions },
+              { title: 'Frequent on this device', choices: frequentCategoryOptions },
+            ]).map(({ title, choices }) => choices.length > 0 && (
+              <div className="bajetbn-v10-usage-group" key={title}>
+                <span className="bajetbn-v10-usage-heading">{title}</span>
+                <div className="bajetbn-v10-usage-list">
+                  {choices.map((category) => (
+                    <button
+                      type="button"
+                      key={category.id}
+                      className={`bajetbn-v10-usage-item ${categoryId === category.id ? 'selected' : ''}`}
+                      aria-pressed={categoryId === category.id}
+                      onClick={() => setCategoryId(category.id)}
+                    >
+                      <CategoryIconVisual category={category} />
+                      <span>{category.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="bajetbn-reference-category-row">
           {primaryCategoryOptions.map((category) => (
             <button
@@ -4132,25 +4212,29 @@ export function MoneyActivityModal({
 
     {type !== 'transfer'
       && showAllCategories
-      && secondaryCategoryOptions.length > 0
+      && (moreCategoryOptions.length > 0 || Boolean(normalizedCategorySearch))
       && (
         <section className="bajetbn-reference-category-more-panel">
           <div className="bajetbn-reference-category-more-heading">
-            <strong>More categories</strong>
+            <strong>{normalizedCategorySearch ? 'Search results' : 'More categories'}</strong>
 
             <button
               type="button"
               className="text-button"
-              onClick={() =>
-                setShowAllCategories(false)
-              }
+              onClick={() => {
+                setShowAllCategories(false);
+                setCategorySearch('');
+              }}
             >
               Close
             </button>
           </div>
 
           <div className="bajetbn-reference-category-more-grid">
-            {secondaryCategoryOptions.map((category) => (
+            {moreCategoryOptions.length === 0 && (
+              <p className="bajetbn-v10-category-empty">No categories found. Try a different name.</p>
+            )}
+            {moreCategoryOptions.map((category) => (
               <button
                 type="button"
                 key={category.id}
@@ -4160,6 +4244,7 @@ export function MoneyActivityModal({
                 onClick={() => {
                   setCategoryId(category.id);
                   setShowAllCategories(false);
+                  setCategorySearch('');
                 }}
               >
                 <CategoryIconVisual category={category} />
