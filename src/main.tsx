@@ -11,6 +11,7 @@ import './styles/design-motion-v6.css';
 import './styles/design-motion-v6-stabilization.css';
 import './styles/design-motion-v6-money-repair.css';
 import './styles/design-stabilization-v7.css';
+import './styles/design-transaction-success-v8.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 

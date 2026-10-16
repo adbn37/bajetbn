@@ -3197,48 +3197,53 @@ export function MoneyActivityModal({
   };
 
   if (sharePrompt) {
+    const saved = sharePrompt.snapshot;
+    const isTransfer = saved.type === 'transfer';
+    const successTitle = initialValues
+      ? 'Transaction Corrected'
+      : isTransfer
+        ? 'Transfer Added'
+        : 'Transaction Added';
+    const successDetail = isTransfer
+      ? [saved.sourceAccountName || 'From account', saved.destinationAccountName || 'To account'].join(' → ')
+      : saved.category || (saved.type === 'income' ? 'Money in' : 'Money out');
     return <Modal
-      title="Money activity saved"
+      title={successTitle}
+      className="bajetbn-v8-transaction-success"
       onClose={() => {
         if (!busy) {
-          void finishSaved(
-            sharePrompt.message,
-            true,
-          );
+          void finishSaved(sharePrompt.message, true);
         }
       }}
     >
-      <div className="notice success">
-        <strong>Transaction saved</strong>
-        <span>
-          Share it to a WhatsApp contact or group if needed.
-        </span>
+      <div className="bajetbn-v8-success-body" role="status" aria-live="polite">
+        <div className="bajetbn-v8-success-icon" aria-hidden="true">
+          <svg viewBox="0 0 64 64" fill="none" focusable="false">
+            <circle cx="32" cy="32" r="31" fill="currentColor" fillOpacity="0.12" />
+            <path d="M18 33L28 43L47 23" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" className="bajetbn-v8-success-check" />
+          </svg>
+        </div>
+        <h3>{successTitle}</h3>
+        <strong className="bajetbn-v8-success-amount">
+          {formatMoney(saved.amountMinor, saved.currency)}
+        </strong>
+        <p className="bajetbn-v8-success-detail">{successDetail}</p>
+        <p className="bajetbn-v8-success-caption">Your money activity has been saved.</p>
       </div>
-
-      <div className="modal-actions">
+      <div className="bajetbn-v8-success-actions">
         <button
           type="button"
-          className="button secondary"
+          className="button primary bajetbn-v8-success-done"
           disabled={busy}
-          onClick={() =>
-            void finishSaved(
-              sharePrompt.message,
-              true,
-            )
-          }
+          onClick={() => void finishSaved(sharePrompt.message, true)}
         >
           Done
         </button>
-
         <button
           type="button"
-          className="button primary"
+          className="button secondary bajetbn-v8-success-share"
           disabled={busy}
-          onClick={() =>
-            shareTransactionToWhatsApp(
-              sharePrompt.snapshot,
-            )
-          }
+          onClick={() => shareTransactionToWhatsApp(saved)}
         >
           Share to WhatsApp
         </button>
