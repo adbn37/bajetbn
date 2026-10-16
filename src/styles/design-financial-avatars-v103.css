@@ -1,0 +1,82 @@
+/* Phase 10.3 revised: exact user-supplied logos, Spaces share the
+   on-device neon-glass visual language from the 84-SVG category icon pack. */
+.account-avatar.bajetbn-v103-account-avatar,
+.space-avatar.bajetbn-v103-space-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-radius: 13px;
+  background: radial-gradient(circle at 30% 18%, rgba(83,224,227,.16), transparent 55%), var(--surface);
+}
+.account-avatar.bajetbn-v103-account-avatar > img,
+.space-avatar.bajetbn-v103-space-avatar > img {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+.account-avatar.bajetbn-v103-account-avatar .bajetbn-v103-neon-art,
+.space-avatar.bajetbn-v103-space-avatar .bajetbn-v103-space-art {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  object-fit: contain;
+}
+.account-avatar.bajetbn-v103-account-avatar .bajetbn-v103-brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0;
+}
+.account-avatar.bajetbn-v103-account-avatar.account-institution-bibd { background: #ffffff; }
+.account-avatar.bajetbn-v103-account-avatar.account-institution-baiduri { background: #ffffff; }
+.account-avatar.bajetbn-v103-account-avatar.account-institution-taib {
+  background: #fcfcf8;
+}
+.account-avatar.bajetbn-v103-account-avatar.account-institution-standard_chartered_brunei {
+  background: #f6faff;
+}
+.account-avatar.bajetbn-v103-account-avatar.account-institution-tng { background: #ffffff; }
+.account-avatar.bajetbn-v103-account-avatar .bajetbn-v103-brand-fallback {
+  font-size: clamp(.56rem, 1.5vw, .75rem);
+  font-weight: 900;
+  letter-spacing: -.02em;
+  text-align: center;
+  color: var(--text);
+}
+.account-avatar.bajetbn-v103-account-avatar.account-institution-baiduri .bajetbn-v103-brand-fallback,
+.account-avatar.bajetbn-v103-account-avatar.account-institution-taib .bajetbn-v103-brand-fallback,
+.account-avatar.bajetbn-v103-account-avatar.account-institution-standard_chartered_brunei .bajetbn-v103-brand-fallback { color: #05685c; }
+.space-avatar.bajetbn-v103-space-avatar.sme { background: #071e21; }
+.space-avatar.bajetbn-v103-space-avatar.trip { background: #091c40; }
+.space-avatar.bajetbn-v103-space-avatar.household { background: #271344; }
+.space-avatar.bajetbn-v103-space-avatar.personal { background: #063e3d; }
+.space-avatar.bajetbn-v103-space-avatar.goal { background: #29204a; }
+/* Ensure small dropdown/account labels don't distort when showing wordmarks. */
+.bajetbn-v103-account-avatar, .bajetbn-v103-space-avatar {
+  line-height: 1;
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bajetbn-v103-account-avatar, .bajetbn-v103-space-avatar { transition: none !important; }
+}
+
+/* Exact supplied images have different original proportions. Keep the full
+   original artwork visible without forcing a square crop or hotlinking. */
+.account-avatar.bajetbn-v103-account-avatar .bajetbn-v103-brand-logo {
+  display: block;
+  object-fit: contain;
+  border-radius: 0;
+}
+.account-avatar.bajetbn-v103-account-avatar.account-institution-standard_chartered_brunei {
+  background: #1455ae;
+}
+.account-avatar.bajetbn-v103-account-avatar.account-institution-standard_chartered_brunei .bajetbn-v103-brand-logo {
+  object-fit: contain;
+}

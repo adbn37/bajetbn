@@ -5,6 +5,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import type { Space } from '../../types/models';
+import { SpaceAvatar } from './SpaceAvatar';
 import {
   getSpaceAvatarUrl,
   removeSpaceAvatar,
@@ -93,9 +94,6 @@ export function SpaceAvatarSettings({
     }
   }
 
-  const fallback =
-    space.name.trim().charAt(0).toUpperCase() || '?';
-
   return (
     <section className="panel space-settings-panel space-avatar-settings">
       <div className="panel-heading">
@@ -114,13 +112,13 @@ export function SpaceAvatarSettings({
       {message && <div className="notice success">{message}</div>}
 
       <div className="space-avatar-settings-row">
-        <div className="space-avatar space-avatar-preview">
-          {previewUrl ? (
+        {previewUrl ? (
+          <span className="space-avatar space-avatar-large space-avatar-preview">
             <img src={previewUrl} alt="" />
-          ) : (
-            fallback
-          )}
-        </div>
+          </span>
+        ) : (
+          <SpaceAvatar space={space} size="large" />
+        )}
 
         <div>
           <input

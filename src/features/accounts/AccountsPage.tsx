@@ -1563,7 +1563,7 @@ function AccountForm({
       <datalist id="brunei-institution-options">{options.map((item) => <option key={item.code} value={item.shortLabel}>{item.label}</option>)}</datalist>
       <small>Choose a common Brunei option or type another institution. Existing custom names still work.</small>
     </label>
-    <div className="institution-preset-grid span-2" aria-label="Common Brunei institutions">{options.filter((item) => item.code !== 'other').map((item) => <button type="button" className="institution-preset" key={item.code} onClick={() => setInstitution(item.shortLabel)}>{item.shortLabel}</button>)}</div>
+    <div className="institution-preset-grid span-2" aria-label="Common Brunei institutions">{options.filter((item) => item.code !== 'other').map((item) => <button type="button" className="institution-preset" key={item.code} onClick={() => setInstitution(item.shortLabel)}>{item.shortLabel}</button>)}{type === 'e_wallet' && <button type="button" className="institution-preset" onClick={() => setInstitution("Touch 'n Go eWallet")}>TNG eWallet</button>}</div>
     <fieldset className="account-color-field span-2">
       <legend>Account colour</legend>
 
