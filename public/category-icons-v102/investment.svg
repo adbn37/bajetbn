@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="investment">
+<defs>
+ <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#21103a"/><stop offset="0.58" stop-color="#0c112a"/><stop offset="1" stop-color="#071017"/></linearGradient>
+ <linearGradient id="lit" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#ffffff"/><stop offset=".27" stop-color="#e9a9ff"/><stop offset="1" stop-color="#7025ab"/></linearGradient>
+ <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e9a9ff" stop-opacity=".77"/><stop offset=".49" stop-color="#ffffff" stop-opacity=".14"/><stop offset="1" stop-color="#7025ab" stop-opacity=".56"/></linearGradient>
+ <radialGradient id="glow"><stop stop-color="#e9a9ff" stop-opacity=".33"/><stop offset="1" stop-color="#e9a9ff" stop-opacity="0"/></radialGradient>
+ <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"/></filter>
+</defs>
+<ellipse cx="47" cy="81" rx="33" ry="7" fill="#000" opacity=".24"/>
+<rect x="8" y="7" width="80" height="80" rx="22" fill="url(#tile)" stroke="url(#edge)" stroke-width="2.2"/>
+<path d="M16 41V26Q16 15 28 15H68Q80 15 80 27V37Q62 30 48 31Q30 31 16 41Z" fill="#fff" opacity=".065"/>
+<ellipse cx="48" cy="48" rx="35" ry="35" fill="url(#glow)"/>
+<g transform="translate(20 18) scale(2.32)" fill="none" stroke="#7025ab" stroke-opacity=".6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)"><path d="M4 20V6M4 20h17M7 16l4-5 4 2 6-9M16 4h5v5"/></g>
+<g transform="translate(20 17) scale(2.32)" fill="none" stroke="url(#lit)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V6M4 20h17M7 16l4-5 4 2 6-9M16 4h5v5"/></g>
+<path d="M17 70Q23 79 35 80" fill="none" stroke="#e9a9ff" stroke-width="1.5" opacity=".33" stroke-linecap="round"/>
+<circle cx="75" cy="23" r="2.6" fill="#e9a9ff" opacity=".85"/>
+</svg>

@@ -7,6 +7,15 @@ export const CATEGORY_ICONS = [
   'wallet', 'briefcase', 'gift', 'shop', 'laptop', 'home', 'food', 'cart', 'fuel', 'car',
   'bus', 'bill', 'phone', 'school', 'health', 'family', 'heart', 'bag', 'game', 'repeat',
   'tools', 'staff', 'building', 'bank', 'plane', 'dots',
+  'cash', 'coins', 'card', 'savings', 'investment', 'chart', 'calendar',
+  'receipt', 'target', 'piggy', 'coffee', 'restaurant', 'groceries', 'supermarket',
+  'delivery', 'train', 'taxi', 'parking', 'toll', 'maintenance', 'insurance',
+  'mortgage', 'furniture', 'laundry', 'electric', 'water', 'wifi', 'mobile',
+  'medical', 'dental', 'pharmacy', 'fitness', 'tuition', 'books', 'childcare',
+  'pets', 'donation', 'wedding', 'clothes', 'shoes', 'beauty', 'movie',
+  'music', 'streaming', 'subscription', 'salary', 'bonus', 'freelance', 'invoice',
+  'tax', 'marketing', 'shipping', 'warehouse', 'inventory', 'equipment', 'payroll',
+  'security', 'cloud',
 ] as const;
 export type CategoryIcon = (typeof CATEGORY_ICONS)[number];
 
