@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { AccountAvatar } from './AccountAvatar';
@@ -81,8 +81,12 @@ export function AccountsPage({
   const [error, setError] = useState('');
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<Account, AccountLifecycleAction> | null>(null);
 
+  const accountsLoadIdV108 = useRef(0);
+  const [sharedLoadingV108, setSharedLoadingV108] = useState(false);
   const load = async () => {
     if (!user) return;
+    const requestIdV108 = ++accountsLoadIdV108.current;
+    setSharedLoadingV108(false);
 
     setLoading(true);
     setError('');
@@ -158,7 +162,16 @@ export function AccountsPage({
         listSpaces(user.uid),
       ]);
 
+      if (requestIdV108 !== accountsLoadIdV108.current) return;
+      // Owned accounts are authoritative and can render while shared reads run.
+      setAccounts(ownedAccounts);
+      setSpaces(nextSpaces);
+      setSharedAccountContext({});
+      setLinkableBusinessAccounts([]);
+      setLoading(false);
+
       const sharedSmeSpaces = nextSpaces.filter((space) => space.type === 'sme' && space.ownerId !== user.uid && !space.archivedAt);
+      setSharedLoadingV108(sharedSmeSpaces.length > 0);
 
       const sharedGroups = await Promise.all(
         sharedSmeSpaces.map(async (space) => ({
@@ -221,6 +234,7 @@ export function AccountsPage({
         });
       });
 
+      if (requestIdV108 !== accountsLoadIdV108.current) return;
       setAccounts(
         [...ownedAccounts, ...sharedById.values()]
           .sort((a, b) => a.name.localeCompare(b.name)),
@@ -229,11 +243,12 @@ export function AccountsPage({
       setSharedAccountContext(nextSharedAccountContext);
       setSpaces(nextSpaces);
     } catch (nextError) {
-      setError(
-        getErrorMessage(nextError),
-      );
+      if (requestIdV108 === accountsLoadIdV108.current) setError(getErrorMessage(nextError));
     } finally {
-      setLoading(false);
+      if (requestIdV108 === accountsLoadIdV108.current) {
+        setLoading(false);
+        setSharedLoadingV108(false);
+      }
     }
   };
 
@@ -247,6 +262,7 @@ export function AccountsPage({
 
       return () => {
         cancelled = true;
+        ++accountsLoadIdV108.current;
       };
     },
     [spaceIdOverride, user],
@@ -470,6 +486,9 @@ export function AccountsPage({
       action={accountHeaderAction}
     />
     {error && !lifecycleDialog && <div className="notice error">{error}</div>}
+    {sharedLoadingV108 && !spaceIdOverride && (
+      <p className="muted" role="status">Loading shared Business accounts; totals will update when ready…</p>
+    )}
     <section className="account-summary">
       <div>
         <span>Total money available</span>
@@ -510,6 +529,8 @@ export function AccountsPage({
       )}
     {loading
       ? <div className="loading-panel">Loading Accounts…</div>
+      : active.length === 0 && sharedLoadingV108
+        ? <div className="loading-panel" role="status">Finishing shared Business account loading…</div>
       : active.length === 0
         ? <EmptyState
             title={embeddedSpace?.type === 'sme' && !canManageEmbeddedAccounts ? 'Business Accounts are owner-managed' : 'Add your first account'}

@@ -640,47 +640,35 @@ export function TransactionsPage() {
   const [labelFilter, setLabelFilter] = useState('all');
   const [search, setSearch] = useState('');
 
+  const transactionLoadIdV108 = useRef(0);
   const load = async () => {
     if (!user) return;
+    const requestIdV108 = ++transactionLoadIdV108.current;
 
     setLoading(true);
     setError('');
 
     try {
-      const [
-        nextAccounts,
-        nextTransactionAccounts,
-        nextSpaces,
-        nextCustomCategories,
-        nextAttachments,
-      ] = await Promise.all([
-        listPersonalAccounts(
-          user.uid,
-        ),
-        listAccounts(
-          user.uid,
-        ),
-        listSpaces(
-          user.uid,
-        ),
-        listAllCustomCategories(
-          user.uid,
-        ),
-        listAllTransactionAttachments(
-          user.uid,
-        ),
-      ]);
-
-      const transactionLists =
-        await Promise.all(
-          nextAccounts.map(
-            (account) =>
-              listTransactionsForOwnerAccount(
-                user.uid,
-                account.id,
-              ),
-          ),
-        );
+      const ownerIdV108 = user.uid;
+      const accountsTaskV108 = listPersonalAccounts(ownerIdV108);
+      // Begin history reads immediately when account IDs arrive, IN PARALLEL
+      // with independent account/Space/category queries.
+      const historyTaskV108 = accountsTaskV108.then((rows) => Promise.all(
+        rows.map((account) => listTransactionsForOwnerAccount(ownerIdV108, account.id)),
+      ));
+      void historyTaskV108.catch(() => undefined);
+      // Attachment counts are decoration. Do not block monetary history on them.
+      const attachmentTaskV108 = listAllTransactionAttachments(ownerIdV108)
+        .catch(() => [] as TransactionAttachment[]);
+      const [nextAccounts, nextTransactionAccounts, nextSpaces, nextCustomCategories] =
+        await Promise.all([
+          accountsTaskV108,
+          listAccounts(ownerIdV108),
+          listSpaces(ownerIdV108),
+          listAllCustomCategories(ownerIdV108),
+        ]);
+      const transactionLists = await historyTaskV108;
+      if (requestIdV108 !== transactionLoadIdV108.current) return;
 
       const transactionMap =
         new Map<
@@ -777,37 +765,6 @@ export function TransactionsPage() {
             },
           );
 
-      const personalTransactionIds =
-        new Set(
-          personalTransactions.map(
-            (item) =>
-              item.id,
-          ),
-        );
-
-      const nextAttachmentCounts:
-        Record<string, number> = {};
-
-      nextAttachments.forEach(
-        (attachment) => {
-          if (
-            !personalTransactionIds.has(
-              attachment.transactionId,
-            )
-          ) {
-            return;
-          }
-
-          nextAttachmentCounts[
-            attachment.transactionId
-          ] = (
-            nextAttachmentCounts[
-              attachment.transactionId
-            ] || 0
-          ) + 1;
-        },
-      );
-
       const personalMoneySpaces =
         nextSpaces.filter(
           (space) =>
@@ -873,17 +830,23 @@ export function TransactionsPage() {
         nextCustomCategories,
       );
 
-      setTransactionAttachmentCounts(
-        nextAttachmentCounts,
-      );
+      setTransactionAttachmentCounts({});
+      void attachmentTaskV108.then((nextAttachments) => {
+        if (requestIdV108 !== transactionLoadIdV108.current) return;
+        const visibleIds = new Set(personalTransactions.map((item) => item.id));
+        const counts: Record<string, number> = {};
+        for (const item of nextAttachments) {
+          if (!visibleIds.has(item.transactionId)) continue;
+          counts[item.transactionId] = (counts[item.transactionId] || 0) + 1;
+        }
+        setTransactionAttachmentCounts(counts);
+      });
     } catch (nextError) {
-      setError(
-        getErrorMessage(
-          nextError,
-        ),
-      );
+      if (requestIdV108 === transactionLoadIdV108.current) {
+        setError(getErrorMessage(nextError));
+      }
     } finally {
-      setLoading(false);
+      if (requestIdV108 === transactionLoadIdV108.current) setLoading(false);
     }
   };
 
@@ -896,6 +859,7 @@ export function TransactionsPage() {
 
     return () => {
       cancelled = true;
+      ++transactionLoadIdV108.current;
     };
   }, [user, lastCompletedAt]);
 

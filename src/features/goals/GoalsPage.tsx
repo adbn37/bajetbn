@@ -107,15 +107,10 @@ setContributions(
       }
 
       const warmedV107 = consumeWarmedGoalsV107(user.uid);
-      const goalsCallV107 = warmedV107
-        ? warmedV107.then((rows) => rows.goals)
-        : listAllGoals(user.uid);
-      const spacesCallV107 = warmedV107
-        ? warmedV107.then((rows) => rows.spaces)
-        : listSpaces(user.uid);
-      const contributionsCallV107 = warmedV107
-        ? warmedV107.then((rows) => rows.contributions)
-        : listGoalContributions(user.uid);
+      // Independent prefetch promises: goal cards never wait for contributions.
+      const goalsCallV107 = warmedV107?.goals || listAllGoals(user.uid);
+      const spacesCallV107 = warmedV107?.spaces || listSpaces(user.uid);
+      const contributionsCallV107 = warmedV107?.contributions || listGoalContributions(user.uid);
 
       // SavingsGoal.currentMinor is already authoritative. Render the cards as
       // soon as goal records arrive; contributions and Space labels follow.
@@ -579,6 +574,19 @@ function GoalGrid({
   onRestore?: (goal: SavingsGoal) => void;
   onUndo?: (contribution: GoalContribution) => void;
 }) {
+  // Contributions arrive later than goals. Index once instead of rescanning
+  // every history record for every goal on each render. Input is date-sorted.
+  const recentByGoalV108 = useMemo(() => {
+    const byGoal = new Map<string, GoalContribution[]>();
+    for (const contribution of contributions) {
+      const recent = byGoal.get(contribution.goalId) || [];
+      if (recent.length < 3) {
+        recent.push(contribution);
+        byGoal.set(contribution.goalId, recent);
+      }
+    }
+    return byGoal;
+  }, [contributions]);
   return (
     <section className="planning-card-grid">
       {goals.map((goal) => {
@@ -594,13 +602,7 @@ function GoalGrid({
               )
             : 0;
 
-        const recent =
-          contributions
-            .filter(
-              (item) =>
-                item.goalId === goal.id,
-            )
-            .slice(0, 3);
+        const recent = recentByGoalV108.get(goal.id) || [];
 
         const goalSpace =
           spaces.find(
