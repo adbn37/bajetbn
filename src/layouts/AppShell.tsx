@@ -10,6 +10,7 @@ import { listSpaces } from '../repositories/spaceRepository';
 import type { Space } from '../types/models';
 import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { planLabel } from '../services/entitlements';
+import { warmRouteV107 } from '../services/routeWarmupV107';
 import { ThemeStudioV2Runtime } from '../components/ThemeStudioV2Runtime';
 import { SidebarCustomizer } from '../components/SidebarCustomizer';
 import {
@@ -67,6 +68,44 @@ export function AppShell() {
   const { pendingCount, needsAttentionCount, syncing } = useOfflineSync();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Phase 10.7: warm only route JS and short-lived owner-scoped Goals data
+  // when the user expresses navigation intent. No account/balance persistence.
+  useEffect(() => {
+    if (!user?.uid) return;
+    const ownerId = user.uid;
+    const onIntent = (event: Event) => {
+      if (!(event.target instanceof Element)) return;
+      const anchor = event.target.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor) {
+        if (event.target.closest('button.mobile-bottom-add')) warmRouteV107('/transactions');
+        return;
+      }
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      warmRouteV107(url.pathname);
+      if (url.pathname === '/goals') {
+        void import('../services/goalsWarmupV107')
+          .then(({ warmGoalsV107 }) => warmGoalsV107(ownerId))
+          .catch(() => undefined);
+      }
+    };
+    document.addEventListener('pointerover', onIntent, { passive: true });
+    document.addEventListener('pointerdown', onIntent, { passive: true });
+    document.addEventListener('focusin', onIntent);
+    // Low-priority warming is intentionally limited to two small, common pages.
+    const idle = window.setTimeout(() => {
+      if (document.visibilityState === 'hidden' || window.location.pathname !== '/') return;
+      warmRouteV107('/goals');
+      warmRouteV107('/more');
+    }, 1600);
+    return () => {
+      window.clearTimeout(idle);
+      document.removeEventListener('pointerover', onIntent);
+      document.removeEventListener('pointerdown', onIntent);
+      document.removeEventListener('focusin', onIntent);
+    };
+  }, [user?.uid]);
 
 
   const visibleNavigation = useMemo(

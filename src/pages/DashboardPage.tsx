@@ -49,8 +49,9 @@ import { navigationIconSrc } from '../services/navigationIconAssets';
 import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
 
 // Load Money Activity only after a user opens Add. Keep Personal Home lightweight.
+const loadMoneyActivityFeatureV107 = () => import('../features/transactions/TransactionsPage');
 const MoneyActivityModal = lazy(() =>
-  import('../features/transactions/TransactionsPage').then((module) => ({
+  loadMoneyActivityFeatureV107().then((module) => ({
     default: module.MoneyActivityModal,
   })),
 );
@@ -354,6 +355,9 @@ export function DashboardPage() {
     showMoneyActivity,
     setShowMoneyActivity,
   ] = useState(false);
+
+  const [showQuickPreparingV107, setShowQuickPreparingV107] = useState(false);
+  const quickPrepareIdV107 = useRef(0);
 
   // BAJETBN_PHASE91_QUICK_CLOSE_GUARD: prevent the URL-triggered quick entry from reopening
   // after a close while React Router is removing the ?quick=1 parameter.
@@ -956,6 +960,28 @@ export function DashboardPage() {
       activeSpaces.length,
     ]);
 
+  // Warm the separately bundled money-entry feature and its options after Home settles.
+  // Do not block the initial Home render; failures fall back to click-time loading.
+  useEffect(() => {
+    const ownerId = user?.uid;
+    if (!ownerId || loading || quickOptionsLoaded || homeMode !== 'personal') return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void loadMoneyActivityFeatureV107().catch(() => undefined);
+      void Promise.all([listSpaces(ownerId), listAllCustomCategories(ownerId)])
+        .then(([nextSpaces, nextCategories]) => {
+          if (!active) return;
+          const nextActive = nextSpaces.filter((item) => !item.archivedAt);
+          if (!nextActive.some((item) => item.type === 'personal')) return;
+          setSpaces(nextActive);
+          setCustomCategories(nextCategories);
+          setQuickOptionsLoaded(true);
+        })
+        .catch(() => undefined);
+    }, 650);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [user?.uid, loading, homeMode, quickOptionsLoaded]);
+
   const openQuickActivity =
     useCallback(async (
       entryMode: 'activity' | 'move' | 'receipt' = 'activity',
@@ -979,11 +1005,17 @@ export function DashboardPage() {
           : 'expense',
       );
 
-      const ready =
-        await loadQuickOptions();
-
-      if (ready) {
-        setShowMoneyActivity(true);
+      const requestId = ++quickPrepareIdV107.current;
+      setShowQuickPreparingV107(true);
+      // Run code download in parallel with Firebase option fetch (rather than serially).
+      void loadMoneyActivityFeatureV107().catch(() => undefined);
+      try {
+        const ready = await loadQuickOptions();
+        if (requestId === quickPrepareIdV107.current && ready) {
+          setShowMoneyActivity(true);
+        }
+      } finally {
+        if (requestId === quickPrepareIdV107.current) setShowQuickPreparingV107(false);
       }
     }, [
       quickEntryAccounts.length,
@@ -1079,6 +1111,8 @@ export function DashboardPage() {
   ]);
 
   function closeQuickActivity() {
+    ++quickPrepareIdV107.current;
+    setShowQuickPreparingV107(false);
     // Keep this request claimed until navigation has cleared the query.
     quickOpenHandledRef.current = true;
 
@@ -2368,6 +2402,15 @@ export function DashboardPage() {
                 </button>
               )}
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {showQuickPreparingV107 && !showMoneyActivity && (
+        <Modal title="Add Money" onClose={closeQuickActivity}>
+          <div className="loading-panel bajetbn-v107-quick-preparing" role="status" aria-live="polite">
+            <p>Preparing your accounts, Spaces and categories…</p>
+            <small>You can close this while it loads.</small>
           </div>
         </Modal>
       )}

@@ -41,6 +41,8 @@ import type {
   SmePosSettings,
 } from '../../types/models';
 import { formatMoney } from '../../utils/money';
+import { bruneiMonthV107 } from '../../services/businessFinancialAuditV107';
+import { BusinessFinancialAuditPanelV107 } from './BusinessFinancialAuditPanelV107';
 import { businessShortcutIconV106 } from '../../services/smartCategoryIconV106';
 import {
   canAccessInternalAdbnTechSpace,
@@ -85,9 +87,7 @@ import {
 } from '../sme-pos/StandardPosWorkspace';
 
 function monthPrefix() {
-  return new Date()
-    .toISOString()
-    .slice(0, 7);
+  return bruneiMonthV107();
 }
 
 function roleLabel(
@@ -220,6 +220,9 @@ export function BusinessHomePage() {
   const [transactions, setTransactions] =
     useState<FinancialTransaction[]>([]);
 
+  // Raw callable-fetched records for read-only status, reversal and duplicate checks.
+  const [auditTransactionsV107, setAuditTransactionsV107] = useState<FinancialTransaction[]>([]);
+
   const [posRole, setPosRole] =
     useState<SmePosRole | null>(null);
 
@@ -266,6 +269,7 @@ export function BusinessHomePage() {
 
     setLoading(true);
     setError('');
+    setAuditTransactionsV107([]);
 
     try {
       const nextSpace =
@@ -392,6 +396,7 @@ export function BusinessHomePage() {
           spaceId,
         );
 
+      setAuditTransactionsV107(nextTransactions);
       setTransactions(
         nextTransactions.filter(
           (item) =>
@@ -479,6 +484,7 @@ export function BusinessHomePage() {
             spaceId,
           );
 
+        setAuditTransactionsV107(nextTransactions);
         setTransactions(
           nextTransactions.filter(
             (item) =>
@@ -493,15 +499,21 @@ export function BusinessHomePage() {
   const currentMonth =
     monthPrefix();
 
+  // Currency guard: different money units cannot be added without an exchange rate.
+  const primaryCurrencyTransactionsV107 = useMemo(
+    () => transactions.filter((item) => item.currency === space?.currency),
+    [transactions, space?.currency],
+  );
+
   const monthlyRows =
     useMemo(
       () =>
-        transactions.filter(
+        primaryCurrencyTransactionsV107.filter(
           (item) =>
             item.transactionDate
               .startsWith(currentMonth),
         ),
-      [currentMonth, transactions],
+      [currentMonth, primaryCurrencyTransactionsV107],
     );
 
   const moneyIn =
@@ -539,7 +551,7 @@ export function BusinessHomePage() {
   const allTimeMoneyIn =
     useMemo(
       () =>
-        transactions
+        primaryCurrencyTransactionsV107
           .filter(
             (item) =>
               item.type === 'income',
@@ -549,13 +561,13 @@ export function BusinessHomePage() {
               sum + item.amountMinor,
             0,
           ),
-      [transactions],
+      [primaryCurrencyTransactionsV107],
     );
 
   const allTimeMoneyOut =
     useMemo(
       () =>
-        transactions
+        primaryCurrencyTransactionsV107
           .filter(
             (item) =>
               item.type === 'expense',
@@ -565,7 +577,7 @@ export function BusinessHomePage() {
               sum + item.amountMinor,
             0,
           ),
-      [transactions],
+      [primaryCurrencyTransactionsV107],
     );
 
   const businessTransactionTotal =
@@ -1962,6 +1974,13 @@ export function BusinessHomePage() {
             </div>
             <small>All-time = this month + other dates. Based on posted money in/out, not bank balances. Invoice status events in the timeline are not counted again.</small>
           </div>
+          <BusinessFinancialAuditPanelV107
+            transactions={auditTransactionsV107}
+            currency={space.currency}
+            currentMonth={currentMonth}
+            dashboardAllTimeNet={businessTransactionTotal}
+            dashboardMonthNet={monthNet}
+          />
         </section>
       ) : (
         <section className="business-home-v115-role-hero">

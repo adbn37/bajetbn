@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
 import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
@@ -21,6 +21,7 @@ import {
 } from '../../repositories/spaceRepository';
 import type { GoalContribution, SavingsGoal, Space } from '../../types/models';
 import { getErrorMessage } from '../../utils/errors';
+import { consumeWarmedGoalsV107 } from '../../services/goalsWarmupV107';
 import { formatMoney, toMinorUnits } from '../../utils/money';
 
 /*
@@ -44,12 +45,17 @@ export function GoalsPage({
 } = {}) {
   const { user, profile } = useAuth();
   const [goals, setGoals] = useState<SavingsGoal[]>([]); const [spaces, setSpaces] = useState<Space[]>([]); const [contributions, setContributions] = useState<GoalContribution[]>([]);
+  const goalsLoadRequestV107 = useRef(0);
+  const [goalRecordsReadyV107, setGoalRecordsReadyV107] = useState(false);
+  const [goalHistoryLoadingV107, setGoalHistoryLoadingV107] = useState(true);
   const [goalScope, setGoalScope] = useState<'all' | 'personal' | 'spaces'>('all');
   const [editing, setEditing] = useState<SavingsGoal | null>(null); const [contributing, setContributing] = useState<SavingsGoal | null>(null); const [showForm, setShowForm] = useState(false); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<SavingsGoal, GoalLifecycleAction> | null>(null);
   const [undoDialog, setUndoDialog] = useState<ActionConfirmState<GoalContribution> | null>(null);
   const load = async () => {
     if (!user) return;
+    const requestIdV107 = ++goalsLoadRequestV107.current;
+    setGoalHistoryLoadingV107(true);
 
     setError('');
 
@@ -84,7 +90,9 @@ export function GoalsPage({
             ),
           );
 
+        if (requestIdV107 !== goalsLoadRequestV107.current) return;
         setGoals(nextGoals);
+        setGoalRecordsReadyV107(true);
         setSpaces([targetSpace]);
 setContributions(
           nextContributions.filter(
@@ -98,19 +106,34 @@ setContributions(
         return;
       }
 
-      const [
-        nextGoals,
-        nextSpaces,
-        nextContributions,
-      ] = await Promise.all([
-        listAllGoals(user.uid),
-        listSpaces(user.uid),
-        listGoalContributions(user.uid),
+      const warmedV107 = consumeWarmedGoalsV107(user.uid);
+      const goalsCallV107 = warmedV107
+        ? warmedV107.then((rows) => rows.goals)
+        : listAllGoals(user.uid);
+      const spacesCallV107 = warmedV107
+        ? warmedV107.then((rows) => rows.spaces)
+        : listSpaces(user.uid);
+      const contributionsCallV107 = warmedV107
+        ? warmedV107.then((rows) => rows.contributions)
+        : listGoalContributions(user.uid);
+
+      // SavingsGoal.currentMinor is already authoritative. Render the cards as
+      // soon as goal records arrive; contributions and Space labels follow.
+      void goalsCallV107.then((records) => {
+        if (requestIdV107 !== goalsLoadRequestV107.current) return;
+        setGoals(records);
+        setGoalRecordsReadyV107(true);
+      }).catch(() => undefined);
+
+      const [nextGoals, nextSpaces, nextContributions] = await Promise.all([
+        goalsCallV107, spacesCallV107, contributionsCallV107,
       ]);
+      if (requestIdV107 !== goalsLoadRequestV107.current) return;
 
       // One goal record powers the central Goals view and every Space view.
       // Existing Plan Space IDs remain intact so legacy Plan workspaces still work.
       setGoals(nextGoals);
+      setGoalRecordsReadyV107(true);
       setSpaces(
         [...nextSpaces].sort(
           (a, b) =>
@@ -120,15 +143,20 @@ setContributions(
       );
       setContributions(nextContributions);
     } catch (nextError) {
-      setError(
-        getErrorMessage(nextError),
-      );
+      if (requestIdV107 === goalsLoadRequestV107.current) setError(getErrorMessage(nextError));
+    } finally {
+      if (requestIdV107 === goalsLoadRequestV107.current) setGoalHistoryLoadingV107(false);
     }
   };
 
   useEffect(
     () => {
+      setGoals([]);
+      setSpaces([]);
+      setContributions([]);
+      setGoalRecordsReadyV107(false);
       void load();
+      return () => { ++goalsLoadRequestV107.current; };
     },
     [spaceIdOverride, user],
   );
@@ -363,7 +391,10 @@ setContributions(
       </div>
     )}
 
-    {visibleGoals.length === 0 && (
+    {!goalRecordsReadyV107 && <p className="bajetbn-v107-goals-loading" role="status">Loading your savings goals…</p>}
+    {goalRecordsReadyV107 && goalHistoryLoadingV107 && <p className="bajetbn-v107-goals-loading" role="status">Updating goal details…</p>}
+
+    {visibleGoals.length === 0 && goalRecordsReadyV107 && (
       <div className="notice">
         {active.length === 0
           ? 'No savings goals yet. Use Add savings goal to create your first target.'

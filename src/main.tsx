@@ -18,6 +18,7 @@ import './styles/design-financial-avatars-v103.css';
 import './styles/design-navigation-icons-v104.css';
 import './styles/design-mobile-nav-activity-v105.css';
 import './styles/design-smart-category-business-v106.css';
+import './styles/design-business-audit-speed-v107.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 
