@@ -3,6 +3,8 @@ import {
   useEffect,
   useMemo,
   useState,
+  lazy,
+  Suspense,
 } from 'react';
 import {
   Link,
@@ -51,40 +53,34 @@ import {
 import {
   BusinessActivityTimeline,
 } from './BusinessActivityTimeline';
-import {
-  AdbnTechIntegrationHealthWorkspace,
-} from './AdbnTechIntegrationHealthWorkspace';
-import {
-  AdbnTechMirrorWorkspace,
-} from './AdbnTechMirrorWorkspace';
-import {
-  AdbnTechPaymentsWorkspace,
-} from './AdbnTechPaymentsWorkspace';
-import {
-  AdbnTechPurchasesWorkspace,
-} from './AdbnTechPurchasesWorkspace';
-import {
-  AdbnTechExpensesWorkspace,
-} from './AdbnTechExpensesWorkspace';
-import {
-  AdbnTechInventoryWorkspace,
-} from './AdbnTechInventoryWorkspace';
-import {
-  BusinessReportsWorkspace,
-} from './BusinessReportsWorkspace';
-import { AccountsPage } from '../accounts/AccountsPage';
-import { CommitmentsPage } from '../commitments/CommitmentsPage';
+
+
+
+
+
+
+
+
+
 import { SpaceAvatar } from '../spaces/SpaceAvatar';
 import {
   SmeOperationalAttentionPanel,
 } from '../spaces/SmeOperationalAttentionPanel';
-import {
-  MarketplaceConsignmentPosWorkspace,
-  type MarketplaceManagementTab,
-} from '../sme-pos/MarketplaceConsignmentPosWorkspace';
-import {
-  StandardPosWorkspace,
-} from '../sme-pos/StandardPosWorkspace';
+import type { MarketplaceManagementTab } from '../sme-pos/MarketplaceConsignmentPosWorkspace';
+
+
+// Keep the regular Business Home light. Operational workspaces load only when opened.
+const AdbnTechIntegrationHealthWorkspace = lazy(() => import('./AdbnTechIntegrationHealthWorkspace').then((module) => ({ default: module.AdbnTechIntegrationHealthWorkspace })));
+const AdbnTechMirrorWorkspace = lazy(() => import('./AdbnTechMirrorWorkspace').then((module) => ({ default: module.AdbnTechMirrorWorkspace })));
+const AdbnTechPaymentsWorkspace = lazy(() => import('./AdbnTechPaymentsWorkspace').then((module) => ({ default: module.AdbnTechPaymentsWorkspace })));
+const AdbnTechPurchasesWorkspace = lazy(() => import('./AdbnTechPurchasesWorkspace').then((module) => ({ default: module.AdbnTechPurchasesWorkspace })));
+const AdbnTechExpensesWorkspace = lazy(() => import('./AdbnTechExpensesWorkspace').then((module) => ({ default: module.AdbnTechExpensesWorkspace })));
+const AdbnTechInventoryWorkspace = lazy(() => import('./AdbnTechInventoryWorkspace').then((module) => ({ default: module.AdbnTechInventoryWorkspace })));
+const BusinessReportsWorkspace = lazy(() => import('./BusinessReportsWorkspace').then((module) => ({ default: module.BusinessReportsWorkspace })));
+const AccountsPage = lazy(() => import('../accounts/AccountsPage').then((module) => ({ default: module.AccountsPage })));
+const CommitmentsPage = lazy(() => import('../commitments/CommitmentsPage').then((module) => ({ default: module.CommitmentsPage })));
+const MarketplaceConsignmentPosWorkspace = lazy(() => import('../sme-pos/MarketplaceConsignmentPosWorkspace').then((module) => ({ default: module.MarketplaceConsignmentPosWorkspace })));
+const StandardPosWorkspace = lazy(() => import('../sme-pos/StandardPosWorkspace').then((module) => ({ default: module.StandardPosWorkspace })));
 
 function monthPrefix() {
   return bruneiMonthV107();
@@ -1387,6 +1383,7 @@ export function BusinessHomePage() {
         )}
       </nav>
 
+      <Suspense fallback={<section className="panel" role="status" aria-live="polite">Loading Business workspace…</section>}>
       {workspaceView === 'adbn_integration'
         && canManageAdbnTechConnection
         ? (
@@ -2075,6 +2072,7 @@ export function BusinessHomePage() {
       </div>
         </>
       )}
+      </Suspense>
     </main>
   );
 }
