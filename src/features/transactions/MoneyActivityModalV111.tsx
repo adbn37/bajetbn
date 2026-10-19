@@ -1,0 +1,3278 @@
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ActionConfirmModal, type ActionConfirmState } from '../../components/ActionConfirmModal';
+import { EmptyState } from '../../components/EmptyState';
+import { LifecycleConfirmModal, type LifecycleConfirmState } from '../../components/LifecycleConfirmModal';
+import { Modal } from '../../components/Modal';
+import { PageHeader } from '../../components/PageHeader';
+import { PaymentMethodField } from '../../components/PaymentMethodField';
+import {
+  institutionDisplay,
+  paymentMethodLabel,
+  suggestedPaymentMethod,
+} from '../../config/bruneiMoneyOptions';
+import { useAuth } from '../../contexts/AuthContext';
+import { useOfflineSync } from '../../contexts/OfflineSyncContext';
+import { shareTransactionToWhatsApp, type TransactionShareSnapshot } from '../../services/transactionShare';
+import {
+  accountColorClass,
+  getAccountColor,
+} from '../../services/accountVisualPreferences';
+import { SpaceAvatar } from '../spaces/SpaceAvatar';
+import { AccountAvatar } from '../accounts/AccountAvatar';
+import {
+  CATEGORY_COLORS,
+  CATEGORY_ICONS,
+  DEFAULT_TRANSACTION_CATEGORIES,
+  categoryApplies,
+  categoryIconGlyph,
+  suggestedCategoryIcon,
+} from '../categories/defaultCategories';
+import {
+  accountSupportsPersonalUse,
+  businessSpaceIdsForAccount,
+  listAccounts,
+  listPersonalAccounts,
+} from '../../repositories/accountRepository';
+import { reverseSharedBillPayment } from '../../repositories/collaborationRepository';
+import { createCategory, listAllCustomCategories, updateCategory } from '../../repositories/categoryRepository';
+import { manageCategory } from '../../repositories/lifecycleRepository';
+import { CATEGORY_VISUAL_EVENT, getCategoryCustomIcon, prepareCategoryCustomIcon, removeCategoryCustomIcon, setCategoryCustomIcon } from '../../services/categoryVisualPreferences';
+import { listSpaces } from '../../repositories/spaceRepository';
+import {
+  getTransactionAttachmentUrl,
+  listAllTransactionAttachments,
+  listTransactionAttachments,
+  listTransactionsForOwnerAccount,
+  postTransaction,
+  reviewFinancialApprovalRequest,
+  removeTransactionAttachment,
+  reverseTransaction,
+  updateTransactionDetails,
+  uploadTransactionAttachment,
+  type PostTransactionOutcome,
+  type TransactionInput,
+} from '../../repositories/transactionRepository';
+import type {
+  Account,
+  CategoryKind,
+  CategoryScope,
+  FinancialApprovalRequest,
+  FinancialTransaction,
+  PaymentMethodCode,
+  Space,
+  TransactionAttachment,
+  TransactionCategory,
+} from '../../types/models';
+import { getErrorMessage } from '../../utils/errors';
+import { formatMoney, toMinorUnits } from '../../utils/money';
+import { categoryIconAsset } from '../../services/categoryIconAssets';
+import { resolveSmartCategoryIconAsset } from '../../services/smartCategoryIconV106';
+import { readSmartCategoryUsage, recordSmartCategoryUsage, smartCategorySuggestions } from '../../services/smartCategoryUsage';
+
+const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
+const statusLabels = { posted: 'Saved', reversed: 'Undone' } as const;
+
+function activityKindLabel(
+  item: FinancialTransaction,
+): string {
+  if (item.type !== 'reversal') {
+    return typeLabels[item.type];
+  }
+
+  if (item.originalType === 'income') {
+    return 'Undo Money in';
+  }
+
+  if (item.originalType === 'expense') {
+    return 'Undo Money out';
+  }
+
+  if (item.originalType === 'transfer') {
+    return 'Undo Move money';
+  }
+
+  return 'Undo';
+}
+
+function activityStatusLabel(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'Undo record'
+    : statusLabels[item.status];
+}
+
+function activityStatusClass(
+  item: FinancialTransaction,
+): string {
+  return item.type === 'reversal'
+    ? 'reversal'
+    : item.status;
+}
+
+const financialApprovalActionLabels: Record<
+  FinancialApprovalRequest['action'],
+  string
+> = {
+  manual_expense: 'Business expense',
+  account_transfer: 'Account transfer',
+  bill_payment: 'Bill payment',
+  instalment_payment: 'Instalment payment',
+  marketplace_seller_payout: 'Seller payout',
+  pos_refund_or_sensitive_money_out: 'Sensitive POS money out',
+};
+
+type PrimaryType = 'income' | 'expense' | 'transfer';
+type TypeFilter = 'all' | PrimaryType;
+type StatusFilter = 'all' | 'posted' | 'reversed';
+type PeriodFilter = 'current_month' | 'all';
+
+function dateInTimezone(timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((item) => [item.type, item.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function monthPrefix(timezone: string): string {
+  return dateInTimezone(timezone).slice(0, 7);
+}
+
+function spaceScope(space?: Space): Exclude<CategoryScope, 'both'> {
+  return space?.type === 'sme' ? 'business' : 'personal';
+}
+
+const spaceTypeLabels: Record<Space['type'], string> = {
+  personal: 'Personal',
+  household: 'Household',
+  sme: 'Business',
+  trip: 'Trip',
+  goal: 'Plan',
+  collection: 'Collection',
+  vehicle: 'Vehicle',
+  property: 'Property',
+  project: 'Project',
+  event: 'Event',
+  asset: 'Asset',
+  custom: 'Custom',
+};
+
+function spaceDisplayLabel(space: Space): string {
+  if (space.type === 'personal') return 'Personal';
+  return [space.name, spaceTypeLabels[space.type], space.currency].join(' - ');
+}
+
+function accountContextLabel(
+  account: Account,
+  spaces: Space[],
+): string {
+  const contexts: string[] = [];
+
+  if (
+    accountSupportsPersonalUse(
+      account,
+    )
+  ) {
+    contexts.push('Personal');
+  }
+
+  const businessNames =
+    businessSpaceIdsForAccount(
+      account,
+    )
+      .map(
+        (spaceId) =>
+          spaces.find(
+            (space) =>
+              space.id === spaceId
+              && space.type === 'sme',
+          )?.name,
+      )
+      .filter(
+        (name): name is string =>
+          Boolean(name),
+      );
+
+  businessNames.forEach(
+    (name) => {
+      if (!contexts.includes(name)) {
+        contexts.push(name);
+      }
+    },
+  );
+
+  if (contexts.length > 0) {
+    return contexts.join(' + ');
+  }
+
+  return account.classification === 'business'
+    ? 'Business'
+    : 'Personal';
+}
+
+export function MoneyScopeSwitch({
+  mode,
+  businessSpaces,
+  currentBusinessId,
+  compact = false,
+  openAddOnBusiness = false,
+}: {
+  mode: 'personal' | 'business';
+  businessSpaces: Space[];
+  currentBusinessId?: string;
+  compact?: boolean;
+  openAddOnBusiness?: boolean;
+}) {
+  const activeBusiness =
+    businessSpaces.find(
+      (space) =>
+        space.id === currentBusinessId,
+    ) || businessSpaces[0];
+
+  const businessMoneyPath =
+    (space: Space) =>
+      '/spaces/'
+      + space.id
+      + '/business/money'
+      + (
+        openAddOnBusiness
+          ? '?quick=1'
+          : ''
+      );
+
+  return (
+    <div
+      className={
+        'money-scope-switch'
+        + (compact ? ' compact' : '')
+      }
+      aria-label="Money Activity scope"
+    >
+      <Link
+        className={
+          mode === 'personal'
+            ? 'active'
+            : ''
+        }
+        to="/transactions"
+      >
+        Personal
+      </Link>
+
+      {businessSpaces.length === 0 ? (
+        <span
+          className="money-scope-disabled"
+          title="Create or join a Business Space to use Business Money Activity."
+        >
+          Business
+        </span>
+      ) : businessSpaces.length === 1 ? (
+        <Link
+          className={
+            mode === 'business'
+              ? 'active'
+              : ''
+          }
+          to={
+            businessMoneyPath(
+              businessSpaces[0],
+            )
+          }
+        >
+          {mode === 'business'
+            ? businessSpaces[0].name
+            : 'Business'}
+        </Link>
+      ) : (
+        <details
+          className={
+            mode === 'business'
+              ? 'active'
+              : ''
+          }
+        >
+          <summary>
+            {mode === 'business'
+              && activeBusiness
+                ? activeBusiness.name
+                : 'Business'}
+          </summary>
+
+          <div className="money-scope-business-list">
+            {businessSpaces.map(
+              (space) => (
+                <Link
+                  key={space.id}
+                  className={
+                    space.id === currentBusinessId
+                      ? 'active'
+                      : ''
+                  }
+                  to={businessMoneyPath(space)}
+                >
+                  {space.name}
+                </Link>
+              ),
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function transactionTimestampMillis(value: unknown): number {
+  if (value == null) return 0;
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value)
+      ? value
+      : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+
+    return Number.isFinite(parsed)
+      ? parsed
+      : 0;
+  }
+
+  if (typeof value !== 'object') {
+    return 0;
+  }
+
+  const timestamp = value as {
+    toMillis?: () => number;
+    seconds?: number | string;
+    nanoseconds?: number | string;
+    _seconds?: number | string;
+    _nanoseconds?: number | string;
+  };
+
+  if (typeof timestamp.toMillis === 'function') {
+    const millis = timestamp.toMillis();
+
+    return Number.isFinite(millis)
+      ? millis
+      : 0;
+  }
+
+  const seconds = Number(
+    timestamp.seconds
+    ?? timestamp._seconds,
+  );
+
+  if (!Number.isFinite(seconds)) {
+    return 0;
+  }
+
+  const nanoseconds = Number(
+    timestamp.nanoseconds
+    ?? timestamp._nanoseconds
+    ?? 0,
+  );
+
+  return (
+    seconds * 1000
+    + (
+      Number.isFinite(nanoseconds)
+        ? nanoseconds / 1_000_000
+        : 0
+    )
+  );
+}
+
+function formatTransactionAuditTime(
+  value: unknown,
+): string {
+  const millis =
+    transactionTimestampMillis(value);
+
+  if (!millis) return '';
+
+  return new Date(millis).toLocaleString();
+}
+
+function transactionCategorySnapshot(item: FinancialTransaction): TransactionCategory {
+  return {
+    id: item.categoryId || `legacy-${item.category}`,
+    ownerId: null,
+    name: item.category || typeLabels[item.type],
+    kind: item.originalType === 'income' || item.type === 'income' ? 'income' : 'expense',
+    scope: item.categoryScope || 'both',
+    icon: item.categoryIcon || (item.type === 'transfer' ? 'transfer' : item.type === 'reversal' ? 'reversal' : 'dots'),
+    color: item.categoryColor || 'slate',
+    isSystem: !item.categoryId?.startsWith('custom-'),
+    archivedAt: null,
+  };
+}
+
+function accountEffectForPreview(account: Account, type: PrimaryType, amountMinor: number, destination = false): number {
+  const flow = type === 'income' || (type === 'transfer' && destination) ? 'in' : 'out';
+  const assetEffect = flow === 'in' ? amountMinor : -amountMinor;
+  return account.type === 'credit_card' ? -assetEffect : assetEffect;
+}
+
+
+function resolveTransferPostingSpaceId(
+  source: Account | undefined,
+  destination: Account | undefined,
+  fallbackSpaceId: string,
+): string {
+  const businessOnlySpaceIds = (
+    account: Account | undefined,
+  ): string[] => {
+    if (
+      !account
+      || account.classification !== 'business'
+      || accountSupportsPersonalUse(account)
+    ) {
+      return [];
+    }
+
+    const ids =
+      businessSpaceIdsForAccount(account);
+
+    if (ids.length === 0) {
+      throw new Error(
+        'This Business account is not linked to a Business Space yet. Link it before moving money to or from Personal.',
+      );
+    }
+
+    return ids;
+  };
+
+  const sourceIds =
+    businessOnlySpaceIds(source);
+
+  const destinationIds =
+    businessOnlySpaceIds(destination);
+
+  if (
+    sourceIds.length === 0
+    && destinationIds.length === 0
+  ) {
+    return fallbackSpaceId;
+  }
+
+  if (
+    sourceIds.length > 0
+    && destinationIds.length > 0
+  ) {
+    const sharedIds =
+      sourceIds.filter(
+        (id) =>
+          destinationIds.includes(id),
+      );
+
+    if (sharedIds.length === 0) {
+      throw new Error(
+        'Move money between different Business Spaces is not supported in one transfer. Use a Personal account with one Business, or choose two accounts from the same Business.',
+      );
+    }
+
+    return sharedIds.includes(
+      fallbackSpaceId,
+    )
+      ? fallbackSpaceId
+      : sharedIds[0];
+  }
+
+  const businessIds =
+    sourceIds.length > 0
+      ? sourceIds
+      : destinationIds;
+
+  return businessIds.includes(
+    fallbackSpaceId,
+  )
+    ? fallbackSpaceId
+    : businessIds[0];
+}
+
+const MAX_TRANSACTION_LABELS = 8;
+const MAX_TRANSACTION_LABEL_LENGTH = 32;
+
+function normalizeTransactionLabel(value: string): string {
+  return value
+    .trim()
+    .replace(/^#+/, '')
+    .replace(/\s+/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '')
+    .slice(0, MAX_TRANSACTION_LABEL_LENGTH);
+}
+
+function parseTransactionLabels(value: string): string[] {
+  const labels: string[] = [];
+  const seen = new Set<string>();
+
+  value.split(',').forEach((part) => {
+    const label = normalizeTransactionLabel(part);
+
+    if (!label) return;
+
+    const key = label.toLowerCase();
+
+    if (seen.has(key)) return;
+
+    seen.add(key);
+    labels.push(label);
+  });
+
+  return labels.slice(0, MAX_TRANSACTION_LABELS);
+}
+
+function transactionLabelText(label: string): string {
+  return `#${label}`;
+}
+
+function transactionHasManagedSource(item: FinancialTransaction): boolean {
+  const linked =
+    item as FinancialTransaction
+    & Record<string, unknown>;
+
+  return Boolean(
+    item.commitmentId
+    || item.commitmentPaymentId
+    || item.businessInvoiceId
+    || item.businessInvoicePaymentId
+    || item.spaceWorkItemId
+    || item.sharedBillAssignmentId
+    || item.sharedBillPaymentId
+    || item.recurringTemplateId
+    || item.recurringRunId
+    || linked.smePosSaleId
+    || linked.posSaleId
+    || linked.smePosReturnId
+    || linked.smePosPayoutId
+    || linked.reservationId
+  );
+}
+
+function CategoryIconVisual({ category, className = '', transaction }: { category: TransactionCategory; className?: string; transaction?: FinancialTransaction; }) {
+  const { user } = useAuth();
+  const [customIcon, setCustomIcon] = useState('');
+  useEffect(() => {
+    const refresh = () => setCustomIcon(user ? getCategoryCustomIcon(user.uid, category.id) : '');
+    refresh(); window.addEventListener(CATEGORY_VISUAL_EVENT, refresh);
+    return () => window.removeEventListener(CATEGORY_VISUAL_EVENT, refresh);
+  }, [category.id, user]);
+  const builtIn = transaction
+    ? resolveSmartCategoryIconAsset({
+      ...transaction,
+      categoryIcon: category.icon === 'dots' ? transaction.categoryIcon : category.icon,
+    })
+    : categoryIconAsset(category.icon);
+  return <span className={`category-icon category-${category.color} bajetbn-v102-neon-icon` + (className ? ` ${className}` : '')}>{customIcon ? <img className="bajetbn-v102-custom-icon" src={customIcon} alt="" /> : builtIn ? <img className="bajetbn-v102-vector-icon" src={builtIn} alt="" loading="lazy" decoding="async" /> : categoryIconGlyph(category.icon)}</span>;
+}
+
+function CategoryBadge({ category }: { category: TransactionCategory }) {
+  return <span className="category-badge"><CategoryIconVisual category={category} className="small" /><span>{category.name}</span></span>;
+}
+
+export function MoneyActivityModal({
+  accounts,
+  spaces,
+  categories,
+  labelSuggestions,
+  timezone,
+  online,
+  initialType,
+  entryMode = 'activity',
+  initialValues,
+  initialSpaceId,
+  lockedSpaceId,
+  onCategoriesChanged,
+  onClose,
+  onSubmit,
+  onComplete,
+}: {
+  accounts: Account[];
+  spaces: Space[];
+  categories: TransactionCategory[];
+  labelSuggestions?: string[];
+  timezone: string;
+  online: boolean;
+  initialType?: PrimaryType;
+  entryMode?: 'activity' | 'move' | 'receipt';
+  initialValues?: TransactionInput;
+  initialSpaceId?: string;
+  lockedSpaceId?: string;
+  onCategoriesChanged?: () => Promise<TransactionCategory[]>;
+  onClose: () => void;
+  onSubmit: (values: TransactionInput) => Promise<PostTransactionOutcome>;
+  onComplete: (message: string, refresh: boolean) => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const maxAttachmentFiles = 5;
+  const maxAttachmentSizeBytes = 10 * 1024 * 1024;
+  const chooseFilesRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const [type, setType] = useState<PrimaryType>(
+    entryMode === 'move'
+      ? 'transfer'
+      : entryMode === 'receipt'
+        ? 'expense'
+        : initialValues?.type || initialType || 'expense',
+  );
+  const requestedInitialSpaceId =
+    initialValues?.spaceId
+    || initialSpaceId
+    || lockedSpaceId
+    || '';
+  const preferredPersonalSpaceId = spaces.find((space) => space.type === 'personal')?.id || '';
+  const resolvedInitialSpaceId = requestedInitialSpaceId && spaces.some((space) => space.id === requestedInitialSpaceId)
+    ? requestedInitialSpaceId
+    : preferredPersonalSpaceId || spaces[0]?.id || '';
+  const [spaceId, setSpaceId] = useState(resolvedInitialSpaceId);
+  const [spaceChooserOpen, setSpaceChooserOpen] = useState(false);
+  const selectedSpace =
+    spaces.find(
+      (space) =>
+        space.id === spaceId,
+    );
+
+  const personalEntrySpaces =
+    spaces.filter(
+      (space) =>
+        space.type !== 'sme',
+    );
+
+  const businessEntrySpaces =
+    spaces.filter(
+      (space) =>
+        space.type === 'sme',
+    );
+
+  const entryOwnerMode:
+    'personal' | 'business' =
+      selectedSpace?.type === 'sme'
+        ? 'business'
+        : 'personal';
+
+  const accountAvailableInSelectedSpace =
+    (account: Account) => {
+      if (
+        type === 'transfer'
+        && account.ownerId === user?.uid
+      ) {
+        return true;
+      }
+
+      if (!selectedSpace) {
+        return true;
+      }
+
+      if (
+        selectedSpace.type === 'sme'
+      ) {
+        return (
+          account.classification
+            === 'business'
+          && businessSpaceIdsForAccount(
+            account,
+          ).includes(
+            selectedSpace.id,
+          )
+        );
+      }
+
+      return accountSupportsPersonalUse(
+        account,
+      );
+    };
+
+  const ownsAccountsInThisForm =
+    accounts.some(
+      (account) =>
+        account.ownerId === user?.uid
+        && accountAvailableInSelectedSpace(
+          account,
+        ),
+    );
+
+  const canManageCategories =
+    selectedSpace?.type !== 'sme'
+    || ownsAccountsInThisForm;
+
+  const canAttachFiles =
+    selectedSpace?.type !== 'sme'
+    || ownsAccountsInThisForm;
+
+  const [localCategories, setLocalCategories] =
+    useState<TransactionCategory[]>(
+      categories,
+    );
+
+  const [
+    showCategoryEditor,
+    setShowCategoryEditor,
+  ] = useState(false);
+
+  function selectEntryOwnerMode(
+    nextMode: 'personal' | 'business',
+  ) {
+    if (
+      nextMode === entryOwnerMode
+    ) {
+      return;
+    }
+
+    if (nextMode === 'business') {
+      const nextBusiness =
+        businessEntrySpaces[0];
+
+      if (!nextBusiness) {
+        return;
+      }
+
+      setSpaceId(
+        nextBusiness.id,
+      );
+
+      setSpaceChooserOpen(false);
+      return;
+    }
+
+    const nextPersonal =
+      personalEntrySpaces.find(
+        (entrySpace) =>
+          entrySpace.type
+            === 'personal',
+      )
+      || personalEntrySpaces[0];
+
+    if (!nextPersonal) {
+      return;
+    }
+
+    setSpaceId(
+      nextPersonal.id,
+    );
+
+    setSpaceChooserOpen(false);
+  }
+  const compatibleAccounts = accounts.filter(
+    (account) =>
+      (!selectedSpace || account.currency === selectedSpace.currency)
+      && accountAvailableInSelectedSpace(account),
+  );
+
+  const accountLinkedToSelectedBusiness = (
+    account: Account | undefined,
+  ) =>
+    Boolean(
+      account
+      && selectedSpace?.type === 'sme'
+      && account.classification === 'business'
+      && businessSpaceIdsForAccount(
+        account,
+      ).includes(
+        selectedSpace.id,
+      ),
+    );
+
+  const transferPairAllowed = (
+    sourceAccount: Account | undefined,
+    destinationAccount: Account | undefined,
+  ) =>
+    selectedSpace?.type !== 'sme'
+    || accountLinkedToSelectedBusiness(
+      sourceAccount,
+    )
+    || accountLinkedToSelectedBusiness(
+      destinationAccount,
+    );
+  const [accountId, setAccountId] = useState(
+    initialValues?.accountId
+    && compatibleAccounts.some((account) => account.id === initialValues.accountId)
+      ? initialValues.accountId
+      : compatibleAccounts[0]?.id || '',
+  );
+  const [destinationAccountId, setDestinationAccountId] = useState(initialValues?.destinationAccountId || '');
+  const [amount, setAmount] = useState(initialValues ? (initialValues.amountMinor / 100).toFixed(2) : '');
+  const [transactionDate, setTransactionDate] = useState(initialValues?.transactionDate || dateInTimezone(timezone));
+  const [categoryId, setCategoryId] = useState(initialValues?.categoryId || '');
+  const [labelDraft, setLabelDraft] = useState(
+    (initialValues?.labels || []).map(transactionLabelText).join(', '),
+  );
+  const [counterparty, setCounterparty] = useState(initialValues?.counterparty || '');
+  const [note, setNote] = useState(initialValues?.note || '');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(
+    initialValues?.paymentMethod || suggestedPaymentMethod(accounts[0]),
+  );
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState(
+    initialValues?.paymentMethod === 'other' ? initialValues.paymentMethodLabel || '' : '',
+  );
+  const preserveInitialPaymentMethodRef = useRef(Boolean(initialValues?.paymentMethod));
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [savedState, setSavedState] = useState<{
+    mode: 'posted_with_failures' | 'queued_with_files';
+    transactionId?: string;
+    spaceId: string;
+    uploadedCount: number;
+  } | null>(null);
+  const [sharePrompt, setSharePrompt] = useState<{
+    message: string;
+    snapshot: TransactionShareSnapshot;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [attachmentError, setAttachmentError] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
+  const receiptAutoOpenedRef = useRef(false);
+
+  const scope = spaceScope(selectedSpace);
+  const [smartCategoryUsage, setSmartCategoryUsage] = useState(
+    () => readSmartCategoryUsage(user?.uid || '', type === 'income' ? 'income' : 'expense', scope),
+  );
+  const categoryOptions = localCategories.filter((category) => type !== 'transfer' && categoryApplies(category, type, scope));
+  const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
+  const { recent: recentCategoryOptions, frequent: frequentCategoryOptions } = useMemo(
+    () => smartCategorySuggestions(categoryOptions, smartCategoryUsage),
+    [categoryOptions, smartCategoryUsage],
+  );
+  const normalizedCategorySearch = categorySearch.trim().toLocaleLowerCase();
+
+  const primaryCategoryOptions = useMemo(() => {
+    const preferredPersonalExpenseIds = [
+      'expense-groceries',
+      'expense-food',
+      'expense-transport',
+      'expense-utilities',
+    ];
+
+    const preferred =
+      type === 'expense'
+      && scope === 'personal'
+        ? preferredPersonalExpenseIds
+            .map(
+              (id) =>
+                categoryOptions.find(
+                  (category) =>
+                    category.id === id,
+                ),
+            )
+            .filter(
+              (
+                category,
+              ): category is TransactionCategory =>
+                Boolean(category),
+            )
+        : [];
+
+    const base =
+      preferred.length === 4
+        ? preferred
+        : categoryOptions.slice(0, 4);
+
+    if (
+      selectedCategory
+      && !base.some(
+        (category) =>
+          category.id === selectedCategory.id,
+      )
+    ) {
+      return [
+        ...base.slice(0, 3),
+        selectedCategory,
+      ];
+    }
+
+    return base;
+  }, [
+    categoryOptions,
+    scope,
+    selectedCategory,
+    type,
+  ]);
+
+  const secondaryCategoryOptions = useMemo(
+    () =>
+      categoryOptions.filter(
+        (category) =>
+          !primaryCategoryOptions.some(
+            (primary) =>
+              primary.id === category.id,
+          ),
+      ),
+    [
+      categoryOptions,
+      primaryCategoryOptions,
+    ],
+  );
+
+  const moreCategoryOptions = useMemo(
+    () => normalizedCategorySearch
+      ? categoryOptions.filter((category) => category.name.toLocaleLowerCase().includes(normalizedCategorySearch))
+      : secondaryCategoryOptions,
+    [categoryOptions, secondaryCategoryOptions, normalizedCategorySearch],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) setLocalCategories(categories);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [categories]);
+  useEffect(() => {
+    const nextAccounts = accounts.filter(
+      (account) =>
+        (!selectedSpace || account.currency === selectedSpace.currency)
+        && accountAvailableInSelectedSpace(account),
+    );
+
+    const nextSourceAccount =
+      nextAccounts.find(
+        (account) =>
+          account.id === accountId,
+      )
+      || nextAccounts[0];
+
+    const nextDestinationAccounts =
+      type === 'transfer'
+        ? accounts.filter(
+            (account) => {
+              if (
+                account.id === nextSourceAccount?.id
+                || account.archivedAt
+                || account.closedAt
+                || account.sharedCanUseAccount === false
+              ) {
+                return false;
+              }
+
+              if (
+                nextSourceAccount
+                && (
+                  account.currency
+                    !== nextSourceAccount.currency
+                  || account.ownerId
+                    !== nextSourceAccount.ownerId
+                )
+              ) {
+                return false;
+              }
+
+              if (
+                !transferPairAllowed(
+                  nextSourceAccount,
+                  account,
+                )
+              ) {
+                return false;
+              }
+
+              try {
+                resolveTransferPostingSpaceId(
+                  nextSourceAccount,
+                  account,
+                  spaceId,
+                );
+
+                return true;
+              } catch {
+                return false;
+              }
+            },
+          )
+        : nextAccounts;
+
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      if (
+        !nextAccounts.some(
+          (account) =>
+            account.id === accountId,
+        )
+      ) {
+        setAccountId(
+          nextAccounts[0]?.id || '',
+        );
+      }
+
+      if (
+        destinationAccountId
+          === nextSourceAccount?.id
+        || !nextDestinationAccounts.some(
+          (account) =>
+            account.id
+              === destinationAccountId,
+        )
+      ) {
+        setDestinationAccountId('');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    accountId,
+    accounts,
+    destinationAccountId,
+    selectedSpace,
+    spaceId,
+    type,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      if (type === 'transfer') {
+        setCategoryId('');
+        return;
+      }
+
+      if (!categoryOptions.some((category) => category.id === categoryId)) {
+        setCategoryId(categoryOptions[0]?.id || '');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryId, categoryOptions, type]);
+
+  useEffect(() => {
+    setShowAllCategories(false);
+    setCategorySearch('');
+  }, [
+    scope,
+    type,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setSmartCategoryUsage(
+          readSmartCategoryUsage(user?.uid || '', type === 'income' ? 'income' : 'expense', scope),
+        );
+      }
+    });
+    return () => { active = false; };
+  }, [user?.uid, type, scope]);
+
+  const sourceAccount = accounts.find((account) => account.id === accountId);
+  const destinationAccount = accounts.find((account) => account.id === destinationAccountId);
+
+  const sourceAccountVisualIndex =
+    sourceAccount
+      ? Math.max(
+          0,
+          accounts.findIndex(
+            (account) =>
+              account.id === sourceAccount.id,
+          ),
+        )
+      : 0;
+
+  const sourceAccountSubtitle =
+    sourceAccount
+      ? [
+          accountContextLabel(
+            sourceAccount,
+            spaces,
+          ),
+          institutionDisplay(sourceAccount),
+          sourceAccount.type === 'e_wallet'
+            ? 'E-wallet'
+            : sourceAccount.type === 'credit_card'
+              ? 'Credit card'
+              : sourceAccount.type === 'cash'
+                ? 'Cash account'
+                : 'Bank account',
+        ].join(' - ')
+      : 'Choose account';
+
+  const destinationAccountVisualIndex =
+    destinationAccount
+      ? Math.max(
+          0,
+          accounts.findIndex(
+            (account) =>
+              account.id
+              === destinationAccount.id,
+          ),
+        )
+      : 0;
+
+  const destinationAccountSubtitle =
+    destinationAccount
+      ? [
+          accountContextLabel(
+            destinationAccount,
+            spaces,
+          ),
+          institutionDisplay(
+            destinationAccount,
+          ),
+          destinationAccount.type
+            === 'e_wallet'
+            ? 'E-wallet'
+            : destinationAccount.type
+              === 'credit_card'
+              ? 'Credit card'
+              : destinationAccount.type
+                === 'cash'
+                ? 'Cash account'
+                : 'Bank account',
+        ].join(' - ')
+      : 'Choose account';
+
+  function currentShareSnapshot(
+    nextAmountMinor: number,
+    transactionId?: string,
+    targetSpaceId = spaceId,
+  ): TransactionShareSnapshot {
+    const targetSpace =
+      spaces.find(
+        (space) =>
+          space.id === targetSpaceId,
+      )
+      || selectedSpace;
+
+    return {
+      transactionId,
+      type,
+      amountMinor: nextAmountMinor,
+      currency:
+        sourceAccount?.currency
+        || targetSpace?.currency
+        || 'BND',
+      transactionDate,
+      category:
+        selectedCategory?.name,
+      counterparty:
+        counterparty.trim()
+        || undefined,
+      note:
+        note.trim()
+        || undefined,
+      spaceName:
+        targetSpace?.type === 'personal'
+          ? 'Personal'
+          : targetSpace?.name,
+      sourceAccountName:
+        sourceAccount?.name,
+      destinationAccountName:
+        destinationAccount?.name,
+    };
+  }
+  useEffect(() => {
+    if (preserveInitialPaymentMethodRef.current) {
+      preserveInitialPaymentMethodRef.current = false;
+      return;
+    }
+
+    setPaymentMethod(suggestedPaymentMethod(sourceAccount));
+    setPaymentMethodCustom('');
+  }, [accountId]);
+  useEffect(() => {
+    if (
+      entryMode !== 'receipt'
+      || initialValues
+      || receiptAutoOpenedRef.current
+      || !online
+    ) {
+      return;
+    }
+
+    receiptAutoOpenedRef.current = true;
+
+    const frame =
+      window.requestAnimationFrame(
+        () => cameraRef.current?.click(),
+      );
+
+    return () =>
+      window.cancelAnimationFrame(frame);
+  }, [
+    entryMode,
+    initialValues,
+    online,
+  ]);
+
+  const transferDestinationOptions =
+    accounts.filter(
+      (account) => {
+        if (
+          account.id === accountId
+          || account.archivedAt
+          || account.closedAt
+          || account.sharedCanUseAccount === false
+        ) {
+          return false;
+        }
+
+        if (
+          sourceAccount
+          && (
+            account.currency
+              !== sourceAccount.currency
+            || account.ownerId
+              !== sourceAccount.ownerId
+          )
+        ) {
+          return false;
+        }
+
+        if (
+          !transferPairAllowed(
+            sourceAccount,
+            account,
+          )
+        ) {
+          return false;
+        }
+
+        try {
+          resolveTransferPostingSpaceId(
+            sourceAccount,
+            account,
+            spaceId,
+          );
+
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    );
+
+  const destinationOptions =
+    type === 'transfer'
+      ? transferDestinationOptions
+      : compatibleAccounts.filter(
+          (account) =>
+            account.id !== accountId,
+        );
+  let amountMinor = 0;
+  try { amountMinor = amount ? toMinorUnits(amount) : 0; } catch { amountMinor = 0; }
+  const projectedSource = sourceAccount ? sourceAccount.ledgerBalanceMinor + accountEffectForPreview(sourceAccount, type, amountMinor) : 0;
+  const projectedDestination = destinationAccount ? destinationAccount.ledgerBalanceMinor + accountEffectForPreview(destinationAccount, type, amountMinor, true) : 0;
+
+  function pendingFileKey(file: File): string {
+    return `${file.name}:${file.size}:${file.lastModified}`;
+  }
+
+  function addPendingFiles(files: FileList | File[]) {
+    setAttachmentError('');
+    if (!online) {
+      setAttachmentError('Connect to the internet to select a receipt or document. You can still save the money activity without one.');
+      return;
+    }
+
+    const currentKeys = new Set(pendingFiles.map(pendingFileKey));
+    const next = [...pendingFiles];
+    for (const file of Array.from(files)) {
+      if (next.length >= maxAttachmentFiles) {
+        setAttachmentError('You can attach up to five files.');
+        break;
+      }
+      if (file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
+        setAttachmentError(`${file.name} is not an image or PDF.`);
+        continue;
+      }
+      if (file.size <= 0 || file.size >= maxAttachmentSizeBytes) {
+        setAttachmentError(`${file.name} must be smaller than 10 MB.`);
+        continue;
+      }
+      const key = pendingFileKey(file);
+      if (currentKeys.has(key)) continue;
+      currentKeys.add(key);
+      next.push(file);
+    }
+    setPendingFiles(next);
+  }
+
+  function removePendingFile(file: File) {
+    const key = pendingFileKey(file);
+    setPendingFiles((current) => current.filter((item) => pendingFileKey(item) !== key));
+    setAttachmentError('');
+  }
+
+  async function uploadFiles(transactionId: string, targetSpaceId: string, files: File[]) {
+    const failed: File[] = [];
+    let uploaded = 0;
+    let lastError = '';
+    for (const file of files) {
+      try {
+        await uploadTransactionAttachment({ transactionId, spaceId: targetSpaceId, file });
+        uploaded += 1;
+      } catch (nextError) {
+        failed.push(file);
+        lastError = getErrorMessage(nextError);
+      }
+    }
+    return { failed, uploaded, lastError };
+  }
+
+  async function finishSaved(message: string, refresh = true) {
+    if (busy) return;
+    await onComplete(message, refresh);
+  }
+
+  async function retryAttachments() {
+    if (!savedState?.transactionId || busy || pendingFiles.length === 0) return;
+    if (!online) {
+      setAttachmentError('Reconnect to the internet before retrying these attachments.');
+      return;
+    }
+    setBusy(true);
+    setAttachmentError('');
+    try {
+      const result = await uploadFiles(savedState.transactionId, savedState.spaceId, pendingFiles);
+      const uploadedCount = savedState.uploadedCount + result.uploaded;
+      if (result.failed.length === 0) {
+        await onComplete(`Money activity saved with ${uploadedCount} attachment${uploadedCount === 1 ? '' : 's'}.`, true);
+        return;
+      }
+      setPendingFiles(result.failed);
+      setSavedState({ ...savedState, uploadedCount });
+      setAttachmentError(`${result.failed.length} attachment${result.failed.length === 1 ? '' : 's'} still could not be uploaded. ${result.lastError}`.trim());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy || savedState) return;
+    setBusy(true);
+    setError('');
+    setAttachmentError('');
+    try {
+      const nextAmountMinor = toMinorUnits(amount);
+      if (nextAmountMinor <= 0) throw new Error('Enter an amount greater than BND 0.00.');
+      if (!spaceId || !accountId) throw new Error('Choose an Account and where this money belongs.');
+      if (type === 'transfer' && !destinationAccountId) throw new Error('Choose a destination Account.');
+      if (type !== 'transfer' && !selectedCategory) throw new Error('Choose a category.');
+      if (pendingFiles.length > 0 && !online) {
+        throw new Error('Reconnect to upload the selected attachments, or remove them and save this money activity offline.');
+      }
+
+      const labels = parseTransactionLabels(labelDraft);
+
+      if (
+        type === 'transfer'
+        && !transferPairAllowed(
+          sourceAccount,
+          destinationAccount,
+        )
+      ) {
+        throw new Error(
+          'A Business transfer must include an account linked to that Business Space.',
+        );
+      }
+
+      const postingSpaceId =
+        type === 'transfer'
+          ? resolveTransferPostingSpaceId(
+              sourceAccount,
+              destinationAccount,
+              spaceId,
+            )
+          : spaceId;
+
+      if (!postingSpaceId) {
+        throw new Error(
+          'Choose where this money belongs.',
+        );
+      }
+
+      const outcome = await onSubmit({
+        type,
+        accountId,
+        destinationAccountId: type === 'transfer' ? destinationAccountId : undefined,
+        spaceId: postingSpaceId,
+        amountMinor: nextAmountMinor,
+        currency: sourceAccount?.currency || selectedSpace?.currency,
+        transactionDate,
+        categoryId: selectedCategory?.id,
+        category: selectedCategory?.name,
+        categoryIcon: selectedCategory?.icon,
+        categoryColor: selectedCategory?.color,
+        categoryScope: selectedCategory?.scope,
+        counterparty,
+        note,
+        labels,
+        paymentMethod,
+        paymentMethodLabel: paymentMethod === 'other' ? paymentMethodCustom.trim() : undefined,
+      });
+
+      if (outcome.mode === 'queued') {
+        if (pendingFiles.length > 0) {
+          setSavedState({ mode: 'queued_with_files', spaceId: postingSpaceId, uploadedCount: 0 });
+          setAttachmentError('Money activity was saved on this device, but attachments cannot be queued. After it syncs, open Details to attach these files.');
+          return;
+        }
+        await onComplete('Saved on this device. BajetBN will sync it when internet returns.', false);
+        return;
+      }
+
+      if (outcome.mode === 'pending_approval') {
+        const attachmentMessage =
+          pendingFiles.length > 0
+            ? ' The selected attachments were not uploaded because no financial transaction exists until approval.'
+            : '';
+
+        await onComplete(
+          'Sent to the Account Owner for approval. No balance or ledger changes have been made yet.'
+          + attachmentMessage,
+          true,
+        );
+        return;
+      }
+
+      // Record only a confirmed posted category, never queued/pending/failed entries.
+      // This preference is local to the device and cannot change posting outcomes.
+      if (user?.uid && type !== 'transfer' && selectedCategory) {
+        setSmartCategoryUsage(
+          recordSmartCategoryUsage(user.uid, type, scope, selectedCategory.id),
+        );
+      }
+
+      if (pendingFiles.length === 0) {
+        setSharePrompt({
+          message: 'Money activity saved.',
+          snapshot:
+            currentShareSnapshot(
+              nextAmountMinor,
+              outcome.transactionId,
+              postingSpaceId,
+            ),
+        });
+        return;
+      }
+
+      if (!outcome.transactionId) {
+        setSavedState({ mode: 'posted_with_failures', spaceId: postingSpaceId, uploadedCount: 0 });
+        setAttachmentError('Money activity was saved, but BajetBN could not link the selected attachments. Add them later from Details.');
+        return;
+      }
+
+      const result = await uploadFiles(outcome.transactionId, postingSpaceId, pendingFiles);
+      if (result.failed.length === 0) {
+        setSharePrompt({
+          message:
+            `Money activity saved with ${result.uploaded} attachment${result.uploaded === 1 ? '' : 's'}.`,
+          snapshot:
+            currentShareSnapshot(
+              nextAmountMinor,
+              outcome.transactionId,
+              postingSpaceId,
+            ),
+        });
+        return;
+      }
+
+      setPendingFiles(result.failed);
+      setSavedState({ mode: 'posted_with_failures', transactionId: outcome.transactionId, spaceId: postingSpaceId, uploadedCount: result.uploaded });
+      setAttachmentError(`Money activity was saved. ${result.failed.length} attachment${result.failed.length === 1 ? '' : 's'} could not be uploaded. ${result.lastError}`.trim());
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sharePrompt) {
+    const saved = sharePrompt.snapshot;
+    const isTransfer = saved.type === 'transfer';
+    const successTitle = initialValues
+      ? 'Transaction Corrected'
+      : isTransfer
+        ? 'Transfer Added'
+        : 'Transaction Added';
+    const successDetail = isTransfer
+      ? [saved.sourceAccountName || 'From account', saved.destinationAccountName || 'To account'].join(' → ')
+      : saved.category || (saved.type === 'income' ? 'Money in' : 'Money out');
+    return <Modal
+      title={successTitle}
+      className="bajetbn-v8-transaction-success"
+      onClose={() => {
+        if (!busy) {
+          void finishSaved(sharePrompt.message, true);
+        }
+      }}
+    >
+      <div className="bajetbn-v8-success-body" role="status" aria-live="polite">
+        <div className="bajetbn-v8-success-icon" aria-hidden="true">
+          <svg viewBox="0 0 64 64" fill="none" focusable="false">
+            <circle cx="32" cy="32" r="31" fill="currentColor" fillOpacity="0.12" />
+            <path d="M18 33L28 43L47 23" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" className="bajetbn-v8-success-check" />
+          </svg>
+        </div>
+        <h3>{successTitle}</h3>
+        <strong className="bajetbn-v8-success-amount">
+          {formatMoney(saved.amountMinor, saved.currency)}
+        </strong>
+        <p className="bajetbn-v8-success-detail">{successDetail}</p>
+        <p className="bajetbn-v8-success-caption">Your money activity has been saved.</p>
+      </div>
+      <div className="bajetbn-v8-success-actions">
+        <button
+          type="button"
+          className="button primary bajetbn-v8-success-done"
+          disabled={busy}
+          onClick={() => void finishSaved(sharePrompt.message, true)}
+        >
+          Done
+        </button>
+        <button
+          type="button"
+          className="button secondary bajetbn-v8-success-share"
+          disabled={busy}
+          onClick={() => shareTransactionToWhatsApp(saved)}
+        >
+          Share to WhatsApp
+        </button>
+      </div>
+    </Modal>;
+  }
+
+  if (savedState) {    const queued = savedState.mode === 'queued_with_files';
+    return <Modal title="Money activity saved" onClose={() => { if (!busy) void finishSaved(queued ? 'Saved on this device. Attachments can be added after it syncs.' : 'Money activity saved. You can add the remaining attachments later from Details.', !queued); }}>
+      <div className={`notice ${queued ? 'warning' : 'success'}`}>
+        <strong>{queued ? 'Saved for offline sync' : 'Transaction saved safely'}</strong>
+        <span>{queued ? 'The selected files were not stored on this device.' : `${savedState.uploadedCount} attachment${savedState.uploadedCount === 1 ? '' : 's'} uploaded successfully.`}</span>
+      </div>
+      {attachmentError && <div className="notice warning">{attachmentError}</div>}
+      {pendingFiles.length > 0 && <div className="transaction-inline-file-list">
+        {pendingFiles.map((file) => <div className="transaction-inline-file-row" key={pendingFileKey(file)}>
+          <div><strong>{file.name}</strong><small>{Math.max(1, Math.round(file.size / 1024))} KB</small></div>
+          {!queued && <button type="button" className="text-button" disabled={busy} onClick={() => removePendingFile(file)}>Remove</button>}
+        </div>)}
+      </div>}
+      <div className="modal-actions">
+        <button type="button" className="button secondary" disabled={busy} onClick={() => void finishSaved(queued ? 'Saved on this device. Attachments can be added after it syncs.' : 'Money activity saved. You can add the remaining attachments later from Details.', !queued)}>{queued ? 'Close' : 'Finish without remaining attachments'}</button>
+        {!queued && savedState.transactionId && pendingFiles.length > 0 && <button type="button" className="button primary" disabled={busy || !online} onClick={() => void retryAttachments()}>{busy ? 'Retrying...' : 'Retry attachments'}</button>}
+      </div>
+    </Modal>;
+  }
+
+  const closeForm = () => { if (!busy) onClose(); };
+  const saveLabel = busy
+    ? pendingFiles.length > 0 ? 'Saving...' : 'Saving...'
+    : initialValues
+      ? 'Save corrected activity'
+      : !online ? 'Save on this device'
+        : pendingFiles.length > 0 ? `Save and attach ${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'}`
+          : 'Save transaction';
+
+  const canTransferBetweenAccounts =
+    compatibleAccounts.length >= 1
+    && transferDestinationOptions.length >= 1;
+
+  const typeOptions: PrimaryType[] =
+    lockedSpaceId
+    && selectedSpace?.type !== 'sme'
+      ? ['expense', 'income']
+      : canTransferBetweenAccounts
+        ? ['expense', 'income', 'transfer']
+        : ['expense', 'income'];
+
+  if (entryMode === 'move' && !initialValues) {
+    return <Modal title="Move Money" className="bajetbn-v4-money-sheet bajetbn-v5-money-sheet" onClose={closeForm}>
+      <form
+        className="transaction-form bajetbn-move-money-form bajetbn-move-reference-form"
+        onSubmit={submit}
+      >
+        {error && <div className="notice error">{error}</div>}
+
+        <div
+          className="bajetbn-move-mode-pill"
+          aria-label="Transfer type"
+        >
+          <span className="active">Transfer</span>
+        </div>
+
+        <section className="bajetbn-move-guide">
+          <span
+            className="bajetbn-move-guide-icon"
+            aria-hidden="true"
+          >{'->'}</span>
+          <div>
+            <strong>
+              Move money between your accounts
+            </strong>
+            <small>
+              Choose where the money comes from
+              and where it should go.
+            </small>
+          </div>
+        </section>
+
+        <div className="bajetbn-move-account-field">
+          <div className="bajetbn-move-account-heading">
+            <span>From account</span>
+            <small>Source</small>
+          </div>
+
+          <div className="bajetbn-move-account-card">
+            {sourceAccount ? (
+              <AccountAvatar
+                account={sourceAccount}
+                className={
+                  accountColorClass(
+                    getAccountColor(
+                      user?.uid || '',
+                      sourceAccount.id,
+                      sourceAccountVisualIndex,
+                    ),
+                  )
+                }
+              />
+            ) : (
+              <span
+                className="bajetbn-account-identity-icon account-color-slate"
+                aria-hidden="true"
+              >
+                ?
+              </span>
+            )}
+
+            <span className="bajetbn-identity-copy">
+              <strong>
+                {sourceAccount?.name
+                  || 'Choose account'}
+              </strong>
+              <small>
+                {sourceAccountSubtitle}
+              </small>
+            </span>
+
+            <span className="bajetbn-move-account-balance">
+              {sourceAccount
+                ? sourceAccount.sharedCanViewBalance
+                    === false
+                  ? 'Balance hidden'
+                  : formatMoney(
+                      sourceAccount.ledgerBalanceMinor,
+                      sourceAccount.currency,
+                    )
+                : ''}
+            </span>
+
+            <span
+              className="bajetbn-identity-chevron"
+              aria-hidden="true"
+            >{'>'}</span>
+
+            <select
+              className="bajetbn-identity-native-select"
+              aria-label="From account"
+              required
+              value={accountId}
+              onChange={(event) =>
+                setAccountId(
+                  event.target.value,
+                )
+              }
+            >
+              {compatibleAccounts.map(
+                (account) => (
+                  <option
+                    value={account.id}
+                    key={account.id}
+                  >
+                    {accountContextLabel(account, spaces)} · {account.name} - {
+                      account.sharedCanViewBalance
+                        === false
+                        ? 'Balance hidden'
+                        : formatMoney(
+                            account.ledgerBalanceMinor,
+                            account.currency,
+                          )
+                    }
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
+        </div>
+
+        <div
+          className="bajetbn-transfer-direction bajetbn-move-reference-direction"
+          aria-hidden="true"
+        >
+          <span>to</span>
+        </div>
+
+        <div className="bajetbn-move-account-field">
+          <div className="bajetbn-move-account-heading">
+            <span>To account</span>
+            <small>Destination</small>
+          </div>
+
+          <div className="bajetbn-move-account-card">
+            {destinationAccount ? (
+              <AccountAvatar
+                account={destinationAccount}
+                className={
+                  accountColorClass(
+                    getAccountColor(
+                      user?.uid || '',
+                      destinationAccount.id,
+                      destinationAccountVisualIndex,
+                    ),
+                  )
+                }
+              />
+            ) : (
+              <span
+                className="bajetbn-account-identity-icon account-color-slate"
+                aria-hidden="true"
+              >
+                ?
+              </span>
+            )}
+
+            <span className="bajetbn-identity-copy">
+              <strong>
+                {destinationAccount?.name
+                  || 'Choose account'}
+              </strong>
+              <small>
+                {destinationAccountSubtitle}
+              </small>
+            </span>
+
+            <span className="bajetbn-move-account-balance">
+              {destinationAccount
+                ? destinationAccount.sharedCanViewBalance
+                    === false
+                  ? 'Balance hidden'
+                  : formatMoney(
+                      destinationAccount.ledgerBalanceMinor,
+                      destinationAccount.currency,
+                    )
+                : ''}
+            </span>
+
+            <span
+              className="bajetbn-identity-chevron"
+              aria-hidden="true"
+            >{'>'}</span>
+
+            <select
+              className="bajetbn-identity-native-select"
+              aria-label="To account"
+              required
+              value={destinationAccountId}
+              onChange={(event) =>
+                setDestinationAccountId(
+                  event.target.value,
+                )
+              }
+            >
+              <option value="">
+                Choose account
+              </option>
+
+              {destinationOptions.map(
+                (account) => (
+                  <option
+                    value={account.id}
+                    key={account.id}
+                  >
+                    {accountContextLabel(account, spaces)} · {account.name} - {
+                      account.sharedCanViewBalance
+                        === false
+                        ? 'Balance hidden'
+                        : formatMoney(
+                            account.ledgerBalanceMinor,
+                            account.currency,
+                          )
+                    }
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
+        </div>
+
+        <div className="bajetbn-move-type-card">
+          <div>
+            <span>Transfer type</span>
+            <strong>Between my accounts</strong>
+          </div>
+          <small>
+            No income or expense category is created.
+          </small>
+        </div>
+
+        <label className="bajetbn-reference-amount bajetbn-move-amount">
+          <span>
+            Amount ({
+              sourceAccount?.currency
+              || selectedSpace?.currency
+              || 'BND'
+            })
+          </span>
+
+          <input
+            required
+            autoFocus
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) =>
+              setAmount(event.target.value)
+            }
+            placeholder="0.00"
+          />
+        </label>
+
+        <div className="bajetbn-reference-date bajetbn-move-date">
+          <span
+            className="bajetbn-reference-date-icon"
+            aria-hidden="true"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              focusable="false"
+            >
+              <path
+                d="M7 3v3M17 3v3M4.5 8.5h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+
+          <label>
+            Date
+            <input
+              required
+              type="date"
+              value={transactionDate}
+              onChange={(event) =>
+                setTransactionDate(
+                  event.target.value,
+                )
+              }
+            />
+          </label>
+        </div>
+
+        <label className="bajetbn-move-note">
+          Note (optional)
+          <textarea
+            rows={3}
+            value={note}
+            onChange={(event) =>
+              setNote(event.target.value)
+            }
+            placeholder="E.g. Move to savings"
+            maxLength={500}
+          />
+        </label>
+
+        <div className="modal-actions bajetbn-reference-submit">
+          <button
+            className="button primary"
+            disabled={
+              busy
+              || transferDestinationOptions.length === 0
+              || !destinationAccountId
+            }
+          >
+            {busy
+              ? 'Moving money...'
+              : 'Move money'}
+          </button>
+        </div>
+      </form>
+    </Modal>;
+  }
+
+  return <Modal
+    className="bajetbn-v4-money-sheet bajetbn-v5-money-sheet bajetbn-v6-money-sheet bajetbn-v61-money-sheet"
+    title={
+      initialValues
+        ? 'Correct money activity'
+        : entryMode === 'receipt'
+          ? 'Scan Receipt'
+          : 'Add money activity'
+    }
+    onClose={closeForm}
+  >
+  <form
+    className={
+      `transaction-form bajetbn-reference-activity-form ${entryMode === 'receipt' ? 'bajetbn-receipt-entry-form' : ''}`
+    }
+    onSubmit={submit}
+  >
+    <div className="bajetbn-v61-form-scroll">
+{initialValues && <div className="notice warning compact-notice"><strong>Creating a correction</strong><span>The original activity has already been undone. Review every field and save this replacement to finish the correction.</span></div>}
+    {error && <div className="notice error">{error}</div>}
+
+    {entryMode === 'receipt' && !initialValues && (
+      <section className="bajetbn-receipt-first-banner">
+        <strong>Receipt first</strong>
+        <span>
+          Take a photo or choose a receipt, then complete the expense details.
+        </span>
+        <div>
+          <button
+            type="button"
+            className="button primary"
+            disabled={!online || busy}
+            onClick={() => cameraRef.current?.click()}
+          >
+            Take photo
+          </button>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={!online || busy}
+            onClick={() => chooseFilesRef.current?.click()}
+          >
+            Choose file
+          </button>
+        </div>
+      </section>
+    )}
+    {!online && <div className="notice warning compact-notice"><strong>Saving offline</strong><span>This money activity will stay on this device and sync safely when internet returns.</span></div>}
+
+    {!lockedSpaceId
+      && !initialValues
+      && entryMode === 'activity'
+      && (
+        <section
+          className="money-entry-owner-v121"
+        >
+          <div
+            className="segmented-control money-entry-owner-switch-v121"
+            role="group"
+            aria-label="Money owner"
+          >
+            <button
+              type="button"
+              className={
+                entryOwnerMode === 'personal'
+                  ? 'active'
+                  : ''
+              }
+              disabled={
+                personalEntrySpaces.length === 0
+              }
+              onClick={() =>
+                selectEntryOwnerMode(
+                  'personal',
+                )
+              }
+            >
+              Personal
+            </button>
+
+            <button
+              type="button"
+              className={
+                entryOwnerMode === 'business'
+                  ? 'active'
+                  : ''
+              }
+              disabled={
+                businessEntrySpaces.length === 0
+              }
+              onClick={() =>
+                selectEntryOwnerMode(
+                  'business',
+                )
+              }
+            >
+              Business
+            </button>
+          </div>
+
+          {entryOwnerMode === 'business'
+            && businessEntrySpaces.length > 0
+            && (
+              <label
+                className="money-entry-business-v121"
+              >
+                <span>
+                  Business
+                </span>
+
+                <select
+                  aria-label="Choose Business"
+                  value={spaceId}
+                  onChange={(event) =>
+                    setSpaceId(
+                      event.target.value,
+                    )
+                  }
+                >
+                  {businessEntrySpaces.map(
+                    (businessSpace) => (
+                      <option
+                        key={businessSpace.id}
+                        value={businessSpace.id}
+                      >
+                        {businessSpace.name}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            )}
+        </section>
+      )}
+
+    <label className="bajetbn-reference-amount bajetbn-add-amount">
+      <span>
+        Amount ({sourceAccount?.currency || selectedSpace?.currency || 'BND'})
+      </span>
+      <input
+        required
+        autoFocus
+        inputMode="decimal"
+        value={amount}
+        onChange={(event) =>
+          setAmount(event.target.value)
+        }
+        placeholder="0.00"
+      />
+    </label>
+
+    <div className="segmented-control transaction-type-picker" role="group" aria-label="Money activity type">
+      {typeOptions.map((value) => <button type="button" key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{typeLabels[value]}</button>)}
+    </div>
+
+    <div className="bajetbn-reference-account-row bajetbn-identity-field">
+      <div className="bajetbn-identity-field-heading">
+        <span>
+          {type === 'income'
+            ? 'To account'
+            : 'From account'}
+        </span>
+        <small>Select account</small>
+      </div>
+
+      <div className="bajetbn-identity-card bajetbn-account-identity-card">
+        {sourceAccount ? (
+          <AccountAvatar
+            account={sourceAccount}
+            className={
+              'bajetbn-account-identity-icon '
+              + accountColorClass(
+                  getAccountColor(
+                    user?.uid || '',
+                    sourceAccount.id,
+                    sourceAccountVisualIndex,
+                  ),
+                )
+            }
+          />
+        ) : (
+          <span
+            className="bajetbn-account-identity-icon account-color-slate"
+            aria-hidden="true"
+          >
+            ?
+          </span>
+        )}
+
+        <span className="bajetbn-identity-copy">
+          <strong>
+            {sourceAccount?.name || 'Choose account'}
+          </strong>
+
+          <small>
+            {sourceAccountSubtitle}
+          </small>
+        </span>
+
+        <span className="bajetbn-identity-balance">
+          {sourceAccount
+            ? sourceAccount.sharedCanViewBalance === false
+              ? 'Balance hidden'
+              : formatMoney(
+                  sourceAccount.ledgerBalanceMinor,
+                  sourceAccount.currency,
+                )
+            : ''}
+        </span>
+
+        <span
+          className="bajetbn-identity-chevron"
+          aria-hidden="true"
+        >{'>'}</span>
+
+        <select
+          className="bajetbn-identity-native-select"
+          aria-label={
+            type === 'income'
+              ? 'To account'
+              : 'From account'
+          }
+          required
+          value={accountId}
+          onChange={(event) =>
+            setAccountId(event.target.value)
+          }
+        >
+          {compatibleAccounts.map((account) => (
+            <option value={account.id} key={account.id}>
+              {accountContextLabel(account, spaces)} · {account.name} - {account.sharedCanViewBalance === false
+                ? 'Balance hidden'
+                : formatMoney(
+                    account.ledgerBalanceMinor,
+                    account.currency,
+                  )}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+
+    {type === 'transfer' && (
+      <div className="bajetbn-reference-account-row bajetbn-identity-field">
+        <div className="bajetbn-identity-field-heading">
+          <span>To account</span>
+          <small>Select destination</small>
+        </div>
+
+        <div className="bajetbn-identity-card bajetbn-account-identity-card">
+          {destinationAccount ? (
+            <AccountAvatar
+              account={destinationAccount}
+              className={
+                'bajetbn-account-identity-icon '
+                + accountColorClass(
+                    getAccountColor(
+                      user?.uid || '',
+                      destinationAccount.id,
+                      destinationAccountVisualIndex,
+                    ),
+                  )
+              }
+            />
+          ) : (
+            <span
+              className="bajetbn-account-identity-icon account-color-slate"
+              aria-hidden="true"
+            >
+              ?
+            </span>
+          )}
+
+          <span className="bajetbn-identity-copy">
+            <strong>
+              {destinationAccount?.name || 'Choose account'}
+            </strong>
+            <small>{destinationAccountSubtitle}</small>
+          </span>
+
+          <span className="bajetbn-identity-balance">
+            {destinationAccount
+              ? destinationAccount.sharedCanViewBalance === false
+                ? 'Balance hidden'
+                : formatMoney(
+                    destinationAccount.ledgerBalanceMinor,
+                    destinationAccount.currency,
+                  )
+              : ''}
+          </span>
+
+          <span className="bajetbn-identity-chevron" aria-hidden="true">{'>'}</span>
+
+          <select
+            className="bajetbn-identity-native-select"
+            aria-label="To account"
+            required
+            value={destinationAccountId}
+            onChange={(event) =>
+              setDestinationAccountId(event.target.value)
+            }
+          >
+            <option value="">Choose account</option>
+            {destinationOptions.map((account) => (
+              <option value={account.id} key={account.id}>
+                {accountContextLabel(account, spaces)} · {account.name} - {account.sharedCanViewBalance === false
+                  ? 'Balance hidden'
+                  : formatMoney(
+                      account.ledgerBalanceMinor,
+                      account.currency,
+                    )}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    )}
+
+    {lockedSpaceId ? (
+      <div className="locked-space-field bajetbn-reference-space-row bajetbn-space-identity-locked">
+        {selectedSpace && (
+          <SpaceAvatar
+            space={selectedSpace}
+          />
+        )}
+
+        <span className="bajetbn-identity-copy">
+          <span>Recorded in</span>
+          <strong>
+            {selectedSpace?.name || 'This Space'}
+          </strong>
+          <small>
+            {selectedSpace
+              ? [
+                  spaceTypeLabels[selectedSpace.type],
+                  selectedSpace.currency,
+                  'Locked to this Space',
+                ].join(' - ')
+              : 'Locked to this Space'}
+          </small>
+        </span>
+      </div>
+    ) : (
+      <div className="contextual-space-field bajetbn-reference-space-row bajetbn-space-identity-field">
+        <div className="contextual-space-summary">
+          <div className="bajetbn-space-identity-main">
+            {selectedSpace && (
+              <SpaceAvatar
+                space={selectedSpace}
+              />
+            )}
+
+            <div className="bajetbn-identity-copy">
+              <span>Recorded in</span>
+              <strong>
+                {selectedSpace?.type === 'personal'
+                  ? 'Personal'
+                  : selectedSpace?.name || 'Choose Space'}
+              </strong>
+              <small>
+                {selectedSpace?.type === 'personal'
+                  ? 'Personal money'
+                  : selectedSpace
+                    ? spaceTypeLabels[selectedSpace.type]
+                    : 'Choose where this activity belongs'}
+              </small>
+            </div>
+          </div>
+
+          {entryOwnerMode === 'personal'
+            && personalEntrySpaces.some(
+              (space) =>
+                space.type !== 'personal',
+            )
+            && (
+            <button
+              type="button"
+              className="text-button contextual-space-change"
+              aria-expanded={spaceChooserOpen}
+              onClick={() =>
+                setSpaceChooserOpen(
+                  (current) => !current,
+                )
+              }
+            >
+              {spaceChooserOpen
+                ? 'Cancel'
+                : 'Change'}
+            </button>
+          )}
+        </div>
+
+        {spaceChooserOpen && (
+          <label className="contextual-space-chooser">
+            Recorded in
+            <select
+              required
+              value={spaceId}
+              onChange={(event) => {
+                setSpaceId(event.target.value);
+                setSpaceChooserOpen(false);
+              }}
+            >
+              {personalEntrySpaces.map(
+                (space) => (
+                  <option
+                    value={space.id}
+                    key={space.id}
+                  >
+                    {spaceDisplayLabel(
+                      space,
+                    )}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+        )}
+      </div>
+    )}
+
+    <div className="bajetbn-reference-date">
+      <span
+        className="bajetbn-reference-date-icon"
+        aria-hidden="true"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          focusable="false"
+        >
+          <path
+            d="M7 3v3M17 3v3M4.5 8.5h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <label>
+        Date
+        <input
+          required
+          type="date"
+          value={transactionDate}
+          onChange={(event) =>
+            setTransactionDate(event.target.value)
+          }
+        />
+      </label>
+    </div>
+
+    {type !== 'transfer' && (
+      <fieldset className="category-picker bajetbn-reference-category-picker">
+        <legend className="category-picker-legend">
+          <span>Category</span>
+
+          {canManageCategories && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() =>
+                setShowCategoryEditor(true)
+              }
+            >
+              + Add category
+            </button>
+          )}
+        </legend>
+
+        <label className="bajetbn-v10-category-search">
+          <span>Find a category</span>
+          <input
+            type="search"
+            aria-label="Search categories"
+            placeholder="Search categories..."
+            value={categorySearch}
+            onChange={(event) => {
+              const nextSearch = event.target.value;
+              setCategorySearch(nextSearch);
+              if (nextSearch.trim()) setShowAllCategories(true);
+            }}
+          />
+        </label>
+
+        {!normalizedCategorySearch && (recentCategoryOptions.length > 0 || frequentCategoryOptions.length > 0) && (
+          <div className="bajetbn-v10-smart-picks" aria-label="Categories used on this device">
+            {([
+              { title: 'Recent on this device', choices: recentCategoryOptions },
+              { title: 'Frequent on this device', choices: frequentCategoryOptions },
+            ]).map(({ title, choices }) => choices.length > 0 && (
+              <div className="bajetbn-v10-usage-group" key={title}>
+                <span className="bajetbn-v10-usage-heading">{title}</span>
+                <div className="bajetbn-v10-usage-list">
+                  {choices.map((category) => (
+                    <button
+                      type="button"
+                      key={category.id}
+                      className={`bajetbn-v10-usage-item ${categoryId === category.id ? 'selected' : ''}`}
+                      aria-pressed={categoryId === category.id}
+                      onClick={() => setCategoryId(category.id)}
+                    >
+                      <CategoryIconVisual category={category} />
+                      <span>{category.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="bajetbn-reference-category-row">
+          {primaryCategoryOptions.map((category) => (
+            <button
+              type="button"
+              key={category.id}
+              className={
+                `bajetbn-reference-category-item ${categoryId === category.id ? 'selected' : ''}`
+              }
+              onClick={() =>
+                setCategoryId(category.id)
+              }
+            >
+              <CategoryIconVisual category={category} />
+
+              <span>
+                {category.name}
+              </span>
+            </button>
+          ))}
+
+          {categoryOptions.length > 4 && (
+            <button
+              type="button"
+              className="bajetbn-reference-category-item bajetbn-reference-category-more"
+              onClick={() =>
+                setShowAllCategories(
+                  (current) => !current,
+                )
+              }
+              aria-expanded={showAllCategories}
+            >
+              <span
+                className="category-icon category-slate"
+                aria-hidden="true"
+              >
+                {showAllCategories ? '<' : '>'}
+              </span>
+
+              <span>
+                {showAllCategories
+                  ? 'Less'
+                  : 'More'}
+              </span>
+            </button>
+          )}
+        </div>
+
+      </fieldset>
+    )}
+
+    {type !== 'transfer'
+      && showAllCategories
+      && (moreCategoryOptions.length > 0 || Boolean(normalizedCategorySearch))
+      && (
+        <section className="bajetbn-reference-category-more-panel">
+          <div className="bajetbn-reference-category-more-heading">
+            <strong>{normalizedCategorySearch ? 'Search results' : 'More categories'}</strong>
+
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setShowAllCategories(false);
+                setCategorySearch('');
+              }}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="bajetbn-reference-category-more-grid">
+            {moreCategoryOptions.length === 0 && (
+              <p className="bajetbn-v10-category-empty">No categories found. Try a different name.</p>
+            )}
+            {moreCategoryOptions.map((category) => (
+              <button
+                type="button"
+                key={category.id}
+                className={
+                  `bajetbn-reference-category-more-item ${categoryId === category.id ? 'selected' : ''}`
+                }
+                onClick={() => {
+                  setCategoryId(category.id);
+                  setShowAllCategories(false);
+                  setCategorySearch('');
+                }}
+              >
+                <CategoryIconVisual category={category} />
+
+                <span>
+                  {category.name}
+                </span>
+
+                {!category.isSystem && (
+                  <small>Custom</small>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+    <details className="bajetbn-v4-optional-details">
+      <summary>Labels (optional)</summary>
+    <section className="transaction-label-editor">
+      <div className="transaction-label-editor-heading">
+        <div>
+          <strong>Labels (optional)</strong>
+          <small>Category remains your main financial classification. Labels are optional and help you filter and find records.</small>
+        </div>
+
+        <span>{parseTransactionLabels(labelDraft).length} of {MAX_TRANSACTION_LABELS} labels</span>
+      </div>
+
+      <input
+        value={labelDraft}
+        onChange={(event) => setLabelDraft(event.target.value)}
+        placeholder="#Rimba, #RentalHouse"
+        maxLength={280}
+        aria-label="Transaction labels"
+      />
+
+      {parseTransactionLabels(labelDraft).length > 0 && (
+        <div className="transaction-label-list">
+          {parseTransactionLabels(labelDraft).map((label) => (
+            <span
+              className="transaction-label-chip"
+              key={label.toLowerCase()}
+            >
+              {transactionLabelText(label)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {(labelSuggestions || []).length > 0 && (
+        <div className="transaction-label-suggestions">
+          <small>Previously used</small>
+
+          <div>
+            {(labelSuggestions || [])
+              .filter(
+                (label) =>
+                  !parseTransactionLabels(labelDraft).some(
+                    (selected) =>
+                      selected.toLowerCase() === label.toLowerCase(),
+                  ),
+              )
+              .slice(0, 8)
+              .map((label) => (
+                <button
+                  type="button"
+                  className="transaction-label-suggestion"
+                  key={label.toLowerCase()}
+                  disabled={
+                    parseTransactionLabels(labelDraft).length
+                    >= MAX_TRANSACTION_LABELS
+                  }
+                  onClick={() => {
+                    const next = parseTransactionLabels(
+                      `${labelDraft},${label}`,
+                    );
+
+                    setLabelDraft(
+                      next
+                        .map(transactionLabelText)
+                        .join(', '),
+                    );
+                  }}
+                >
+                  {transactionLabelText(label)}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
+      <small>
+        Add up to 8 labels to this transaction. Example:
+        #Rimba, #KualaBalai, #RentalHouse.
+      </small>
+    </section>
+
+    </details>
+
+    <div className="form-grid">
+      {type !== 'transfer' && <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} placeholder="Optional" maxLength={120} /></label>}
+      <PaymentMethodField className={type === 'transfer' ? 'span-2' : ''} label={type === 'transfer' ? 'How was the money moved?' : 'Payment method'} value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
+      <label className="span-2">Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional details" maxLength={500} /></label>
+    </div>
+
+    {canAttachFiles && <section className="transaction-inline-attachments" aria-labelledby="inline-attachment-title">
+      <div className="transaction-attachments-heading">
+        <div><h3 id="inline-attachment-title">Receipt or document (optional)</h3><p>Skip this section when you do not have a receipt. You can also attach files later from Money activity details.</p></div>
+        <span>{pendingFiles.length}/{maxAttachmentFiles}</span>
+      </div>
+      <input ref={chooseFilesRef} hidden type="file" multiple accept="image/*,application/pdf" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onChange={(event) => { if (event.target.files) addPendingFiles(event.target.files); event.currentTarget.value = ''; }} />
+      <input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onChange={(event) => { if (event.target.files) addPendingFiles(event.target.files); event.currentTarget.value = ''; }} />
+      <div className="transaction-inline-picker-actions">
+        <button type="button" className="button secondary" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onClick={() => chooseFilesRef.current?.click()}>Choose files</button>
+        <button type="button" className="button ghost" disabled={!online || busy || pendingFiles.length >= maxAttachmentFiles} onClick={() => cameraRef.current?.click()}>Take photo</button>
+      </div>
+      {pendingFiles.length > 0 && <div className="transaction-inline-file-list">
+        {pendingFiles.map((file) => <div className="transaction-inline-file-row" key={pendingFileKey(file)}>
+          <div><strong>{file.name}</strong><small>{Math.max(1, Math.round(file.size / 1024))} KB</small></div>
+          <button type="button" className="text-button" disabled={busy} onClick={() => removePendingFile(file)}>Remove</button>
+        </div>)}
+      </div>}
+      {!online && <div className="notice warning compact-notice"><strong>Internet required for attachments</strong><span>You can still save this money activity without a file and attach one later.</span></div>}
+      {attachmentError && <div className="notice error">{attachmentError}</div>}
+      <small>Images and PDFs only. Up to five files, each smaller than 10 MB.</small>
+    </section>}
+
+    {sourceAccount && sourceAccount.sharedCanViewBalance !== false && amountMinor > 0 && <div className="transaction-preview">
+      <div><span>{sourceAccount.name} after saving</span><strong>{formatMoney(projectedSource, sourceAccount.currency)}</strong></div>
+      {type === 'transfer' && destinationAccount && destinationAccount.sharedCanViewBalance !== false && <div><span>{destinationAccount.name} after saving</span><strong>{formatMoney(projectedDestination, destinationAccount.currency)}</strong></div>}
+      <small>Preview only. BajetBN will safely update the final account balances.</small>
+    </div>}
+
+    {selectedSpace && compatibleAccounts.length === 0 && <div className="notice error">No account uses {selectedSpace.currency}. Choose another Space or create a matching Account.</div>}
+    </div>
+    <div className="modal-actions"><button type="button" className="button secondary" disabled={busy} onClick={closeForm}>Cancel</button><button className="button primary" disabled={busy || compatibleAccounts.length === 0 || (type !== 'transfer' && !selectedCategory)}>{saveLabel}</button></div>
+  </form>
+  {showCategoryEditor && canManageCategories && type !== 'transfer' && <CategoryEditor
+    category={null}
+    defaultKind={type === 'income' ? 'income' : 'expense'}
+    defaultScope={scope}
+    onClose={() => setShowCategoryEditor(false)}
+    onSaved={async (savedName) => {
+      const nextCategories = onCategoriesChanged
+        ? await onCategoriesChanged()
+        : user
+          ? [
+              ...DEFAULT_TRANSACTION_CATEGORIES,
+              ...(await listAllCustomCategories(user.uid)).filter((item) => !item.archivedAt),
+            ]
+          : localCategories;
+      setLocalCategories(nextCategories);
+      const created = nextCategories.find((category) =>
+        !category.archivedAt
+        && category.name.trim().toLowerCase() === (savedName || '').trim().toLowerCase()
+        && categoryApplies(category, type, scope));
+      if (created) setCategoryId(created.id);
+      setShowCategoryEditor(false);
+    }}
+  />}
+  </Modal>;
+}
+
+function TransactionEditDetails({
+  item,
+  source,
+  online,
+  onClose,
+  onSaved,
+}: {
+  item: FinancialTransaction;
+  source?: Account;
+  online: boolean;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [counterparty, setCounterparty] = useState(item.counterparty || '');
+  const [note, setNote] = useState(item.note || '');
+  const [labelDraft, setLabelDraft] = useState(
+    (item.labels || []).map(transactionLabelText).join(', '),
+  );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(
+    item.paymentMethod || suggestedPaymentMethod(source),
+  );
+  const [paymentMethodCustom, setPaymentMethodCustom] = useState(
+    item.paymentMethod === 'other' ? item.paymentMethodLabel || '' : '',
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (busy) return;
+
+    if (!online) {
+      setError('Connect to the internet before editing saved money activity.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      await updateTransactionDetails({
+        transactionId: item.id,
+        counterparty: counterparty.trim(),
+        note: note.trim(),
+        labels: parseTransactionLabels(labelDraft),
+        paymentMethod,
+        paymentMethodLabel:
+          paymentMethod === 'other'
+            ? paymentMethodCustom.trim()
+            : null,
+      });
+
+      await onSaved();
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <Modal title="Edit money activity details" onClose={onClose}>
+    <form className="transaction-form" onSubmit={submit}>
+      <div className="info-banner">
+        <strong>Safe details only</strong>
+        <span>Amount, Account, Space, Date, Category and transaction type stay locked here because they affect balances or reports. Use Correct transaction for those changes.</span>
+      </div>
+
+      {error && <div className="notice error">{error}</div>}
+      {!online && <div className="notice warning">Connect to the internet before saving edits.</div>}
+
+      <div className="form-grid">
+        {item.type !== 'transfer' && <label>
+          {item.type === 'income' ? 'Source or customer' : 'Shop or person paid'}
+          <input
+            value={counterparty}
+            onChange={(event) => setCounterparty(event.target.value)}
+            maxLength={120}
+            placeholder="Optional"
+          />
+        </label>}
+        <PaymentMethodField
+          className={item.type === 'transfer' ? 'span-2' : ''}
+          label={item.type === 'transfer' ? 'How was the money moved?' : 'Payment method'}
+          value={paymentMethod}
+          customLabel={paymentMethodCustom}
+          onChange={(value, custom) => {
+            setPaymentMethod(value);
+            setPaymentMethodCustom(custom);
+          }}
+        />
+      </div>
+
+      <section className="transaction-label-editor">
+        <div className="transaction-label-editor-heading">
+          <div>
+            <strong>Labels</strong>
+            <small>Update labels used for search and filtering.</small>
+          </div>
+          <span>{parseTransactionLabels(labelDraft).length} of {MAX_TRANSACTION_LABELS} labels</span>
+        </div>
+        <input
+          value={labelDraft}
+          onChange={(event) => setLabelDraft(event.target.value)}
+          placeholder="#Rimba, #RentalHouse"
+          maxLength={280}
+        />
+        {parseTransactionLabels(labelDraft).length > 0 && (
+          <div className="transaction-label-list">
+            {parseTransactionLabels(labelDraft).map((label) => (
+              <span
+                className="transaction-label-chip"
+                key={label.toLowerCase()}
+              >
+                {transactionLabelText(label)}
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <label>
+        Note
+        <textarea
+          rows={3}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          maxLength={500}
+          placeholder="Optional details"
+        />
+      </label>
+
+      <div className="modal-actions">
+        <button type="button" className="button secondary" disabled={busy} onClick={onClose}>Cancel</button>
+        <button className="button primary" disabled={busy || !online}>{busy ? 'Saving...' : 'Save details'}</button>
+      </div>
+    </form>
+  </Modal>;
+}
+
+function TransactionDetails({ item, source, destination, space, spaces, category, online, receiptsOnly = false, onClose, onReverse, onCorrect, onUpdated, onAttachmentsChanged }: {
+  item: FinancialTransaction;
+  source?: Account;
+  destination?: Account;
+  space?: Space;
+  spaces: Space[];
+  category: TransactionCategory;
+  online: boolean;
+  receiptsOnly?: boolean;
+  onClose: () => void;
+  onReverse: () => void;
+  onCorrect: () => void;
+  onUpdated: () => Promise<void>;
+  onAttachmentsChanged?: (count: number) => void;
+}) {
+  const { user } = useAuth();
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [attachments, setAttachments] = useState<TransactionAttachment[]>([]);
+  const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [removeId, setRemoveId] = useState('');
+
+  const loadAttachments = async () => {
+    try {
+      const next = await listTransactionAttachments(item.id);
+      setAttachments(next);
+      onAttachmentsChanged?.(next.length);
+      const resolved = await Promise.all(next.map(async (attachment) => {
+        try { return [attachment.id, await getTransactionAttachmentUrl(attachment.storagePath)] as const; }
+        catch { return [attachment.id, ''] as const; }
+      }));
+      setAttachmentUrls(Object.fromEntries(resolved));
+    } catch (error) {
+      setAttachmentError(getErrorMessage(error));
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    listTransactionAttachments(item.id)
+      .then(async (next) => {
+        const resolved = await Promise.all(
+          next.map(async (attachment) => {
+            try {
+              return [
+                attachment.id,
+                await getTransactionAttachmentUrl(attachment.storagePath),
+              ] as const;
+            } catch {
+              return [attachment.id, ''] as const;
+            }
+          }),
+        );
+
+        return {
+          next,
+          urls: Object.fromEntries(resolved),
+        };
+      })
+      .then(({ next, urls }) => {
+        if (cancelled) return;
+
+        setAttachments(next);
+        setAttachmentUrls(urls);
+        onAttachmentsChanged?.(next.length);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAttachmentError(getErrorMessage(error));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, onAttachmentsChanged]);
+
+  async function addAttachment() {
+    if (!selectedFile || attachmentBusy) return;
+    setAttachmentBusy(true);
+    setAttachmentError('');
+    try {
+      await uploadTransactionAttachment({ transactionId: item.id, spaceId: item.spaceId, file: selectedFile });
+      setSelectedFile(null);
+      await loadAttachments();
+    } catch (error) {
+      setAttachmentError(getErrorMessage(error));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }
+
+  async function confirmRemoveAttachment() {
+    if (!removeId || attachmentBusy) return;
+    setAttachmentBusy(true);
+    setAttachmentError('');
+    try {
+      await removeTransactionAttachment(removeId);
+      setRemoveId('');
+      await loadAttachments();
+    } catch (error) {
+      setAttachmentError(getErrorMessage(error));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }
+
+  if (editingDetails) {
+    return <TransactionEditDetails
+      item={item}
+      source={source}
+      online={online}
+      onClose={() => setEditingDetails(false)}
+      onSaved={onUpdated}
+    />;
+  }
+
+  const canSafelyChangeRecord =
+    item.ownerId === user?.uid
+    && item.type !== 'reversal'
+    && item.status === 'posted'
+    && !transactionHasManagedSource(item);
+
+  const isTransferFlow =
+    item.type === 'transfer'
+    || item.originalType === 'transfer';
+
+  const createdTime =
+    formatTransactionAuditTime(
+      item.createdAt,
+    );
+
+  const postedTime =
+    formatTransactionAuditTime(
+      item.postedAt,
+    );
+
+  const updatedTime =
+    formatTransactionAuditTime(
+      item.updatedAt,
+    );
+
+  const editedTime =
+    formatTransactionAuditTime(
+      item.editedAt,
+    );
+
+  return <Modal title={receiptsOnly ? 'Receipts & documents' : 'Money activity details'} onClose={onClose}>
+    {!receiptsOnly && <>
+    <div className="transaction-detail-hero">
+      <CategoryBadge category={category} />
+      <strong className={item.type === 'income' ? 'money-positive' : item.type === 'expense' ? 'money-negative' : ''}>{item.type === 'income' ? '+' : item.type === 'expense' ? '-' : ''}{formatMoney(item.amountMinor, item.currency)}</strong>
+      <span className={`status-badge ${activityStatusClass(item)}`}>{activityStatusLabel(item)}</span>
+    </div>
+    <dl className="detail-list">
+
+      <Detail label="Type">{activityKindLabel(item)}</Detail>
+      <Detail label="Date">{item.transactionDate}</Detail>
+      <Detail label="Space">{space?.name || 'Unknown Space'}</Detail>
+      <Detail label={isTransferFlow ? 'Account route' : 'Account'}>
+        {isTransferFlow ? (
+          <span className="transaction-route">
+            <span>
+              {source
+                ? accountContextLabel(source, spaces) + ' - ' + source.name
+                : 'Unknown Account'}
+            </span>
+            <b>to</b>
+            <span>
+              {destination
+                ? accountContextLabel(destination, spaces) + ' - ' + destination.name
+                : 'Unknown Account'}
+            </span>
+          </span>
+        ) : (
+          source?.name || 'Unknown Account'
+        )}
+      </Detail>
+      <Detail
+        label={
+          item.type === 'income'
+          || item.originalType === 'income'
+            ? 'Money from'
+            : item.type === 'expense'
+              || item.originalType === 'expense'
+                ? 'Paid to'
+                : 'Payee / source'
+        }
+      >
+        {item.counterparty || 'Not set'}
+      </Detail>
+      <Detail label="Payment method">{paymentMethodLabel(item.paymentMethod, item.paymentMethodLabel)}</Detail>
+      {(item.labels || []).length > 0 && (
+        <Detail label="Labels">
+          <div className="transaction-label-list">
+            {(item.labels || []).map((label) => (
+              <span
+                className="transaction-label-chip"
+                key={label.toLowerCase()}
+              >
+                {transactionLabelText(label)}
+              </span>
+            ))}
+          </div>
+        </Detail>
+      )}
+      <Detail label="Note">{item.note || 'Not set'}</Detail>
+      {item.budgetIds && item.budgetIds.length > 0 && <Detail label="Budgets">{item.budgetIds.length} matching budget{item.budgetIds.length === 1 ? '' : 's'}</Detail>}
+      {item.commitmentId && <Detail label="Bill or instalment">Linked bill or instalment</Detail>}
+      {item.sharedBillAssignmentId && <Detail label="Person's bill share">{item.sharedBillAssignmentId}</Detail>}
+      {item.sharedBillPaymentId && <Detail label="Payment submitted">{item.sharedBillPaymentId}</Detail>}
+      {item.paymentProofPath && <Detail label="Payment proof">Attached in its Space</Detail>}
+      {item.recurringTemplateId && <Detail label="Recurring money"><Link to="/recurring">Created automatically from a recurring template</Link></Detail>}
+      {item.recurringScheduledDate && <Detail label="Scheduled date">{item.recurringScheduledDate}</Detail>}
+    </dl>
+
+    <section
+      className="transaction-audit"
+      aria-label="Record history"
+    >
+      <div className="transaction-audit-heading">
+        <div>
+          <strong>Record history</strong>
+          <small>
+            Audit trail for this money activity.
+          </small>
+        </div>
+        <span>
+          {activityStatusLabel(item)}
+        </span>
+      </div>
+
+      <dl className="detail-list transaction-audit-list">
+        <Detail label="Record ID">
+          {item.displayId || item.id}
+        </Detail>
+
+        <Detail label="Status">
+          {activityStatusLabel(item)}
+        </Detail>
+
+        {createdTime && (
+          <Detail label="Created">
+            {createdTime}
+          </Detail>
+        )}
+
+        {postedTime && (
+          <Detail label="Posted">
+            {postedTime}
+          </Detail>
+        )}
+
+        {updatedTime && (
+          <Detail label="Last updated">
+            {updatedTime}
+          </Detail>
+        )}
+
+        {Boolean(item.editCount) && (
+          <Detail label="Edited">
+            {item.editCount} time{
+              item.editCount === 1 ? '' : 's'
+            }{
+              editedTime
+                ? ' - ' + editedTime
+                : ''
+            }
+          </Detail>
+        )}
+
+        {item.reversalOf && (
+          <Detail label="Undo relationship">
+            <span className="transaction-audit-note">
+              This record undoes {item.reversalOf}.
+            </span>
+          </Detail>
+        )}
+
+        {item.reversedBy && (
+          <Detail label="Undo relationship">
+            <span className="transaction-audit-note">
+              This record was undone by {item.reversedBy}.
+            </span>
+          </Detail>
+        )}
+
+        {item.financialApprovalId && (
+          <Detail label="Approval">
+            Linked approval {item.financialApprovalId}
+          </Detail>
+        )}
+      </dl>
+    </section>
+    </>}
+
+    {receiptsOnly && <div className="transaction-receipt-shortcut-summary"><strong>{item.category || typeLabels[item.type]}</strong><span>{item.transactionDate}</span></div>}
+
+    <section className="transaction-attachments" aria-labelledby="transaction-attachments-title">
+      <div className="transaction-attachments-heading">
+        <div><h3 id="transaction-attachments-title">Receipts & documents</h3><p>Keep up to five images or PDF files with this money activity.</p></div>
+        <span>{attachments.length}/5</span>
+      </div>
+      {attachments.length === 0 && <p className="muted">No receipt or document attached.</p>}
+      {attachments.length > 0 && <div className="transaction-attachment-list">
+        {attachments.map((attachment) => <div className="transaction-attachment-row" key={attachment.id}>
+          <div><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.sizeBytes / 1024))} KB</small></div>
+          {removeId === attachment.id ? <div className="transaction-attachment-confirm">
+            <span>Remove this file?</span>
+            <button type="button" className="button danger small" disabled={attachmentBusy} onClick={() => void confirmRemoveAttachment()}>Remove</button>
+            <button type="button" className="button secondary small" disabled={attachmentBusy} onClick={() => setRemoveId('')}>Keep</button>
+          </div> : <div className="transaction-attachment-actions">
+            {attachmentUrls[attachment.id] && <a className="button secondary small" href={attachmentUrls[attachment.id]} target="_blank" rel="noreferrer">Open</a>}
+            <button type="button" className="button ghost small" disabled={!online || attachmentBusy} onClick={() => setRemoveId(attachment.id)}>Remove</button>
+          </div>}
+        </div>)}
+      </div>}
+      {item.type !== 'reversal' && attachments.length < 5 && <div className="transaction-attachment-upload">
+        <input type="file" accept="image/*,application/pdf" disabled={!online || attachmentBusy} onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} />
+        <button type="button" className="button secondary" disabled={!online || !selectedFile || attachmentBusy} onClick={() => void addAttachment()}>{attachmentBusy ? 'Saving...' : 'Attach file'}</button>
+      </div>}
+      {!online && <div className="notice warning">Connect to the internet to add or remove receipts and documents.</div>}
+      {attachmentError && <div className="notice error">{attachmentError}</div>}
+      <small>Images and PDFs only. Maximum 10 MB per file.</small>
+    </section>
+
+    <div className="modal-actions">
+      <button className="button secondary" onClick={onClose}>Close</button>
+      {!receiptsOnly && item.type !== 'reversal' && (
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() =>
+            shareTransactionToWhatsApp({
+              transactionId:
+                item.id,
+              type: item.type,
+              amountMinor:
+                item.amountMinor,
+              currency:
+                item.currency,
+              transactionDate:
+                item.transactionDate,
+              category:
+                item.category
+                || category.name,
+              counterparty:
+                item.counterparty,
+              note:
+                item.note,
+              spaceName:
+                space?.type === 'personal'
+                  ? 'Personal'
+                  : space?.name,
+              sourceAccountName:
+                source
+                  ? accountContextLabel(source, spaces) + ' - ' + source.name
+                  : undefined,
+              destinationAccountName:
+                destination
+                  ? accountContextLabel(destination, spaces) + ' - ' + destination.name
+                  : undefined,
+            })
+          }
+        >
+          Share to WhatsApp
+        </button>
+      )}
+      {!receiptsOnly && canSafelyChangeRecord && (
+        <button className="button secondary" disabled={!online} onClick={() => setEditingDetails(true)}>Edit details</button>
+      )}
+      {!receiptsOnly && canSafelyChangeRecord && (
+        <button className="button secondary" disabled={!online} onClick={onCorrect}>Correct transaction</button>
+      )}
+      {!receiptsOnly && item.type !== 'reversal' && item.status === 'posted' && (
+        <button className="button danger" onClick={onReverse}>Undo this activity</button>
+      )}
+    </div>
+  </Modal>;
+}
+
+function Detail({ label, children }: { label: string; children: ReactNode }) {
+  return <div><dt>{label}</dt><dd>{children}</dd></div>;
+}
+
+function CategoryManager({ customCategories, onClose, onChanged }: {
+  customCategories: TransactionCategory[];
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState<TransactionCategory | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [busyId, setBusyId] = useState('');
+  const [error, setError] = useState('');
+  const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleConfirmState<TransactionCategory, 'archive' | 'delete'> | null>(null);
+  const active = customCategories.filter((item) => !item.archivedAt);
+  const hidden = customCategories.filter((item) => item.archivedAt);
+
+  function askLifecycle(category: TransactionCategory, action: 'archive' | 'delete') {
+    setError('');
+    setLifecycleDialog(action === 'archive'
+      ? { record: category, action, title: `Hide ${category.name}?`, description: 'This category will move to Hidden Categories and will not appear in new money activity forms.', note: 'Past money activity will keep this category name.', confirmLabel: 'Hide category' }
+      : { record: category, action, title: `Delete ${category.name} permanently?`, description: 'Permanent deletion only works when this category has never been used.', note: 'This cannot be undone.', confirmLabel: 'Delete permanently', tone: 'danger' });
+  }
+
+  async function runLifecycle() {
+    if (!lifecycleDialog) return;
+    const { record: category, action } = lifecycleDialog;
+    setBusyId(category.id); setError('');
+    try { await manageCategory(category.id, action); setLifecycleDialog(null); await onChanged(); }
+    catch (nextError) {
+      const message = getErrorMessage(nextError);
+      if (action === 'delete' && /hide/i.test(message)) {
+        setLifecycleDialog({ record: category, action: 'archive', title: `${category.name} cannot be deleted`, description: message, note: 'Hide it instead. It will disappear from new forms while previous records remain correct.', confirmLabel: 'Hide category instead' });
+      } else setError(message);
+    }
+    finally { setBusyId(''); }
+  }
+
+
+  return <Modal title="Edit categories" onClose={onClose}>
+    <div className="category-manager-intro"><div><strong>Brunei-ready defaults</strong><p>{DEFAULT_TRANSACTION_CATEGORIES.length} built-in categories are available automatically. Add custom categories for your own household or Business workflow.</p></div><div className="button-row"><Link className="button secondary archive-button" to="/categories/archived" onClick={onClose}>Hidden Categories <span>{hidden.length}</span></Link><button className="button primary" onClick={() => { setEditing(null); setShowEditor(true); }}>+ Custom category</button></div></div>
+    {error && <div className="notice error">{error}</div>}
+    {active.length === 0 ? <EmptyState title="No custom categories" description="Ready-made categories are available. Add your own only when you need a different name." /> : <div className="category-manager-list">
+      {active.map((category) => <div className="category-manager-row" key={category.id}><CategoryBadge category={category} /><span className="category-meta">{category.kind} - {category.scope}</span><div><button className="text-button" onClick={() => { setEditing(category); setShowEditor(true); }}>Edit</button><button className="text-button" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'archive')}>Hide</button><button className="text-button danger" disabled={busyId === category.id} onClick={() => askLifecycle(category, 'delete')}>Delete</button></div></div>)}
+    </div>}
+    {lifecycleDialog && <LifecycleConfirmModal state={lifecycleDialog} busy={busyId === lifecycleDialog.record.id} error={error} onClose={() => { setLifecycleDialog(null); setError(''); }} onConfirm={() => void runLifecycle()} />}
+    <div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button></div>
+    {showEditor && <CategoryEditor category={editing} onClose={() => setShowEditor(false)} onSaved={async () => { setShowEditor(false); await onChanged(); }} />}
+  </Modal>;
+}
+
+function CategoryEditor({ category, defaultKind, defaultScope, onClose, onSaved }: {
+  category: TransactionCategory | null; defaultKind?: CategoryKind; defaultScope?: CategoryScope; onClose: () => void; onSaved: (savedName?: string) => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const [name,setName]=useState(category?.name || '');
+  const [kind,setKind]=useState<CategoryKind>(category?.kind || defaultKind || 'expense');
+  const [scope,setScope]=useState<CategoryScope>(category?.scope || defaultScope || 'both');
+  const [icon,setIcon]=useState(category?.icon || 'dots');
+  const [color,setColor]=useState(category?.color || 'teal');
+  const [customIconPreview,setCustomIconPreview]=useState(user && category ? getCategoryCustomIcon(user.uid,category.id) : '');
+  const [customIconTouched,setCustomIconTouched]=useState(false);
+  const [iconBusy,setIconBusy]=useState(false); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
+  const iconInputRef=useRef<HTMLInputElement>(null);
+  const suggestion=suggestedCategoryIcon(name,icon);
+  const chooseBuiltInIcon=(value:string)=>{ setIcon(value); setCustomIconPreview(''); setCustomIconTouched(true); };
+  const chooseCustomIcon=async(file:File|null)=>{ if(!file)return; setIconBusy(true); setError(''); try{ setCustomIconPreview(await prepareCategoryCustomIcon(file)); setCustomIconTouched(true); }catch(nextError){ setError(getErrorMessage(nextError)); }finally{ setIconBusy(false); } };
+  const submit=async(event:FormEvent)=>{ event.preventDefault(); if(busy||iconBusy)return; setBusy(true); setError(''); try{ if(!name.trim())throw new Error('Category name is required.'); let savedCategoryId=category?.id || ''; if(category){ await updateCategory({categoryId:category.id,name,kind,scope,icon,color}); }else{ savedCategoryId=await createCategory({name,kind,scope,icon,color}); } if(customIconTouched&&user&&savedCategoryId){ if(customIconPreview)setCategoryCustomIcon(user.uid,savedCategoryId,customIconPreview); else removeCategoryCustomIcon(user.uid,savedCategoryId); } await onSaved(name.trim()); }catch(nextError){ setError(getErrorMessage(nextError)); }finally{ setBusy(false); } };
+  return <Modal title={category ? 'Edit custom category' : 'Create custom category'} onClose={onClose}><form className="category-editor" onSubmit={submit}>
+    {error && <div className="notice error">{error}</div>}
+    <label>Name<input required value={name} onChange={(event)=>setName(event.target.value)} maxLength={60} placeholder="Example: School allowance" /></label>
+    <div className="form-grid"><label>Type<select value={kind} onChange={(event)=>setKind(event.target.value as CategoryKind)}><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Available for<select value={scope} onChange={(event)=>setScope(event.target.value as CategoryScope)}><option value="both">Personal and Business</option><option value="personal">Personal only</option><option value="business">Business only</option></select></label></div>
+    <fieldset className="category-picker category-icon-editor-v115"><legend>Icon</legend><div className="category-icon-actions-v115"><button type="button" className="button secondary compact" onClick={()=>chooseBuiltInIcon(suggestedCategoryIcon(name,'dots'))}>Use suggested</button><button type="button" className="button secondary compact" disabled={iconBusy} onClick={()=>iconInputRef.current?.click()}>{iconBusy ? 'Preparing...' : 'Upload image'}</button><button type="button" className="text-button" onClick={()=>{setCustomIconPreview('');setCustomIconTouched(true);setIcon(suggestedCategoryIcon(name,'dots'));}}>Reset</button><input ref={iconInputRef} className="visually-hidden" type="file" accept="image/*" onChange={(event)=>void chooseCustomIcon(event.target.files?.[0] || null)} /></div><small className="muted">Suggested: {suggestion}. Uploaded images are saved on this device; built-in icon and colour remain synced.</small><div className="icon-option-grid">{CATEGORY_ICONS.map((value)=><button type="button" aria-label={value} title={value} className={`category-icon category-${color} ${!customIconPreview && icon===value ? 'selected' : ''}`} key={value} onClick={()=>chooseBuiltInIcon(value)}>{categoryIconAsset(value) ? <img src={categoryIconAsset(value)} alt="" loading="lazy" /> : categoryIconGlyph(value)}</button>)}</div></fieldset>
+    <fieldset className="category-picker"><legend>Colour</legend><div className="color-option-grid">{CATEGORY_COLORS.map((value)=><button type="button" aria-label={value} title={value} className={`color-swatch category-${value} ${color===value ? 'selected' : ''}`} key={value} onClick={()=>setColor(value)} />)}</div></fieldset>
+    <div className="category-preview"><span>Preview</span><span className="category-badge"><span className={`category-icon small category-${color}`}>{customIconPreview ? <img src={customIconPreview} alt="" /> : categoryIconAsset(icon) ? <img src={categoryIconAsset(icon)} alt="" /> : categoryIconGlyph(icon)}</span><span>{name || 'Category name'}</span></span></div>
+    <div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy||iconBusy}>{busy ? 'Saving...' : 'Save category'}</button></div>
+  </form></Modal>;
+}

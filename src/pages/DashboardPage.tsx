@@ -50,7 +50,7 @@ import { navigationIconSrc } from '../services/navigationIconAssets';
 const GlobalBusinessOverview = lazy(() => import('../features/business/GlobalBusinessOverview').then((module) => ({ default: module.GlobalBusinessOverview })));
 
 // Load Money Activity only after a user opens Add. Keep Personal Home lightweight.
-const loadMoneyActivityFeatureV107 = () => import('../features/transactions/TransactionsPage');
+const loadMoneyActivityFeatureV107 = () => import('../features/transactions/MoneyActivityModalV111');
 const MoneyActivityModal = lazy(() =>
   loadMoneyActivityFeatureV107().then((module) => ({
     default: module.MoneyActivityModal,
