@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { transformHomeV112 } from './transform-home-v112.mjs';
 const BASE = '3a77ef6c122b7626ce88af45171e3b9fd3a52808';
 const ORIGINAL = 'src/features/transactions/TransactionsPage.tsx';
 const MODAL = 'src/features/transactions/MoneyActivityModalV111.tsx';
@@ -25,7 +26,7 @@ const source = read(ORIGINAL);
 const modal = read(MODAL);
 assert.equal(source, expected, 'TransactionsPage must differ only by removing duplicate modal and adding import/re-export');
 assert.equal(modal, old.slice(0, pageStart) + old.slice(pageEnd), 'Authoritative modal differs from tested source');
-assert.equal(read(HOME), base(HOME), 'Dashboard Add Money loader changed from tested version');
+assert.equal(read(HOME), transformHomeV112(base(HOME)), 'Dashboard must match the reviewed Phase 11.2 Home-only read optimizations');
 assert.equal(source.split('export function MoneyActivityModal({').length - 1, 0, 'Duplicate original modal still exists');
 assert.equal(source.split('<MoneyActivityModal').length - 1, 2, 'Transactions route no longer uses shared modal twice');
 assert(source.includes('export function TransactionsPage() {'), 'Transactions page removed');

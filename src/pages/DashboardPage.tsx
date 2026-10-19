@@ -25,8 +25,7 @@ import {
   getPreferredHomeAccountId,
   setPreferredHomeAccountId,
 } from '../services/accountVisualPreferences';
-import { listAllCustomCategories } from '../repositories/categoryRepository';
-import { listSpaces } from '../repositories/spaceRepository';
+import { readHomeSpacesV112, readHomeCategoriesV112 } from '../services/homeReadCoalescingV112';
 import {
   listTransactionsForOwnerAccount,
   postTransaction,
@@ -810,7 +809,7 @@ export function DashboardPage() {
 
     let cancelled = false;
 
-    void listSpaces(user.uid)
+    void readHomeSpacesV112(user.uid)
       .then((items) => {
         if (cancelled) return;
 
@@ -915,8 +914,8 @@ export function DashboardPage() {
           nextSpaces,
           nextCategories,
         ] = await Promise.all([
-          listSpaces(user.uid),
-          listAllCustomCategories(
+          readHomeSpacesV112(user.uid),
+          readHomeCategoriesV112(
             user.uid,
           ),
         ]);
@@ -969,7 +968,7 @@ export function DashboardPage() {
     let active = true;
     const timer = window.setTimeout(() => {
       void loadMoneyActivityFeatureV107().catch(() => undefined);
-      void Promise.all([listSpaces(ownerId), listAllCustomCategories(ownerId)])
+      void Promise.all([readHomeSpacesV112(ownerId), readHomeCategoriesV112(ownerId)])
         .then(([nextSpaces, nextCategories]) => {
           if (!active) return;
           const nextActive = nextSpaces.filter((item) => !item.archivedAt);
@@ -1448,11 +1447,27 @@ export function DashboardPage() {
           return;
         }
 
+        // Home has already loaded these Space labels. Use them for the
+        // detail heading without another Firestore read. Unknown/archived
+        // Spaces still use the original fresh-query fallback below.
+        const homeSpaceV112 = spaces.find(
+          (space) => space.id === transaction.spaceId,
+        );
+        if (homeSpaceV112) {
+          setSelectedActivitySpaceName(
+            homeSpaceV112.type === 'personal'
+              ? 'Personal'
+              : homeSpaceV112.name || 'Unknown Space',
+          );
+          setActivityDetailLoading(false);
+          return;
+        }
+
         setActivityDetailLoading(true);
 
         try {
           const nextSpaces =
-            await listSpaces(
+            await readHomeSpacesV112(
               user.uid,
             );
 
@@ -1478,7 +1493,7 @@ export function DashboardPage() {
           setActivityDetailLoading(false);
         }
       },
-      [user],
+      [user, spaces],
     );
 
   const selectedActivitySource =
