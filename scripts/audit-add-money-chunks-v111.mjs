@@ -8,7 +8,19 @@ const manifestPath = 'dist/.vite/manifest.json';
 assert(fs.existsSync(manifestPath), 'Build staging first (npm run build:staging)');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entries = Object.entries(manifest);
-const find = suffix => entries.find(([name]) => name.endsWith(suffix));
+const find = suffix => entries.find(([name, entry]) => {
+  if (name.endsWith(suffix)) return true;
+
+  // Vite may emit shared modules with generated manifest keys.
+  const moduleName = suffix
+    .split('/')
+    .pop()
+    .replace(/\.tsx$/, '');
+
+  return typeof entry.file === 'string'
+    && entry.file.split('/').pop().startsWith(moduleName + '-')
+    && entry.file.endsWith('.js');
+});
 const modal = find('/MoneyActivityModalV111.tsx');
 const transactions = find('/TransactionsPage.tsx');
 const dashboard = find('/DashboardPage.tsx');
