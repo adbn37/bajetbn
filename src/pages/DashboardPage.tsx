@@ -46,7 +46,8 @@ import { SpaceAvatar } from '../features/spaces/SpaceAvatar';
 import { HomeShortcutSymbol } from '../components/HomeShortcutSymbol';
 import { RecentActivityIcon } from '../components/RecentActivityIcon';
 import { navigationIconSrc } from '../services/navigationIconAssets';
-import { GlobalBusinessOverview } from '../features/business/GlobalBusinessOverview';
+// Defer the Business overview and its data dependencies until Business mode is opened.
+const GlobalBusinessOverview = lazy(() => import('../features/business/GlobalBusinessOverview').then((module) => ({ default: module.GlobalBusinessOverview })));
 
 // Load Money Activity only after a user opens Add. Keep Personal Home lightweight.
 const loadMoneyActivityFeatureV107 = () => import('../features/transactions/TransactionsPage');
@@ -2456,10 +2457,12 @@ initialType={quickInitialType}
         )}
         </>
       ) : (
-        <GlobalBusinessOverview
-          userId={user?.uid || ''}
-          currency={currency}
-        />
+        <Suspense fallback={<div className="loading-panel" role="status">Loading Business overview…</div>}>
+          <GlobalBusinessOverview
+            userId={user?.uid || ''}
+            currency={currency}
+          />
+        </Suspense>
       )}
 
       {homeSpacePicker && (
