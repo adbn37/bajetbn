@@ -9,7 +9,7 @@
     "gitBranch": "main",
     "firebaseProject": "bajetbn-staging",
     "cloudflareProject": "bajetbn",
-    "url": "https://bajetbn.com",
+    "url": "https://bajet.bwnsite.com",
     "automaticDeployments": "disabled",
     "sharedFirebaseBackend": true
   }
