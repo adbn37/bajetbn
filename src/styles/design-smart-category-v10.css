@@ -79,3 +79,24 @@
 @media (prefers-reduced-motion: reduce) {
   .bajetbn-v10-category-search *, .bajetbn-v10-smart-picks * { transition: none !important; }
 }
+
+/* Phase 12.1 â€” merchant category suggestion, deliberately scoped to the money form. */
+.bajetbn-v12-merchant-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .65rem;
+  padding: .7rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.bajetbn-v12-merchant-suggestion-copy { display: grid; min-width: 0; gap: .2rem; }
+.bajetbn-v12-merchant-suggestion-copy small { color: var(--muted); font-size: .72rem; }
+.bajetbn-v12-merchant-suggestion-copy strong { color: var(--text); font-size: .9rem; }
+.bajetbn-v12-merchant-suggestion-actions { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
+@media (max-width: 430px) {
+  .bajetbn-v12-merchant-suggestion-actions { width: 100%; }
+  .bajetbn-v12-merchant-suggestion-actions > .button { flex: 1; }
+}

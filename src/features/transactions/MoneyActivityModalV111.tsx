@@ -69,6 +69,7 @@ import { formatMoney, toMinorUnits } from '../../utils/money';
 import { categoryIconAsset } from '../../services/categoryIconAssets';
 import { resolveSmartCategoryIconAsset } from '../../services/smartCategoryIconV106';
 import { readSmartCategoryUsage, recordSmartCategoryUsage, smartCategorySuggestions } from '../../services/smartCategoryUsage';
+import { findMerchantCategorySuggestion, forgetMerchantCategoryUsage, readMerchantCategoryUsage, recordMerchantCategoryUsage } from '../../services/merchantCategoryUsage';
 
 const typeLabels = { income: 'Money in', expense: 'Money out', transfer: 'Move money', reversal: 'Undo' } as const;
 const statusLabels = { posted: 'Saved', reversed: 'Undone' } as const;
@@ -834,6 +835,11 @@ export function MoneyActivityModal({
   const receiptAutoOpenedRef = useRef(false);
 
   const scope = spaceScope(selectedSpace);
+  const [merchantUsageRevision, setMerchantUsageRevision] = useState(0);
+  const merchantCategoryUsage = useMemo(
+    () => readMerchantCategoryUsage(user?.uid || '', scope),
+    [user?.uid, scope, merchantUsageRevision],
+  );
   const [smartCategoryUsage, setSmartCategoryUsage] = useState(
     () => readSmartCategoryUsage(user?.uid || '', type === 'income' ? 'income' : 'expense', scope),
   );
@@ -844,6 +850,12 @@ export function MoneyActivityModal({
     [categoryOptions, smartCategoryUsage],
   );
   const normalizedCategorySearch = categorySearch.trim().toLocaleLowerCase();
+  const merchantSuggestion = useMemo(
+    () => type === 'expense'
+      ? findMerchantCategorySuggestion(categoryOptions, merchantCategoryUsage, counterparty)
+      : null,
+    [type, categoryOptions, merchantCategoryUsage, counterparty],
+  );
 
   const primaryCategoryOptions = useMemo(() => {
     const preferredPersonalExpenseIds = [
@@ -1454,6 +1466,11 @@ export function MoneyActivityModal({
         setSmartCategoryUsage(
           recordSmartCategoryUsage(user.uid, type, scope, selectedCategory.id),
         );
+        if (type === 'expense') {
+          // A local-only preference: learn only from confirmed posted expenses.
+          recordMerchantCategoryUsage(user.uid, scope, counterparty, selectedCategory.id);
+          setMerchantUsageRevision((current) => current + 1);
+        }
       }
 
       if (pendingFiles.length === 0) {
@@ -2613,6 +2630,34 @@ export function MoneyActivityModal({
 
     <div className="form-grid">
       {type !== 'transfer' && <label>{type === 'income' ? 'Source or customer' : 'Shop or person paid'}<input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} placeholder="Optional" maxLength={120} /></label>}
+      {type === 'expense' && merchantSuggestion && (
+        <div className="bajetbn-v12-merchant-suggestion span-2" role="status">
+          <div className="bajetbn-v12-merchant-suggestion-copy">
+            <small>Suggested from a previous expense on this device</small>
+            <strong>{merchantSuggestion.name}</strong>
+          </div>
+          <div className="bajetbn-v12-merchant-suggestion-actions">
+            <button
+              type="button"
+              className="button secondary compact"
+              disabled={categoryId === merchantSuggestion.id}
+              onClick={() => setCategoryId(merchantSuggestion.id)}
+            >
+              {categoryId === merchantSuggestion.id ? 'Selected' : 'Use category'}
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                forgetMerchantCategoryUsage(user?.uid || '', scope, counterparty);
+                setMerchantUsageRevision((current) => current + 1);
+              }}
+            >
+              Forget
+            </button>
+          </div>
+        </div>
+      )}
       <PaymentMethodField className={type === 'transfer' ? 'span-2' : ''} label={type === 'transfer' ? 'How was the money moved?' : 'Payment method'} value={paymentMethod} customLabel={paymentMethodCustom} onChange={(value, custom) => { setPaymentMethod(value); setPaymentMethodCustom(custom); }} />
       <label className="span-2">Note<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional details" maxLength={500} /></label>
     </div>
