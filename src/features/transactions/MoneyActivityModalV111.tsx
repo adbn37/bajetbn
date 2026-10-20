@@ -1333,7 +1333,7 @@ export function MoneyActivityModal({
 
   async function finishSaved(message: string, refresh = true) {
     if (busy) return;
-    await onComplete(message, refresh);
+    await onComplete(sharePrompt ? '' : message, refresh);
   }
 
   async function retryAttachments() {
